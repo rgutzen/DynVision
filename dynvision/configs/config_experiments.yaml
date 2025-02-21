@@ -1,0 +1,77 @@
+experiment_config:
+
+  categories:
+    rctype: ['depthpointwise', 'pointdepthwise', 'full', 'self']
+
+  response:
+    status: trained
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      tsteps: 20
+      intro: 2
+      stim: [16]
+
+  response_ffonly:
+    status: trained
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      tsteps: 20
+      intro: 2
+      stim: [16]
+      feedforward_only: True
+
+  stability:
+    status: trained
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      tsteps: 200
+      stim: [10, 100, 150]
+
+  duration:
+    status: trained
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      # tsteps: 20
+      # stim: [1,2,3,4,6,8,10,12,14,16]
+      tsteps: 100
+      stim: [1, 5, 10, 15, 20, 25]
+
+  contrast:
+    status: trained
+    parameter: contrast
+    data_loader: StimulusContrast
+    data_args:
+      tsteps: 100
+      stim: 15
+      contrast: [0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]  
+
+  intedvml:
+    status: trained
+    parameter: intedvml
+    data_loader: StimulusIntedvml
+    data_args:
+      tsteps: 100
+      stim: 5
+      intedvml: [2, 10, 20, 30]
+
+  noise_adaption:
+    status: trained
+    parameter: noise
+    data_loader: NoiseAdaption
+    data_args:
+      tsteps: 30
+      tadapt: [5, 10, 20]
+      tdelay: [1, 2, 5]
+      ttest: 5
+      noise: ["none", "same", "different"]
+
+  spatialsplit:
+    status: trained
+    parameter: topdown
+    data_loader: DoubleStimulus
+    data_args:
+      topdown: [False]

@@ -1,0 +1,64 @@
+# Workflow parameters - running rule all
+model_name:
+  # - AlexNet
+  # - CorNetRT
+  # - TwoLayerCNN
+  - FourLayerCNN
+  # - CordsNet
+  # - ResNet20
+  # - ResNet18
+  # - ResNet44
+seed: "0039"
+model_args:
+  tsteps: 20
+  # tau: [5, 8, 11, 14, 17]
+  # trc: [5, 10, 15, 20]
+  # dt: 2
+  # tau: 8
+  # trc: 6
+  # tff: 10
+  rctype: ['self', 'full', 'pointdepthwise', 'depthpointwise'] 
+  # rctype: ['local'] #
+  # skip: 'true'
+  # feedback: 'true'
+  # supralin: 1.5
+  # taugrad: 'true'
+  # lossrt: 20
+  # inadapt: 0.8
+
+init_with_pretrained: False
+
+# data_name: imagenet
+# data_name: tinyimagenet
+data_name: cifar100
+# data_name: cifar10
+# data_name: mnist1
+# data_name: snakenet
+
+# data_group: "snakes"  # imagenet
+# data_group: "89"  # mnist
+# data_group: "mollusks"  # tinyimagenet
+# data_group: "invertebrates"  # cifar100
+data_group: "all"
+
+experiment: 
+  - response
+  - response_ffonly
+  # - duration
+  # - stability
+  # - contrast
+  # - intedvml
+  # - noiseadaption
+  # - spatialsplit
+
+# Training parameters
+loss: 
+  - CrossEntropyLoss
+  # - EnergyLoss
+
+optimizer: Adam
+learning_rate: 0.001
+epochs: 200
+batch_size: 512
+accumulate_grad_batches: 4
+check_val_every_n_epoch: 10

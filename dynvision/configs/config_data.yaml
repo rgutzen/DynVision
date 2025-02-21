@@ -1,0 +1,99 @@
+
+mounted_datasets:
+    - imagenet
+
+data_resolution:
+    mnist: 28
+    cifar10: 32
+    cifar100: 32
+    tinyimagenet: 64
+    imagenet: 224
+    snakenet: 224
+    gabordetect: 48
+
+data_groups:
+    mnist:
+        '01':
+            - 0
+            - 1
+        '89':
+            - 8
+            - 9
+    tinyimagenet:
+        mollusks:
+            - 13 # jellyfish
+            - 14 # brain_coral
+            - 15 # snail
+            - 16 # slug
+            - 17 # sea_slug
+            - 18 # American_lobster
+            - 19 # spiny_lobster
+            - 46 # sea cucumber
+        catdogs:
+            - 187 # Yorkshire_terrier
+            - 207 # Golden_retriever
+            - 208 # Labrador_retriever
+            - 235 # German_shepherd
+            - 267 # standard_poodle
+            - 281 # tabby
+            - 283 # Persian_cat
+            - 285 # Egyptian_cat
+            - 286 # cougar
+            - 291 # lion
+    imagenet:
+        snakes:
+            - 54  # hognose_snake
+            - 60  # night_snake
+            - 62  # rock_python
+            - 66  # horned_viper
+            - 67  # diamondback
+            - 68  # sidewinder
+        insects:
+            - 304 # leaf beetle
+            - 310 # ant
+            - 311 # grasshopper
+            - 312 # cricket
+            - 313 # walking stick
+            - 314 # cockroach
+            - 315 # mantis
+            - 316 # cicada
+            - 317 # leafhopper
+            - 318 # lacewing
+            - 319 # dragonfly
+    snakenet:
+        cool:
+            - 1  # night_snake
+            - 2  # rock_python
+            - 4  # diamondback
+    cifar100:
+        invertebrates:
+            - 6  # bee
+            - 7  # beetle
+            - 14 # butterfly
+            - 18 # caterpillar
+            - 24 # cockroach
+            - 26 # crab
+            - 45 # lobster
+            - 77 # snail
+            - 79 # spider
+            - 99 # worm
+    gabordetect:
+        '013':
+            - 0  # no patch
+            - 1  # upper right
+            - 3  # lower left
+
+gabordetect:
+    # image_dimension: 48  # set via wildcard
+    duration: 1000  # in ms
+    time_resolution: 100 # in ms
+    delay: 500  # in ms
+    orientation: 0  # in degrees
+    spatial_frequency: 0.2
+    positions: [0, 1, 2, 3, 4]
+    contrasts: [1, 0.3]  # [train, test]
+    noise: 0.05
+    n_stds: 4
+    offset: 0
+    bandwidth: 1
+    data_size: [500, 100] # per position [train, test]

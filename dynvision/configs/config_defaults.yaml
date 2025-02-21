@@ -1,0 +1,67 @@
+# Namespace
+classifier_name: classifier
+
+# Model
+retain_graph: False
+status: trained
+dt: 2  # ms
+tau: 8  # ms
+t_recurrence: 6  # ms
+t_feedforward: 10  # ms
+recurrence_influence: 'additive'  # 'additive' or 'multiplicative'
+init_with_pretrained: False
+store_train_responses: 0  # n_samples
+store_val_responses: 0  # n_samples
+store_test_responses: 10  # n_samples
+store_responses_on_cpu: True
+
+# Data
+data_name: mnist
+data_group: all
+
+# Training run
+seed: "0000"
+train_ratio: 0.8
+epochs: 250
+batch_size: 256
+check_val_every_n_epoch: 5
+accumulate_grad_batches: 1
+precision: "bf16-mixed"
+profiler: None
+benchmark: True
+# tbptt_length: None
+
+# Test run
+logger: False
+
+# Loss
+loss: 
+  - CrossEntropyLoss
+loss_configs:
+  CrossEntropyLoss:
+    weight: 1
+    ignore_index: -1
+  EnergyLoss:
+    weight: 100
+loss_reaction_time: 0  # ms (+ residual time)
+      
+# Optimizer
+optimizer: Adam
+optimizer_kwargs:
+  weight_decay: 0.0005
+  fused: False
+optimizer_configs:
+  monitor: train_loss
+
+# Learning rate
+learning_rate: 0.002
+recurrence_lr_factor: 0.5
+scheduler: CosineAnnealingLR
+scheduler_kwargs:
+  T_max: 250
+  eta_min: 0.0001
+scheduler_configs:
+  intedvml: epoch
+  frequency: 1
+  monitor: train_loss
+  name: lr_scheduled
