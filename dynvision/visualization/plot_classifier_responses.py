@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from dynvision.utils.utils import load_df
+from dynvision.utils import load_df
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", type=Path, required=True, help="Path to CSV file")

@@ -4,6 +4,7 @@ classifier_name: classifier
 # Model
 retain_graph: False
 status: trained
+n_timesteps: 20
 dt: 2  # ms
 tau: 8  # ms
 t_recurrence: 6  # ms
@@ -12,7 +13,7 @@ recurrence_influence: 'additive'  # 'additive' or 'multiplicative'
 init_with_pretrained: False
 store_train_responses: 0  # n_samples
 store_val_responses: 0  # n_samples
-store_test_responses: 10  # n_samples
+store_test_responses: 100  # n_samples
 store_responses_on_cpu: True
 
 # Data
@@ -25,6 +26,7 @@ train_ratio: 0.8
 epochs: 250
 batch_size: 256
 check_val_every_n_epoch: 5
+log_every_n_steps: 100
 accumulate_grad_batches: 1
 precision: "bf16-mixed"
 profiler: None
@@ -40,10 +42,11 @@ loss:
 loss_configs:
   CrossEntropyLoss:
     weight: 1
-    ignore_index: -1
+    ignore_index: -100
   EnergyLoss:
     weight: 100
 loss_reaction_time: 0  # ms (+ residual time)
+non_label_index: -100
       
 # Optimizer
 optimizer: Adam
@@ -61,7 +64,22 @@ scheduler_kwargs:
   T_max: 250
   eta_min: 0.0001
 scheduler_configs:
-  intedvml: epoch
+  interval: epoch
   frequency: 1
   monitor: train_loss
   name: lr_scheduled
+
+# System
+use_executor: False
+executor_start: "singularity exec --nv \
+  --overlay /scratch/rg5022/images/rva.ext3:ro \
+  --overlay /vast/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro \
+  --overlay /vast/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro \
+  --overlay /vast/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro \
+  /scratch/work/public/singularity/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif \
+  bash -c '\
+  source /ext3/env.sh; \
+  conda activate rva; \
+  "
+executor_close: "'"
+verbose: True

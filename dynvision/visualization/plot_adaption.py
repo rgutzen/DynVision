@@ -6,8 +6,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from dynvision.utils.utils import replace_param_in_string
-from dynvision.visualization.utils import save_plot, load_responses
+from dynvision.utils import replace_param_in_string
+from dynvision.utils.visualization_utils import save_plot, load_responses
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -68,7 +68,7 @@ def plot_adaption(
         else:
             ax.set_ylabel("")
         ax.set_xlabel("")
-        ax.set_yticklabels([])
+        # ax.set_yticklabels([])
         if i < len(key_values) - 1:
             ax.set_xticklabels([])
 
@@ -106,7 +106,7 @@ def plot_adaption(
 if __name__ == "__main__":
     args, unknown = parser.parse_known_args()
 
-    if "intedvml" in args.parameter:
+    if "interval" in args.parameter:
         args.measures = [
             measure.replace("peak_time", "peak_ratio") for measure in args.measures
         ]

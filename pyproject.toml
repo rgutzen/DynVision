@@ -19,19 +19,20 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 
+# some packages may be better installed via conda on some systems
 dependencies = [
     "ruamel.yaml ~=0.18.3",
     "python-dotenv ~=1.0.1",
-    "scipy ~=1.9",                                       # formerly 1.7.3
-    "snakemake ~=8.10.0",
+    "scipy ==1.12",
+    "snakemake ~=9.1.5",
     "snakemake-executor-plugin-cluster-generic ~=1.0.0",
-    "pandas ~=1.2.0",
+    # "pandas ~=1.2.0",
     "scikit-learn ~=1.1.0",
     "scikit-image ~=0.20.0",
     "torch >=2.2.0",
     "torchvision >=0.16.0",
     "torchsummary ~=1.5.0",
-    "opencv-python ~=4.9.0",
+    # "opencv-python ~=4.9.0",
     "matplotlib ~=3.5.1",
     "seaborn ~=0.13.0",
     "jupyterlab ~=4.0.0",
@@ -40,12 +41,14 @@ dependencies = [
     "wandb",
     "pytorch-lightning",
     "tensorboard",
-    "cupy ~= 13.3.0",
-    "numba ~= 0.60.0",
-    "cudatoolkit ~= 11.3",
-    "libjpeg-turbo ~= 3.0.0",
-    "opencv ~= 4.10.0",
-    "pkg-config ~= 0.29.2",
+    # "cupy ~= 13.3.0",
+    "numba ~= 0.61.0",
+    # "cudatoolkit ~= 11.2",
+    # "libjpeg-turbo ~= 3.0.0",
+    "libtiff == 4.5.1",
+    "pillow == 10.0.0",
+    # "opencv ~= 4.10.0",
+    # "pkg-config ~= 0.29.2",
     "ffcv ~= 1.0.2",
 ]
 

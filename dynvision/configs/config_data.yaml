@@ -3,13 +3,35 @@ mounted_datasets:
     - imagenet
 
 data_resolution:
+# used for setup the ffcv dataloader
     mnist: 28
     cifar10: 32
     cifar100: 32
     tinyimagenet: 64
     imagenet: 224
     snakenet: 224
+    imagenette: 224
     gabordetect: 48
+
+data_statistics:
+    mnist:
+        mean: [0.1307]
+        std: [0.3081]
+    cifar10:
+        mean: [0.5071, 0.4867, 0.4408]
+        std: [0.2675, 0.2565, 0.2761]
+    cifar100:
+        mean: [0.5071, 0.4867, 0.4408]
+        std: [0.2675, 0.2565, 0.2761]
+    imagenet:
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
+    imagenette:
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
+    tinyimagenet:
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
 
 data_groups:
     mnist:
@@ -41,6 +63,17 @@ data_groups:
             - 286 # cougar
             - 291 # lion
     imagenet:
+        imagenette:
+            - 0 # tench
+            - 217 # English springer
+            - 482 # cassette player
+            - 491 # chain saw
+            - 497 # church
+            - 566 # French horn
+            - 569 # garbage truck
+            - 571 # gas pump
+            - 574 # golf ball
+            - 701 # parachute
         snakes:
             - 54  # hognose_snake
             - 60  # night_snake

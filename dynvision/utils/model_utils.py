@@ -1,0 +1,124 @@
+"""Model utility functions for the DynVision toolbox.
+
+This module provides model-related utilities:
+- Error handling and logging
+- Model stability checking
+- Weight analysis and validation
+"""
+
+import logging
+import traceback
+from functools import wraps
+from types import SimpleNamespace
+from typing import Any, Callable
+
+import numpy as np
+import torch
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def handle_errors(verbose: bool = False) -> Callable:
+    """Decorator to handle errors consistently across functions.
+
+    Wraps functions with try-except that catches exceptions, logs them,
+    and optionally prints full traceback before re-raising as ValueError.
+
+    Args:
+        verbose: Whether to print full Python traceback on error
+
+    Returns:
+        Decorated function with error handling
+
+    Example:
+        @handle_errors(verbose=True)
+        def my_function():
+            # Function code here
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if verbose:
+                    logger.error(f"Full traceback:\n{traceback.format_exc()}")
+                raise ValueError(f"Error in {func.__name__}: {str(e)}") from e
+
+        return wrapper
+
+    return decorator
+
+
+def check_stability(x: torch.Tensor, stage: str = "") -> None:
+    """Check numerical stability of activations.
+
+    Args:
+        x: Tensor to check for stability
+        stage: Optional name of the stage being checked (for logging)
+    """
+    if torch.isnan(x).any():
+        logger.error(f"NaN values detected in {stage} output")
+        # raise ValueError("Numerical instability detected")
+    if torch.isinf(x).any():
+        logger.error(f"Inf values detected in {stage} output")
+        # raise ValueError("Numerical instability detected")
+
+
+def check_weights(model, message="", min=-2, max=2):
+    """Check model weights for potential issues.
+
+    Analyzes weight distributions and identifies problematic values:
+    - Values outside specified range
+    - NaN values
+    - Extremely small/large values
+
+    Args:
+        model: PyTorch model to check
+        message: Optional message to display with results
+        min: Minimum acceptable weight value
+        max: Maximum acceptable weight value
+
+    Returns:
+        Tuple of (weight_info, contain_nan):
+        - weight_info: Dictionary mapping layer names to weight statistics
+        - contain_nan: Boolean indicating if any NaN values were found
+    """
+    layer_names = model.state_dict().keys()
+    layer_names = [name.rstrip(".weight") for name in layer_names]
+    weight_info = {}
+    contain_nan = False
+
+    for layer in model.state_dict().keys():
+        layer_name = layer.rstrip(".weight")
+        weights = model.state_dict()[layer].numpy().flatten()
+        n_weights = len(weights)
+        min_value = np.nanmin(weights)
+        max_value = np.nanmax(weights)
+        norm = np.linalg.norm(weights)
+        weight_info[layer_name] = SimpleNamespace(
+            min=min_value, max=max_value, norm=norm
+        )
+
+        is_nan = ~np.isfinite(weights)
+        is_large = np.abs(weights) > max
+        is_small = np.abs(weights) < min
+        is_bad = is_nan.any() or is_small.any() or is_large.any()
+
+        if is_bad:
+            print(message)
+            print(f"Layer: {layer_name}")
+            if is_large.any():
+                n_large = np.sum(is_large.astype(int))
+                print(f"\t{n_large}/{n_weights} large weights (>{max:2f})")
+            if is_small.any():
+                n_small = np.sum(is_small.astype(int))
+                print(f"\{n_small}/{n_weights} small weights (<{min:3f})")
+            if is_nan.any():
+                n_nans = np.sum(is_nan.astype(int))
+                print(f"\t{n_nans}/{n_weights} NaN weights")
+                contain_nan = True
+
+    return weight_info, contain_nan

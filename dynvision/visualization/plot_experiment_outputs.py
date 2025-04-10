@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from dynvision.utils.utils import extract_param_from_string, load_df
+from dynvision.utils import extract_param_from_string, load_df
 from dynvision.visualization.plot_classifier_responses import (
     calculate_accuracy,
     get_label_changepoints,
 )
-from dynvision.visualization.utils import save_plot
+from dynvision.utils.visualization_utils import save_plot
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
