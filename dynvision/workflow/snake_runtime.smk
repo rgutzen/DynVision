@@ -121,6 +121,7 @@ rule train_model:
         epochs = config.epochs,
         batch_size = config.batch_size if project_paths.iam_on_cluster() else 3,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        n_timesteps = config.n_timesteps, 
         learning_rate = config.learning_rate,
         loss = config.loss,
         resolution = lambda w: config.data_resolution[w.data_name],
@@ -165,6 +166,7 @@ rule train_model:
             --store_responses {params.store_responses} \
             --enable_progress_bar {params.enable_progress_bar} \
             --loss {params.loss} \
+            --n_timesteps {params.n_timesteps} \
             {params.model_arguments} \
         {params.executor_close}
         """
@@ -231,6 +233,7 @@ rule test_model:
             --config_path {params.config_path:q} \
             --input_model_state {input.model_state:q} \
             --model_name {wildcards.model_name} \
+            --data_name {wildcards.data_name} \
             --dataset {input.dataset:q} \
             --data_loader {wildcards.data_loader} \
             --output_results {output.results:q} \

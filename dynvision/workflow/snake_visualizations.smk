@@ -62,9 +62,9 @@ rule plot_confusion_matrix:
             --palette {params.palette} \
             --dpi {params.dpi} \
             --format {params.format} \
-            > {log} 2>&1
         {config.executor_close}
         """
+            # > {log} 2>&1
 
 rule plot_classifier_responses:
     """Analyze and visualize classifier responses.
@@ -85,9 +85,9 @@ rule plot_classifier_responses:
             / '{model_name}{data_identifier}_test_outputs.csv',
         script = SCRIPTS / 'visualization' / 'plot_classifier_responses.py'
     params:
-        dpi = 300,
-        format = 'png',
-        style = 'seaborn-paper'
+        n_units = 10,
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
     output:
         directory(project_paths.figures \
             / 'classifier_response' \
@@ -97,14 +97,12 @@ rule plot_classifier_responses:
     group: "visualization"
     shell:
         """
-        {config.executor_start}
+        {params.executor_start}
         python {input.script:q} \
             --input {input.dataframe:q} \
             --output {output:q} \
-            --dpi {params.dpi} \
-            --format {params.format} \
-            --style {params.style} \
-        {config.executor_close}
+            --n_units {params.n_units}
+        {params.executor_close}
         """
             # > {log} 2>&1
 

@@ -1,5 +1,12 @@
+# user files
+Makefile
+
+# runtime files
+config/config_runtime.yaml
+
 # temporary files 
 temp*
+*old
 
 # data
 /data/
@@ -14,6 +21,7 @@ temp*
 logs/
 .snakemake
 wandb/
+lightning_logs/
 
 # dataframes
 *.csv

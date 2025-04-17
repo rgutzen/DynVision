@@ -192,13 +192,13 @@ def setup_data_loaders(
 
     train_loader = get_ffcv_dataloader(
         path=config.dataset_train,
-        data_transform=f"ffcv_train_{config.data_name}",
+        data_transform=f"ffcv_train",
         **dataloader_args,
     )
 
     val_loader = get_ffcv_dataloader(
         path=config.dataset_val,
-        data_transform=f"ffcv_test_{config.data_name}",
+        data_transform=f"ffcv_test",
         **dataloader_args,
     )
 
@@ -217,14 +217,12 @@ def setup_callbacks(config: Any) -> List[pl.Callback]:
     """
     callbacks = []
 
-    # Add temporal dynamics monitoring callbacks if applicable
     if hasattr(config, "n_timesteps") and config.n_timesteps > 1:
         callbacks.append(custom_callbacks.MonitorClassifierResponses())
-        if hasattr(config, "train_tau") and config.train_tau:
-            callbacks.append(custom_callbacks.MonitorTimescales())
 
-    # Add weight distribution monitoring
     callbacks.append(custom_callbacks.MonitorWeightDistributions())
+
+    callbacks.append(custom_callbacks.MonitorClassifierResponses())
 
     # Setup checkpointing
     checkpoint_path = (
@@ -317,7 +315,10 @@ def run_training(config) -> int:
     data_mean = config.data_statistics[config.data_name]["mean"]
     data_std = config.data_statistics[config.data_name]["std"]
     dataloader_args = {
-        "n_timesteps": config.n_timesteps,
+        # not adding time extension in the data loader causes the model to repeat input
+        # over time during the model steps which is more efficient, because it requires
+        # less GPU transfer
+        # "n_timesteps": config.n_timesteps,
         "batch_size": config.batch_size,
         "encoding": "image",
         "resolution": config.resolution,

@@ -14,8 +14,6 @@ Usage:
 
 import argparse
 import logging
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -26,6 +24,8 @@ from ffcv.fields import IntField, RGBImageField, TorchTensorField
 from ffcv.writer import DatasetWriter
 from torchvision import datasets
 from torchvision.datasets.folder import IMG_EXTENSIONS
+from torchvision.transforms import ToPILImage
+
 
 from dynvision.data.datasets import get_dataset, load_raw_data
 
@@ -33,10 +33,6 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-# Configure parallel processing
-MAX_WORKERS = max(1, multiprocessing.cpu_count() - 1)
-executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,16 +66,13 @@ def parse_args() -> argparse.Namespace:
         "--max_resolution", type=int, default=224, help="Maximum image resolution"
     )
     parser.add_argument(
-        "--num_workers", type=int, default=MAX_WORKERS, help="Number of worker threads"
-    )
-    parser.add_argument(
         "--compress_probability",
         type=float,
         default=1.0,
         help="Probability of compressing an image",
     )
     parser.add_argument(
-        "--jpeg_quality", type=int, default=80, help="JPEG compression quality"
+        "--jpeg_quality", type=int, default=100, help="JPEG compression quality"
     )
 
     args = parser.parse_args()
@@ -118,9 +111,10 @@ def get_writer_config(
     Raises:
         ValueError: If data type is not supported
     """
-    if isinstance(data_sample, PIL.Image.Image):
+    if True:  # isinstance(data_sample, PIL.Image.Image):
         logger.info("Configuring RGB image encoding")
         data_shape = data_sample.size
+        # Configure writer specifically for the dataset characteristics
         image_writer = RGBImageField(
             write_mode=writer_mode,
             compress_probability=compress_probability,
@@ -149,6 +143,7 @@ def write_dataset_subset(
     """
     try:
         logger.info(f"Writing {subset_name} dataset with {len(dataset)} samples")
+        # Write dataset with explicit page size
         writer.from_indexed_dataset(dataset)
         logger.info(f"Finished writing {subset_name} dataset")
     except Exception as e:
@@ -169,6 +164,7 @@ def main() -> None:
             extensions=IMG_EXTENSIONS,
             data_transform=None,
             target_transform=f"{args.data_name}_all",
+            pil_to_tensor=False,
         )
 
         # Split dataset
@@ -184,6 +180,7 @@ def main() -> None:
 
         # Get writer configuration
         data_sample = dataset[0][0]
+
         writer_config = get_writer_config(
             data_sample,
             writer_mode=args.writer_mode,
@@ -192,33 +189,23 @@ def main() -> None:
             jpeg_quality=args.jpeg_quality,
         )
 
-        # Write datasets in parallel
-        futures = []
+        # Write datasets sequentially
         for subset, output in zip(
             ["train", "val"], [args.output_train, args.output_val]
         ):
             output.parent.mkdir(parents=True, exist_ok=True)
-            writer = DatasetWriter(output, writer_config)
-            future = executor.submit(
-                write_dataset_subset, writer, data[subset], subset
-            )
-            futures.append((subset, future))
-
-        # Wait for completion and handle errors
-        for subset, future in futures:
+            writer = DatasetWriter(output, writer_config, num_workers=0)
             try:
-                future.result()
+                write_dataset_subset(writer, data[subset], subset)
             except Exception as e:
                 logger.error(f"Failed to write {subset} dataset: {str(e)}")
-                raise
+                raise e
 
         logger.info("Successfully created FFCV datasets")
 
     except Exception as e:
         logger.error(f"Error creating FFCV datasets: {str(e)}")
-        raise
-    finally:
-        executor.shutdown()
+        raise e
 
 
 if __name__ == "__main__":

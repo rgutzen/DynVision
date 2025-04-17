@@ -129,12 +129,14 @@ class CorNetRT(LightningBase):
         input_dims: tuple = (20, 3, 224, 224),
         n_classes: int = 1000,
         stability_check: bool = False,
+        init_with_pretrained: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(
             input_dims=input_dims,
             n_classes=n_classes,
             stability_check=stability_check,
+            init_with_pretrained=init_with_pretrained,
             **kwargs,
         )
 
@@ -144,10 +146,15 @@ class CorNetRT(LightningBase):
         self._init_parameters()
 
     def _init_parameters(self) -> None:
-        self.load_pretrained_state_dict(check_mismatch_layer=["classifier.2"])
-        self.trainable_parameter_names = [
-            p for p in list(self.state_dict().keys()) if "classifier.2" in p
-        ]
+        if self.init_with_pretrained:
+            self.load_pretrained_state_dict(check_mismatch_layer=["classifier.2"])
+            self.trainable_parameter_names = [
+                p for p in list(self.state_dict().keys()) if "classifier.2" in p
+            ]
+        else:
+            self.trainable_parameter_names = [
+                p for p in list(self.state_dict().keys())
+            ]
 
     def download_pretrained_state_dict(self):
         url = f"https://s3.amazonaws.com/cornet-models/cornet_{self.model_letter.lower()}-{self.model_hash}.pth"

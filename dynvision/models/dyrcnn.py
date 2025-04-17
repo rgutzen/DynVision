@@ -111,8 +111,6 @@ class DyRCNN(LightningBase):
         stability_check: bool = False,
         **kwargs: Any,
     ) -> None:
-        validate_biological_parameters(dt, tau, t_feedforward, t_recurrence)
-
         super().__init__(
             n_classes=n_classes,
             input_dims=input_dims,
@@ -133,26 +131,19 @@ class DyRCNN(LightningBase):
             stability_check=stability_check,
             **kwargs,
         )
+        validate_biological_parameters(
+            self.dt, self.tau, self.t_feedforward, self.t_recurrence
+        )
 
         # Calculate delays in timesteps
-        self.delay_ff = int(t_feedforward / dt)
-        self.delay_rc = int(t_recurrence / dt)
-
-        # Initialize retina
-        if self.use_retina:
-            self.bottleneck_channels = 18
-            self.retina = Retina(
-                in_channels=self.n_channels,
-                out_channels=self.bottleneck_channels,
-                mid_channels=36,
-                kernel_size=9,
-                bias=self.bias,
-                stability_check=stability_check,
-            )
+        self.delay_ff = int(self.t_feedforward / self.dt)
+        self.delay_rc = int(self.t_recurrence / self.dt)
 
     def setup(self, stage: Optional[str]) -> None:
         """Set up model for training or evaluation."""
+        # Initialize parameters with a forward pass before optimizer configuration
         super().setup(stage)
+
         if stage == "fit":
             # Make all parameters trainable
             self.trainable_parameter_names = [
@@ -165,6 +156,9 @@ class DyRCNN(LightningBase):
     def _define_architecture(self) -> None:
         """Define model architecture."""
         raise NotImplementedError("Define the model architecture!")
+
+    def configure_optimizers(self):
+        return super().configure_optimizers()
 
 
 class DyRCNNx4(DyRCNN, LightningBase):
@@ -212,7 +206,7 @@ class DyRCNNx4(DyRCNN, LightningBase):
             "layer",  # apply (recurrent) convolutional layer
             "addext",  # add external input
             "addskip",  # add skip connection
-            "addfeedback"  # add feedback connection
+            "addfeedback",  # add feedback connection
             "tstep",  # apply dynamical systems ode solver step
             "nonlin",  # apply nonlinearity
             "supralin",  # apply supralinearity
@@ -227,6 +221,18 @@ class DyRCNNx4(DyRCNN, LightningBase):
         if hasattr(self, "supralinearity") and float(self.supralinearity) != 1:
             self.supralin = SupraLinearity(
                 n=float(self.supralinearity), requires_grad=False
+            )
+
+        # Initialize retina
+        if self.use_retina:
+            self.bottleneck_channels = 18
+            self.retina = Retina(
+                in_channels=self.n_channels,
+                out_channels=self.bottleneck_channels,
+                mid_channels=36,
+                kernel_size=9,
+                bias=self.bias,
+                stability_check=self.stability_check,
             )
 
         # Common layer parameters
@@ -302,7 +308,10 @@ class DyRCNNx4(DyRCNN, LightningBase):
         if self.feedback:
             self.addfeedback_V1 = Feedback(
                 source=self.V4,
-                auto_adapt=True,
+                in_channels=self.V4.out_channels,
+                out_channels=self.V1.in_channels,
+                scale_factor=self.V4.dim_y / self.V1.dim_y,
+                # auto_adapt=True,
             )
         self.tau_V4 = torch.nn.Parameter(
             torch.tensor(self.tau, dtype=float),
@@ -329,7 +338,10 @@ class DyRCNNx4(DyRCNN, LightningBase):
         if self.feedback:
             self.addfeedback_V2 = Feedback(
                 source=self.IT,
-                auto_adapt=True,
+                in_channels=self.IT.out_channels,
+                out_channels=self.V2.in_channels,
+                scale_factor=self.IT.dim_y / self.V2.dim_y,
+                # auto_adapt=True,
             )
         self.tau_IT = torch.nn.Parameter(
             torch.tensor(self.tau, dtype=float),
@@ -343,6 +355,12 @@ class DyRCNNx4(DyRCNN, LightningBase):
             nn.Flatten(),
             nn.Linear(self.IT.out_channels, self.n_classes),
         )
+
+        x = torch.randn(1, *self.input_dims, device=self.device)
+        y = self.forward(x, store_responses=False)
+        self.reset()
+
+        self.trainable_parameter_names = [k for k in self.state_dict().keys()]
 
     def _init_parameters(self) -> None:
         super()._init_parameters()
@@ -375,9 +393,9 @@ class DyRCNNx2(DyRCNN):
 
     def _define_architecture(self):
         self.layer_names = ["layer1", "layer2"]
+        # define operations order within layer
         self.layer_operations = [
             "layer",  # apply (recurrent) convolutional layer
-            "addskip",  # add skip connection
             "addext",  # add external input
             "tstep",  # apply dynamical systems ode solver step
             "nonlin",  # apply nonlinearity

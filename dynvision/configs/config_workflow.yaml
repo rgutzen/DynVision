@@ -10,7 +10,7 @@ model_name:
   # - ResNet18
   # - ResNet1202
   # - ResNet44
-seed: "0003"
+seed: "0011"
 model_args:
   # tsteps: 20
   # tau: [5, 8, 11, 14, 17]
@@ -27,8 +27,8 @@ model_args:
   # feedback: 'true'
   # supralin: [1.000000001, 1.0000001, 1.00001, 1.001, 1.1]
   # taugrad: 'true'
-  # lossrt: 20
-  # inadapt: 0.9
+  lossrt: 20
+  inadapt: 0.9
   # inadapt: [0.3, 0.6, 0.9]
 
 init_with_pretrained: False
@@ -48,12 +48,12 @@ data_group: "invertebrates"  # cifar100
 # data_group: "all"
 
 experiment: 
-  # - response
-  # - responseffonly
+  - response
+  - responseffonly
   - duration
   # - stability
-  # - contrast
-  # - interval
+  - contrast
+  - interval
   # - noiseadaption
   # - spatialsplit
 

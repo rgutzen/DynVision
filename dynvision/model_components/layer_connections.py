@@ -59,7 +59,7 @@ class ConnectionBase(nn.Module):
         self.bias = bias
         self.scale_factor = scale_factor
         self.parametrization = parametrization
-        self.setup_transform = auto_adapt
+        self.setup_transform = True
         self.stability_check = stability_check
 
         # Initialize device to None - will be set on first forward pass
@@ -77,6 +77,7 @@ class ConnectionBase(nn.Module):
                     raise ValueError(
                         "scale_factor must be an integer when greater than 1."
                     )
+                scale_factor = int(scale_factor)
                 x_proxy = torch.randn(out_channels, 1, 1)
                 h_proxy = torch.randn(in_channels, scale_factor, scale_factor)
             else:
@@ -84,10 +85,8 @@ class ConnectionBase(nn.Module):
                 x_proxy = torch.randn(out_channels, s.denominator, s.denominator)
                 h_proxy = torch.randn(in_channels, s.numerator, s.numerator)
 
-            self.conv = self._setup_conv(x=x_proxy, h=h_proxy)
-            self.upsample = self._setup_upsample(
-                x=x_proxy, h=h_proxy, mode=upsample_mode
-            )
+            self._setup_conv(x=x_proxy, h=h_proxy)
+            self._setup_upsample(x=x_proxy, h=h_proxy, mode=upsample_mode)
 
     def _setup_conv(self, x: torch.Tensor, h: torch.Tensor) -> Union[nn.Module, bool]:
         if x is None or h is None:
@@ -101,7 +100,7 @@ class ConnectionBase(nn.Module):
         if in_channels == out_channels and stride == 1:
             return False
 
-        transform_conv = nn.Conv2d(
+        self.conv = nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=1,
@@ -111,9 +110,8 @@ class ConnectionBase(nn.Module):
             device=h.device,
             dtype=h.dtype,
         )
-        transform_conv = self.parametrization(transform_conv)
-        self._initialize_weights(transform_conv)
-        return transform_conv
+        # transform_conv = self.parametrization(self.conv)
+        self._initialize_weights(self.conv)
 
     def _setup_upsample(
         self, x: torch.Tensor, h: torch.Tensor, mode: str = "bilinear"
@@ -125,7 +123,7 @@ class ConnectionBase(nn.Module):
         if scale_factor <= 1:
             return False
 
-        return nn.Upsample(scale_factor=scale_factor, mode=mode)
+        self.upsample = nn.Upsample(scale_factor=scale_factor, mode=mode)
 
     def _initialize_weights(self, conv_layer: nn.Conv2d) -> None:
         """Initialize weights using Kaiming initialization."""
@@ -154,8 +152,8 @@ class ConnectionBase(nn.Module):
 
         # Setup transforms if needed
         if self.setup_transform:
-            self.conv = self._setup_conv(x, h)
-            self.upsample = self._setup_upsample(x, h)
+            self._setup_conv(x, h)
+            self._setup_upsample(x, h)
 
         if h is None:
             return x
@@ -163,23 +161,20 @@ class ConnectionBase(nn.Module):
         h = h.requires_grad_()
 
         # Process hidden state
-        with on_same_device(
-            x=x, h=h, conv=self.conv, upsample=self.upsample, label="LayerConnection"
-        ):
-            if self.conv:
-                h = self.conv(h)
-            if self.upsample:
-                h = self.upsample(h)
+        if self.conv:
+            h = self.conv(h)
+        if self.upsample:
+            h = self.upsample(h)
 
-            # Check stability
-            if self.stability_check:
-                check_stability(h)
+        # Check stability
+        if self.stability_check:
+            check_stability(h)
 
-            # Combine with input
-            output = x + h
+        # Combine with input
+        output = x + h
 
-            if self.stability_check:
-                check_stability(output)
+        if self.stability_check:
+            check_stability(output)
 
         return output
 

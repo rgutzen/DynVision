@@ -22,15 +22,17 @@ import torch
 from torch.utils.data import DataLoader
 
 from dynvision import models
-from dynvision.data.dataloader import get_data_loader_class
+from dynvision.data.dataloader import (
+    get_data_loader_class,
+    _adjust_data_dimensions,
+    _adjust_label_dimensions,
+)
+
 from dynvision.data.datasets import get_dataset
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
-    parse_kwargs,
     filter_kwargs,
     parse_parameters,
-    parse_string2dict,
-    load_config,
     str_to_bool,
     handle_errors,
 )
@@ -151,8 +153,8 @@ def setup_data_loader(
     return data_loader_class(
         dataset,
         batch_size=batch_size,
-        shuffle=False,  # Disable shuffling for testing
-        num_workers=num_workers,  # Use minimal workers for testing
+        shuffle=True,
+        num_workers=num_workers,
         persistent_workers=False,  # Disable persistent workers
         prefetch_factor=None,  # Disable prefetching
         pin_memory=True,  # Keep pin_memory for GPU transfer
@@ -278,7 +280,8 @@ def run_testing(config, **kwargs) -> int:
     pylogger.info(f"Loading dataset from {config.dataset}")
     config.dataset = get_dataset(
         config.dataset,
-        data_transform=f"{config.data_transform}_test",
+        data_name=config.data_name,
+        data_transform="test",
         target_transform=config.target_transform,
         cache_size=100,  # Reduce cache size for testing
         pin_memory=True,
@@ -300,6 +303,18 @@ def run_testing(config, **kwargs) -> int:
         config.batch_size = suggested_batch_size
 
     data_loader = setup_data_loader(**vars(config))
+
+    inputs, label_indices, *paths = next(iter(data_loader))
+    inputs = _adjust_data_dimensions(inputs)
+    label_indices = _adjust_label_dimensions(label_indices)
+    batch_size, n_timesteps, *input_shape = inputs.shape
+    input_dims = (n_timesteps, *input_shape)
+    setattr(config, "input_dims", input_dims)
+
+    pylogger.info(f"input shape: {inputs.shape}")
+    pylogger.info(
+        f"pixel values in first batch: {inputs.mean():.3f} ± {inputs.std():.3f}"
+    )
 
     # Load model and weights
     pylogger.info(f"Loading model {config.model_name} from {config.input_model_state}")

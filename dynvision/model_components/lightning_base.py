@@ -80,6 +80,8 @@ class UtilityBase(nn.Module):
             x = x.unsqueeze(1)
         elif len(x.shape) == 5:
             pass
+        elif len(x.shape) == 6:  # assume duplicate batch dim
+            x = x[0]
         else:
             raise ValueError(
                 f"Invalid input shape: {x.shape}. Expected formats: (dim_y, dim_x), (batch_size, dim_y, dim_x), (batch_size, channels, dim_y, dim_x), or (batch_size, n_timesteps, channels, dim_y, dim_x)"
@@ -193,7 +195,7 @@ class UtilityBase(nn.Module):
             torch.all(x.eq(0)) or (torch.isnan(x).all()) or x.grad_fn is None
         )
 
-        # breakpoint()
+        logger.info("Determining residual timesteps...")
         with on_same_device(
             x=x,
             **self.get_safely_named_parameters_dict(),
@@ -206,6 +208,8 @@ class UtilityBase(nn.Module):
                     raise ValueError(
                         f"Unable to determine residual timesteps (> {max_timesteps})!"
                     )
+
+        logger.info(f"Residual timesteps: {t}")
 
         if hasattr(self, "reset"):
             self.reset()
@@ -352,16 +356,8 @@ class UtilityBase(nn.Module):
         Print the names of trainable and fixed parameters in the model.
         """
         trainable, fixed = [], []
-        for name, param in self.named_parameters():
-            if (
-                hasattr(self, "trainable_parameter_names")
-                and name in self.trainable_parameter_names
-                and param.requires_grad
-            ):
-                trainable += [name]
-            elif (
-                not hasattr(self, "trainable_parameter_names") and param.requires_grad
-            ):
+        for name, param in self.named_trainable_parameters():
+            if param.requires_grad:
                 trainable += [name]
             else:
                 fixed += [name]
@@ -665,12 +661,14 @@ class LightningBase(UtilityBase, pl.LightningModule):
     )
     def __init__(
         self,
+        input_dims: Tuple[int] = (20, 3, 224, 224),
         retain_graph: bool = defaults.retain_graph,
         store_responses: int = defaults.store_train_responses,
         criterion_params: List[Tuple[str, Dict[str, Any]]] = [
             (loss, defaults.loss_configs[loss]) for loss in defaults.loss
         ],
         loss_reaction_time: float = defaults.loss_reaction_time,
+        n_timesteps: int = 1,
         dt: float = defaults.dt,
         tau: float = defaults.tau,
         t_feedforward: float = defaults.t_feedforward,
@@ -714,11 +712,23 @@ class LightningBase(UtilityBase, pl.LightningModule):
         self.scheduler_configs = scheduler_configs
         self.recurrence_lr_factor = recurrence_lr_factor
 
-        # Define the input dims
-        if "input_dims" in kwargs:
-            x = torch.randn(1, *kwargs["input_dims"], device=self.device)
-            x = self._adjust_input_dimensions(x)
-            _, self.n_timesteps, self.n_channels, self.dim_y, self.dim_x = x.shape
+        # Process the input dims and timesteps
+        x = torch.randn(1, *input_dims, device=self.device)
+        x = self._adjust_input_dimensions(x)
+        _, data_timesteps, self.n_channels, self.dim_y, self.dim_x = x.shape
+
+        if data_timesteps == 1:
+            self.n_timesteps = n_timesteps
+        elif n_timesteps == 1:
+            self.n_timesteps = data_timesteps
+        else:
+            self.n_timesteps = max(n_timesteps, data_timesteps)
+            logger.warning(
+                f"The model is initialized with {n_timesteps} timesteps. "
+                f"The provided data dimensions have {data_timesteps} timesteps. "
+                f"Choosing the larger number of timesteps!"
+            )
+        self.input_dims = (self.n_timesteps, self.n_channels, self.dim_y, self.dim_x)
 
         self.save_hyperparameters()  # redundant with logger?
 
@@ -775,12 +785,12 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
         responses = {}
         if not hasattr(self, "layer_operations"):
-            # define operations order within layer
+            # define default operations order within layer
             self.layer_operations = [
                 "layer",  # apply (recurrent) convolutional layer
                 "addext",  # add external input
                 "addskip",  # add skip connection
-                "addfeedback"  # add feedback connection
+                "addfeedback",  # add feedback connection
                 "tstep",  # apply dynamical systems ode solver step
                 "nonlin",  # apply nonlinearity
                 "supralin",  # apply supralinearity
@@ -795,10 +805,15 @@ class LightningBase(UtilityBase, pl.LightningModule):
             layer = getattr(self, layer_name)
 
             for operation in self.layer_operations:
-                if feedforward_only and operation in ["addskip", "addext"]:
+                if feedforward_only and operation in [
+                    "addskip",
+                    "addext",
+                    "addfeedback",
+                ]:
                     continue
 
                 module_name = f"{operation}_{layer_name}"
+
                 if operation == "layer":
                     x = layer(x)
 
@@ -826,7 +841,6 @@ class LightningBase(UtilityBase, pl.LightningModule):
                 else:
                     pass
 
-        # linear classifier
         if x is None:
             x = torch.zeros((batch_size, self.n_classes), device=self.device)
         else:
@@ -893,6 +907,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
         response_dict: Dict[str, torch.Tensor] = {},
         store_n_responses: Optional[int] = None,
     ) -> None:
+        logger.info("Initializing responses")
+
         if store_n_responses is None:
             store_n_responses = int(self.store_responses)
 
@@ -902,6 +918,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
             device = self.device
 
         self.responses = {}
+        self.reset()
 
         if not response_dict or any(v is None for v in response_dict.values()):
             random_input = torch.randn(
@@ -912,7 +929,10 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
         if hasattr(self, "n_residual_timesteps"):
             n_timesteps = self.n_timesteps + self.n_residual_timesteps
+        else:
+            n_timesteps = self.n_timesteps
 
+        # n_timesteps = 40  ## hack!!
         for layer_name in response_dict.keys():
             self.responses[layer_name] = torch.zeros(
                 (
@@ -976,14 +996,15 @@ class LightningBase(UtilityBase, pl.LightningModule):
         inputs, label_indices, *extra = batch
         inputs = self._adjust_input_dimensions(inputs)
         label_indices = self._adjust_label_dimensions(label_indices)
+
         if inputs.size(1) == 1 and self.n_timesteps > 1:
             # input data is not yet extended
             inputs = inputs.expand(-1, self.n_timesteps, -1, -1, -1)
-            label_indices = label_indices(-1, self.n_timesteps)
+            label_indices = label_indices.expand(-1, self.n_timesteps)
 
         return (inputs, label_indices, *extra)
 
-    def _expand_residual_timesteps(
+    def _extend_residual_timesteps(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         inputs, label_indices, *extra = batch
@@ -1029,7 +1050,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         store_responses: bool = False,
     ) -> Tuple[torch.Tensor, float, torch.Tensor]:
         batch = self._expand_timesteps(batch)
-        inputs, label_indices, *paths = self._expand_residual_timesteps(batch)
+        inputs, label_indices, *paths = self._extend_residual_timesteps(batch)
 
         # forward
         # (you may override the model's store_response setting here)
@@ -1134,9 +1155,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
         self,
         label_indices: torch.Tensor,
         guess_indices: torch.Tensor,
-        ignore_index: int = -100,
     ) -> float:
-        mask = torch.where(label_indices != ignore_index)
+        mask = torch.where(label_indices >= 0)
         accuracy = (guess_indices[mask] == label_indices[mask]).float().mean().item()
         return accuracy
 
@@ -1158,8 +1178,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
         batch_idx: int,
         store_responses: bool = False,
     ) -> Tuple[torch.Tensor, float]:
-        batch = self.backward_expand_timesteps(batch)
-        inputs, label_indices, *paths = self._expand_residual_timesteps(batch)
+        batch = self._expand_timesteps(batch)
+        inputs, label_indices, *paths = self._extend_residual_timesteps(batch)
         loss, accuracy, guess_indices = self.model_step(
             batch, batch_idx, store_responses
         )
@@ -1319,6 +1339,9 @@ class LightningBase(UtilityBase, pl.LightningModule):
         # Initialize lists to hold recurrent and non-recurrent parameters
         recurrence_params, non_recurrence_params = [], []
 
+        # Log trainable parameter names for debugging
+        self.print_trainable_parameter_names()
+
         # Retrieve the optimizer class from PyTorch
         if isinstance(self.optimizer, str):
             if hasattr(torch.optim, self.optimizer):
@@ -1326,16 +1349,12 @@ class LightningBase(UtilityBase, pl.LightningModule):
             else:
                 raise ValueError(f"Unknown optimizer: {self.optimizer}")
 
-            # Log trainable parameter names for debugging
-            self.print_trainable_parameter_names()
-
             # Split parameters into recurrent and non-recurrent groups
-            for name, param in self.named_parameters():
-                if name in self.trainable_parameter_names:
-                    if "recurrence" in name:  # Identify recurrent parameters by name
-                        recurrence_params.append(param)
-                    else:
-                        non_recurrence_params.append(param)
+            for name, param in self.named_trainable_parameters():
+                if "recurrence" in name:  # Identify recurrent parameters by name
+                    recurrence_params.append(param)
+                else:
+                    non_recurrence_params.append(param)
 
             # Prepare optimizer parameter groups
             param_groups = [{"params": non_recurrence_params}]

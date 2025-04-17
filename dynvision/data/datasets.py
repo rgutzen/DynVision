@@ -111,7 +111,7 @@ class PathFolder(datasets.DatasetFolder):
         )
 
         self.cache_size = cache_size
-        self.pin_memory = pin_memory
+        self.pin_memory = pin_memory and torch.cuda.is_available()
         self._prefetch_indices = set()
         self.return_path = return_path
 
@@ -174,7 +174,7 @@ class PathFolder(datasets.DatasetFolder):
             if self.target_transform is not None:
                 target = self.target_transform(target)
 
-            # Pin memory if requested
+            # Pin memory if requested and GPU is available
             if (
                 self.pin_memory
                 and isinstance(sample, torch.Tensor)
@@ -248,11 +248,13 @@ def insert_a_before_b(
 
 def get_dataset(
     data_path: Path = None,
+    data_name=None,
     data_transform=None,
     target_transform=None,
     dataset_class=PathFolder,
     cache_size: int = 1000,
     pin_memory: bool = False,
+    pil_to_tensor: bool = True,
     **kwargs,
 ) -> Dataset:
     """Get dataset with optimized loading.
@@ -287,18 +289,28 @@ def get_dataset(
         data_path = data_path.parent
 
     # get transforms
-    data_transform = [tv.transforms.PILToTensor()]
-    data_transform = data_transform.extend(get_data_transform(data_transform))
+    transform = []
+    additional_transforms = get_data_transform(
+        transform=data_transform, data_name=data_name
+    )
+    if additional_transforms is not None:
+        transform.extend(additional_transforms)
+
+    # Add ToTensor after PIL transforms
+    if pil_to_tensor:
+        transform.append(tv.transforms.PILToTensor())
+
     target_transform = get_target_transform(target_transform)
 
-    if isinstance(data_transform, list):
-        data_transform = transforms.Compose(data_transform)
+    print(f"Transform sequence: {transform}")
+    if isinstance(transform, list):
+        transform = transforms.Compose(transform)
     if isinstance(target_transform, list):
         target_transform = transforms.Compose(target_transform)
 
     dataset_kwargs = dict(
         root=data_path,
-        transform=data_transform,
+        transform=transform,
         target_transform=target_transform,
         cache_size=cache_size,
         pin_memory=pin_memory,

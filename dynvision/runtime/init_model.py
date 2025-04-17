@@ -91,7 +91,8 @@ def main():
         # Load the dataset
         dataset = get_dataset(
             config.dataset,
-            data_transform=f"{config.data_name}_test",
+            data_transform="test",
+            data_name=config.data_name,
             pin_memory=torch.cuda.is_available(),
         )
 

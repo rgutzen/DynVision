@@ -29,12 +29,12 @@ transform_presets = dict(
     ],
     ffcv_test=[],
     train=[
-        tv.transforms.RandomRotation(10),
-        tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
+        # tv.transforms.RandomRotation(10),
+        # tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
         tv.transforms.RandomHorizontalFlip(),
-        tv.transforms.ColorJitter(
-            brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1
-        ),
+        # tv.transforms.ColorJitter(
+        #     brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1
+        # ),
     ],
     test=[],
     ffcv_train_mnist=[
@@ -42,23 +42,23 @@ transform_presets = dict(
         ffcv.transforms.RandomContrast(0.2),
         ffcv.transforms.RandomSaturation(0.2),
     ],
-    train_mnist=[
-        tv.transforms.RandomRotation(10),
-        tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
-        tv.transforms.RandomHorizontalFlip(),
-        tv.transforms.ColorJitter(
-            brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1
-        ),
+    mnist=[
         tv.transforms.Grayscale(num_output_channels=1),
     ],
-    test_mnist=[
-        tv.transforms.Grayscale(num_output_channels=1),
+    imagenet=[
+        tv.transforms.Resize(256),
+        tv.transforms.CenterCrop(224),
+    ],
+    imagenette=[
+        tv.transforms.Resize(256),
+        tv.transforms.CenterCrop(224),
     ],
 )
 
 
 def get_data_transform(
     transform: Union[str, List[str], Dict[str, Any], None] = None,
+    data_name: Optional[str] = None,
     **kwargs: Any,
 ) -> Optional[List[Any]]:
     """Get data transforms.
@@ -76,39 +76,46 @@ def get_data_transform(
     Raises:
         ValueError: If transform specification is invalid
     """
-    if transform is None:
-        return None
+    transforms_to_apply = []
 
-    out = []
+    # Always apply data_name specific transforms first if available
+    if (
+        data_name is not None
+        and data_name.lower() in transform_presets.keys()
+        and (not "ffcv" in str(transform))
+    ):
+        transforms_to_apply.extend(transform_presets[data_name.lower()])
 
     # Handle different transform types
-    if isinstance(transform, list):
+    if transform is None:
+        return transforms_to_apply if transforms_to_apply else None
+    elif isinstance(transform, list):
         for t in transform:
-            out.extend(get_data_transform(t))
-
+            additional = get_data_transform(t)
+            if additional:
+                transforms_to_apply.extend(additional)
     elif isinstance(transform, dict):
         for t, k in transform.items():
             k.update(kwargs)
-            out.extend(get_data_transform(t, **k))
-
+            additional = get_data_transform(t, **k)
+            if additional:
+                transforms_to_apply.extend(additional)
     elif isinstance(transform, str):
         transform = transform.lower()
-        if transform in transform_presets.keys():
-            pass
+        if transform in transform_presets:
+            transforms_to_apply.extend(transform_presets[transform])
         elif "ffcv_train" in transform:
-            transform = "ffcv_train"
+            transforms_to_apply.extend(transform_presets["ffcv_train"])
         elif "train" in transform:
-            transform = "train"
+            transforms_to_apply.extend(transform_presets["train"])
         elif "ffcv_test" in transform:
-            transform = "ffcv_test"
+            transforms_to_apply.extend(transform_presets["ffcv_test"])
         elif "test" in transform:
-            transform = "test"
+            transforms_to_apply.extend(transform_presets["test"])
         else:
-            ValueError(f"No transform with name {transform} found in presets!")
+            raise ValueError(f"No transform with name {transform} found in presets!")
 
-        out.extend(transform_presets[transform])
-
-    return out
+    return transforms_to_apply if transforms_to_apply else None
 
 
 def get_target_transform(transform: str, **kwargs):
@@ -123,8 +130,6 @@ def get_target_transform(transform: str, **kwargs):
         for t, k in transform.items():
             out += get_target_transform(t, **k)
     elif isinstance(transform, str):
-        transform = transform.replace("imagenette", "imagenet")  # hack
-
         if len(transform.lower().split("_")) != 2:
             raise ValueError(
                 f"Expect target transform name as 'dataset_datagroup', got {transform}"

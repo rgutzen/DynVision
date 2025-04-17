@@ -43,13 +43,6 @@ conda activate dynvision
 # Core dependencies
 pip install -e .
 
-# Development dependencies
-pip install -e ".[dev]"
-
-# Documentation dependencies
-pip install -e ".[doc]"
-```
-
 ## Quick Start
 
 1. Prepare your dataset:
@@ -130,18 +123,6 @@ snakemake -j1 plot_classifier_responses \
 
 ## Development
 
-### Environment Setup
-
-1. Install development dependencies:
-```bash
-pip install -e ".[dev]"
-```
-
-2. Install pre-commit hooks:
-```bash
-pre-commit install
-```
-
 ### Code Style
 
 - We use Black for code formatting
@@ -161,21 +142,6 @@ pytest tests/test_models.py
 
 # Run with coverage
 pytest --cov=dynvision
-```
-
-### Documentation
-
-Build the documentation:
-```bash
-# Install documentation dependencies
-pip install -e ".[doc]"
-
-# Build docs
-cd docs
-mkdocs build
-
-# Serve locally
-mkdocs serve
 ```
 
 ## Contributing

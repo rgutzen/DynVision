@@ -24,7 +24,7 @@ class CordsNet(LightningBase):
     def __init__(
         self,
         n_classes=1000,
-        input_dims=(20, 3, 128, 128),  # (t, c, y, x)
+        input_dims=(20, 3, 224, 224),  # (t, c, y, x)
         dt=1,  # ms
         tau=10,  # ms
         t_feedforward=1,  # ms
@@ -128,6 +128,7 @@ class CordsNet(LightningBase):
     def reset(self):
         for layer_name in self.layer_names[1:]:
             getattr(self, layer_name).reset()
+            getattr(self, f"tstep_{layer_name}").reset()
 
     def _define_architecture(self):
         channels = [64, 64, 64, 128, 128, 256, 256, 512, 512]
@@ -254,7 +255,7 @@ if __name__ == "__main__":
     random_input = torch.randn(1, *input_shape)
 
     t = 0
-    output = model._forward(random_input[:, t, ...])
+    output = model.forward(random_input)
 
     outputs = model(random_input).squeeze()  # remove batch dimension
 
