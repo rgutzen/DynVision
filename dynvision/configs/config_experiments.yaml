@@ -11,7 +11,7 @@ experiment_config:
     data_loader: StimulusDuration
     data_args:
       tsteps: 20
-      intro: 2
+      intro: 0
       stim: [16]
 
   responseffonly:
@@ -20,7 +20,7 @@ experiment_config:
     data_loader: StimulusDuration
     data_args:
       tsteps: 20
-      intro: 2
+      intro: 0
       stim: [16]
       ffonly: 'true'
 

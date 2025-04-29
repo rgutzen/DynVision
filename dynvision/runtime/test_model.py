@@ -16,12 +16,10 @@ import multiprocessing
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
-import pandas as pd
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
 
-from dynvision import models
 from dynvision.data.dataloader import (
     get_data_loader_class,
     _adjust_data_dimensions,
@@ -35,6 +33,7 @@ from dynvision.utils import (
     parse_parameters,
     str_to_bool,
     handle_errors,
+    load_model_and_weights,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -162,42 +161,6 @@ def setup_data_loader(
     )
 
 
-@handle_errors(verbose=False)
-def load_model_and_weights(
-    model_name: str, state_dict_path: Path, config: Any, device: torch.device
-) -> Tuple[torch.nn.Module, int]:
-    """Load the model and its weights.
-
-    Args:
-        model_name: Name of the model class
-        state_dict_path: Path to the saved model weights
-        config: Configuration object containing model parameters
-
-    Returns:
-        Tuple containing:
-            - Loaded model instance
-            - Number of classes
-
-    Raises:
-        ValueError: If model loading fails
-    """
-    state_dict = torch.load(state_dict_path, map_location=device)
-    if not len(state_dict):
-        raise ValueError(f"State dict is empty: {state_dict_path}")
-
-    last_key = next(reversed(state_dict))
-    n_classes = len(state_dict[last_key])
-
-    model_class = getattr(models, model_name)
-    model_args = filter_kwargs(model_class, vars(config))
-    model_args.update({"n_classes": n_classes})
-
-    model = model_class(**model_args).to(device)
-    model.load_state_dict(state_dict)
-
-    return model
-
-
 def setup_trainer(
     logger: Optional[pl.loggers.WandbLogger],
     enable_progress_bar: bool,
@@ -278,7 +241,7 @@ def run_testing(config, **kwargs) -> int:
 
     # Load dataset
     pylogger.info(f"Loading dataset from {config.dataset}")
-    config.dataset = get_dataset(
+    dataset = get_dataset(
         config.dataset,
         data_name=config.data_name,
         data_transform="test",
@@ -286,7 +249,7 @@ def run_testing(config, **kwargs) -> int:
         cache_size=100,  # Reduce cache size for testing
         pin_memory=True,
     )
-    total_samples = len(config.dataset)
+    total_samples = len(dataset)
     pylogger.info(f"Dataset loaded with {total_samples} samples")
 
     # Setup data loader with minimal configuration

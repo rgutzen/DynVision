@@ -2,8 +2,10 @@
 mounted_datasets:
     - imagenet
 
-data_resolution:
+use_ffcv: True
+
 # used for setup the ffcv dataloader
+data_resolution:
     mnist: 28
     cifar10: 32
     cifar100: 32
@@ -38,6 +40,9 @@ data_groups:
         '01':
             - 0
             - 1
+        '38':
+            - 3
+            - 8
         '89':
             - 8
             - 9
@@ -110,23 +115,19 @@ data_groups:
             - 77 # snail
             - 79 # spider
             - 99 # worm
-    gabordetect:
-        '013':
-            - 0  # no patch
-            - 1  # upper right
-            - 3  # lower left
-
-gabordetect:
-    # image_dimension: 48  # set via wildcard
-    duration: 1000  # in ms
-    time_resolution: 100 # in ms
-    delay: 500  # in ms
-    orientation: 0  # in degrees
-    spatial_frequency: 0.2
-    positions: [0, 1, 2, 3, 4]
-    contrasts: [1, 0.3]  # [train, test]
-    noise: 0.05
-    n_stds: 4
-    offset: 0
-    bandwidth: 1
-    data_size: [500, 100] # per position [train, test]
+        alphabet:
+            - 0  # apple
+            - 8  # bicycle
+            - 18 # caterpillar
+            - 29 # dinosaur
+            - 31 # elephant
+            - 33 # forest
+            - 35 # girl
+            - 37 # house
+            - 38 # kangaroo
+            - 44 # lizard
+            - 51 # mushroom
+            - 53 # orange
+            - 63 # porcupine
+            - 69 # rocket
+            - 82 # sunflower

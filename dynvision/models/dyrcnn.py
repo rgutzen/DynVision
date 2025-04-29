@@ -141,20 +141,9 @@ class DyRCNN(LightningBase):
 
     def setup(self, stage: Optional[str]) -> None:
         """Set up model for training or evaluation."""
-        # Initialize parameters with a forward pass before optimizer configuration
         super().setup(stage)
 
-        if stage == "fit":
-            # Make all parameters trainable
-            self.trainable_parameter_names = [
-                p for p in list(self.state_dict().keys())
-            ]
-            logger.info(
-                f"Number of trainable parameters: {len(self.trainable_parameter_names)}"
-            )
-
     def _define_architecture(self) -> None:
-        """Define model architecture."""
         raise NotImplementedError("Define the model architecture!")
 
     def configure_optimizers(self):
@@ -308,10 +297,10 @@ class DyRCNNx4(DyRCNN, LightningBase):
         if self.feedback:
             self.addfeedback_V1 = Feedback(
                 source=self.V4,
-                in_channels=self.V4.out_channels,
-                out_channels=self.V1.in_channels,
-                scale_factor=self.V4.dim_y / self.V1.dim_y,
-                # auto_adapt=True,
+                # in_channels=self.V4.out_channels,
+                # out_channels=self.V1.in_channels,
+                # scale_factor=self.V4.dim_y / self.V1.dim_y,
+                auto_adapt=True,
             )
         self.tau_V4 = torch.nn.Parameter(
             torch.tensor(self.tau, dtype=float),
@@ -338,10 +327,10 @@ class DyRCNNx4(DyRCNN, LightningBase):
         if self.feedback:
             self.addfeedback_V2 = Feedback(
                 source=self.IT,
-                in_channels=self.IT.out_channels,
-                out_channels=self.V2.in_channels,
-                scale_factor=self.IT.dim_y / self.V2.dim_y,
-                # auto_adapt=True,
+                # in_channels=self.IT.out_channels,
+                # out_channels=self.V2.in_channels,
+                # scale_factor=self.IT.dim_y / self.V2.dim_y,
+                auto_adapt=True,
             )
         self.tau_IT = torch.nn.Parameter(
             torch.tensor(self.tau, dtype=float),
@@ -356,11 +345,19 @@ class DyRCNNx4(DyRCNN, LightningBase):
             nn.Linear(self.IT.out_channels, self.n_classes),
         )
 
-        x = torch.randn(1, *self.input_dims, device=self.device)
-        y = self.forward(x, store_responses=False)
-        self.reset()
+    def setup(self, stage: Optional[str]) -> None:
+        if stage == "fit" and self.feedback:
+            # run forward pass to init feedback connections
+            for layer_name in self.layer_names:
+                if hasattr(self, f"addfeedback_{layer_name}"):
+                    getattr(self, f"addfeedback_{layer_name}").reset_transform()
 
-        self.trainable_parameter_names = [k for k in self.state_dict().keys()]
+            x = torch.randn((1, *self.input_dims), device=self.device)
+            y = self.forward(x, store_responses=False)
+
+            self.reset()
+
+        super().setup(stage)
 
     def _init_parameters(self) -> None:
         super()._init_parameters()
@@ -397,6 +394,8 @@ class DyRCNNx2(DyRCNN):
         self.layer_operations = [
             "layer",  # apply (recurrent) convolutional layer
             "addext",  # add external input
+            "addskip",  # add skip connection
+            "addfeedback",  # add feedback connection
             "tstep",  # apply dynamical systems ode solver step
             "nonlin",  # apply nonlinearity
             "supralin",  # apply supralinearity
@@ -454,12 +453,28 @@ class DyRCNNx2(DyRCNN):
         )
         self.tstep_layer2 = EulerStep(dt=self.dt, tau=self.tau)
         self.nonlin_layer2 = nn.ReLU(inplace=False)
+        if self.feedback:
+            self.addfeedback_layer1 = Feedback(source=self.layer2, autoadapt=True)
 
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
             nn.Linear(self.layer2.out_channels, self.n_classes, device=self.device),
         )
+
+    def setup(self, stage: Optional[str]) -> None:
+        if stage == "fit" and self.feedback:
+            # run forward pass to init feedback connections
+            for layer_name in self.layer_names:
+                if hasattr(self, f"addfeedback_{layer_name}"):
+                    getattr(self, f"addfeedback_{layer_name}").setup_transform = True
+
+            x = torch.randn((1, *self.input_dims), device=self.device)
+            y = self.forward(x, store_responses=False)
+
+            self.reset()
+
+        super().setup(stage)
 
     def _init_parameters(self):
         super()._init_parameters()

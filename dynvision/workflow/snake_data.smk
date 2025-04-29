@@ -16,14 +16,6 @@ Usage:
 
 """
 
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Union
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger('workflow.data')
 
 
@@ -95,7 +87,9 @@ rule symlink_data_subsets:
         get_data_location
     params:
         parent = lambda wildcards, output: Path(output.flag).parent,
-        source = lambda wildcards, output: Path(output.flag).with_suffix('')
+        source = lambda wildcards, output: Path(output.flag).with_suffix(''),
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
     output:
         flag = project_paths.data.interim \
             / '{data_name}' \
@@ -106,9 +100,11 @@ rule symlink_data_subsets:
     #     project_paths.logs / 'symlink_data_subsets_{data_name}_{data_subset}_{data_group}_{category}.log'
     shell:
         """
+        {params.executor_start}
         (mkdir -p {params.parent:q} && \
         ln -sf {input:q} {params.source:q} && \
         touch {output.flag:q}) 
+        {params.executor_close}
         """
         # > {log} 2>&1
 

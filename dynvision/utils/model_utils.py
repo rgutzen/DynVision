@@ -10,7 +10,9 @@ import logging
 import traceback
 from functools import wraps
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any, Callable, Tuple, Optional
+from pathlib import Path
+from .config_utils import filter_kwargs
 
 import numpy as np
 import torch
@@ -122,3 +124,49 @@ def check_weights(model, message="", min=-2, max=2):
                 contain_nan = True
 
     return weight_info, contain_nan
+
+
+@handle_errors(verbose=False)
+def load_model_and_weights(
+    model_name: str,
+    state_dict_path: Path,
+    config: Any,
+    device: Optional[torch.device] = None,
+) -> Tuple[torch.nn.Module, int]:
+    """Load the model and its weights.
+
+    Args:
+        model_name: Name of the model class
+        state_dict_path: Path to the saved model weights
+        config: Configuration object containing model parameters
+
+    Returns:
+        Tuple containing:
+            - Loaded model instance
+            - Number of classes
+
+    Raises:
+        ValueError: If model loading fails
+    """
+    # Lazy import to avoid circular dependency
+    from dynvision import models
+
+    state_dict = torch.load(state_dict_path, map_location=device)
+    if not len(state_dict):
+        raise ValueError(f"State dict is empty: {state_dict_path}")
+
+    last_key = next(reversed(state_dict))
+    n_classes = len(state_dict[last_key])
+
+    model_class = getattr(models, model_name)
+    model_args = filter_kwargs(model_class, vars(config))
+    model_args.update({"n_classes": n_classes})
+
+    model = model_class(**model_args)
+
+    if device is not None:
+        model = model.to(device)
+
+    model.load_state_dict(state_dict)
+
+    return model

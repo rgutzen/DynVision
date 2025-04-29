@@ -109,9 +109,8 @@ def calculate_accuracy(df: pd.DataFrame) -> float:
     Returns:
         Classification accuracy as float
     """
-    dfi = df[df.label_index != -1]
-    n_correct = (dfi.guess_index == dfi.label_index).sum()
-    accuracy = n_correct / len(dfi)
+    dfi = df[df.label_index >= 0]
+    accuracy = (dfi.guess_index == dfi.label_index).mean()
     return accuracy
 
 

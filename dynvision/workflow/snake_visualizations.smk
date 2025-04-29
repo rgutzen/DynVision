@@ -6,6 +6,12 @@ This workflow handles all visualization-related tasks including:
 - Weight distribution visualization
 - Experiment result plotting
 - Adaptation analysis
+- Interactive notebook generation
+- Enhanced model visualization
+- Model architecture visualization
+- Enhanced weight analysis
+- Temporal dynamics visualization
+- Interactive notebook generation
 
 Usage:
     # Generate confusion matrix
@@ -15,15 +21,128 @@ Usage:
     snakemake -j1 plot_classifier_responses model_name=DyRCNNx4
 """
 
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Union
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger('workflow.visualizations')
+
+# Configuration for interactive visualizations
+notebook_config = {
+    'template_dir': SCRIPTS / 'visualization' / 'examples',
+    'template_name': 'visualization_examples.ipynb',
+    'output_dir': project_paths.reports / 'notebooks'
+}
+
+
+rule generate_all_visualizations:
+    """Generate all visualizations for a model.
+
+    This rule creates all available visualizations including:
+    - Model architecture and temporal flow
+    - Weight distributions and layer statistics
+    - Classifier responses
+    - Interactive notebook
+
+    The visualizations provide comprehensive insights into:
+    - Network architecture and connectivity
+    - Layer-wise weight patterns and statistics
+    - Model behavior and responses
+    - Interactive analysis capabilities
+    """
+    input:
+        # Architecture visualizations
+        architecture = project_paths.figures / 'architecture' / '{model_name}{data_identifier}_{status}_architecture.png',
+        temporal = project_paths.figures / 'architecture' / '{model_name}{data_identifier}_{status}_temporal_flow.png',
+        
+        # Weight analysis
+        distributions = project_paths.figures / 'weights' / '{model_name}{data_identifier}_{status}_distributions.png',
+        statistics = project_paths.figures / 'weights' / '{model_name}{data_identifier}_{status}_statistics.png',
+        
+        # Interactive analysis
+        notebook = notebook_config['output_dir'] / '{model_name}' / 'analysis_{model_name}{data_identifier}_{status}.ipynb'
+    group: "visualization"
+
+# rule generate_interactive_notebook:
+#     """Generate interactive visualization notebook.
+
+#     This rule creates a Jupyter notebook for interactive
+#     model analysis and visualization.
+
+#     Input:
+#         model: Trained model state
+#         template: Example notebook template
+    
+#     Output:
+#         Interactive notebook
+#     """
+#     input:
+#         model = project_paths.models / '{model_name}' / '{model_name}{data_identifier}_{status}.pt',
+#         template = notebook_config['template_dir'] / notebook_config['template_name']
+#     output:
+#         notebook = notebook_config['output_dir'] / '{model_name}' / 'analysis_{model_name}{data_identifier}_{status}.ipynb'
+#     group: "visualization"
+#     run:
+#         output.notebook.parent.mkdir(parents=True, exist_ok=True)
+#         generate_analysis_notebook(
+#             model=input.model,
+#             output_dir=output.notebook.parent,
+#             name=output.notebook.stem,
+#             template_path=input.template
+#         )
+#         logger.info(f"Generated interactive notebook: {output.notebook}")
+
+rule plot_layer_analysis:
+    input:
+        model = project_paths.models / '{model_name}' / '{model_name}{data_identifier}_{status}.pt',
+        script = SCRIPTS / 'visualization' / 'enhanced_weight_distributions.py'
+    params:
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''    
+    output:
+        project_paths.figures / 'weights' / '{model_name}{data_identifier}_{status}_distributions.png',
+    group: "visualization"
+    shell:
+        """
+        {params.executor_start}
+        python {input.script:q} \
+            --model {input.model:q} \
+            --output {output:q} 
+        {params.executor_close}
+        """
+
+rule plot_model_architecture:
+    """Visualize model architecture.
+
+    This rule generates static and interactive visualizations
+    of model architecture with focus on recurrent connections.
+
+    Input:
+        model: Trained model state
+        script: Visualization script
+    
+    Output:
+        Architecture visualization
+    """
+    input:
+        state_dict = project_paths.models / '{model_name}' / '{model_name}{data_identifier}_{status}.pt',
+        script = SCRIPTS / 'visualization' / 'plot_model_architecture.py'
+    params:
+        interactive = True,
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
+    output:
+        static = project_paths.figures / 'architecture' / '{model_name}{data_identifier}_{status}_architecture.{format}',
+        temporal = project_paths.figures / 'architecture' / '{model_name}{data_identifier}_{status}_temporal_flow.{format}'
+    group: "visualization"
+    shell:
+        """
+        {params.executor_start}
+        python {input.script:q} \
+            --model_name {wildcards.model_name} \
+            --state_dict {input.state_dict:q} \
+            --output_static {output.static:q} \
+            --output_temporal {output.temporal:q} \
+            --format {wildcards.format} \
+            --interactive {params.interactive}
+        {params.executor_close}
+        """
 
 rule plot_confusion_matrix:
     """Generate and save confusion matrix visualization.
@@ -45,8 +164,8 @@ rule plot_confusion_matrix:
         script = SCRIPTS / 'visualization' / 'plot_confusion_matrix.py'
     params:
         palette = 'cividis',
-        dpi = 300,
-        format = 'png'
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
     output:
         plot = project_paths.figures / '{path}_{data_name}_confusion.{format}'
     # log:
@@ -54,15 +173,14 @@ rule plot_confusion_matrix:
     group: "visualization"
     shell:
         """
-        {config.executor_start}
+        {params.executor_start}
         python {input.script:q} \
             --input {input.test_results:q} \
             --output {output.plot:q} \
             --dataset {input.dataset} \
             --palette {params.palette} \
-            --dpi {params.dpi} \
-            --format {params.format} \
-        {config.executor_close}
+            --format {wildcards.format} \
+        {params.executor_close}
         """
             # > {log} 2>&1
 
@@ -125,9 +243,8 @@ rule plot_weight_distributions:
             / '{model_name}{data_identifier}_{status}.pt',
         script = SCRIPTS / 'visualization' / 'plot_weight_distributions.py'
     params:
-        dpi = 300,
-        format = 'png',
-        style = 'seaborn-paper'
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
     output:
         plot = project_paths.figures \
             / 'weight_distributions' \
@@ -137,14 +254,12 @@ rule plot_weight_distributions:
     group: "visualization"
     shell:
         """
-        {config.executor_start}
+        {params.executor_start}
         python {input.script:q} \
             --input {input.state:q} \
             --output {output.plot:q} \
-            --dpi {params.dpi} \
-            --format {params.format} \
-            --style {params.style} \
-        {config.executor_close}
+            --format {wildcards.format} 
+        {params.executor_close}
         """
             # > {log} 2>&1
 
@@ -173,9 +288,8 @@ rule plot_experiment_outputs:
         script = SCRIPTS / 'visualization' / 'plot_experiment_outputs.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        dpi = 300,
-        format = 'png',
-        style = 'seaborn-paper'
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
     output:
         plot = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{category}=*_{seed}_{data_name}_{status}_{data_group}' / 'experiment_outputs_label{label_target}.{format}'
     # log:
@@ -183,16 +297,15 @@ rule plot_experiment_outputs:
     group: "visualization"
     shell:
         """
-        {config.executor_start}
+        {params.executor_start}
         python {input.script:q} \
             --test_outputs {input.test_outputs:q} \
             --output {output.plot:q} \
             --parameter {params.parameter} \
             --category {wildcards.category} \
-            --dpi {params.dpi} \
             --format {params.format} \
             --style {params.style} \
-        {config.executor_close}
+        {params.executor_close}
         """
             # > {log} 2>&1
 
@@ -229,9 +342,8 @@ checkpoint plot_adaption:
     params:
         measures = ['power', 'peak_height', 'peak_time'],
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        dpi = 300,
-        format = 'png',
-        style = 'seaborn-paper'
+        executor_start = config.executor_start if config.use_executor else '',
+        executor_close = config.executor_close if config.use_executor else ''
     output:
         flag = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / '{plot}.flag'
     # log:
@@ -239,7 +351,7 @@ checkpoint plot_adaption:
     group: "visualization"
     shell:
         """
-        {config.executor_start}
+        {params.executor_start}
         python {input.script:q} \
             --responses {input.responses:q} \
             --test_outputs {input.test_outputs:q} \
@@ -247,10 +359,8 @@ checkpoint plot_adaption:
             --parameter {params.parameter} \
             --category {wildcards.category} \
             --measures {params.measures} \
-            --dpi {params.dpi} \
-            --format {params.format} \
-            --style {params.style} \
-        {config.executor_close}
+            --format {wildcards.format} 
+        {params.executor_close}
         """
             # > {log} 2>&1
 

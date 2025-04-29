@@ -2,7 +2,7 @@
 Makefile
 
 # runtime files
-config/config_runtime.yaml
+config_runtime.yaml
 
 # temporary files 
 temp*

@@ -59,28 +59,62 @@ from .model_utils import (
     check_stability,
     check_weights,
     handle_errors,
+    load_model_and_weights,
+)
+
+from .visualization_utils import (
+    layer_power,
+    peak_time,
+    peak_height,
+    peak_ratio,
+    calculate_accuracy,
+    load_responses,
+    save_plot,
 )
 
 # For backward compatibility, expose all utilities at package level
 __all__ = [
     # Type utilities
-    'str_to_bool', 'guess_type', 'dtypes', 'types_int', 'types_float', 
-    'types_bool', 'types_str',
-    
+    "str_to_bool",
+    "guess_type",
+    "dtypes",
+    "types_int",
+    "types_float",
+    "types_bool",
+    "types_str",
     # String utilities (including path parsing)
-    'path_to_index', 'extract_param_from_string', 'replace_param_in_string',
-    'str2dict', 'parse_string2dict',
-    
+    "path_to_index",
+    "extract_param_from_string",
+    "replace_param_in_string",
+    "str2dict",
+    "parse_string2dict",
     # Config utilities
-    'load_config', 'parse_parameters', 'parse_kwargs', 'filter_kwargs',
-    'update_config_with_kwargs', 'alias_kwargs',
-    
+    "load_config",
+    "parse_parameters",
+    "parse_kwargs",
+    "filter_kwargs",
+    "update_config_with_kwargs",
+    "alias_kwargs",
     # Data utilities
-    'load_df', 'identity', 'tqdm',
-    
+    "load_df",
+    "identity",
+    "tqdm",
     # Torch utilities
-    'ensure_same_device', 'ensure_same_dtype', 'on_same_device', 'set_seed',
-    
+    "ensure_same_device",
+    "ensure_same_dtype",
+    "on_same_device",
+    "set_seed",
     # Model utilities
-    'check_stability', 'check_weights', 'handle_errors',
+    "check_stability",
+    "check_weights",
+    "handle_errors",
+    "load_model_and_weights",
+    # Visualization utilities
+    "layer_power",
+    "peak_time",
+    "peak_height",
+    "peak_ratio",
+    "calculate_accuracy",
+    "load_responses",
+    "save_plot",
 ]

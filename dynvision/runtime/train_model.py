@@ -165,6 +165,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--loss_config", nargs="+", type=str, help="Loss function configurations"
     )
+    parser.add_argument(
+        "--use_ffcv", type=str_to_bool, default=True, help="Use FFCV for data loading"
+    )
     return parser
 
 
@@ -190,18 +193,25 @@ def setup_data_loaders(
         )
         dataloader_args["device"] = device
 
-    train_loader = get_ffcv_dataloader(
-        path=config.dataset_train,
-        data_transform=f"ffcv_train",
-        **dataloader_args,
-    )
+    if config.use_ffcv:
+        train_loader = get_ffcv_dataloader(
+            path=config.dataset_train,
+            data_transform=f"ffcv_train",
+            **dataloader_args,
+        )
 
-    val_loader = get_ffcv_dataloader(
-        path=config.dataset_val,
-        data_transform=f"ffcv_test",
-        **dataloader_args,
-    )
-
+        val_loader = get_ffcv_dataloader(
+            path=config.dataset_val,
+            data_transform=f"ffcv_test",
+            **dataloader_args,
+        )
+    else:
+        train_loader, val_loader = get_train_val_loaders(
+            path_train=config.dataset_train,
+            path_val=config.dataset_val,
+            data_transform="ffcv_train",
+            **dataloader_args,
+        )
     return train_loader, val_loader
 
 
@@ -218,11 +228,9 @@ def setup_callbacks(config: Any) -> List[pl.Callback]:
     callbacks = []
 
     if hasattr(config, "n_timesteps") and config.n_timesteps > 1:
-        callbacks.append(custom_callbacks.MonitorClassifierResponses())
+        callbacks.append(custom_callbacks.ClassifierResponseCallback())
 
-    callbacks.append(custom_callbacks.MonitorWeightDistributions())
-
-    callbacks.append(custom_callbacks.MonitorClassifierResponses())
+    callbacks.append(custom_callbacks.WeightDistributionCallback())
 
     # Setup checkpointing
     checkpoint_path = (

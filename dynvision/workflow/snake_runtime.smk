@@ -15,14 +15,6 @@ Usage:
     snakemake -c1 test_model model_name=DyRCNNx4 seed=0001
 """
 
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Union
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger('workflow.runtime')
 
 rule init_model:
@@ -131,6 +123,7 @@ rule train_model:
         precision = config.precision,
         store_responses = config.store_val_responses,
         profiler = config.profiler,
+        use_ffcv = config.use_ffcv,
         enable_progress_bar = not project_paths.iam_on_cluster(),
         executor_start = config.executor_start if config.use_executor else '',
         executor_close = config.executor_close if config.use_executor else ''
@@ -165,6 +158,7 @@ rule train_model:
             --profiler {params.profiler} \
             --store_responses {params.store_responses} \
             --enable_progress_bar {params.enable_progress_bar} \
+            --use_ffcv {params.use_ffcv} \
             --loss {params.loss} \
             --n_timesteps {params.n_timesteps} \
             {params.model_arguments} \

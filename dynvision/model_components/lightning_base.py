@@ -34,9 +34,6 @@ from dynvision.utils import (
     load_config,
     on_same_device,
 )
-from dynvision.visualization.plot_classifier_responses import (
-    plot_classifier_responses,
-)
 from dynvision.project_paths import project_paths
 
 __all__ = ["UtilityBase", "LightningBase"]
@@ -323,9 +320,91 @@ class UtilityBase(nn.Module):
         state_dict = self._remove_unexpected_parameters_from_state_dict(state_dict)
         super().load_state_dict(state_dict, **kwargs)
 
+    def hasattr(self, attribute_name: str) -> bool:
+        attributes = attribute_name.split(".")
+        attr = self
+        for attr_name in attributes:
+            if not hasattr(attr, attr_name):
+                return False
+            attr = getattr(attr, attr_name)
+        return True
+
+    def getattr(self, attribute_name: str):
+        attributes = attribute_name.split(".")
+        attr = self
+        for attr_name in attributes:
+            attr = getattr(attr, attr_name)
+        return attr
+
+    def set_trainable_parameters(
+        self, parameter_names: List[str] = [], force_train_all: bool = False
+    ) -> None:
+        if hasattr(self, "trainable_parameter_names") and len(
+            self.trainable_parameter_names
+        ):
+            logger.warning(
+                f"self.trainable_parameter_names is not empty: {self.trainable_parameter_names}! This will be overwritten!"
+            )
+
+        if not len(parameter_names):
+            parameter_names = list(self.state_dict().keys())
+
+        self.trainable_parameter_names = []
+        for parameter_name in parameter_names:
+            if self.hasattr(parameter_name):
+                parameter = self.getattr(parameter_name)
+            else:
+                logger.warning(
+                    f"Parameter {parameter_name} not found in model, can't be set to trainable!"
+                )
+                continue
+            if force_train_all:
+                try:
+                    parameter.requires_grad = True
+                except Exception as e:
+                    logger.warning(
+                        f"Parameter {parameter} can't be set to requires_grad=True! \n\t{e}"
+                    )
+            if hasattr(parameter, "requires_grad") and parameter.requires_grad:
+                self.trainable_parameter_names.append(parameter_name)
+
+    def set_trainable_parameter(self, parameter_name: str) -> None:
+        if hasattr(self, parameter_name):
+            if hasattr(self, "trainable_parameter_names"):
+                if parameter_name not in self.trainable_parameter_names:
+                    self.trainable_parameter_names.append(parameter_name)
+            else:
+                self.trainable_parameter_names = [parameter_name]
+        else:
+            logger.warning(
+                f"Parameter {parameter_name} not found in model, can't be set to trainable!"
+            )
+
+    def get_trainable_parameter_names(self) -> List[str]:
+        """
+        Get the names of trainable parameters in the model.
+
+        Returns:
+            List[str]: List of trainable parameter names.
+        """
+        if not hasattr(self, "trainable_parameter_names"):
+            self.set_trainable_parameters()
+        return self.trainable_parameter_names
+
+    def get_trainable_parameters(self) -> List[torch.Tensor]:
+        """
+        Get the trainable parameters of the model.
+
+        Returns:
+            List[torch.Tensor]: List of trainable parameters.
+        """
+        if not hasattr(self, "trainable_parameter_names"):
+            self.set_trainable_parameters()
+        return list(self.trainable_parameters())
+
     def trainable_parameters(self) -> torch.Generator:
         """
-        Yield trainable parameters of the model. Requires the model to have a 'trainable_parameter_names' attribute.
+        Yield trainable parameters of the model. Refers to 'trainable_parameter_names' attribute if defined, else `parameters`.
 
         Returns:
             torch.Generator: Generator yielding trainable parameters.
@@ -339,7 +418,7 @@ class UtilityBase(nn.Module):
 
     def named_trainable_parameters(self) -> torch.Generator:
         """
-        Yield trainable parameters of the model along with their names. Requires the model to have a 'trainable_parameter_names' attribute.
+        Yield trainable parameters of the model. Refers to 'trainable_parameter_names' attribute if defined, else `named_parameters`.
 
         Returns:
             torch.Generator: Generator yielding tuples of parameter names and trainable parameters.
@@ -355,9 +434,12 @@ class UtilityBase(nn.Module):
         """
         Print the names of trainable and fixed parameters in the model.
         """
+        if not hasattr(self, "trainable_parameter_names"):
+            self.set_trainable_parameters()
+
         trainable, fixed = [], []
-        for name, param in self.named_trainable_parameters():
-            if param.requires_grad:
+        for name, param in self.named_parameters():
+            if name in self.trainable_parameter_names:
                 trainable += [name]
             else:
                 fixed += [name]
@@ -386,7 +468,8 @@ class UtilityBase(nn.Module):
             if len(param.data.size()):
                 for metric in metrics:
                     self.log(
-                        f"{section}/{name}_{metric}", getattr(param.data, metric)()
+                        f"{section}/{name}_{metric}",
+                        getattr(param.data, metric)(),
                     )
             else:
                 self.log(f"{section}/{name}", param.data)
@@ -805,6 +888,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
             layer = getattr(self, layer_name)
 
             for operation in self.layer_operations:
+
                 if feedforward_only and operation in [
                     "addskip",
                     "addext",

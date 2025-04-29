@@ -137,6 +137,10 @@ def str2dict(string: str, assigner: str = ":", separator: str = ",") -> Dict[str
         string = string[1:]
     if string[-1] == "}":
         string = string[:-1]
+
+    if not len(string):
+        return {}
+
     my_dict = {}
     # list or tuple values
     brackets = [delimiter for delimiter in ["[", "]", "(", ")"] if delimiter in string]

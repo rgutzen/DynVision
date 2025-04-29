@@ -18,14 +18,6 @@ logger = logging.getLogger(__name__)
 __all__ = ["SkipConnection", "Feedback"]
 
 
-def validate_shapes(x: torch.Tensor, h: torch.Tensor) -> None:
-    """Validate tensor shapes for compatibility."""
-    if x.dim() != h.dim():
-        raise ValueError(f"Dimension mismatch: x ({x.dim()}) != h ({h.dim()})")
-    if x.size(0) != h.size(0):
-        raise ValueError(f"Batch size mismatch: x ({x.size(0)}) != h ({h.size(0)})")
-
-
 class ConnectionBase(nn.Module):
     """
     The connection module adds a hidden state (h) of a source module to the input tensor (x). There are two ways to use this module:
@@ -90,44 +82,54 @@ class ConnectionBase(nn.Module):
 
     def _setup_conv(self, x: torch.Tensor, h: torch.Tensor) -> Union[nn.Module, bool]:
         if x is None or h is None:
+            self.conv = False
             return False
 
-        self.setup_transform = False
         in_channels = h.shape[-3]
         out_channels = x.shape[-3]
         stride = h.shape[-1] // x.shape[-1] or 1
 
         if in_channels == out_channels and stride == 1:
+            self.conv = False
+            self.setup_transform = False
             return False
 
-        self.conv = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=1,
-            stride=stride,
-            padding=0,
-            bias=self.bias,
-            device=h.device,
-            dtype=h.dtype,
+        self.conv = self.parametrization(
+            nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=1,
+                stride=stride,
+                padding=0,
+                bias=self.bias,
+                device=h.device,
+                dtype=h.dtype,
+            )
         )
-        # transform_conv = self.parametrization(self.conv)
         self._initialize_weights(self.conv)
+        self.setup_transform = False
 
     def _setup_upsample(
         self, x: torch.Tensor, h: torch.Tensor, mode: str = "bilinear"
     ) -> Union[nn.Module, bool]:
         if x is None or h is None:
+            self.upsample = False
             return False
 
         scale_factor = x.shape[-1] / h.shape[-1]
         if scale_factor <= 1:
+            self.upsample = False
             return False
 
         self.upsample = nn.Upsample(scale_factor=scale_factor, mode=mode)
 
-    def _initialize_weights(self, conv_layer: nn.Conv2d) -> None:
-        """Initialize weights using Kaiming initialization."""
-        init.kaiming_normal_(conv_layer.weight, mode="fan_in", nonlinearity="relu")
+    def reset_transform(self) -> None:
+        """Reset the transform to allow for re-initialization."""
+        self.setup_transform = True
+
+    def _init_parameters(self, conv_layer: nn.Conv2d) -> None:
+        """Initialize zero weights."""
+        init.zeros_(conv_layer.weight)
         if conv_layer.bias is not None:
             init.zeros_(conv_layer.bias)
 
