@@ -1,175 +1,259 @@
-"""Plot classifier unit responses with focus on top active units."""
+"""Plot classifier unit responses with focus on top active units.
+
+This module provides visualization of classifier responses, focusing on
+the most active units and their temporal dynamics.
+"""
 
 import argparse
+import logging
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Optional, Dict, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from dynvision.utils import load_df
+from dynvision.visualization.base_visualization import BaseVisualization
+from dynvision.utils import load_df, parse_parameters
+
+logger = logging.getLogger(__name__)
 
 
-def get_label_sequence_info(
-    df: pd.DataFrame, label_set: str
-) -> Tuple[np.ndarray, List[int]]:
-    """
-    Extract label sequence information including changepoints and label sequence.
+class ClassifierResponseViz(BaseVisualization):
+    """Visualization of classifier unit responses."""
 
-    Args:
-        df: DataFrame containing classifier responses
-        label_set: String identifier for the specific label sequence
+    def __init__(self, n_units: int = 10, batch_size: Optional[int] = None, **kwargs):
+        """Initialize classifier response visualization.
 
-    Returns:
-        Tuple containing:
-        - Array of timepoints where labels change
-        - List of labels in sequence order
-    """
-    # Filter DataFrame for the specific label set
-    label_set_df = df[df.label_set == label_set]
-    sample_index = label_set_df.sample_index.unique()[0]
-    class_index = label_set_df.class_index.unique()[0]
-    label_set_df = label_set_df[
-        (label_set_df.sample_index == sample_index)
-        & (label_set_df.class_index == class_index)
-    ]
-    label_indices = label_set_df.label_index.values
+        Args:
+            n_units: Number of top units to analyze
+            batch_size: Optional batch size for large datasets
+            **kwargs: Additional arguments for BaseVisualization
 
-    # Find points where label changes
-    changepoints = np.where(np.diff(label_indices) != 0)[0]
+        Raises:
+            ValueError: If n_units < 1
+        """
+        if n_units < 1:
+            raise ValueError(f"n_units must be >= 1, got {n_units}")
 
-    # Get the sequence of labels at change points (including the first label)
-    sequence = [label_indices[0]]  # Start with first label
-    for point in changepoints:
-        sequence.append(label_indices[point + 1])  # Add label after each change
+        super().__init__(**kwargs)
+        self.n_units = n_units
+        self.batch_size = batch_size
+        self.df = None
+        self._required_columns = {
+            "label_set",
+            "sample_index",
+            "class_index",
+            "label_index",
+            "response",
+            "times_index",
+            "guess_index",
+        }
 
-    return changepoints, sequence
+    def validate_label_set(self, label_set: str) -> None:
+        """Validate label set exists in data.
 
+        Args:
+            label_set: Label set to validate
 
-def get_top_units(df: pd.DataFrame, n_units: int = 10) -> List[int]:
-    """
-    Identify the top N most active classifier units based on mean response.
+        Raises:
+            ValueError: If label set is invalid
+        """
+        if label_set not in self.df.label_set.unique():
+            raise ValueError(
+                f"Invalid label_set: {label_set}. "
+                f"Available sets: {', '.join(map(str, self.df.label_set.unique()))}"
+            )
 
-    Args:
-        df: DataFrame containing classifier responses
-        n_units: Number of top units to select
+    def get_label_sequence_info(self, label_set: str) -> Tuple[np.ndarray, List[int]]:
+        """Extract label sequence information.
 
-    Returns:
-        List of class indices for top N units
-    """
-    # Calculate mean response per class across all samples and timepoints
-    mean_responses = df.groupby("class_index")["response"].mean()
-    top_units = mean_responses.nlargest(n_units).index.tolist()
-    return top_units
+        Args:
+            label_set: String identifier for label sequence
 
+        Returns:
+            Tuple of (changepoints, label sequence)
 
-def calculate_accuracy(df: pd.DataFrame) -> float:
-    """
-    Calculate classification accuracy for valid labels.
+        Raises:
+            ValueError: If data not loaded or label set invalid
+        """
+        if self.df is None:
+            raise ValueError("No data loaded. Call load_data first.")
 
-    Args:
-        df: DataFrame containing classifier responses
+        self.validate_label_set(label_set)
 
-    Returns:
-        Classification accuracy as float
-    """
-    valid_samples = df[df.label_index > -1]
-    accuracy = (valid_samples.guess_index == valid_samples.label_index).mean()
-    return accuracy
+        try:
+            # Filter DataFrame for the specific label set
+            label_set_df = self.df[self.df.label_set == label_set]
+            sample_index = label_set_df.sample_index.unique()[0]
+            class_index = label_set_df.class_index.unique()[0]
+            label_set_df = label_set_df[
+                (label_set_df.sample_index == sample_index)
+                & (label_set_df.class_index == class_index)
+            ]
+            label_indices = label_set_df.label_index.values
 
+            if len(label_indices) == 0:
+                raise ValueError(f"No data found for label_set: {label_set}")
 
-def plot_classifier_responses(
-    df: pd.DataFrame, n_units: int = 10, figsize: Tuple[int, int] = (10, 6)
-) -> Tuple[plt.Figure, plt.Axes]:
-    """
-    Plot response traces for top N most active classifier units.
+            # Find points where label changes
+            changepoints = np.where(np.diff(label_indices) != 0)[0]
 
-    Args:
-        df: DataFrame containing classifier responses
-        n_units: Number of top units to plot
-        figsize: Figure dimensions as (width, height)
+            # Get sequence of labels
+            sequence = [label_indices[0]]
+            for point in changepoints:
+                sequence.append(label_indices[point + 1])
 
-    Returns:
-        Matplotlib figure and axes objects
-    """
-    # Set Seaborn style
-    sns.set_context("talk")
-    sns.set_style("ticks")
+            return changepoints, sequence
+        except Exception as e:
+            raise ValueError(
+                f"Failed to extract sequence info for label_set {label_set}: {str(e)}"
+            )
 
-    # Get unique label set and top units
-    label_set = df.label_set.unique()[0]
-    top_units = get_top_units(df, n_units)
+    def get_top_units(
+        self,
+        df: Optional[pd.DataFrame] = None,
+        n_units: Optional[int] = None,
+        use_ranks: bool = True,
+    ) -> List[int]:
+        """Identify top N classifier units based on activity or rank scores.
 
-    # Filter data for top units
-    plot_df = df[df.class_index.isin(top_units)].copy()
+        Args:
+            use_ranks: If True, select units based on average rank over time
+                      If False, select based on overall mean activity (legacy behavior)
 
-    # Create figure and prepare colors
-    fig, ax = plt.subplots(figsize=figsize)
+        Returns:
+            List of class indices for top units
+        """
+        if df is None:
+            if self.df is None:
+                raise ValueError("No data loaded. Call load_data first.")
+            else:
+                df = self.df
+        if n_units is None:
+            n_units = self.n_units
 
-    # Create a color palette with exactly n_units distinct colors
-    colors = sns.color_palette("husl", n_colors=n_units)
-    color_dict = dict(zip(top_units, colors))
-
-    # Plot response traces with explicit hue order
-    sns.lineplot(
-        data=plot_df,
-        x="times_index",
-        y="response",
-        hue="class_index",
-        hue_order=top_units,  # Ensure specific order of units
-        errorbar=("ci", 75),
-        palette=color_dict,  # Use our explicit color mapping
-        ax=ax,
-        marker=".",
-        legend="full",  # Ensure full legend is shown
-    )
-
-    # Get label sequence information
-    changepoints, label_sequence = get_label_sequence_info(plot_df, label_set)
-
-    # Add vertical lines at changepoints
-    for changepoint in changepoints:
-        ax.axvline(
-            changepoint,
-            color="0.6",
-            linestyle="--",
-            linewidth=1,
-            alpha=0.5,
-            label="_nolegend_",
+        df = df[df.label_index > -1]
+        df = (
+            df.groupby(["label_set", "times_index", "class_index"])
+            .mean()
+            .reset_index(drop=False)
         )
 
-    # Customize plot
-    ax.set_xlabel("Time Step")
-    ax.set_ylabel("Classifier Response")
-    # Create informative title
-    label_seq = "→".join(map(str, label_sequence))
-    ax.set_title(f"Top {n_units} Most Active Units\n" f"Label Sequence: {label_seq}")
+        if use_ranks:
+            # Group by time step and rank units within each time step
+            ranked_df = df.groupby("times_index").apply(
+                lambda x: x.assign(rank=x["response"].rank(method="average"))
+            )
 
-    # Add accuracy text
-    accuracy = calculate_accuracy(plot_df)
-    ax.text(
-        0.05,
-        0.95,
-        f"Accuracy: {accuracy:.2f}",
-        transform=ax.transAxes,
-        bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
-    )
+            # Calculate mean rank over time for each unit
+            mean_ranks = ranked_df.groupby("class_index")["rank"].mean()
+            return mean_ranks.nlargest(n_units).index.tolist()
+        else:
+            # Legacy behavior: use mean activity
+            mean_responses = df.groupby("class_index")["response"].mean()
+            return mean_responses.nlargest(n_units).index.tolist()
 
-    # Customize legend
-    ax.legend(
-        title="Class Index", bbox_to_anchor=(1.05, 1), loc="upper left", frameon=False
-    )
+    def plot_responses(
+        self,
+        label_set: Optional[str] = None,
+        show_accuracy: bool = True,
+        save_path: Optional[Path] = None,
+    ) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot response traces for top units.
 
-    # Final styling
-    sns.despine()
-    plt.tight_layout()
+        Args:
+            label_set: Optional specific label set to plot
+            show_accuracy: Whether to show accuracy text
+            save_path: Optional path to save figure
 
-    return fig, ax
+        Returns:
+            Tuple of (Figure, Axes)
+
+        Raises:
+            ValueError: If data not loaded or label set invalid
+        """
+        if self.df is None:
+            raise ValueError("No data loaded. Call load_data first.")
+
+        # Get label set if not provided
+        if label_set is None:
+            label_set = self.df.label_set.unique()[0]
+        else:
+            self.validate_label_set(label_set)
+
+        # Get top units and filter data
+        plot_df = self.df[(self.df.label_set == label_set)].copy()
+        top_units = self.get_top_units(plot_df)
+        plot_df = plot_df[(plot_df.class_index.isin(top_units))].copy()
+
+        if plot_df.empty:
+            raise ValueError(f"No data to plot for label_set: {label_set}")
+
+        # Create figure
+        fig, ax = self.create_figure()
+
+        # Create color palette
+        colors = self.get_colors(top_units)
+        # Plot responses
+        sns.lineplot(
+            data=plot_df,
+            x="times_index",
+            y="response",
+            hue="class_index",
+            hue_order=top_units,
+            errorbar=("ci", 75),
+            palette=colors,
+            ax=ax,
+            marker=".",
+        )
+        # Add changepoint lines
+        changepoints, sequence = self.get_label_sequence_info(label_set)
+        for changepoint in changepoints:
+            ax.axvline(
+                changepoint,
+                color="0.6",
+                linestyle="--",
+                linewidth=1,
+                alpha=0.5,
+                label="_nolegend_",
+            )
+
+        # Add accuracy text
+        if show_accuracy:
+            accuracy = self.calculate_accuracy(plot_df)
+            ax.text(
+                0.05,
+                0.95,
+                f"Accuracy: {accuracy:.2f}",
+                transform=ax.transAxes,
+                bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
+            )
+
+        # Customize plot
+        label_seq = "→".join(map(str, sequence))
+        self.apply_common_styling(
+            ax,
+            title=f"Top {self.n_units} Most Active Units\nLabel Sequence: {label_seq}",
+            xlabel="Time Step",
+            ylabel="Classifier Response",
+        )
+
+        ax.legend(
+            title="Class Index",
+            bbox_to_anchor=(1.01, 1),
+            loc="upper left",
+            frameon=False,
+        )
+
+        if save_path:
+            self.save_figure(fig, save_path)
+
+        return fig, ax
 
 
-def main():
+def create_argument_parser():
     """Main execution function."""
     parser = argparse.ArgumentParser(description="Plot classifier unit responses.")
     parser.add_argument(
@@ -181,28 +265,31 @@ def main():
     parser.add_argument(
         "--n_units", type=int, default=10, help="Number of top units to plot"
     )
+    parser.add_argument(
+        "--max_sets", type=int, default=5, help="Number of label sets to plot"
+    )
+    return parser
 
-    args = parser.parse_args()
 
-    if not args.input.exists():
-        raise FileNotFoundError(f"Input file not found: {args.input}")
+def main():
+    parser = create_argument_parser()
+    config = parse_parameters(parser)
 
-    # Create output directory
-    args.output.mkdir(parents=True, exist_ok=True)
+    if not config.input.exists():
+        raise FileNotFoundError(f"Input file not found: {config.input}")
 
-    # Load and process data
-    df = load_df(args.input)
-    data_identifier = args.input.stem
+    config.output.mkdir(parents=True, exist_ok=True)
 
-    # Generate plots for each unique label sequence
-    for label_set in df.label_set.unique():
-        label_df = df[df.label_set == label_set]
-        fig, _ = plot_classifier_responses(label_df, n_units=args.n_units)
+    df = load_df(config.input)
+    data_identifier = config.input.stem
 
-        # Save plot
-        output_path = args.output / f"{data_identifier}_label{label_set}.png"
-        fig.savefig(output_path, bbox_inches="tight", dpi=300)
-        plt.close(fig)
+    viz = ClassifierResponseViz(**vars(config))
+    viz.load_dataframe(df)
+
+    for label_set in df.label_set.unique()[: config.max_sets]:
+        changepoints, sequence = viz.get_label_sequence_info(label_set)
+        output_path = config.output / f"{data_identifier}_label{sequence}.png"
+        viz.plot_responses(label_set=label_set, save_path=output_path)
 
 
 if __name__ == "__main__":
