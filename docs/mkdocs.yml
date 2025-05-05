@@ -1,45 +1,32 @@
-site_name: DynVision
-site_description: A toolbox for modeling dynamical vision with recurrent convolutional neural networks
-site_author: DynVision Team
-repo_url: https://github.com/yourusername/dynvision
-edit_uri: edit/main/docs/docs/
+site_name: DynVision Documentation
+site_description: Documentation for DynVision - A modular toolbox for biologically plausible recurrent convolutional vision networks
+site_author: Robin Gutzen
+site_url: https://Lindsay-Lab.github.io/dynvision
+
+repo_name: Lindsay-Lab/dynvision
+repo_url: https://github.com/Lindsay-Lab/dynvision
+edit_uri: edit/main/docs/
 
 theme:
   name: material
+  palette:
+    primary: indigo
+    accent: blue
   features:
     - navigation.tabs
     - navigation.sections
-    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - toc.integrate
     - search.suggest
     - search.highlight
+    - content.tabs.link
+    - content.code.annotation
     - content.code.copy
-  palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-
-plugins:
-  - search
-  - mkdocstrings:
-      default_handler: python
-      handlers:
-        python:
-          rendering:
-            show_source: true
-            show_root_heading: true
-  - git-revision-date-localized:
-      type: datetime
-  - mkdocs-jupyter:
-      include_source: true
+  icon:
+    repo: fontawesome/brands/github
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
 
 markdown_extensions:
   - admonition
@@ -53,67 +40,78 @@ markdown_extensions:
       alternate_style: true
   - tables
   - footnotes
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
   - attr_list
   - md_in_html
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [../dynvision]
+          options:
+            docstring_style: numpy
+            show_source: true
+  - git-revision-date-localized:
+      fallback_to_build_date: true
+  - social
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - User Guide:
-    - Installation: guide/installation.md
-    - Basic Usage: guide/basic-usage.md
-    - Configuration: guide/configuration.md
-    - Workflows: guide/workflows.md
-  - Models:
-    - Overview: models/index.md
-    - DyRCNN: models/dyrcnn.md
-    - CORDSNet: models/cordsnet.md
-    - CorNet: models/cornet.md
-    - ResNet: models/resnet.md
-  - Components:
-    - Overview: components/index.md
-    - Dynamics Solver: components/dynamics-solver.md
-    - Layer Connections: components/layer-connections.md
-    - Recurrence: components/recurrence.md
-    - Retina: components/retina.md
-    - Supralinearity: components/supralinearity.md
-  - Data:
-    - Overview: data/index.md
-    - Datasets: data/datasets.md
-    - Transforms: data/transforms.md
-    - FFCV Integration: data/ffcv.md
-  - Training:
-    - Overview: training/index.md
-    - Lightning Base: training/lightning-base.md
-    - Loss Functions: training/losses.md
-    - Callbacks: training/callbacks.md
-  - Visualization:
-    - Overview: visualization/index.md
-    - Response Analysis: visualization/responses.md
-    - Weight Analysis: visualization/weights.md
-    - Performance Metrics: visualization/metrics.md
-  - Advanced:
-    - Overview: advanced/index.md
-    - Custom Models: advanced/custom-models.md
-    - Cluster Execution: advanced/cluster.md
-    - Performance Optimization: advanced/optimization.md
-  - API Reference:
-    - Overview: api/index.md
-    - Models: api/models.md
-    - Components: api/components.md
-    - Data: api/data.md
-    - Training: api/training.md
-    - Visualization: api/visualization.md
+    - user-guide/index.md
+    - Installation: user-guide/installation.md
+    - Custom Models: user-guide/custom-models.md
+    - Data Processing: user-guide/data-processing.md
+    - Workflow Management: user-guide/workflows.md
+    - Visualization: user-guide/visualization.md
+    - Model Evaluation: user-guide/evaluation.md
+    - Cluster Integration: user-guide/cluster-integration.md
+    - Performance Optimization: user-guide/performance-optimization.md
+    - Hyperparameter Optimization: user-guide/hyperparameter-optimization.md
+    - Transfer Learning: user-guide/transfer-learning.md
+    - Troubleshooting: user-guide/troubleshooting.md
+  - Tutorials:
+    - tutorials/index.md
+    - Basic Model Training: tutorials/basic-model-training.md
+    - Visualization Tutorial: tutorials/visualization-tutorial.md
+    - Custom Model Creation: tutorials/custom-model-creation.md
+    - Experiment Design: tutorials/experiment-design.md
+  - Reference:
+    - reference/index.md
+    - Architecture: reference/organization.md
+    - Model Components: reference/model-components.md
+    - Recurrence Types: reference/recurrence-types.md
+    - Dynamics Solvers: reference/dynamics-solvers.md
+    - Configuration: reference/configuration.md
+    - Data Loaders: reference/data-loaders.md
+    - Visualization: reference/visualization.md
+    - Losses: reference/losses.md
+    - Utilities: reference/utilities.md
+  - Explanation:
+    - explanation/index.md
+    - Biological Plausibility: explanation/biological-plausibility.md
+    - Temporal Dynamics: explanation/temporal-dynamics.md
+    - Design Philosophy: explanation/design-philosophy.md
+    - Comparison with Other Frameworks: explanation/comparison.md
   - Contributing: contributing.md
-  - FAQ: faq.md
+  - API Reference: api/
 
 extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/yourusername/dynvision
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/dynvision
   version:
     provider: mike
-
-copyright: Copyright &copy; 2024 DynVision Team
+    default: latest

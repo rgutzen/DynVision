@@ -1,0 +1,3 @@
+- fix feedback connections
+- add excitatory-inhibitory unit distinction
+- write unit tests

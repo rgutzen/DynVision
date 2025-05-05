@@ -1,219 +1,56 @@
 # DynVision Documentation
 
-## Introduction
+## What is DynVision?
 
-DynVision is a modular modeling toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. The toolbox provides a flexible framework for investigating neural mechanisms of visual perception while maintaining computational efficiency.
+DynVision is a modular toolbox for building and evaluating recurrent convolutional neural networks (RCNNs) with biologically plausible temporal dynamics.
+The toolbox provides researchers with a framework to explore how details in the network architecture influence temporal dynamics and shape visual processing, while handling most of the overhead to achieve computational efficiently.
+The toolbox provides a collection of biologically-inspired components including:
 
-## Technical Overview
+- realistic lateral recurrent connections
+- flexible skip and feedback connections
+- activity evolution governed by dynamical systems equations
+- unrolling of biological time with heterogenous time delays for different connection types 
 
-### Architecture
+## Documentation Structure
 
-DynVision is built on a modular architecture with several key components:
+Our documentation is organized into four main categories:
 
-1. **Model Components**
-   - Dynamics solvers for neural activity evolution
-   - Recurrent connection implementations
-   - Layer connections (skip, feedback)
-   - Retina preprocessing
-   - Supralinearity functions
+1. **Tutorials**: Step-by-step guides for beginners to get started with DynVision
+   - [Getting Started](getting-started.md): First steps with DynVision
+   - [Basic Model Training](tutorials/basic-model-training.md): Train your first model
+   - [Visualization Tutorial](tutorials/visualization-tutorial.md): Visualize model responses
 
-2. **Model Implementations**
-   - DyRCNN (base implementation)
-   - CORDSNet (cortically organized)
-   - CorNet (various versions)
-   - Standard models (ResNet, AlexNet)
+2. **How-to Guides**: Task-oriented guides for solving specific problems
+   - [Installation](user-guide/installation.md): Detailed installation instructions
+   - [Custom Models](user-guide/custom-models.md): Define your own neural network architectures
+   - [Data Processing](user-guide/data-processing.md): Work with different datasets
+   - [Workflow Management](user-guide/workflows.md): Use Snakemake for experiments
+   - [Model Evaluation](user-guide/evaluation.md): Evaluate model performance
 
-3. **Training Infrastructure**
-   - PyTorch Lightning integration
-   - FFCV data loading optimization
-   - Distributed training support
-   - Checkpoint management
+3. **Reference**: Technical descriptions of DynVision's components
+   - [Organization Overview](reference/organization.md): Structure of the toolbox
+   - [Model Components API](reference/model-components.md): Core building blocks
+   - [Recurrence Types](reference/recurrence-types.md): Different recurrent connection implementations
+   - [Dynamics Solvers](reference/dynamics-solvers.md): ODE solvers for neural dynamics
+   - [Configuration Reference](reference/configuration.md): Configuration file documentation
 
-4. **Workflow Management**
-   - Snakemake-based pipelines
-   - Cluster execution support
-   - Configuration management
-   - Experiment tracking
-
-### Key Features
-
-1. **Biological Plausibility**
-   - Realistic recurrent architectures
-   - Dynamical systems integration
-   - Structured connectivity patterns
-   - Biologically-inspired loss functions
-
-2. **Performance Optimization**
-   - FFCV data loading
-   - GPU memory optimization
-   - Batch processing
-   - Resource management
-
-3. **Analysis Tools**
-   - Response visualization
-   - Weight distribution analysis
-   - Confusion matrix generation
-   - Temporal dynamics analysis
-
-## Getting Started
-
-### Installation
-
-1. **Environment Setup**
-   ```bash
-   conda create -n dynvision python=3.11
-   conda activate dynvision
-   ```
-
-2. **Install Dependencies**
-   ```bash
-   # Core installation
-   pip install -e .
-   
-   # Development tools
-   pip install -e ".[dev]"
-   
-   # Documentation
-   pip install -e ".[doc]"
-   ```
-
-### Basic Usage
-
-1. **Data Preparation**
-   ```python
-   from dynvision.data import get_dataset
-   
-   # Load dataset
-   dataset = get_dataset(
-       path="path/to/data",
-       data_transform="cifar10_train"
-   )
-   ```
-
-2. **Model Creation**
-   ```python
-   from dynvision.models import DyRCNNx4
-   
-   # Initialize model
-   model = DyRCNNx4(
-       input_dims=(20, 3, 32, 32),
-       n_classes=10,
-       recurrence_type="full",
-       tau=8.0
-   )
-   ```
-
-3. **Training**
-   ```python
-   from pytorch_lightning import Trainer
-   
-   # Configure trainer
-   trainer = Trainer(
-       max_epochs=200,
-       accelerator="gpu",
-       devices=1
-   )
-   
-   # Train model
-   trainer.fit(model, train_dataloader, val_dataloader)
-   ```
-
-## API Reference
-
-### Model Components
-
-- [Dynamics Solver](api/dynamics_solver.md)
-- [Layer Connections](api/layer_connections.md)
-- [Recurrence](api/recurrence.md)
-- [Retina](api/retina.md)
-- [Supralinearity](api/supralinearity.md)
-
-### Models
-
-- [DyRCNN](api/models/dyrcnn.md)
-- [CORDSNet](api/models/cordsnet.md)
-- [CorNet](api/models/cornet.md)
-- [ResNet](api/models/resnet.md)
-
-### Data Handling
-
-- [Datasets](api/data/datasets.md)
-- [Transforms](api/data/transforms.md)
-- [FFCV Integration](api/data/ffcv.md)
-
-### Training
-
-- [Lightning Base](api/training/lightning_base.md)
-- [Loss Functions](api/training/losses.md)
-- [Callbacks](api/training/callbacks.md)
-
-### Visualization
-
-- [Response Analysis](api/visualization/responses.md)
-- [Weight Analysis](api/visualization/weights.md)
-- [Performance Metrics](api/visualization/metrics.md)
-
-## Advanced Topics
-
-### Custom Models
-
-Learn how to create custom models by extending the base classes:
-
-```python
-from dynvision.models import DyRCNN
-
-class CustomModel(DyRCNN):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Custom initialization
-        
-    def _define_architecture(self):
-        # Define model architecture
-        pass
-```
-
-### Workflow Configuration
-
-Configure experiments using YAML:
-
-```yaml
-model_name: DyRCNNx4
-seed: "0001"
-model_args:
-  rctype: full
-  tau: 8
-  trc: 6
-
-training:
-  epochs: 200
-  batch_size: 256
-  learning_rate: 0.001
-  loss:
-    - CrossEntropyLoss
-```
-
-### Cluster Execution
-
-Run on compute clusters:
-
-```bash
-# Submit job
-sbatch cluster/snakejob.sh
-
-# Monitor progress
-tail -f logs/slurm/*.out
-```
+4. **Explanation**: Conceptual understanding of DynVision's approach
+   - [Biological Plausibility](explanation/biological-plausibility.md): Alignment with neural systems
+   - [Temporal Dynamics](explanation/temporal-dynamics.md): Understanding temporal properties
+   - [Design Philosophy](explanation/design-philosophy.md): Core design principles
 
 ## Contributing
 
-See our [Contributing Guide](contributing.md) for details on:
-- Code style
-- Pull request process
-- Testing requirements
-- Documentation standards
+DynVision is an open-source project, and we welcome contributions! See our [Contributing Guide](contributing.md) for information on how to get involved.
 
-## Support
+## Getting Support
 
-- [Issue Tracker](https://github.com/yourusername/dynvision/issues)
-- [Discussion Forum](https://github.com/yourusername/dynvision/discussions)
-- [Email Support](mailto:support@dynvision.org)
+If you have questions or run into issues:
+
+1. Check the [FAQ](user-guide/faq.md) for common questions
+2. Search the [GitHub Issues](https://github.com/yourusername/dynvision/issues) to see if someone has encountered the same problem. Open a new issue if you can't find a solution.
+3. Reach out via [Email](mailto:robin.gutzen@nyu.edu).
+
+## License
+
+DynVision is released under the MIT License. See the [LICENSE](https://github.com/yourusername/dynvision/blob/main/LICENSE) file for more details.
