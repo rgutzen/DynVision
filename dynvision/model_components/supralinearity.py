@@ -17,6 +17,7 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 from torch import Tensor
+from pytorch_lightning import LightningModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["SupraLinearity"]
 
 
-class SupraLinearity(nn.Module):
+class SupraLinearity(LightningModule):
     """Supra-linear activation function for biologically-inspired neural networks.
 
     This module implements a biologically-inspired supra-linear transformation:

@@ -39,9 +39,9 @@ from dynvision.project_paths import project_paths
 # Load configuration files in priority order
 configfile: project_paths.scripts.configs / 'config_defaults.yaml'
 configfile: project_paths.scripts.configs / 'config_data.yaml'
-# configfile: project_paths.scripts.configs / 'config_visualization.yaml'
-configfile: project_paths.scripts.configs / 'config_workflow.yaml'
+configfile: project_paths.scripts.configs / 'config_visualization.yaml'
 configfile: project_paths.scripts.configs / 'config_experiments.yaml'
+configfile: project_paths.scripts.configs / 'config_workflow.yaml'
 
 # Convert to SimpleNamespace for dot notation access
 config = SimpleNamespace(**config)

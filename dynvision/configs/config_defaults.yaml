@@ -2,7 +2,7 @@
 classifier_name: classifier
 
 # Model
-retain_graph: False
+retain_graph: False  # retain the computational graph for repeated backprop paths
 status: trained
 n_timesteps: 20
 dt: 2  # ms
@@ -27,11 +27,19 @@ epochs: 250
 batch_size: 256
 check_val_every_n_epoch: 5
 log_every_n_steps: 100
-accumulate_grad_batches: 1
+accumulate_grad_batches: 2
 precision: "bf16-mixed"
 profiler: None
 benchmark: True
+enable_progress_bar: False
 # tbptt_length: None
+
+# Local debugging runs
+debug_batch_size: 3
+debug_check_val_every_n_epoch: 1
+debug_log_every_n_steps: 1
+debug_accumulate_grad_batches: 1
+debug_enable_progress_bar: True
 
 # Test run
 logger: False

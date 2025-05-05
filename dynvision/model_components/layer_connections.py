@@ -11,14 +11,15 @@ import torch.nn as nn
 from torch.amp import autocast
 import torch.nn.init as init
 from dynvision.utils import on_same_device, check_stability
+from pytorch_lightning import LightningModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-__all__ = ["SkipConnection", "Feedback"]
+__all__ = ["Skip", "Feedback"]
 
 
-class ConnectionBase(nn.Module):
+class ConnectionBase(LightningModule):
     """
     The connection module adds a hidden state (h) of a source module to the input tensor (x). There are two ways to use this module:
 
@@ -106,7 +107,7 @@ class ConnectionBase(nn.Module):
                 dtype=h.dtype,
             )
         )
-        self._initialize_weights(self.conv)
+        self._init_parameters(self.conv)
         self.setup_transform = False
 
     def _setup_upsample(
@@ -181,7 +182,7 @@ class ConnectionBase(nn.Module):
         return output
 
 
-class SkipConnection(ConnectionBase):
+class Skip(ConnectionBase):
     """
     The skip connection module adds the input tensor (x) of an earlier layer to the output tensor (h) of a deeper layer.
     """
@@ -220,7 +221,7 @@ if __name__ == "__main__":
                     batch_size, self.out_channels, self.scale, self.scale
                 )
 
-        if class_name == "SkipConnection":
+        if class_name == "Skip":
             source = DummySource(out_channels=10, scale=64)
         elif class_name == "Feedback":
             source = DummySource(out_channels=1, scale=24)

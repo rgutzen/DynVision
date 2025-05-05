@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Callable, Optional, Union, Deque
+from typing import Callable, Optional, Union, Deque, Dict, Any
 
 import torch
 import torch.nn as nn
@@ -9,8 +9,8 @@ from dynvision.model_components.topographic_recurrence import (
     LocalLateralConnection,
     LocalSeparableConnection,
 )
-from dynvision.utils import str_to_bool, on_same_device
-
+from dynvision.utils import str_to_bool
+from pytorch_lightning import LightningModule
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -27,39 +27,62 @@ __all__ = [
 ]
 
 
-class TemplateConnection(nn.Module):
+class RecurrenceBase(LightningModule):
     """
-    A template class for defining custom connections in neural networks.
+    Base class for recurrent connections providing common parameter initialization
+    and argument validation.
     """
 
-    def __init__(self, **kwargs) -> None:
-        """
-        Initialize the TemplateConnection class.
-        """
-        super(TemplateConnection, self).__init__()
+    def __init__(self, max_weight_init: float = 0.05, **kwargs) -> None:
+        super().__init__()
+        self.max_weight_init = max_weight_init
+        self.validate_init_args(kwargs)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass for the connection.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns:
-            torch.Tensor: Output tensor.
-        """
-        raise NotImplementedError("Forward method must be implemented.")
+    def validate_init_args(self, kwargs: Dict[str, Any]) -> None:
+        """Validate initialization arguments."""
+        pass
 
     def _init_parameters(self) -> None:
-        """
-        Initialize parameters for the connection.
-        """
-        raise NotImplementedError("Parameter initialization must be implemented.")
+        """Common parameter initialization for recurrent connections."""
+        for module in self.modules():
+            if isinstance(module, nn.Conv2d):
+                if hasattr(module, "weight.original0"):
+                    module.weight.original0.data.fill_(1.0)
+                if hasattr(module, "weight.original1"):
+                    nn.init.uniform_(
+                        module.weight.original1.weight,
+                        a=-self.max_weight_init,
+                        b=self.max_weight_init,
+                    )
+                elif hasattr(module, "weight"):
+                    nn.init.uniform_(
+                        module.weight, a=-self.max_weight_init, b=self.max_weight_init
+                    )
+                if hasattr(module, "bias") and module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
 
 
-class DepthwiseSeparableConnection(nn.Module):
+class ConvolutionalRecurrenceBase(RecurrenceBase):
+    """
+    Base class for recurrence types that use convolutions.
+    Provides common validation for convolution-specific parameters.
+    """
+
+    def validate_init_args(self, kwargs: Dict[str, Any]) -> None:
+        """Validate required arguments for convolutional recurrence."""
+        required = {"in_channels", "kernel_size"}
+        missing = required - set(kwargs.keys())
+        if missing:
+            raise ValueError(f"Missing required arguments for convolution: {missing}")
+
+
+class DepthwiseSeparableConnection(RecurrenceBase):
     """
     Implements a depthwise separable convolution connection.
+
+    This connection type first applies a depthwise convolution (separate convolution
+    for each channel) followed by a pointwise convolution (1x1 convolution across channels).
+    This decomposition reduces parameter count while maintaining expressivity.
     """
 
     def __init__(
@@ -69,7 +92,6 @@ class DepthwiseSeparableConnection(nn.Module):
         bias: bool = False,
         max_weight_init: float = 0.05,
         parametrization: Callable[[torch.Tensor], torch.Tensor] = lambda x: x,
-        device: Optional[Union[str, torch.device]] = None,
         **kwargs,
     ) -> None:
         """
@@ -83,30 +105,38 @@ class DepthwiseSeparableConnection(nn.Module):
             parametrization (Callable): Function to apply to the convolution layers. Default is identity.
             device (Optional[Union[str, torch.device]]): Device to use for computation. Default is None.
         """
-        super(DepthwiseSeparableConnection, self).__init__()
-        self.max_weight_init = max_weight_init
+        super().__init__(max_weight_init=max_weight_init, **kwargs)
 
-        self.depthwise_conv = parametrization(
+        # Store initialization arguments as attributes
+        self.in_channels = in_channels
+        self.kernel_size = kernel_size
+        self.bias = bias
+        self.parametrization = parametrization
+
+        self._define_architecture()
+        self._init_parameters()
+
+    def _define_architecture(self) -> None:
+        """Define the architecture of the depthwise separable connection."""
+        self.depthwise_conv = self.parametrization(
             nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=in_channels,
-                kernel_size=kernel_size,
+                in_channels=self.in_channels,
+                out_channels=self.in_channels,
+                kernel_size=self.kernel_size,
                 stride=1,
-                padding=kernel_size // 2,
-                groups=in_channels,
-                bias=bias,
-                device=device,
+                padding=self.kernel_size // 2,
+                groups=self.in_channels,
+                bias=self.bias,
             )
         )
-        self.pointwise_conv = parametrization(
+        self.pointwise_conv = self.parametrization(
             nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=in_channels,
+                in_channels=self.in_channels,
+                out_channels=self.in_channels,
                 kernel_size=1,
                 stride=1,
                 padding=0,
-                bias=bias,
-                device=device,
+                bias=self.bias,
             )
         )
 
@@ -123,23 +153,6 @@ class DepthwiseSeparableConnection(nn.Module):
         h = self.depthwise_conv(x)
         h = self.pointwise_conv(h)
         return h
-
-    def _init_parameters(self) -> None:
-        """
-        Initialize parameters for the depthwise separable connection.
-        """
-        max_w_init = self.max_weight_init
-        for module in [self.depthwise_conv, self.pointwise_conv]:
-            if hasattr(module, "weight.original0"):
-                module.weight.original0.data.fill_(1.0)
-            if hasattr(module, "weight.original1"):
-                nn.init.uniform_(
-                    module.weight.original1.weight, a=-max_w_init, b=max_w_init
-                )
-            elif hasattr(module, "weight"):
-                nn.init.uniform_(module.weight, a=-max_w_init, b=max_w_init)
-            if hasattr(module, "bias") and module.bias is not None:
-                nn.init.constant_(module.bias, 0)
 
 
 class DepthPointwiseConnection(DepthwiseSeparableConnection):
@@ -170,9 +183,14 @@ class PointDepthwiseConnection(DepthwiseSeparableConnection):
         return h
 
 
-class FullConnection(nn.Module):
+class FullConnection(RecurrenceBase):
     """
     Implements a full convolution connection.
+
+    This connection type applies a full convolutional operation where each unit
+    receives input from all units within a nearby spatial region across all channels.
+    This provides the most complete form of local connectivity but with the highest
+    parameter count.
     """
 
     def __init__(
@@ -182,7 +200,6 @@ class FullConnection(nn.Module):
         bias: bool = False,
         max_weight_init: float = 0.05,
         parametrization: Callable[[torch.Tensor], torch.Tensor] = lambda x: x,
-        device: Optional[Union[str, torch.device]] = None,
         **kwargs,
     ) -> None:
         """
@@ -196,21 +213,29 @@ class FullConnection(nn.Module):
             parametrization (Callable): Function to apply to the convolution layers. Default is identity.
             device (Optional[Union[str, torch.device]]): Device to use for computation. Default is None.
         """
-        super(FullConnection, self).__init__()
+        super().__init__(max_weight_init=max_weight_init, **kwargs)
 
-        self.conv = parametrization(
+        # Store initialization arguments as attributes
+        self.in_channels = in_channels
+        self.kernel_size = kernel_size
+        self.bias = bias
+        self.parametrization = parametrization
+
+        self._define_architecture()
+        self._init_parameters()
+
+    def _define_architecture(self) -> None:
+        """Define the architecture of the full connection."""
+        self.conv = self.parametrization(
             nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=in_channels,
-                kernel_size=kernel_size,
+                in_channels=self.in_channels,
+                out_channels=self.in_channels,
+                kernel_size=self.kernel_size,
                 stride=1,
-                padding=kernel_size // 2,
-                bias=bias,
-                device=device,
+                padding=self.kernel_size // 2,
+                bias=self.bias,
             )
         )
-
-        self.max_weight_init = max_weight_init
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -222,29 +247,16 @@ class FullConnection(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        h = self.conv(x)
-        return h
-
-    def _init_parameters(self) -> None:
-        """
-        Initialize parameters for the full connection.
-        """
-        max_w_init = self.max_weight_init
-        if hasattr(self.conv, "weight.original0"):
-            self.conv.weight.original0.data.fill_(1.0)
-        if hasattr(self.conv, "weight.original1"):
-            nn.init.uniform_(
-                self.conv.weight.original1.weight, a=-max_w_init, b=max_w_init
-            )
-        elif hasattr(self.conv, "weight"):
-            nn.init.uniform_(self.conv.weight, a=-max_w_init, b=max_w_init)
-        if hasattr(self.conv, "bias") and self.conv.bias is not None:
-            nn.init.constant_(self.conv.bias, 0)
+        return self.conv(x)
 
 
-class SelfConnection(nn.Module):
+class SelfConnection(RecurrenceBase):
     """
     Implements a self-connection with optional fixed weight and bias.
+
+    This is the simplest form of recurrence where a unit connects only to itself.
+    It can be used to model the persistence of neural activity over time or as a
+    simplified form of neural adaptation.
     """
 
     def __init__(
@@ -262,18 +274,21 @@ class SelfConnection(nn.Module):
             max_weight_init (float): Maximum weight initialization value. Default is 0.2.
             bias (bool): Whether to include a bias term. Default is True.
         """
-        super(SelfConnection, self).__init__()
+        super().__init__(max_weight_init=max_weight_init, **kwargs)
 
-        self.requires_grad = fixed_weight is None
-        self.max_weight_init = max_weight_init
+        # Store initialization arguments as attributes
         self.fixed_weight = fixed_weight
+        self.bias_enabled = bias
+        self.requires_grad = fixed_weight is None
 
-        self.weight = nn.Parameter(torch.Tensor([1]), requires_grad=self.requires_grad)
-
-        if bias:
-            self.bias = nn.Parameter(torch.Tensor([0]), requires_grad=True)
-
+        self._define_architecture()
         self._init_parameters()
+
+    def _define_architecture(self) -> None:
+        """Define the architecture of the self connection."""
+        self.weight = nn.Parameter(torch.Tensor([1]), requires_grad=self.requires_grad)
+        if self.bias_enabled:
+            self.bias = nn.Parameter(torch.Tensor([0]), requires_grad=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -287,8 +302,7 @@ class SelfConnection(nn.Module):
         """
         if hasattr(self, "bias"):
             return x * self.weight + self.bias
-        else:
-            return x * self.weight
+        return x * self.weight
 
     def _init_parameters(self) -> None:
         """
@@ -302,7 +316,7 @@ class SelfConnection(nn.Module):
             nn.init.constant_(self.bias, 0)
 
 
-class InputAdaption(nn.Module):
+class InputAdaption(LightningModule):
     """
     Implements input adaptation with a self-connection.
     """
@@ -356,9 +370,13 @@ class InputAdaption(nn.Module):
             return h
 
 
-class RecurrentConnectedConv2d(nn.Module):
+class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
     """
     Implements a recurrently connected convolutional layer.
+
+    This layer combines feedforward convolutional processing with various types
+    of recurrent connections, allowing for dynamic temporal processing and
+    feature integration over time.
     """
 
     def __init__(
@@ -384,71 +402,69 @@ class RecurrentConnectedConv2d(nn.Module):
         feedforward_only: bool = False,
         **kwargs,
     ) -> None:
-        """
-        Initialize the RecurrentConnectedConv2d.
+        """Initialize the RecurrentConnectedConv2d."""
+        super().__init__()
 
-        Args:
-            in_channels (int): Number of input channels.
-            out_channels (int): Number of output channels.
-            kernel_size (int): Size of the convolution kernel.
-            stride (int): Stride of the convolution. Default is 1.
-            padding (Optional[int]): Padding for the convolution. Default is None.
-            bias (bool): Whether to include a bias term. Default is True.
-            dim_y (Optional[int]): Height of the input tensor. Default is None.
-            dim_x (Optional[int]): Width of the input tensor. Default is None.
-            dt (float): Time step for recurrence. Default is 1 ms.
-            tau (float): Time constant for recurrence. Default is 1 ms.
-            recurrence_type (str): Type of recurrence. Default is "self".
-            recurrence_delay (float): Delay for recurrence. Default is 0 ms.
-            recurrence_influence (Union[Callable, str]): Influence of recurrence. Default is "additive".
-            history_length (Optional[float]): Length of history for recurrence. Default is None.
-            fixed_self_weight (Optional[float]): Fixed weight for self-connection. Default is None.
-            max_weight_init (float): Maximum weight initialization value. Default is 0.001.
-            parametrization (Callable): Function to apply to the convolution layers. Default is identity.
-            device (Optional[Union[str, torch.device]]): Device to use for computation. Default is None.
-            feedforward_only (bool): Whether to use only feedforward connections. Default is False.
-        """
-        super(RecurrentConnectedConv2d, self).__init__()
+        # Store core convolution parameters
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.bias = bias
+        self.parametrization = parametrization
 
-        model_args = {
-            k: v
-            for k, v in locals().items()
-            if k not in ["self", "kwargs"] and not k.startswith("_")
-        } | kwargs
-        for key, value in model_args.items():
-            setattr(self, key, value)
+        # Store spatial dimensions
+        self.dim_y = dim_y
+        self.dim_x = dim_x
 
+        # Store recurrence parameters
+        self.dt = dt
+        self.tau = tau
+        self.recurrence_type = recurrence_type
+        self.recurrence_delay = recurrence_delay
+        self.fixed_self_weight = fixed_self_weight
+        self.max_weight_init = max_weight_init
         self.feedforward_only = str_to_bool(feedforward_only)
 
-        # Determine length of the hidden state memory
-        self.history_length = (
-            recurrence_delay if history_length is None else history_length
-        )
-        self.n_deque = int(self.history_length / self.dt) + 1
-        self.recurrence_delay_i = int(self.recurrence_delay / self.dt)
+        # Configure recurrence influence
+        self._setup_recurrence_influence(recurrence_influence)
 
-        # Set how the recurrent signal is integrated with the feedforward signal
-        if isinstance(self.recurrence_influence, str):
-            if self.recurrence_influence == "additive":
-                self.recurrence_influence = lambda x, h: x + h
-            elif self.recurrence_influence == "multiplicative":
-                self.recurrence_influence = lambda x, h: x * (1 + torch.tanh(h))
-            else:
-                raise ValueError(
-                    f"Invalid recurrence influence keyword: {self.recurrence_influence}! Use a callable function instead."
-                )
+        # Configure hidden state memory
+        self._setup_hidden_state_memory(history_length)
 
+        # Define architecture and initialize
         self._define_architecture()
         self._init_parameters()
         self.reset()
 
-    def _define_architecture(self) -> None:
-        """
-        Define the architecture of the recurrently connected convolutional layer.
-        """
-        if self.feedforward_only:
-            self.recurrence_type = None
+    def _setup_recurrence_influence(self, influence: Union[Callable, str]) -> None:
+        if isinstance(influence, str):
+            if influence == "additive":
+                self.recurrence_influence = lambda x, h: x + h
+            elif influence == "multiplicative":
+                self.recurrence_influence = lambda x, h: x * (1 + torch.tanh(h))
+            else:
+                raise ValueError(f"Invalid recurrence influence: {influence}")
+        else:
+            self.recurrence_influence = influence
 
+    def _setup_hidden_state_memory(self, history_length: Optional[float]) -> None:
+        self.history_length = (
+            self.recurrence_delay if history_length is None else history_length
+        )
+        self.n_deque = int(self.history_length / self.dt) + 1
+        self.recurrence_delay_i = int(self.recurrence_delay / self.dt)
+
+    def _define_architecture(self) -> None:
+        # Define feedforward convolution
+        self._setup_feedforward_conv()
+
+        # Define recurrent connection if needed
+        if not self.feedforward_only:
+            self._setup_recurrence()
+
+    def _setup_feedforward_conv(self) -> None:
         padding = self.kernel_size // 2 if self.padding is None else self.padding
 
         self.conv = self.parametrization(
@@ -459,69 +475,52 @@ class RecurrentConnectedConv2d(nn.Module):
                 stride=self.stride,
                 padding=padding,
                 bias=self.bias,
-                device=self.device,
             )
         )
 
-        # select recurrence
+    def _setup_recurrence(self) -> None:
+        """Set up the recurrent connection based on specified type."""
         recurrence_params = dict(
             kernel_size=self.kernel_size,
             bias=False,
             parametrization=self.parametrization,
             max_weight_init=self.max_weight_init,
-            device=self.device,
         )
 
-        if self.recurrence_type == "self":
-            self.recurrence = SelfConnection(fixed_weight=self.fixed_self_weight)
-
-        elif self.recurrence_type == "full":
-            self.recurrence = FullConnection(
-                in_channels=self.out_channels,
-                **recurrence_params,
-            )
-
-        elif self.recurrence_type == "depthpointwise":
-            self.recurrence = DepthPointwiseConnection(
-                in_channels=self.out_channels,
-                **recurrence_params,
-            )
-
-        elif self.recurrence_type == "pointdepthwise":
-            self.recurrence = PointDepthwiseConnection(
-                in_channels=self.out_channels,
-                **recurrence_params,
-            )
-
-        elif self.recurrence_type == "local":
-            self.recurrence = LocalLateralConnection(
+        # Map recurrence types to their implementations
+        recurrence_types = {
+            "self": lambda: SelfConnection(fixed_weight=self.fixed_self_weight),
+            "full": lambda: FullConnection(
+                in_channels=self.out_channels, **recurrence_params
+            ),
+            "depthpointwise": lambda: DepthPointwiseConnection(
+                in_channels=self.out_channels, **recurrence_params
+            ),
+            "pointdepthwise": lambda: PointDepthwiseConnection(
+                in_channels=self.out_channels, **recurrence_params
+            ),
+            "local": lambda: LocalLateralConnection(
                 in_channels=self.out_channels,
                 dim_y=self.dim_y // self.stride,
                 dim_x=self.dim_x // self.stride,
                 **recurrence_params,
-            )
-
-        elif self.recurrence_type == "localdepthwise":
-            self.recurrence = LocalSeparableConnection(
+            ),
+            "localdepthwise": lambda: LocalSeparableConnection(
                 in_channels=self.out_channels,
                 dim_y=self.dim_y // self.stride,
                 dim_x=self.dim_x // self.stride,
                 **recurrence_params,
-            )
+            ),
+            None: lambda: None,
+            "none": lambda: None,
+        }
 
-        elif self.recurrence_type is None or self.recurrence_type.lower() == "none":
-            self.recurrence = None
-
-        else:
+        if self.recurrence_type.lower() not in recurrence_types:
             raise ValueError(f"Invalid recurrence type: {self.recurrence_type}")
 
-        self.relu = nn.ReLU(inplace=True)
+        self.recurrence = recurrence_types[self.recurrence_type.lower()]()
 
     def _init_parameters(self) -> None:
-        """
-        Initialize parameters for the recurrently connected convolutional layer.
-        """
-        max_w_init = self.max_weight_init
         if hasattr(self.conv, "weight.original0"):
             self.conv.weight.original0.data.fill_(1.0)
         if hasattr(self.conv, "weight.original1"):
@@ -534,9 +533,6 @@ class RecurrentConnectedConv2d(nn.Module):
             self.recurrence._init_parameters()
 
     def reset(self) -> None:
-        """
-        Reset the hidden states.
-        """
         self.hidden_states: Deque[torch.Tensor] = deque(maxlen=self.n_deque)
 
     def get_hidden_state(self, i: Optional[int] = None) -> Optional[torch.Tensor]:
@@ -579,50 +575,33 @@ class RecurrentConnectedConv2d(nn.Module):
         h: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Optional[torch.Tensor]:
-        """
-        Forward pass for the recurrently connected convolutional layer.
-
-        Args:
-            x (Optional[torch.Tensor]): Input tensor.
-            h (Optional[torch.Tensor]): Hidden state tensor.
-
-        Returns:
-            Optional[torch.Tensor]: Output tensor.
-        """
         # Get previous activation for recurrent input
         if h is None:  # passed hidden state takes precedence
             h = self.get_hidden_state(-1 * self.recurrence_delay_i)
 
-        with on_same_device(
-            x=x,
-            h=h,
-            conv=self.conv,
-            recurrence=self.recurrence,
-            label="RecurrentConnectedConv2D",
-        ):
-            # Response to recurrent input
-            if h is None or self.recurrence is None:
-                h = None
-            else:
-                h = self.recurrence(h)
+        # Response to recurrent input
+        if h is None or self.recurrence is None:
+            h = None
+        else:
+            h = self.recurrence(h)
 
-            # Response to feedforward input
-            if x is not None:
-                x = self.conv(x)
+        # Response to feedforward input
+        if x is not None:
+            x = self.conv(x)
 
-            # Combine responses
-            if x is None and h is None:
-                out = None
-                return out
-
-            elif x is None:
-                out = h
-            elif h is None:
-                out = x
-            else:
-                out = self.recurrence_influence(x, h)
-
+        # Combine responses
+        if x is None and h is None:
+            out = None
             return out
+
+        elif x is None:
+            out = h
+        elif h is None:
+            out = x
+        else:
+            out = self.recurrence_influence(x, h)
+
+        return out
 
 
 if __name__ == "__main__":

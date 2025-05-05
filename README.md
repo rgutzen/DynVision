@@ -1,182 +1,114 @@
-# DynVision
-> A modular modeling toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics.
+# DynVision: A Modeling Toolbox for Biologically Plausible Recurrent Visual Networks
 
-## Overview
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-DynVision provides a flexible framework for building and analyzing biologically plausible RCNNs, incorporating key properties of the visual cortex:
-- Realistic recurrent architectures
-- Activity evolution governed by dynamical systems equations
-- Structured connectivity reflecting cortical arrangements
-- Computational efficiency and scalability
+DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks and how these networks can be aligned with properties of biological visual systems.
 
-Built on modern deep learning infrastructure:
-- PyTorch for performative tensor operations
-- PyTorch Lightning for training organization
-- FFCV for optimized data loading
-- Snakemake for workflow management
-- YAML for configuration
+<p align="center">
+  <img src="docs/assets/overview_diagram.png" alt="DynVision Overview" width="800"/>
+</p>
 
-## Features
+## Key Features
 
-- **Modular Architecture**: Easily extensible with new models and components
-- **Biological Plausibility**: Incorporates key visual cortex properties
-- **Performance Optimized**: Efficient data loading and GPU utilization
-- **Reproducible Research**: Structured workflows and configurations
-- **Comprehensive Analysis**: Built-in visualization and analysis tools
+- **Biologically Plausible Dynamics**: Implement neural dynamics governed by continuous differential equations with realistic time constants and delays
+- **Diverse Recurrent Architectures**: Explore various recurrent connection types (self, full, depthwise, pointwise, local topographic)
+- **Minimal Coding Requirements**: Customization of models, training hyperparameters, testing scenarios, data selection, parameter sweeps, visualizations can be achieved by editing by human-readable config files. For more elaborate extensions there are template files and guides.
+- **Modular Components**: Easily combine and reconfigure biologically-inspired features:
+  - Recurrent processing within and across areas
+  - Skip and feedback connections
+  - Retinal preprocessing
+  - Supralinear activation
+  - Adaptive input gain
+- **Modular Operation Order**: Easily rearrange the execution order of layer operations like convolution, adding recurrence, applying delays, nonlinearity, pooling, recording activity, etc.
+- **Efficient Workflow Management**: Leverages Snakemake for reproducible experiments and parameter sweeps
+- **PyTorch Lightning Integration**: Standardized training with minimal boilerplate
+- **Optimized Performance**: Fast data loading with FFCV, GPU acceleration, mixed precision
+- **Comprehensive Model Zoo**: Access pre-implemented architectures like AlexNet, CorNetRT, ResNet, CordsNet, and DyRCNNx4
 
 ## Installation
 
-1. Clone the repository:
 ```bash
+# Clone repository
 git clone https://github.com/yourusername/dynvision.git
 cd dynvision
-```
 
-2. Create and activate a conda environment:
-```bash
+# Create conda environment
 conda create -n dynvision python=3.11
 conda activate dynvision
+
+# Install dependencies
+pip install -e .
 ```
 
-3. Install dependencies:
-```bash
-# Core dependencies
-pip install -e .
+For more detailed installation instructions, see the [Installation Guide](docs/user-guide/installation.md).
 
 ## Quick Start
 
-1. Prepare your dataset:
+```python
+import torch
+from dynvision.models import DyRCNNx4
+
+# Create a 4-layer RCNN with recurrent connections
+model = DyRCNNx4(
+    n_classes=10,
+    input_dims=(20, 3, 224, 224),  # (timesteps, channels, height, width)
+    recurrence_type="full",        # Full recurrent connectivity
+    dt=2,                          # Integration time step (ms)
+    tau=5,                         # Neural time constant (ms)
+    tff=8,                         # feedforward delay (ms)
+    trc=4,                         # recurrence delay (ms)
+)
+
+# Forward pass with a batch of inputs
+batch = torch.randn(1, 20, 3, 224, 224)  # (batch, timesteps, channels, height, width)
+outputs = model(batch)
+```
+
+For a step-by-step tutorial, see the [Getting Started](docs/getting-started.md) guide.
+
+## Example Experiments
+
+DynVision includes pre-configured experiments to explore temporal response properties of different recurrent architectures:
+
 ```bash
-# Download and prepare CIFAR-10
-snakemake -j1 get_data --config data_name=cifar10
+# Train and run contrast response experiment with on multiple models
+snakemake -j1 --config experiment=contrast model_name=['AlexNet', 'ResNet18', 'CorNetRT'] data_name=cifar100
 
-# Build optimized FFCV dataset
-snakemake -j1 build_ffcv_datasets --config data_name=cifar10
+# Evaluate stimulus duration effects with different recurrence types
+snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rctype: [full, self, pointdepthwise]}"
 ```
 
-2. Train a model:
-```bash
-# Initialize model
-snakemake -j1 init_model \
-    --config model_name=DyRCNNx4 \
-    seed=0001 \
-    model_args="rctype=full,tau=8"
+<p align="center">
+  <img src="docs/assets/temporal_dynamics.png" alt="Temporal Dynamics Example" width="600"/>
+</p>
 
-# Train model
-snakemake -j1 train_model \
-    --config model_name=DyRCNNx4 \
-    seed=0001 \
-    epochs=200
+## Documentation
 
-# Evaluate model
-snakemake -j1 test_model \
-    --config model_name=DyRCNNx4 \
-    seed=0001
-```
+- [Getting Started](docs/getting-started.md): Beginner's tutorial
+- [User Guide](docs/user-guide/index.md): How-to guides for common tasks
+- [API Reference](docs/reference/index.md): Technical documentation
+- [Concepts](docs/explanation/concepts.md): Explanation of core concepts
+- [Contributing](docs/contributing.md): How to contribute to the project
 
-3. Visualize results:
-```bash
-# Plot confusion matrix
-snakemake -j1 plot_confusion_matrix \
-    --config model_name=DyRCNNx4
+<!-- ## Citation
 
-# Analyze responses
-snakemake -j1 plot_classifier_responses \
-    --config model_name=DyRCNNx4
-```
+If you use DynVision in your research, please cite our paper:
 
-## Project Organization
+```bibtex
+@article{dynvision2023,
+  title={DynVision: A Modeling Toolbox for Biologically Plausible Recurrent Visual Networks},
+  author={Anonymous},
+  journal={ArXiv},
+  year={2023}
+}
+``` 
 
-```
-├── LICENSE            <- Open-source license
-├── Makefile           <- Makefile with convenience commands
-├── README.md          <- The top-level README for developers
-├── data
-│   ├── external       <- Data from third party sources
-│   ├── interim        <- Intermediate data that has been transformed
-│   ├── processed      <- The final, canonical data sets for modeling
-│   └── raw           <- The original, immutable data dump
-│
-├── docs               <- Documentation (mkdocs)
-├── models             <- Trained and serialized models
-├── notebooks          <- Jupyter notebooks
-├── pyproject.toml     <- Project configuration and dependencies
-├── references         <- Data dictionaries and explanatory materials
-├── reports           <- Generated analysis as HTML, PDF, LaTeX, etc.
-│   └── figures       <- Generated graphics and figures
-├── setup.cfg         <- Configuration for development tools
-│
-└── dynvision         <- Source code package
-    ├── cluster       <- Utility scripts for cluster execution
-    |   └── profiles  <- cluster config for specific queueing systems (e.g. slurm)
-    ├── data          <- Data loading and processing
-    ├── models        <- Model implementations
-    ├── model_components <- Modules to use in model implementations
-    ├── runtime       <- init, train, and test models
-    ├── utils         <- collection of utility functions
-    ├── losses        <- Loss function implementations
-    ├── visualization <- Analysis and visualization tools
-    ├── workflow      <- Workflow management
-    |   └── tests     <- unit tests to validate workflow
-    └── project_paths.py  <- paths handling across the project
-```
+TODO: add rrid, zenodo
 
-## Development
-
-### Code Style
-
-- We use Black for code formatting
-- Follow PEP 8 guidelines
-- Use type hints
-- Write docstrings in NumPy format
-
-### Testing
-
-Run the test suite:
-```bash
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_models.py
-
-# Run with coverage
-pytest --cov=dynvision
-```
-
-## Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and ensure they pass
-5. Submit a pull request
-
-Please read our [Contributing Guidelines](CONTRIBUTING.md) for more details.
+-->
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Citation
-
-If you use DynVision in your research, please cite:
-
-```bibtex
-@software{dynvision2024,
-  title = {DynVision: A Toolbox for Modeling Dynamical Vision},
-  author = {Author, A.},
-  year = {2024},
-  url = {https://github.com/yourusername/dynvision}
-}
-```
-
-## Acknowledgments
-
-This project builds on several key technologies:
-- [PyTorch](https://pytorch.org/)
-- [PyTorch Lightning](https://lightning.ai/)
-- [FFCV](https://ffcv.io/)
-- [Snakemake](https://snakemake.readthedocs.io/)

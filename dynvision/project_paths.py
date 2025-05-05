@@ -20,12 +20,12 @@ class project_paths_class:
     def __init__(self, working_dir=None, toolbox_dir=None):
         if self.iam_on_cluster():
             working_dir = Path().home() / self.project_name
-            toolbox_dir = Path().home() / self.toolbox_name
+            toolbox_dir = Path().home() / self.toolbox_name / self.toolbox_name.lower()
 
         if working_dir is None:
             working_dir = Path("/home/rgutzen/Projects/rhythmic_visual_attention")
         if toolbox_dir is None:
-            toolbox_dir = self.this_file.parents[1].resolve()
+            toolbox_dir = self.this_file.parents[0].resolve()
 
         self.working_dir = working_dir
         self.toolbox_dir = toolbox_dir
@@ -44,6 +44,7 @@ class project_paths_class:
             self.large_logs = (
                 Path("/scratch") / self.user_name / self.project_name / "logs"
             )
+
         os.environ["WANDB_DIR"] = str(self.logs.resolve())
         return None
 
@@ -75,7 +76,7 @@ class project_paths_class:
         self.large_logs = working_dir / "logs"
         self.benchmarks = self.logs / "benchmarks"
 
-        self.scripts_path = toolbox_dir / self.toolbox_name.lower()
+        self.scripts_path = toolbox_dir
         self.scripts = SimpleNamespace(scripts=self.scripts_path)
         self.scripts.data = self.scripts_path / "data"
         self.scripts.utils = self.scripts_path / "utils"
@@ -89,7 +90,16 @@ class project_paths_class:
 
     def iam_on_cluster(self):
         host_name = os.popen("hostname").read()
-        cluster_names = ["hpc", "log-", "greene"]
+        # look for common cluster names
+        cluster_names = [
+            "hpc",  # Generic HPC systems
+            "log-",  # Login nodes
+            "greene",  # NYU Greene
+            "slurm",  # SLURM-based clusters
+            "compute",  # Common compute node prefix
+            "node",  # Generic compute nodes
+            "cluster",  # Generic cluster systems
+        ]
         return any(x in host_name for x in cluster_names)
 
 

@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 from dynvision.utils import on_same_device
+from pytorch_lightning import LightningModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def validate_input(x: torch.Tensor, expected_channels: int) -> None:
         raise ValueError("Input contains Inf values")
 
 
-class Retina(nn.Module):
+class Retina(LightningModule):
     """
     Model of the retina and LGN as two convolutional layers with ReLU activation.
 

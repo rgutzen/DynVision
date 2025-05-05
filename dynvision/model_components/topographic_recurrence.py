@@ -21,6 +21,7 @@ from typing import Optional, Any
 import torch
 import torch.nn as nn
 import math
+from pytorch_lightning import LightningModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -142,7 +143,7 @@ def create_plane_to_layer_mapping(
     return _layer_to_plane(layer_coordinates)
 
 
-class LocalLateralConnection(nn.Module):
+class LocalLateralConnection(LightningModule):
     """Local lateral connections for biologically-inspired neural networks.
 
     Biological Features:
@@ -299,7 +300,7 @@ class LocalLateralConnection(nn.Module):
         return torch.jit.trace(self.forward, x0)
 
 
-class LocalSeparableConnection(nn.Module):
+class LocalSeparableConnection(LightningModule):
     """Separable local connections for biologically-inspired neural networks.
 
     Biological Features:

@@ -12,6 +12,7 @@ import logging
 import torch
 import torch.nn as nn
 from dynvision.utils import check_stability
+from pytorch_lightning import LightningModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["EulerStep", "RungeKuttaStep"]
 
 
-class BaseSolver(nn.Module):
+class BaseSolver(LightningModule):
     """Base class for ODE solvers with common utilities."""
 
     def __init__(
@@ -140,7 +141,7 @@ class RungeKuttaStep(BaseSolver):
 
 
 def test_solver(
-    solver_class: nn.Module,
+    solver_class: LightningModule,
     dt: float = 0.1,
     tau: float = 1.0,
     device: Optional[Union[str, torch.device]] = None,
