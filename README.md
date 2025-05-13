@@ -74,7 +74,7 @@ DynVision includes pre-configured experiments to explore temporal response prope
 
 ```bash
 # Train and run contrast response experiment with on multiple models
-snakemake -j1 --config experiment=contrast model_name=['AlexNet', 'ResNet18', 'CorNetRT'] data_name=cifar100
+snakemake --config experiment=contrast model_name=['AlexNet', 'ResNet18', 'CorNetRT'] data_name=cifar100
 
 # Evaluate stimulus duration effects with different recurrence types
 snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rctype: [full, self, pointdepthwise]}"

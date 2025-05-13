@@ -6,7 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "dynvision"
 version = "0.0.1"
 description = "Dynamical Vision Modeling"
-authors = [{ name = "Inkognito" }]
+authors = [{ name = "Robin Gutzen" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 classifiers = [

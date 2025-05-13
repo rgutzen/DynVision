@@ -17,7 +17,7 @@ from .config_utils import filter_kwargs
 import numpy as np
 import torch
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

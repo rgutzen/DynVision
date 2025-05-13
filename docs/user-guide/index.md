@@ -31,15 +31,15 @@ Below are step-by-step instructions for common tasks in DynVision:
 2. Add dataset statistics in `config_data.yaml`.
 3. Run the data preparation workflow:
    ```bash
-   snakemake -j1 project_paths.data.raw/your_dataset/train
+   snakemake project_paths.data.raw/your_dataset/train
    ```
 4. Convert the dataset to FFCV format:
    ```bash
-   snakemake -j1 project_paths.data.processed/your_dataset/train_all/train.beton
+   snakemake project_paths.data.processed/your_dataset/train_all/train.beton
    ```
 5. Train a model on your dataset:
    ```bash
-   snakemake -j1 train_model --config \
+   snakemake train_model --config \
      model_name=DyRCNNx4 \
      data_name=your_dataset \
      model_args="{rctype:full}"
@@ -50,13 +50,13 @@ Below are step-by-step instructions for common tasks in DynVision:
 1. Set up your experiment in `config_experiments.yaml` (or use an existing one).
 2. Run the experiment with multiple recurrence types:
    ```bash
-   snakemake -j1 all_experiments --config \
+   snakemake all_experiments --config \
      experiment=contrast \
      model_args="{rctype:[full,self,depthpointwise,pointdepthwise]}"
    ```
 3. Generate comparative visualizations:
    ```bash
-   snakemake -j1 plot_experiments_on_models
+   snakemake plot_experiments_on_models
    ```
 4. Analyze the results in the `reports/figures/contrast/` directory.
 
@@ -64,7 +64,7 @@ Below are step-by-step instructions for common tasks in DynVision:
 
 1. Test a model and store responses:
    ```bash
-   snakemake -j1 test_model --config \
+   snakemake test_model --config \
      model_name=DyRCNNx4 \
      model_args="{rctype:full}" \
      data_name=cifar100 \
@@ -139,7 +139,7 @@ Below are step-by-step instructions for common tasks in DynVision:
 
 3. Use your custom recurrence type in a model:
    ```bash
-   snakemake -j1 experiment --config \
+   snakemake experiment --config \
      model_name=DyRCNNx4 \
      model_args="{rctype:custom}" \
      experiment=contrast

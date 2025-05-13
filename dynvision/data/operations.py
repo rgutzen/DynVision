@@ -3,9 +3,6 @@ import yaml
 import logging
 from dynvision.project_paths import project_paths
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 

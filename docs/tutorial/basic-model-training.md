@@ -30,14 +30,14 @@ DynVision provides a Snakemake workflow for dataset preparation. For CIFAR-10:
 
 ```bash
 # Download CIFAR-10
-snakemake -j1 project_paths.data.raw/cifar10/train
+snakemake project_paths.data.raw/cifar10/train
 
 # Create symbolic links for the full dataset
-snakemake -j1 project_paths.data.interim/cifar10/train_all/folder.link
-snakemake -j1 project_paths.data.interim/cifar10/test_all/folder.link
+snakemake project_paths.data.interim/cifar10/train_all/folder.link
+snakemake project_paths.data.interim/cifar10/test_all/folder.link
 
 # Convert to FFCV format for faster loading
-snakemake -j1 project_paths.data.processed/cifar10/train_all/train.beton
+snakemake project_paths.data.processed/cifar10/train_all/train.beton
 ```
 
 This will download CIFAR-10, organize it in the data directory structure, and convert it to the FFCV format for efficient loading.
@@ -47,7 +47,7 @@ This will download CIFAR-10, organize it in the data directory structure, and co
 Now, let's initialize a DyRCNNx4 model with full recurrence:
 
 ```bash
-snakemake -j1 project_paths.models/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_init.pt --config \
+snakemake project_paths.models/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_init.pt --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
   data_name=cifar10 \
@@ -61,7 +61,7 @@ This creates an initialized model file with full recurrent connections.
 Now, let's train the model:
 
 ```bash
-snakemake -j1 project_paths.models/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_trained.pt --config \
+snakemake project_paths.models/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_trained.pt --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
   data_name=cifar10 \
@@ -91,7 +91,7 @@ You can monitor the training progress with the output logs, which show:
 After training, let's test the model on the CIFAR-10 test set:
 
 ```bash
-snakemake -j1 project_paths.reports/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_trained_StandardDataLoader_all_test_outputs.csv --config \
+snakemake project_paths.reports/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_trained_StandardDataLoader_all_test_outputs.csv --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
   data_name=cifar10 \
@@ -108,7 +108,7 @@ Now, let's run some experiments to analyze the model's temporal dynamics:
 
 ```bash
 # Response experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=response \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
@@ -122,7 +122,7 @@ Let's also run the contrast experiment to see how the model responds to differen
 
 ```bash
 # Contrast experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=contrast \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
@@ -136,7 +136,7 @@ Generate visualizations for the experiment results:
 
 ```bash
 # Generate visualizations
-snakemake -j1 plot_adaption --config \
+snakemake plot_adaption --config \
   experiment=contrast \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
@@ -152,7 +152,7 @@ For comparison, let's train and evaluate a model with self recurrence:
 
 ```bash
 # Initialize and train a model with self recurrence
-snakemake -j1 project_paths.models/DyRCNNx4/DyRCNNx4:rctype=self_0001_cifar10_trained.pt --config \
+snakemake project_paths.models/DyRCNNx4/DyRCNNx4:rctype=self_0001_cifar10_trained.pt --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:self}" \
   data_name=cifar10 \
@@ -162,7 +162,7 @@ snakemake -j1 project_paths.models/DyRCNNx4/DyRCNNx4:rctype=self_0001_cifar10_tr
   learning_rate=0.001
 
 # Run contrast experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=contrast \
   model_name=DyRCNNx4 \
   model_args="{rctype:self}" \
@@ -174,7 +174,7 @@ Now, let's generate comparative visualizations:
 
 ```bash
 # Generate comparative visualizations
-snakemake -j1 plot_experiments_on_models --config \
+snakemake plot_experiments_on_models --config \
   experiment=contrast \
   model_args="{rctype:[full,self]}" \
   data_name=cifar10 \
@@ -208,7 +208,7 @@ You can customize the training process by modifying the configuration parameters
 
 ```bash
 # Train with custom parameters
-snakemake -j1 train_model --config \
+snakemake train_model --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full,dt:1,tau:10,tff:12,trc:5}" \
   data_name=cifar10 \

@@ -4,6 +4,8 @@ include: "snake_runtime.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 
+setup_logger()
+
 rule all:
     input:
         expand(project_paths.reports / 'experiment_{experiment}.done',

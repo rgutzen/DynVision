@@ -17,7 +17,7 @@ import pytorch_lightning as pl
 import torch
 from torch.amp import autocast
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

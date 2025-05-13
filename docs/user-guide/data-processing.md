@@ -1,6 +1,8 @@
 # Data Processing and Management
 
-This guide explains how to use DynVision's data processing pipeline, including dataset preparation, management, and loading for experiments.
+This guide explains how to use DynVision's data processing pipeline, including dataset preparation, management, and loading for experiments. 
+
+Most operations described in this documentation are automatically handled when executing the full workflow through Snakemake and usually don't need to run manually. For custom modifications and extensions to the pipeline, refer to the [Customization of Data Processing](#customization-of-data-processing) section.
 
 ## Overview
 
@@ -12,7 +14,7 @@ DynVision implements a comprehensive data management system that:
 4. Provides performance-optimized data loading with FFCV
 5. Implements specialized data loaders for neuroscience experiments
 
-## Data Directory Structure
+### Data Directory Structure
 
 DynVision organizes data into a structured hierarchy:
 
@@ -26,7 +28,6 @@ data/
 ├── interim/             # Processed data, organized by experiments
 │   ├── cifar100/
 │   │   ├── train_all/
-│   │   ├── train_invertebrates/
 │   │   └── test_invertebrates/
 │   └── mnist/
 └── processed/           # Final data ready for model consumption
@@ -34,9 +35,42 @@ data/
     │   ├── train_all/
     │   │   ├── train.beton     # FFCV-formatted data
     │   │   └── val.beton
-    │   └── test_invertebrates/
     └── mnist/
 ```
+
+### Data Processing Flow
+
+The following flow chart illustrates the complete data processing pipeline in DynVision:
+
+```
+data/raw/                      data/interim/                   data/processed/              Usage
+(Original Datasets)            (Organized Data)                (Optimized Data)
+      |                             |                               |
+      |                             |                               |
+[Data Acquisition]------------>[Data Organization]---------->[FFCV Processing]----------->[Training]
+      |                             |                               |                         |
+Download/Mount                 Create Symlinks              Convert to .beton                 |
+  - CIFAR10                    - Group by Classes           Configure Loader                  |
+  - CIFAR100                   - Train/Test Split           - Extended Timesteps              |
+  - MNIST                      - Create PyTorch             - GPU Optimization                |
+  - ImageNet                     Dataset Objects            - Memory Efficiency               |
+  - Custom Datasets                 |                                                         |
+                                    |                                                         |
+                                    |                                                         |
+                                    +--------------->[PyTorch Processing]---------------->[Testing]
+                                                    - Specialized DataLoader
+                                                    - Temporal Presentation
+                                                    - Experimental Conditions
+```
+
+Key Processing Steps:
+1. Raw Data Storage: Original datasets stored in their native format
+2. Interim Organization: Data split into train/test and organized in testing groups
+3. FFCV Optimization: Conversion to .beton format for efficient loading
+4. Usage Paths: 
+   - Training: uses FFCV-optimized data and dataloader
+   - Testing: uses pytorch dataloader on symlinked groups
+
 
 ## Downloading and Preparing Datasets
 
@@ -44,16 +78,16 @@ DynVision uses Snakemake rules to download and prepare datasets:
 
 ```bash
 # Download and prepare CIFAR100 dataset
-snakemake -j1 project_paths.data.raw/cifar100/train
+snakemake <project_paths.data.raw>/cifar100/train/
 ```
 
 This command triggers the `get_data` rule, which downloads CIFAR100 and organizes it in the raw data directory.
 
 For custom datasets, place them in the `data/raw` directory following the same structure.
 
-## Creating Data Groups
+## Configuring the Dataset
 
-DynVision supports organizing datasets into groups of categories, which is useful for specialized experiments:
+DynVision supports organizing datasets into groups of classes, which is useful for experiments with a scaled-down dataset that can vary in difficulty depending on the grouping:
 
 ### Configuring Data Groups
 
@@ -88,140 +122,156 @@ To create symlinks for a data group:
 
 ```bash
 # Create symlinks for CIFAR100 invertebrates group
-snakemake -j1 project_paths.data.interim/cifar100/train_invertebrates/folder.link
+snakemake <project_paths.data.interim>/cifar100/test_invertebrates/folder.link
+```
+
+The default group containing all classes is called `all`:
+
+```bash
+snakemake <project_paths.data.interim>/cifar100/train_all/folder.link
 ```
 
 This command creates symbolic links to the specified categories, making them appear as a cohesive dataset.
 
-## Converting to FFCV Format
 
-DynVision uses FFCV for optimized data loading. To convert a dataset to FFCV format:
+### Converting to FFCV Format
+
+DynVision uses FFCV for optimized data loading during training. To convert a dataset to FFCV format:
 
 ```bash
 # Convert CIFAR100 to FFCV format
-snakemake -j1 project_paths.data.processed/cifar100/train_all/train.beton
+snakemake <project_paths.data.processed>/cifar100/train_all/train.beton
 ```
 
 This creates `.beton` files that can be loaded more efficiently during training.
 
+
+## Configuring Transforms
+
+### Data Transforms
+
+DynVision provides configurable data transformations:
+
+```python
+from dynvision.data.transforms import get_data_transform
+
+# Get a predefined transform
+transform = get_data_transform(transform='train')  # Standard training augmentations
+
+# Get dataset-specific transform
+transform = get_data_transform(transform='train', data_name='cifar100')
+
+# Create custom transform combination
+transform = get_data_transform(transform=['train', 'test'])
+```
+
+The `transform` input can single str, list, or dict of keys from the transform presets defined in `dynvision.data.transforms`, which you can edit and extend.
+
+Available transform presets include:
+- `train`: Standard training augmentations (random flips, etc.)
+- `test`: Standard test transformations
+- `ffcv_train`: Optimized transforms for FFCV training
+- `ffcv_test`: Optimized transforms for FFCV testing
+- Dataset-specific transforms (e.g., `mnist`, `imagenet`)
+
+### Target Transforms
+
+For data grouping, target transforms map original labels to new indices:
+
+```python
+from dynvision.data.transforms import get_target_transform
+
+# Transform for CIFAR100 invertebrates group
+target_transform = get_target_transform('cifar100_invertebrates')
+```
+
 ## Data Loaders
 
-DynVision provides several specialized data loaders for neuroscience experiments:
-
-### Standard Data Loader
-
-The basic data loader with performance optimizations:
+With the dataset files and symlinks organized, the data can be compiled into pytorch dataset.
 
 ```python
 from dynvision.data.dataloader import get_data_loader
-from torchvision.datasets import CIFAR100
+from dynvision.data.datasets import get_dataset
 
-# Create dataset
-dataset = CIFAR100(root='./data/raw', train=True, download=True)
-
-# Create data loader
-loader = get_data_loader(
-    dataset,
-    batch_size=32,
-    num_workers=8,
-    pin_memory=True,
-    prefetch_factor=2,
-    n_timesteps=20  # Repeat data over time dimension
+# get dataset
+dataset = get_dataset(
+    data_path="<project_paths.data.interim>/{data_name}/test_{data_group}/folder.link",
+    data_name="{data_name}",
+    data_transform="test",
+    target_transform="{data_group}",
 )
 ```
 
-### Stimulus Duration Loader
+The selected data can be presented to the model in various ways by varying how an image appears over time, by changing the image's contrast, or other manipulations.
+These can be realized by the dataloader at runtime.
+DynVision provides several specialized data loaders for neuroscience experiments:
 
-For experiments varying stimulus duration:
+**Standard Loader**
+
+Optionally repeating the image presentation over multiple timesteps.
 
 ```python
-from dynvision.data.dataloader import StimulusDurationDataLoader
-from torchvision.datasets import CIFAR100
-
-# Create dataset
-dataset = CIFAR100(root='./data/raw', train=False, download=True)
-
-# Create stimulus duration loader
-loader = StimulusDurationDataLoader(
-    dataset,
-    batch_size=32,
-    n_timesteps=100,        # Total sequence length
-    stimulus_duration=20,   # Duration of the stimulus
-    intro_duration=2,       # Duration before stimulus
+loader = get_data_loader(
+    dataset=dataset,
+    n_timesteps=1,  # Repeat data over time dimension
+    **kwargs        # other optional data loader args
 )
 ```
+
+**Stimulus Duration Loader**
 
 This loader presents a stimulus for a specified duration, with intro and outro periods of void values.
 
-### Stimulus Interval Loader
-
-For experiments testing effects of repeated stimuli with varying intervals:
-
 ```python
-from dynvision.data.dataloader import StimulusIntervalDataLoader
-from torchvision.datasets import CIFAR100
-
-# Create dataset
-dataset = CIFAR100(root='./data/raw', train=False, download=True)
-
-# Create stimulus interval loader
-loader = StimulusIntervalDataLoader(
-    dataset,
-    batch_size=32,
+loader = get_data_loader(
+    dataloader='StimulusDuration',
+    dataset=dataset,
     n_timesteps=100,        # Total sequence length
-    stimulus_duration=5,    # Duration of each stimulus
-    intro_duration=1,       # Duration before first stimulus
-    interval_duration=10,   # Interval between stimuli
+    stimulus_duration=20,   # Duration of the stimulus
+    intro_duration=2,       # Duration before stimulus
+    void_value=0            # Pixel value shown in absence of image
+    non_label_index=-1,     # Label index for void input
+    **kwargs                # other optional data loader args
 )
 ```
+
+
+**Stimulus Interval Loader**
 
 This loader presents a stimulus twice with a specified interval between presentations.
 
-### Stimulus Contrast Loader
+```python
+loader = get_data_loader(
+    dataloader='StimulusInterval',
+    n_timesteps=100,        # Total sequence length
+    stimulus_duration=5,    # Duration of each stimulus
+    intro_duration=1,       # Duration before the first stimulus
+    interval_duration=10,   # Interval between the two stimuli
+    void_value=0,           # Pixel value shown in absence of image
+    non_label_index=-1,     # Label index for void input
+    **kwargs                # other optional data loader args
+)
+```
 
-For experiments varying stimulus contrast:
+**Stimulus Contrast Loader**
+
+This loader presents a stimulus with adjustable contrast. The contrast level can be set to simulate different experimental conditions.
 
 ```python
-from dynvision.data.dataloader import StimulusContrastDataLoader
-from torchvision.datasets import CIFAR100
-
-# Create dataset
-dataset = CIFAR100(root='./data/raw', train=False, download=True)
-
-# Create stimulus contrast loader
-loader = StimulusContrastDataLoader(
-    dataset,
-    batch_size=32,
+loader = get_data_loader(
+    dataloader='StimulusContrast',
+    dataset=dataset,
     n_timesteps=100,        # Total sequence length
     stimulus_duration=15,   # Duration of the stimulus
-    intro_duration=2,       # Duration before stimulus
+    intro_duration=2,       # Duration before the stimulus
     stimulus_contrast=0.5,  # Contrast of the stimulus (0-1)
+    void_value=0,           # Pixel value shown in absence of image
+    non_label_index=-1,     # Label index for void input
+    **kwargs                # Other optional data loader arguments
 )
 ```
 
-This loader presents a stimulus with adjustable contrast.
-
-### FFCV Data Loader
-
-For optimal performance using FFCV:
-
-```python
-from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
-
-# Create FFCV data loader
-loader = get_ffcv_dataloader(
-    path='data/processed/cifar100/train_all/train.beton',
-    batch_size=128,
-    n_timesteps=20,
-    num_workers=8,
-    resolution=32,
-    normalize=([0.5071, 0.4867, 0.4408], [0.2675, 0.2565, 0.2761]),
-    order='random',
-    dtype=torch.float16
-)
-```
-
-## Using Data Loaders in Experiments
+### Using Data Loaders in Experiments
 
 DynVision's workflow system sets up appropriate data loaders based on experiment configurations:
 
@@ -241,45 +291,29 @@ experiment_config:
 To run this experiment:
 
 ```bash
-snakemake -j1 experiment --config experiment=contrast
+snakemake --config experiment=contrast
 ```
 
 The system automatically sets up the `StimulusContrastDataLoader` with the specified parameters.
 
-## Custom Data Transforms
+### FFCV Data Loader
 
-DynVision provides configurable data transformations:
-
-```python
-from dynvision.data.transforms import get_data_transform
-
-# Get a predefined transform
-transform = get_data_transform('train')  # Standard training augmentations
-
-# Get dataset-specific transform
-transform = get_data_transform('train', data_name='cifar100')
-
-# Create custom transform combination
-transform = get_data_transform(['train', 'cifar100'])
-```
-
-Available transform presets include:
-- `train`: Standard training augmentations (random flips, etc.)
-- `test`: Standard test transformations
-- `ffcv_train`: Optimized transforms for FFCV training
-- `ffcv_test`: Optimized transforms for FFCV testing
-- Dataset-specific transforms (e.g., `mnist`, `imagenet`)
-
-## Target Transforms
-
-For data grouping, target transforms map original labels to new indices:
+For optimal performance during training use FFCV:
 
 ```python
-from dynvision.data.transforms import get_target_transform
+from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
 
-# Transform for CIFAR100 invertebrates group
-target_transform = get_target_transform('cifar100_invertebrates')
+# Create FFCV data loader
+loader = get_ffcv_dataloader(
+    path='data/processed/cifar100/train_all/train.beton',
+    n_timesteps=20,
+    resolution=32,
+    normalize=([0.5071, 0.4867, 0.4408], [0.2675, 0.2565, 0.2761]),
+    batch_size=128,
+)
 ```
+
+You can toggle the use of ffcv for training with the config `use_ffcv=False`.
 
 ## Handling Large Datasets
 
@@ -295,7 +329,7 @@ mounted_datasets:
     - imagenet
 ```
 
-This configuration tells DynVision to use the dataset from its mounted location rather than copying it.
+This configuration tells DynVision to use the dataset from its mounted location (`/imagenet/) rather than copying it.
 
 ### Automatic Optimization
 
@@ -313,68 +347,98 @@ optimized_params = DatasetParams(
 )
 ```
 
-### Custom Dataset Integration
-
-To use a custom dataset with DynVision:
-
-1. Place your dataset in `data/raw/your_dataset/`
-
-2. Create a PyTorch dataset class:
-
+A large dataset is detected by multiple criteria, that are set in the script `data/ffcv_dataloader.py`:
 ```python
-from torch.utils.data import Dataset
-
-class CustomDataset(Dataset):
-    def __init__(self, root, transform=None, target_transform=None):
-        self.root = root
-        self.transform = transform
-        self.target_transform = target_transform
-        # Load your data
-        
-    def __len__(self):
-        return len(self.data)
-        
-    def __getitem__(self, index):
-        # Load and process a single sample
-        return sample, target
+MAX_RESOLUTION = 112
+MAX_TIMESTEPS = 20
 ```
 
-3. Update configuration in `config_data.yaml`:
+1. Image Resolution: Datasets with resolution > 112x112 pixels
+2. Temporal Dimension: Sequences with > 20 timesteps
 
-```yaml
-data_resolution:
-    your_dataset: 64
-    
-data_statistics:
-    your_dataset:
-        mean: [0.5, 0.5, 0.5]
-        std: [0.25, 0.25, 0.25]
-        
-data_groups:
-    your_dataset:
-        your_group:
-            - 0
-            - 1
-            - 2
-```
+These criteria trigger automatic parameter adjustments to ensure efficient processing.
 
-4. Create data loader in your experiment:
+## Customization of Data Processing
 
-```python
-from dynvision.data.dataloader import get_data_loader
-from your_module import CustomDataset
+While most data processing is automated through the workflow system, you may need to customize certain aspects for your specific research needs. This section details the key points of customization:
 
-dataset = CustomDataset(
-    root='data/raw/your_dataset',
-    transform=get_data_transform('train')
-)
+### Adding New Datasets
 
-loader = get_data_loader(
-    dataset,
-    batch_size=32,
-    n_timesteps=20
-)
-```
+1. Prepare your dataset in the standard format:
+   ```
+   data/raw/your_dataset/
+   ├── train/
+   │   ├── class_1/
+   │   │   ├── image1.ext
+   │   │   └── image2.ext
+   │   └── class_2/
+   │       ├── image1.ext
+   │       └── image2.ext
+   └── test/
+       └── [same structure as train]
+   ```
+
+2. Configure dataset parameters in `config_data.yaml`:
+   ```yaml
+   # Set resolution for efficient preprocessing with ffcv
+   data_resolution:
+       your_dataset: 64  # desired image size
+   
+   # Define dataset statistics
+   data_statistics:
+       your_dataset:
+           mean: [0.5, 0.5, 0.5]  # channel-wise mean
+           std: [0.25, 0.25, 0.25]  # channel-wise std
+   ```
+
+### Adding New Data Groups
+
+1. Define class groups in `config_data.yaml`:
+   ```yaml
+   data_groups:
+       your_dataset:
+           group_name:
+               - class_id_1  # class index or name
+               - class_id_2
+               # Add more classes as needed
+   ```
+
+2. The workflow will automatically:
+   - Create appropriate symlinks
+   - Generate group-specific target transforms
+   - Set up data loaders
+
+### Adding New Data Transforms
+
+1. Add your transform to `dynvision/data/transforms.py`:
+   ```python
+   # In transform_presets dictionary
+   'your_transform': [
+       transforms.RandomHorizontalFlip(),
+       transforms.RandomRotation(10),
+       # Add your custom transforms
+   ]
+   ```
+
+### Adding New Experiments
+
+1. (Optional) Create a custom data loader in `dynvision/data/dataloader.py`
+   if needed for specialized data presentation.
+
+2. Define the experiment in `config_experiments.yaml`:
+   ```yaml
+   experiment_config:
+       your_experiment:
+           status: trained
+           data_loader: YourDataLoader
+           parameter: param2
+           data_args:
+               param1: value1
+               param2: [0.1, 0.2, 0.3]  # parameter range
+   ```
+
+The workflow system will automatically integrate your customizations into the pipeline, maintaining consistency with existing functionality.
+
 
 ## Best Practices
 
@@ -419,17 +483,6 @@ If FFCV data loading fails:
 3. Try reducing the number of workers
 4. Set `use_ffcv: False` temporarily to isolate the issue
 
-### Memory Errors
-
-If you encounter memory errors:
-
-1. Reduce batch size
-2. Store responses on CPU with `store_responses_on_cpu: True`
-3. Use mixed precision with `dtype=torch.float16`
-4. Reduce the number of timesteps
-
-## Conclusion
-
-DynVision's data processing pipeline provides flexible and efficient data management for neuroscience experiments. By combining symbolic linking, FFCV optimization, and specialized data loaders, DynVision enables researchers to efficiently work with various datasets and experimental conditions.
+## Next Steps
 
 For more information on specific data loaders, see the [API Reference](../reference/data-loaders.md).

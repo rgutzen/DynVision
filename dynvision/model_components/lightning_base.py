@@ -42,9 +42,8 @@ defaults = SimpleNamespace(
     **load_config(project_paths.scripts.configs / "config_defaults.yaml")
 )
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(defaults.log_level.upper())
 
 
 class UtilityBase(nn.Module):
@@ -320,21 +319,38 @@ class UtilityBase(nn.Module):
         state_dict = self._remove_unexpected_parameters_from_state_dict(state_dict)
         super().load_state_dict(state_dict, **kwargs)
 
-    def hasattr(self, attribute_name: str) -> bool:
+    def hasattr(self, *args: Any) -> bool:
+        if len(args) == 1:
+            obj = self
+            attribute_name = args[0]
+        elif len(args) == 2:
+            obj, attribute_name = args
+        else:
+            raise ValueError(
+                "getattr accepts either a single attribute name (str) or an object and an attribute name."
+            )
         attributes = attribute_name.split(".")
-        attr = self
         for attr_name in attributes:
-            if not hasattr(attr, attr_name):
+            if not hasattr(obj, attr_name):
                 return False
-            attr = getattr(attr, attr_name)
+            obj = getattr(obj, attr_name)
         return True
 
-    def getattr(self, attribute_name: str):
+    def getattr(self, *args: Any):
+        if len(args) == 1:
+            obj = self
+            attribute_name = args[0]
+        elif len(args) == 2:
+            obj, attribute_name = args
+        else:
+            raise ValueError(
+                "getattr accepts either a single attribute name (str) or an object and an attribute name."
+            )
+
         attributes = attribute_name.split(".")
-        attr = self
         for attr_name in attributes:
-            attr = getattr(attr, attr_name)
-        return attr
+            obj = getattr(obj, attr_name)
+        return obj
 
     def set_trainable_parameters(
         self, parameter_names: List[str] = [], force_train_all: bool = False
@@ -467,10 +483,18 @@ class UtilityBase(nn.Module):
 
             if len(param.data.size()):
                 for metric in metrics:
-                    self.log(
-                        f"{section}/{name}_{metric}",
-                        getattr(param.data, metric)(),
-                    )
+                    if hasattr(param.data, metric):
+                        self.log(
+                            f"{section}/{name}_{metric}",
+                            getattr(param.data, metric)(),
+                        )
+                    elif metric == "full":
+                        self.log(
+                            f"{section}/{name}_{metric}",
+                            param,
+                        )
+                    else:
+                        logger.debug(f"Metric {metric} not available!")
             else:
                 self.log(f"{section}/{name}", param.data)
 
@@ -637,42 +661,80 @@ class UtilityBase(nn.Module):
             tensor = tensor.unsqueeze(dim)
         return tensor
 
-    def _check_for_nans(
+    def _check_tensors(
         self,
-        response_dict: Optional[Dict[str, torch.Tensor]] = None,
+        generator_name: str = "named_parameters",
+        data_attr: str = "data",
         raise_error: bool = False,
-    ) -> Optional[None]:
+    ) -> None:
         """
-        Check for NaN values in the model responses.
-
-        Args:
-            response_dict (Optional[Dict[str, torch.Tensor]], optional): Dictionary of responses to check. Defaults to None.
-            raise_error (bool, optional): Whether to raise an error if NaNs are detected. Defaults to False.
-
-        Returns:
-            Optional[None]: None if no NaNs are detected.
+        Check for NaN/Inf values in the model parameters.
         """
-        if response_dict is None:
-            response_dict = self.responses
-        for layer in response_dict.keys():
-            signal = response_dict[layer]
-            if isinstance(signal, list):
-                signal = signal[-1]
-            if signal is not None and torch.isnan(signal).any():
-                logger.warning(f"NaN detected in {layer} responses: ")
+        iterator = getattr(self, generator_name)
+        if isinstance(iterator, dict):
+            iterator = iterator.items()
+        elif callable(iterator):
+            iterator = iterator()
+        else:
+            raise ValueError(
+                f"The attribute {generator_name} is neither a dict nor a generator."
+            )
+
+        logger.info(f"Checking {generator_name} {data_attr}: [min - max ; norm]")
+        for name, tensor in iterator:
+            if data_attr and self.hasattr(tensor, data_attr):
+                tensor = self.getattr(tensor, data_attr)
+            else:
+                logger.debug(f"Attribute {data_attr} not found in {name}!")
+
+            if isinstance(tensor, list):
+                tensor = self._concatenate_tensors(tensor, dim=0)
+            if len(tensor.size()):
+                valid_data = tensor[torch.isfinite(tensor)]
+                if valid_data.numel() > 0:
+                    logger.info(
+                        f"\t {name}: {valid_data.min().item():.4f} - {valid_data.max().item():.4f} ;\t {valid_data.norm().item():.4f}"
+                    )
+                else:
+                    logger.warning(f"\t {name}: All values are NaN or Inf")
+            else:
+                logger.info(f"\t {name}: {tensor}")
+
+            if (torch.isnan(tensor)).any():
+                logger.warning(f"\t NaN detected in {name}: ")
                 logger.warning(
-                    f"\t {torch.isnan(signal).sum().item()} / {signal.numel()}"
+                    f"\t {(torch.isnan(tensor)).sum().item()} / {tensor.numel()}"
                 )
-                for name, param in self.named_parameters():
-                    if param.requires_grad:
-                        if len(param.data.size()):
-                            logger.info(f"\t{name}_min: {param.data.min().item()}")
-                            logger.info(f"\t{name}_max: {param.data.max().item()}")
-                            logger.info(f"\t{name}_norm: {param.data.norm().item()}")
-                        else:
-                            logger.info(f"\t{name}: {param.data}")
-                if raise_error:
-                    raise ValueError("NaN detected in model responses")
+            if torch.isinf(tensor).any():
+                logger.warning(f"\t Inf detected in {name}: ")
+                logger.warning(
+                    f"\t {(torch.isinf(tensor)).sum().item()} / {tensor.numel()}"
+                )
+            if raise_error and (~torch.isfinite(tensor)).any():
+                raise ValueError("NaN/Inf detected in model weights")
+        return None
+
+    def _check_gradients(self, raise_error: bool = False) -> None:
+        self._check_tensors(
+            generator_name="named_trainable_parameters",
+            data_attr="grad.data",
+            raise_error=raise_error,
+        )
+
+    def _check_weights(self, raise_error: bool = False) -> None:
+        self._check_tensors(
+            generator_name="named_trainable_parameters",
+            data_attr="data",
+            raise_error=raise_error,
+        )
+
+    def _check_responses(self, raise_error: bool = False) -> None:
+        self._check_tensors(
+            generator_name="get_responses",
+            data_attr="",
+            raise_error=raise_error,
+        )
+
         return None
 
     def _clear_gpu_memory(self) -> None:
@@ -763,19 +825,21 @@ class LightningBase(UtilityBase, pl.LightningModule):
         optimizer_kwargs: Dict[str, Any] = defaults.optimizer_kwargs,
         optimizer_configs: Dict[str, Dict[str, Any]] = defaults.optimizer_configs,
         learning_rate: float = defaults.learning_rate,
-        recurrence_lr_factor: float = defaults.recurrence_lr_factor,
+        lr_parameter_groups: Dict[str, Dict[str, Any]] = defaults.lr_parameter_groups,
         scheduler: str = defaults.scheduler,
         scheduler_kwargs: Dict[str, Any] = defaults.scheduler_kwargs,
         scheduler_configs: Dict[str, Dict[str, Any]] = defaults.scheduler_configs,
+        log_level: str = defaults.log_level,
         **kwargs: Any,
     ) -> None:
         super().__init__()
-
         # Store the arguments as attributes
         for name, value in kwargs.items():
             if name != "self":
                 setattr(self, name, value)
         self.retain_graph = retain_graph
+        self.lr_parameter_groups = lr_parameter_groups
+        self.log_level = log_level
         self.criterion_params = criterion_params
         self.store_responses = store_responses
         self.learning_rate = float(learning_rate)
@@ -793,7 +857,6 @@ class LightningBase(UtilityBase, pl.LightningModule):
         self.scheduler = scheduler
         self.scheduler_kwargs = scheduler_kwargs
         self.scheduler_configs = scheduler_configs
-        self.recurrence_lr_factor = recurrence_lr_factor
 
         # Process the input dims and timesteps
         x = torch.randn(1, *input_dims, device=self.device)
@@ -822,9 +885,6 @@ class LightningBase(UtilityBase, pl.LightningModule):
         Args:
             stage (Optional[str]): Stage of the setup process (e.g., "fit", "test").
         """
-        if stage == "fit":
-            self._init_parameters()
-
         self.n_residual_timesteps = self._determine_residual_timesteps(
             device=self.device
         )
@@ -871,9 +931,9 @@ class LightningBase(UtilityBase, pl.LightningModule):
             # define default operations order within layer
             self.layer_operations = [
                 "layer",  # apply (recurrent) convolutional layer
-                "addext",  # add external input
-                "addskip",  # add skip connection
-                "addfeedback",  # add feedback connection
+                "ext",  # add external input
+                "skip",  # add skip connection
+                "feedback",  # add feedback connection
                 "tstep",  # apply dynamical systems ode solver step
                 "nonlin",  # apply nonlinearity
                 "supralin",  # apply supralinearity
@@ -899,12 +959,15 @@ class LightningBase(UtilityBase, pl.LightningModule):
                 module_name = f"{operation}_{layer_name}"
 
                 if operation == "layer":
-                    x = layer(x)
+                    module = layer
+                    x = module(x)
 
                 elif operation == "record":
+                    module = "record_" + layer_name
                     responses[layer_name] = x
 
                 elif operation == "delay" and hasattr(layer, "set_hidden_state"):
+                    module = "delay_" + layer_name
                     layer.set_hidden_state(x)
                     x = layer.get_hidden_state(0)
 
@@ -924,6 +987,11 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
                 else:
                     pass
+
+                if x is not None and (~torch.isfinite(x)).any():
+                    logger.warning(
+                        f"NaN/inf detected in {module} output! \n\t {(~torch.isfinite(x)).sum()}/{x.numel()} NaNs"
+                    )
 
         if x is None:
             x = torch.zeros((batch_size, self.n_classes), device=self.device)
@@ -955,6 +1023,13 @@ class LightningBase(UtilityBase, pl.LightningModule):
             torch.Tensor: Model outputs.
         """
         store_responses = store_responses if store_responses else self.store_responses
+
+        if (~torch.isfinite(x_0)).any():
+            logger.warning(
+                f"nan/inf detected in input data! {(~torch.isfinite(x_0)).sum()}/{x_0.numel()} nans/infs"
+            )
+            x_0 = torch.nan_to_num(x_0, nan=0.0, posinf=0.0, neginf=0.0)
+            logger.warning("nan/inf replaced with 0")
 
         x_0 = self._adjust_input_dimensions(x_0)
         batch_size, n_timesteps, dim_channels, dim_y, dim_x = x_0.shape
@@ -1069,6 +1144,31 @@ class LightningBase(UtilityBase, pl.LightningModule):
                     self.responses[layer_name][:, t, ...] = response[
                         -layer_response_size:
                     ]
+        return None
+
+    def get_responses(self) -> Dict[str, torch.Tensor]:
+        """
+        Get the stored responses of the model.
+
+        Returns:
+            Dict[str, torch.Tensor]: Dictionary of stored responses.
+        """
+        if hasattr(self, "responses"):
+            return self.responses
+        else:
+            logger.warning("No responses stored!")
+            return {}
+
+    def set_responses(self, responses: Dict[str, torch.Tensor]) -> None:
+        """
+        Set the stored responses of the model.
+
+        Args:
+            responses (Dict[str, torch.Tensor]): Dictionary of responses to set.
+        """
+        if hasattr(self, "responses"):
+            logger.warning("Overwriting stored responses!")
+        self.responses = responses
         return None
 
     def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
@@ -1359,6 +1459,10 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
     def optimizer_step(self, *args: Any, **kwargs: Any) -> None:
         super().optimizer_step(*args, **kwargs)
+        if self.log_level.upper() == "DEBUG":
+            with torch.no_grad():
+                self._check_gradients()
+                self._check_weights(raise_error=True)
 
     def on_train_start(self) -> None:
         pass
@@ -1399,82 +1503,124 @@ class LightningBase(UtilityBase, pl.LightningModule):
     ) -> None:
         pass
 
-    def configure_optimizers(
-        self, recurrence_lr_factor: float = None
-    ) -> Dict[str, Any]:
-        """
-        Configure the optimizers and learning rate schedulers for the model.
+    def _group_lr_parameters(self, base_lr: float) -> List[Dict[str, Any]]:
+        """Group parameters with appropriate learning rates and gradient clipping.
+
+        This helper method organizes parameters into groups based on their type
+        (regular, recurrent, or feedback) and assigns appropriate learning rates
+        and gradient clipping settings to each group.
 
         Args:
-            recurrence_lr_factor (float, optional): Factor to reduce learning rate for recurrent weights. Defaults to `self.recurrence_lr_factor`.
+            base_lr: The base learning rate after batch size scaling
+            recurrence_factor: Factor to scale recurrent weights' learning rate
+            feedback_factor: Factor to scale feedback weights' learning rate
 
         Returns:
-            Dict[str, Any]: Dictionary containing optimizer and scheduler configurations.
+            List of parameter group dictionaries for the optimizer
         """
-        if recurrence_lr_factor is None:
-            recurrence_lr_factor = self.recurrence_lr_factor
+        params = {key: [] for key in self.lr_parameter_groups.keys()}
+        params["regular"] = []
 
-        # Retrieve the base learning rate
-        lr = getattr(self, "lr", getattr(self, "learning_rate", None))
-
-        # Adjust the learning rate for recurrent weights
-        lr_recurrence = lr * recurrence_lr_factor
-
-        # Initialize lists to hold recurrent and non-recurrent parameters
-        recurrence_params, non_recurrence_params = [], []
-
-        # Log trainable parameter names for debugging
-        self.print_trainable_parameter_names()
-
-        # Retrieve the optimizer class from PyTorch
-        if isinstance(self.optimizer, str):
-            if hasattr(torch.optim, self.optimizer):
-                optimizer_class = getattr(torch.optim, self.optimizer)
+        # Categorize parameters
+        for name, param in self.named_trainable_parameters():
+            for key in params.keys():
+                if key != "regular" and key in name:
+                    params[key].append(param)
+                    break
             else:
+                params["regular"].append(param)
+
+        param_groups = []
+
+        for group_name, group_params in params.items():
+            if group_params:  # Only create groups with parameters
+                group_config = self.lr_parameter_groups.get(group_name, {})
+                lr_factor = group_config.get("lr_factor", 1.0)
+                param_groups.append(
+                    {
+                        "params": group_params,
+                        "lr": base_lr * lr_factor,
+                    }
+                )
+
+        return param_groups
+
+    def _get_base_learning_rate(self) -> float:
+        """Get the base learning rate from model attributes.
+
+        Returns:
+            float: Base learning rate value
+        """
+        base_lr = getattr(self, "lr", getattr(self, "learning_rate", None))
+        if base_lr is None:
+            raise ValueError("No learning rate specified in model attributes")
+        return base_lr
+
+    def _create_optimizer(self, scaled_lr: float) -> torch.optim.Optimizer:
+        """Create and configure the optimizer.
+
+        Args:
+            scaled_lr: Scaled learning rate
+            recurrence_lr_factor: Factor for scaling recurrent weights' learning rate
+            feedback_lr_factor: Factor for scaling feedback weights' learning rate
+
+        Returns:
+            torch.optim.Optimizer: Configured optimizer
+        """
+        if isinstance(self.optimizer, str):
+            if not hasattr(torch.optim, self.optimizer):
                 raise ValueError(f"Unknown optimizer: {self.optimizer}")
 
-            # Split parameters into recurrent and non-recurrent groups
-            for name, param in self.named_trainable_parameters():
-                if "recurrence" in name:  # Identify recurrent parameters by name
-                    recurrence_params.append(param)
-                else:
-                    non_recurrence_params.append(param)
+            param_groups = self._group_lr_parameters(scaled_lr)
 
-            # Prepare optimizer parameter groups
-            param_groups = [{"params": non_recurrence_params}]
-            if recurrence_params:
-                param_groups.append({"params": recurrence_params, "lr": lr_recurrence})
-
-            # Instantiate the optimizer with the parameter groups
-            optimizer = optimizer_class(param_groups, lr=lr, **self.optimizer_kwargs)
+            optimizer_class = getattr(torch.optim, self.optimizer)
+            optimizer = optimizer_class(param_groups, **self.optimizer_kwargs)
+            return optimizer
         else:
-            # Use the provided optimizer instance if passed directly
-            optimizer = self.optimizer
+            return self.optimizer
 
-        # Configure the learning rate scheduler
-        if hasattr(self, "lr_scheduler") and hasattr(
-            torch.optim.lr_scheduler, self.lr_scheduler
-        ):
-            # Use the specified scheduler and its arguments
-            if not hasattr(self, "lr_scheduler_kwargs"):
-                self.lr_scheduler_kwargs = {}
-        else:
-            # Default scheduler settings
-            self.lr_scheduler = self.scheduler
-            self.lr_scheduler_kwargs = self.scheduler_kwargs
+    def _create_scheduler(self, optimizer: torch.optim.Optimizer) -> Dict[str, Any]:
+        """Create and configure the learning rate scheduler.
 
-        # Instantiate the learning rate scheduler
-        lr_scheduler = getattr(torch.optim.lr_scheduler, self.lr_scheduler)(
-            optimizer, **self.lr_scheduler_kwargs
+        Args:
+            optimizer: The optimizer to schedule
+
+        Returns:
+            Dict[str, Any]: Scheduler configuration
+        """
+        if not hasattr(torch.optim.lr_scheduler, self.scheduler):
+            raise ValueError(f"Unknown scheduler: {self.scheduler}")
+
+        scheduler = getattr(torch.optim.lr_scheduler, self.scheduler)(
+            optimizer, **self.scheduler_kwargs
         )
 
-        # Prepare the scheduler configuration
-        lr_scheduler_config = {
-            "scheduler": lr_scheduler,
+        return {
+            "scheduler": scheduler,
             **self.scheduler_configs,
         }
 
-        # Return the optimizer and scheduler configuration
+    def configure_optimizers(self) -> Dict[str, Any]:
+        """Configure optimizers and learning rate schedulers.
+
+        This is a standard PyTorch Lightning hook that sets up the optimizer
+        with appropriate parameter groups and learning rates. Learning rate scaling
+        based on batch size is handled by the trainer configuration.
+
+        Returns:
+            Dict containing optimizer and scheduler configurations
+
+        Raises:
+            ValueError: If required optimizer or scheduler configurations are invalid
+        """
+        self.print_trainable_parameter_names()
+
+        base_lr = self._get_base_learning_rate()
+
+        optimizer = self._create_optimizer(base_lr)
+
+        lr_scheduler_config = self._create_scheduler(optimizer)
+
         return {
             "optimizer": optimizer,
             "lr_scheduler": lr_scheduler_config,

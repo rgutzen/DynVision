@@ -1,5 +1,6 @@
 import logging
 import multiprocessing
+import os
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -31,14 +32,11 @@ from dynvision.data.dataloader import _adjust_data_dimensions, _adjust_label_dim
 from dynvision.data.transforms import get_data_transform, get_target_transform
 from dynvision.utils import alias_kwargs, filter_kwargs
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
-MAX_WORKERS = min(16, multiprocessing.cpu_count() - 1)
+MAX_WORKERS = min(16, len(os.sched_getaffinity(0)) - 1)
 # Constants for large dataset detection
-MAX_RESOLUTION = 224
+MAX_RESOLUTION = 112
 MAX_TIMESTEPS = 20
 MAX_WORKERS_LARGE_DATASET = 4
 MAX_BATCH_SIZE = 256

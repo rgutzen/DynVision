@@ -13,6 +13,7 @@ Example:
 import argparse
 import logging
 import multiprocessing
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -36,7 +37,6 @@ from dynvision.utils import (
     load_model_and_weights,
 )
 
-logging.basicConfig(level=logging.INFO)
 pylogger = logging.getLogger(__name__)
 
 
@@ -231,7 +231,7 @@ def run_testing(config, **kwargs) -> int:
         logger = None
 
     # Log system information
-    num_cpu_cores = multiprocessing.cpu_count()
+    num_cpu_cores = len(os.sched_getaffinity(0))
     num_gpu_cores = torch.cuda.device_count()
     pylogger.info(
         f"Available compute resources: CPU={num_cpu_cores}, GPU={num_gpu_cores}"

@@ -84,7 +84,7 @@ This file typically changes most frequently as it defines the specific experimen
 Configuration values can be overridden via the command line using Snakemake's `--config` parameter:
 
 ```bash
-snakemake -j1 --config model_name=DyRCNNx4 model_args="{rctype: full}"
+snakemake --config model_name=DyRCNNx4 model_args="{rctype: full}"
 ```
 
 This approach allows for flexible parameter exploration without modifying the configuration files.

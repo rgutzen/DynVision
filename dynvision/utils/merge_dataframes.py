@@ -24,7 +24,7 @@ import pandas as pd
 
 from dynvision.utils import load_df, parse_kwargs, tqdm
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

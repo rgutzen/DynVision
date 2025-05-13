@@ -63,8 +63,29 @@ loss:
   # - EnergyLoss
 
 optimizer: Adam
-learning_rate: 0.001 # classifier: 10^-3 - 10^-2, recurrent: 10^-4 - 10^-3
+learning_rate: 0.001
 epochs: 200
-batch_size: 1028
-accumulate_grad_batches: 4
+batch_size: 3
+accumulate_grad_batches: 1
 check_val_every_n_epoch: 10
+
+# Trainer configuration
+trainer:
+  # Gradient clipping settings
+  automatic_optimization: True
+  clip_gradients: True
+  gradient_clip_algorithm: "norm"  # "norm" or "value"
+  gradient_clip_val: 1.0  # global clip value
+
+  # Learning rate scaling settings
+  lr_scaling:
+    enabled: true  # whether to scale learning rate with batch size
+    ref_batch_size: 64  # reference batch size for scaling
+    threshold_factor: 8  # maximum scaling threshold
+
+  # Hardware and precision settings
+  precision: "32"  # Changed to full precision for debugging feedback stability
+  accelerator: "auto"
+  devices: "auto"
+  strategy: "auto"
+  deterministic: false  # Consider setting to true if still unstable

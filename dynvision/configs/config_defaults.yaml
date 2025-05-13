@@ -2,7 +2,7 @@
 classifier_name: classifier
 
 # Model
-retain_graph: False  # retain the computational graph for repeated backprop paths
+retain_graph: True  # retain the computational graph for repeated backprop paths
 status: trained
 n_timesteps: 20
 dt: 2  # ms
@@ -26,7 +26,7 @@ train_ratio: 0.8
 epochs: 250
 batch_size: 256
 check_val_every_n_epoch: 5
-log_every_n_steps: 100
+log_every_n_steps: 20
 accumulate_grad_batches: 2
 precision: "bf16-mixed"
 profiler: None
@@ -34,7 +34,7 @@ benchmark: True
 enable_progress_bar: False
 # tbptt_length: None
 
-# Local debugging runs
+# Debugging settings
 debug_batch_size: 3
 debug_check_val_every_n_epoch: 1
 debug_log_every_n_steps: 1
@@ -64,9 +64,17 @@ optimizer_kwargs:
 optimizer_configs:
   monitor: train_loss
 
+# Learning rate parameter groups
+lr_parameter_groups:
+  regular:
+    lr_factor: 1.0
+  recurrence:
+    lr_factor: 0.2
+  feedback:
+    lr_factor: 0.1
+
 # Learning rate
 learning_rate: 0.002
-recurrence_lr_factor: 0.5
 scheduler: CosineAnnealingLR
 scheduler_kwargs:
   T_max: 250
@@ -78,6 +86,7 @@ scheduler_configs:
   name: lr_scheduled
 
 # System
+log_level: debug
 use_executor: False
 executor_start: "singularity exec --nv \
   --overlay /scratch/rg5022/images/rva.ext3:ro \

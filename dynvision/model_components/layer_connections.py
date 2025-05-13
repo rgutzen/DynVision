@@ -13,7 +13,7 @@ import torch.nn.init as init
 from dynvision.utils import on_same_device, check_stability
 from pytorch_lightning import LightningModule
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["Skip", "Feedback"]
@@ -40,9 +40,11 @@ class ConnectionBase(LightningModule):
         scale_factor: float = 1,
         bias: bool = True,
         parametrization: Callable[[torch.Tensor], torch.Tensor] = lambda x: x,
-        upsample_mode: str = "bilinear",
+        upsample_mode: str = "nearest",
         auto_adapt: bool = False,
         stability_check: bool = False,
+        clip_range: float = 1.0,
+        use_layer_norm: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -54,9 +56,9 @@ class ConnectionBase(LightningModule):
         self.parametrization = parametrization
         self.setup_transform = True
         self.stability_check = stability_check
-
-        # Initialize device to None - will be set on first forward pass
-        self.device = None
+        self.auto_adapt = auto_adapt
+        self.clip_range = clip_range
+        self.use_layer_norm = use_layer_norm
 
         if not auto_adapt:
             # infer in_channels, out_channels from source module
@@ -71,12 +73,12 @@ class ConnectionBase(LightningModule):
                         "scale_factor must be an integer when greater than 1."
                     )
                 scale_factor = int(scale_factor)
-                x_proxy = torch.randn(out_channels, 1, 1)
-                h_proxy = torch.randn(in_channels, scale_factor, scale_factor)
+                x_proxy = torch.empty(out_channels, 1, 1)
+                h_proxy = torch.empty(in_channels, scale_factor, scale_factor)
             else:
                 s = Fraction(scale_factor).limit_denominator()
-                x_proxy = torch.randn(out_channels, s.denominator, s.denominator)
-                h_proxy = torch.randn(in_channels, s.numerator, s.numerator)
+                x_proxy = torch.empty(out_channels, s.denominator, s.denominator)
+                h_proxy = torch.empty(in_channels, s.numerator, s.numerator)
 
             self._setup_conv(x=x_proxy, h=h_proxy)
             self._setup_upsample(x=x_proxy, h=h_proxy, mode=upsample_mode)
@@ -95,23 +97,34 @@ class ConnectionBase(LightningModule):
             self.setup_transform = False
             return False
 
-        self.conv = self.parametrization(
-            nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                stride=stride,
-                padding=0,
-                bias=self.bias,
+        # Add layer normalization for feedback stability
+        if self.use_layer_norm:
+            self.layer_norm = nn.LayerNorm(
+                normalized_shape=[in_channels, h.shape[-2], h.shape[-1]],
+                elementwise_affine=True,
                 device=h.device,
                 dtype=h.dtype,
             )
-        )
-        self._init_parameters(self.conv)
+
+        with autocast(enabled=True, dtype=x.dtype, device_type=x.device.type):
+            self.conv = self.parametrization(
+                nn.Conv2d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=1,
+                    stride=stride,
+                    padding=0,
+                    bias=self.bias,
+                    device=h.device,
+                    dtype=x.dtype,
+                )
+            )
+
+        self._init_parameters(in_channels, out_channels)
         self.setup_transform = False
 
     def _setup_upsample(
-        self, x: torch.Tensor, h: torch.Tensor, mode: str = "bilinear"
+        self, x: torch.Tensor, h: torch.Tensor, mode: str = "nearest"
     ) -> Union[nn.Module, bool]:
         if x is None or h is None:
             self.upsample = False
@@ -122,17 +135,19 @@ class ConnectionBase(LightningModule):
             self.upsample = False
             return False
 
-        self.upsample = nn.Upsample(scale_factor=scale_factor, mode=mode)
+        self.upsample = nn.Upsample(size=x.shape[-2:], mode=mode)
 
     def reset_transform(self) -> None:
         """Reset the transform to allow for re-initialization."""
         self.setup_transform = True
 
-    def _init_parameters(self, conv_layer: nn.Conv2d) -> None:
-        """Initialize zero weights."""
-        init.zeros_(conv_layer.weight)
-        if conv_layer.bias is not None:
-            init.zeros_(conv_layer.bias)
+    def _init_parameters(self, in_channels: int = 1, out_channels: int = 1) -> None:
+        if hasattr(self, "conv") and isinstance(self.conv, nn.Conv2d):
+            # Scale-aware initialization
+            std = min(0.001, 1.0 / (in_channels * out_channels) ** 0.5)
+            init.trunc_normal_(self.conv.weight, mean=0.0, std=std)
+            if self.conv.bias is not None:
+                init.zeros_(self.conv.bias)
 
     def forward(
         self, x: torch.Tensor, h: Optional[torch.Tensor] = None
@@ -153,27 +168,32 @@ class ConnectionBase(LightningModule):
                 )
                 return x
 
+        if h is None:
+            return x
+
         # Setup transforms if needed
         if self.setup_transform:
             self._setup_conv(x, h)
             self._setup_upsample(x, h)
 
-        if h is None:
-            return x
+        # Process hidden state with mixed precision and stability controls
+        with autocast(enabled=True, dtype=x.dtype, device_type=x.device.type):
+            # Apply layer normalization if enabled
+            if self.use_layer_norm and hasattr(self, "layer_norm"):
+                h = self.layer_norm(h)
 
-        h = h.requires_grad_()
+            # Apply convolution if needed
+            if self.conv:
+                h = self.conv(h)
 
-        # Process hidden state
-        if self.conv:
-            h = self.conv(h)
-        if self.upsample:
-            h = self.upsample(h)
+            # Apply upsampling if needed
+            if self.upsample:
+                h = self.upsample(h)
 
-        # Check stability
-        if self.stability_check:
-            check_stability(h)
+            # Normalize feedback magnitude for stability
+            h_norm = torch.norm(h, p=2, dim=(1, 2, 3), keepdim=True)
+            h = h / (h_norm + 1e-6)
 
-        # Combine with input
         output = x + h
 
         if self.stability_check:

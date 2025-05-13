@@ -20,6 +20,7 @@ Example:
 import argparse
 import logging
 import multiprocessing
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -38,7 +39,6 @@ from dynvision.project_paths import project_paths
 from dynvision.utils import parse_parameters, filter_kwargs, str_to_bool, handle_errors
 from dynvision.visualization import callbacks as custom_callbacks
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -206,6 +206,7 @@ def setup_data_loaders(
             **dataloader_args,
         )
     else:
+        # TODO: Add support for non-ffcv data loaders
         train_loader, val_loader = get_train_val_loaders(
             path_train=config.dataset_train,
             path_val=config.dataset_val,
@@ -228,9 +229,9 @@ def setup_callbacks(config: Any) -> List[pl.Callback]:
     callbacks = []
 
     if hasattr(config, "n_timesteps") and config.n_timesteps > 1:
-        callbacks.append(custom_callbacks.ClassifierResponseCallback())
+        callbacks.append(custom_callbacks.MonitorClassifierResponses())
 
-    callbacks.append(custom_callbacks.WeightDistributionCallback())
+    callbacks.append(custom_callbacks.MonitorWeightDistributions())
 
     # Setup checkpointing
     checkpoint_path = (
@@ -271,27 +272,33 @@ def setup_trainer(
     Returns:
         pl.Trainer: Configured trainer instance
     """
-    return pl.Trainer(
-        callbacks=callbacks,
-        max_epochs=config.epochs,
-        logger=logger,
-        accelerator="auto",
-        devices="auto",
-        strategy="auto",
-        precision=config.precision,
-        check_val_every_n_epoch=config.check_val_every_n_epoch,
-        accumulate_grad_batches=config.accumulate_grad_batches,
-        profiler=None if config.profiler == "None" else config.profiler,
-        enable_progress_bar=config.enable_progress_bar,
-        benchmark=config.benchmark,
-        log_every_n_steps=int(config.log_every_n_steps),
-        deterministic=False,  # Disable for speed
-        # gradient_clip_val=0.5,  # Add gradient clipping
-        limit_train_batches=1.0,  # Use full dataset
-        limit_val_batches=0.25,  # Use smaller validation set
-        num_sanity_val_steps=0,  # Skip sanity check
-        reload_dataloaders_every_n_epochs=0,  # Don't reload unnecessarily
+    # Get trainer settings from config
+    trainer_kwargs = {
+        "callbacks": callbacks,
+        "max_epochs": config.epochs,
+        "logger": logger,
+        "precision": config.precision,
+        "check_val_every_n_epoch": config.check_val_every_n_epoch,
+        "accumulate_grad_batches": config.accumulate_grad_batches,
+        "profiler": None if config.profiler == "None" else config.profiler,
+        "enable_progress_bar": config.enable_progress_bar,
+        "benchmark": config.benchmark,
+        "log_every_n_steps": int(config.log_every_n_steps),
+        "limit_train_batches": 1.0,  # Use full dataset
+        "limit_val_batches": 0.25,  # Use smaller validation set
+        "num_sanity_val_steps": 0,  # Skip sanity check
+        "reload_dataloaders_every_n_epochs": 0,  # Don't reload unnecessarily
+    }
+
+    # Add trainer settings from config
+    if hasattr(config, "trainer"):
+        trainer_kwargs.update(config.trainer)
+
+    trainer_kwargs = filter_kwargs(
+        pl.Trainer,
+        trainer_kwargs,
     )
+    return pl.Trainer(**trainer_kwargs)
 
 
 @handle_errors(verbose=True)
@@ -304,14 +311,27 @@ def run_training(config) -> int:
         tags=["train"],
     )
 
+    logger.setLevel(getattr(logging, config.log_level.upper(), "INFO"))
+
     # Log system information
-    num_cpu_cores = multiprocessing.cpu_count()
+    num_cpu_cores = len(os.sched_getaffinity(0))
     num_gpu_cores = torch.cuda.device_count()
     logger.info(
         f"Available compute resources: CPU={num_cpu_cores}, GPU={num_gpu_cores}"
     )
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logger.info(f"Trying to use device {device}")
+
+    # Scale learning rate if enabled
+    if hasattr(config.trainer, "lr_scaling") and config.trainer.lr_scaling.enabled:
+        scale = min(
+            config.batch_size / config.trainer.lr_scaling.ref_batch_size,
+            config.trainer.lr_scaling.threshold_factor,
+        )
+        config.learning_rate *= scale
+        logger.info(
+            f"Scaled learning rate by {scale:.4f} for batch size {config.batch_size}"
+        )
 
     # Setup training
     callbacks, checkpoint_path = setup_callbacks(config)
@@ -341,7 +361,8 @@ def run_training(config) -> int:
     inputs = _adjust_data_dimensions(inputs)
     label_indices = _adjust_label_dimensions(label_indices)
 
-    logger.info(f"input shape: {inputs.shape}")
+    logger.info(f"input shape: {inputs.size()}")
+    logger.info(f"label shape: {label_indices.size()}")
     logger.info(
         f"pixel values in first batch: {inputs.mean():.3f} ± {inputs.std():.3f}"
     )

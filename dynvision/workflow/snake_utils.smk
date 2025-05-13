@@ -24,12 +24,6 @@ import subprocess
 import re
 from typing import Dict, List, Optional, Union, Any
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-pylogger = logging.getLogger('workflow.utils')
-
 # Add the parent directory to the system path
 package_dir = Path(inspect.getfile(lambda: None)).parents[2].resolve()
 sys.path.insert(0, str(package_dir))
@@ -39,7 +33,7 @@ from dynvision.project_paths import project_paths
 # Load configuration files in priority order
 configfile: project_paths.scripts.configs / 'config_defaults.yaml'
 configfile: project_paths.scripts.configs / 'config_data.yaml'
-configfile: project_paths.scripts.configs / 'config_visualization.yaml'
+# configfile: project_paths.scripts.configs / 'config_visualization.yaml'
 configfile: project_paths.scripts.configs / 'config_experiments.yaml'
 configfile: project_paths.scripts.configs / 'config_workflow.yaml'
 
@@ -51,6 +45,9 @@ runtime_config = project_paths.scripts.configs / 'config_runtime.yaml'
 with open(runtime_config, 'w') as f:
     f.write("# This is an automatically compiled file. Do not edit manually!\n")
     json.dump(config.__dict__, f, indent=4)
+
+   
+pylogger = logging.getLogger('workflow.utils')
 
 # Print configuration summary
 pylogger.info("Loaded configurations:")
@@ -79,9 +76,28 @@ wildcard_constraints:
     experiment = r'[a-z]+',
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)'
 
-localrules: all, symlink_data_subsets, symlink_data_groups, experiment, plot_adaption, plot_experiments_on_models, all_experiments
+localrules: all, symlink_data_subsets, symlink_data_groups, experiment, plot_adaption, plot_experiments_on_models
 ruleorder: symlink_data_groups > symlink_data_subsets
 
+# Set up logging
+def setup_logger():
+    # create logger
+    logger = logging.getLogger('project')
+    logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
+
+    # create console handler and set level to debug
+    ch = logging.StreamHandler()
+    ch.setLevel(logger.level)
+
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+
+    # add formatter to ch
+    ch.setFormatter(formatter)
+
+    # add ch to logger
+    logger.addHandler(ch)
+    
 def get_imagenet_classes(tiny: bool = False) -> tuple[list, dict]:
     """Get ImageNet class information.
 

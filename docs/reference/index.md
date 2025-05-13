@@ -4,7 +4,7 @@ This section provides detailed technical reference documentation for DynVision's
 
 ## Available References
 
-### [Model Architectures and Components](model-components.md)
+### [Model Architectures and Components](models.md)
 
 Documentation of available model architectures in DynVision and how they utilize different components. This includes:
 - DyRCNN family of models

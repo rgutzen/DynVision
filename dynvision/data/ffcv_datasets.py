@@ -29,9 +29,6 @@ from torchvision.transforms import ToPILImage
 
 from dynvision.data.datasets import get_dataset, load_raw_data
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 

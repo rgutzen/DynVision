@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from snakemake.logging import logger
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

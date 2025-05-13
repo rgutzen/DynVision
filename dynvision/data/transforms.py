@@ -15,9 +15,6 @@ import torchvision as tv
 import ffcv
 from .operations import IndexToLabel
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 transform_presets = dict(
@@ -29,12 +26,12 @@ transform_presets = dict(
     ],
     ffcv_test=[],
     train=[
-        # tv.transforms.RandomRotation(10),
-        # tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
+        tv.transforms.RandomRotation(10),
+        tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
         tv.transforms.RandomHorizontalFlip(),
-        # tv.transforms.ColorJitter(
-        #     brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1
-        # ),
+        tv.transforms.ColorJitter(
+            brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1
+        ),
     ],
     test=[],
     ffcv_train_mnist=[
@@ -42,8 +39,10 @@ transform_presets = dict(
         ffcv.transforms.RandomContrast(0.2),
         ffcv.transforms.RandomSaturation(0.2),
     ],
-    mnist=[
-        tv.transforms.Grayscale(num_output_channels=1),
+    train_mnist=[
+        tv.transforms.RandomRotation(10),
+        tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
+        # tv.transforms.Grayscale(num_output_channels=1),
     ],
     imagenet=[
         tv.transforms.Resize(256),
@@ -61,20 +60,30 @@ def get_data_transform(
     data_name: Optional[str] = None,
     **kwargs: Any,
 ) -> Optional[List[Any]]:
-    """Get data transforms.
+    """Get data transforms for image preprocessing.
+
+    Processes transform specifications to create a list of transformations
+    to apply to input data. Handles various transform specification formats
+    and supports preset transform configurations.
 
     Args:
-        transform: Transform specification
-        device: Device to use for transforms
-        memory_format: Memory format for tensors
-        dtype: Data type for mixed precision
-        **kwargs: Additional transform arguments
+        transform: Transform specification that can be:
+            - None: Uses data_name specific transforms if available
+            - list: Processes each item recursively
+            - dict: Processes each key-value pair recursively, merging kwargs
+            - str: Looks up transform in presets or infers from names containing
+                  'train' or 'test'
+            - other: Attempts to append the transform directly
+        data_name: Name of the dataset to apply specific preset transforms
+            (e.g., 'imagenet', 'mnist') if available
+        **kwargs: Additional parameters passed to recursive calls or used for
+            transform configuration
 
     Returns:
-        List of transforms or None
+        List of transforms or None if no transforms are specified
 
     Raises:
-        ValueError: If transform specification is invalid
+        ValueError: If string transform name is not found in presets
     """
     transforms_to_apply = []
 
@@ -114,11 +123,37 @@ def get_data_transform(
             transforms_to_apply.extend(transform_presets["test"])
         else:
             raise ValueError(f"No transform with name {transform} found in presets!")
+    else:
+        try:
+            transforms_to_apply.append(transform)
+        except Exception as e:
+            logger.error(f"Error applying transform {transform}: {e}")
 
     return transforms_to_apply if transforms_to_apply else None
 
 
 def get_target_transform(transform: str, **kwargs):
+    """Get target (label) transforms for dataset preprocessing.
+
+    Processes transform specifications to create a list of transformations
+    to apply to target labels. Support for various transform specification formats,
+    including strings, lists, and dictionaries.
+
+    Args:
+        transform: Transform specification that can be:
+            - None: Returns None
+            - list: Processes each item recursively
+            - dict: Processes each key-value pair recursively
+            - str: Expected format "dataset_datagroup", creates IndexToLabel transformer
+                   if datagroup is not "all"
+        **kwargs: Additional parameters passed to recursive calls or transformers
+
+    Returns:
+        List of target transforms or None if no transforms are specified
+
+    Raises:
+        ValueError: If string transform doesn't follow the expected "dataset_datagroup" format
+    """
     out = []
 
     if transform is None:

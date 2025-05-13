@@ -13,7 +13,7 @@ from dynvision.utils import str_to_bool
 from pytorch_lightning import LightningModule
 import logging
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -36,11 +36,13 @@ class RecurrenceBase(LightningModule):
     def __init__(self, max_weight_init: float = 0.05, **kwargs) -> None:
         super().__init__()
         self.max_weight_init = max_weight_init
-        self.validate_init_args(kwargs)
 
     def validate_init_args(self, kwargs: Dict[str, Any]) -> None:
-        """Validate initialization arguments."""
-        pass
+        """Validate required arguments for convolutional recurrence."""
+        required = {"in_channels", "kernel_size"}
+        missing = required - set(kwargs.keys())
+        if missing:
+            raise ValueError(f"Missing required arguments for convolution: {missing}")
 
     def _init_parameters(self) -> None:
         """Common parameter initialization for recurrent connections."""
@@ -68,12 +70,7 @@ class ConvolutionalRecurrenceBase(RecurrenceBase):
     Provides common validation for convolution-specific parameters.
     """
 
-    def validate_init_args(self, kwargs: Dict[str, Any]) -> None:
-        """Validate required arguments for convolutional recurrence."""
-        required = {"in_channels", "kernel_size"}
-        missing = required - set(kwargs.keys())
-        if missing:
-            raise ValueError(f"Missing required arguments for convolution: {missing}")
+    pass
 
 
 class DepthwiseSeparableConnection(RecurrenceBase):

@@ -645,7 +645,7 @@ Custom models can be easily integrated with DynVision's Snakemake workflows:
 3. Use it in workflows with the `model_name` parameter:
 
 ```bash
-snakemake -j1 experiment --config model_name=DyRCNNx3 experiment=contrast
+snakemake experiment --config model_name=DyRCNNx3 experiment=contrast
 ```
 
 ## Conclusion

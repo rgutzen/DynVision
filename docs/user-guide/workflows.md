@@ -2,32 +2,84 @@
 
 DynVision uses Snakemake to manage complex workflows. This guide explains how to use Snakemake to run experiments, parameter sweeps, scale and port between environments with DynVision.
 
-## Introduction to Snakemake
+## Core Concepts
 
-Snakemake is a workflow management system that allows for the creation of reproducible and scalable data analyses. It is based on a Python-like language that defines rules to create output files from input files.
+[Snakemake](https://www.snakemake.io/) manages DynVision's workflows through three key mechanisms:
 
-In DynVision, Snakemake is used to:
-- Organize computational pipelines into discrete steps
-- Automatically determine dependencies between tasks
-- Enable parameter sweeps 
-- Provide consistent execution across different environments
+### 1. Rule Dependencies
+Each computational step is defined as a rule that transforms input files into output files. Snakemake automatically builds a dependency graph by matching output files of one rule to input files of another.
 
-## DynVision's Workflow Structure
+When you request a trained model:
+```bash
+snakemake models/DyRCNNx4_0000_cifar100_trained.pt
+```
 
-DynVision's workflow system is organized into several Snakemake files:
+Snakemake builds a dependency graph by:
+1. Finding the rule that creates this file (`train_model`)
+2. Checking what input files it needs (`DyRCNNx4_0000_cifar100_init.pt`)
+3. Finding rules that create those inputs (`init_model`)
+4. Running rules in the correct order
+
+You can visualize the graph:
+```bash
+snakemake --dag models/DyRCNNx4_0000_cifar100_trained.pt | dot -Tpdf > workflow.pdf
+```
+
+The `all` rule defines what happens when no specific target is given:
+```python
+rule all:
+    input:
+        # Run experiments from config
+        expand("reports/experiment_{name}.done",
+               name=config.experiment)
+```
+
+This rule:
+- Serves as the default target when running `snakemake`
+- Uses `expand()` to generate multiple targets
+- Typically requests experiment completion flags
+
+
+### 2. Smart Execution
+
+DynVision uses Snakemake's timestamp tracking to avoid redundant work:
+```python
+rule train_model:
+    input: "models/{name}_init.pt"       # Input file
+    output: "models/{name}_trained.pt"   # Output file
+```
+
+The rule only runs when:
+- Output files are missing
+- Input files are newer than outputs
+- Explicitly requested with `--forcerun`
+
+### 3. Wildcards and Patterns
+
+DynVision uses wildcards to create flexible rules:
+```python
+# Basic model training with configuration
+models/{model_name}{model_args}_{seed}_{data_name}_{status}.pt
+```
+
+This enables:
+- Parameter sweeps (`model_args`)
+- Multiple seeds for validation
+- Consistent file organization
+
+For more details, see [Snakemake Documentation](https://snakemake.readthedocs.io/).
+
+## Workflow Organization
+
+DynVision organizes its workflow into specialized components:
 
 ```
 dynvision/workflow/
-├── Snakefile              # Main entry point
-├── snake_utils.smk        # Utility functions and configuration
-├── snake_data.smk         # Data preparation and processing
-├── snake_runtime.smk      # Model training and evaluation
-├── snake_experiments.smk  # Complex testing scenarios
-└── snake_visualizations.smk # Result visualization and analysis
+├── Snakefile                # Main entry point and targets
+└── snake_*.smk              # Specialized rule files
 ```
 
-Each file contains rules that define specific parts of the overall workflow:
-
+Each component handles specific tasks:
 1. **Snakefile**: The main entry point that includes the other files and defines the top-level targets.
 2. **snake_utils.smk**: Utility functions, path management, and configuration loading.
 3. **snake_data.smk**: Rules for dataset acquisition, organization, and preprocessing.
@@ -35,160 +87,78 @@ Each file contains rules that define specific parts of the overall workflow:
 5. **snake_experiments.smk**: Rules for running suites of tests
 5. **snake_visualizations.smk**: Rules for visualizing model responses and analyzing results.
 
-## Basic Workflow Commands
+See [Organization](../reference/organization.md) for detailed structure.
 
-### Running a Single Experiment
+## Basic to Advanced Usage
 
-To run a single experiment with a specific model and dataset:
+DynVision workflows support a progression from simple to complex use cases:
+
+### 1. Single Experiment
+Run a predefined experiment with default settings:
+```bash
+# Basic experiment execution
+snakemake --config experiment=contrast
+```
+
+### 2. Custom Configuration
+Override default parameters for specific needs:
+```bash
+# Configure model and dataset
+snakemake --config \
+  model_name=DyRCNNx4 \
+  data_name=cifar100 \
+  model_args="{rctype: full}"
+```
+
+### 3. Parameter Sweeps
+
+Run experiments with multiple parameter combinations:
 
 ```bash
-# Navigate to the DynVision directory
-cd dynvision
-
-# Run an experiment with default parameters
-snakemake -j1 <project_paths.reports>/'experiment_<experiment_name>.done'
+# Test different recurrence types
+snakemake -j4 --config \
+  experiment=contrast \
+  model_args="{rctype: [full, self, depthpointwise]}"
 ```
 
-which is equivalent to
+Snakemake will:
+- Create separate output files for each combination
+- Run jobs in parallel (limited by -j parameter)
+- Skip combinations that are already complete
 
+### 4. Model Comparison
+Evaluate different architectures:
 ```bash
-snakemake -j1 --config experiment=<experiment_name>
+# Compare model architectures
+snakemake -j4 --config \
+  model_name="[AlexNet, DyRCNNx4]" \
+  experiment=contrast
 ```
 
-### Specifying Model and Parameters
-
-You can override default parameters using the `--config` option:
-
+### 5. Result Analysis
+Generate comprehensive visualizations:
 ```bash
-# Train a DyRCNNx4 model with full recurrence on CIFAR100
-snakemake -j1 experiment --config model_name=DyRCNNx4 data_name=cifar100 model_args="{rctype:full}"
+# Create analysis plots
+snakemake plot_experiments_on_models
 ```
 
-### Running Multiple Experiments
+For more complex patterns and best practices, see:
+- [Configuration Reference](../reference/configuration.md)
 
-To run multiple experiments defined in the configuration:
+## Rule Implementation
 
-```bash
-# Run all experiments defined in config_experiments.yaml
-snakemake -j1
-```
+DynVision implements Snakemake rules with consistent patterns. Each rule:
+- Takes input files and parameters
+- Produces output files
+- Uses wildcards for flexibility
 
-### Visualizing Results
-
-To generate visualizations for experiments:
-
-```bash
-# Generate plots for all experiments
-snakemake -j1 plot_experiments_on_models
-```
-
-## Parameter Sweeps
-
-DynVision makes it easy to run parameter sweeps by specifying multiple values for parameters:
-
-```bash
-# Run experiments with different recurrence types
-snakemake -j4 all_experiments --config experiment=contrast model_args="{rctype:[full,self,depthpointwise,pointdepthwise]}"
-```
-
-This will run the contrast experiment for each recurrence type in parallel.
-
-## Understanding Workflow Rules
-
-Let's examine some of the key Snakemake rules in DynVision:
-
-### Data Preparation Rules
-
-```python
-rule get_data:
-    """Download and prepare standard datasets."""
-    input:
-        script = SCRIPTS / 'data' / 'get_data.py'
-    params:
-        raw_data_path = lambda w: project_paths.data.raw / f'{w.data_name}',
-        # Additional parameters...
-    output:
-        flag = directory(project_paths.data.raw \
-            / '{data_name}' \
-            / '{data_subset}' )
-    shell:
-        """
-        python {input.script:q} \
-            --output {params.output:q} \
-            --data_name {params.data_name} \
-            # Additional parameters...
-        """
-```
-
-This rule downloads and prepares a standard dataset for use in experiments.
-
-### Model Initialization Rule
-
-```python
-rule init_model:
-    """Initialize a model with specified configuration."""
-    input:
-        script = SCRIPTS / 'runtime' / 'init_model.py',
-        dataset = project_paths.data.interim \
-            / '{data_name}' \
-            / 'train_all' \
-            / 'folder.link'
-    params:
-        config_path = CONFIGS,
-        model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        init_with_pretrained = config.init_with_pretrained,
-    output:
-        model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_init.pt'
-    shell:
-        """
-        python {input.script:q} \
-            # Command-line arguments...
-        """
-```
-
-This rule initializes a model with the specified configuration.
-
-### Model Training Rule
-
-```python
-rule train_model:
-    """Train a model on specified dataset."""
-    input:
-        model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_init.pt',
-        dataset_train = project_paths.data.processed \
-            / '{data_name}' \
-            / 'train_all' \
-            / 'train.beton',
-        dataset_val = project_paths.data.processed \
-            / '{data_name}' \
-            / 'train_all' \
-            / 'val.beton',
-        script = SCRIPTS / 'runtime' / 'train_model.py'
-    params:
-        # Various parameters...
-    output:
-        model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_trained.pt'
-    shell:
-        """
-        python {input.script:q} \
-            # Command-line arguments...
-        """
-```
-
-This rule trains a model on the specified dataset.
-
-### Model Evaluation Rule
+Example rule structure:
 
 ```python
 rule test_model:
     """Evaluate a trained model on test data."""
     input:
+        # Required input files
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}.pt',
@@ -198,8 +168,12 @@ rule test_model:
             / 'folder.link',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
-        # Various parameters...
+        # Additional parameters
+        config_path = CONFIGS,
+        batch_size = config.batch_size,
+        store_responses = config.store_test_responses
     output:
+        # Generated output files
         responses = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
@@ -207,13 +181,14 @@ rule test_model:
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_outputs.csv'
     shell:
+        # Command to execute
         """
         python {input.script:q} \
-            # Command-line arguments...
+            --input_model_state {input.model_state:q} \
+            --output_results {output.results:q} \
+            --batch_size {params.batch_size}
         """
 ```
-
-This rule evaluates a trained model on test data.
 
 ## Working with Wildcards
 
@@ -238,8 +213,8 @@ DynVision workflows are configured through YAML files and command-line overrides
 1. **YAML Configuration**:
    - `config_defaults.yaml`: Default parameters for all components
    - `config_data.yaml`: Dataset-specific configurations
-   - `config_workflow.yaml`: Workflow execution parameters
    - `config_experiments.yaml`: Experiment-specific settings
+   - `config_workflow.yaml`: Workflow execution parameters
 
 2. **Command-Line Overrides**:
    - Directly override parameters with `--config key=value`
@@ -249,7 +224,29 @@ See the [Configuration Reference](../reference/configuration.md) for detailed in
 
 ## Output Organization
 
-DynVision organizes workflow outputs according to a consistent pattern:
+DynVision organizes outputs in a consistent hierarchy:
+
+```
+project_root/
+├── data/
+│   ├── raw/          # Original datasets
+│   ├── interim/      # Processed datasets
+│   └── processed/    # FFCV-optimized datasets
+├── models/
+│   └── {model_name}/
+│       ├── *_init.pt      # Initialized models
+│       ├── *_trained.pt   # Trained models
+│       └── *_responses.pt # Model responses
+├── reports/
+│   └── {model_name}/
+│       ├── *_outputs.csv  # Evaluation results
+│       └── figures/       # Generated plots
+└── logs/
+    ├── training/     # Training logs
+    └── slurm/        # Cluster execution logs
+```
+
+and a consistent naming pattern:
 
 - **Models**: `/models/{model_name}/{model_name}{model_args}_{seed}_{data_name}_{status}.pt`
 - **Responses**: `/models/{model_name}/{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt`
@@ -260,214 +257,25 @@ This organization ensures that outputs can be easily located and associated with
 
 ## Running Workflows on Clusters
 
-DynVision provides robust support for executing workflows on high-performance computing (HPC) clusters, enabling efficient parallel processing of large-scale experiments. This section explains how to configure and run DynVision workflows on cluster environments.
+DynVision workflows can scale seamlessly from laptops to high-performance computing clusters. The integration with Snakemake's cluster support provides:
 
-### Prerequisites
+- Automatic job distribution and scheduling
+- Resource management (CPU, GPU, memory)
+- Job dependency handling
+- Logging and monitoring
 
-Before running workflows on a cluster, ensure:
-
-1. **Environment Setup**:
-   ```bash
-   # Load required modules (example for typical HPC setup)
-   module load anaconda3/2020.07
-   
-   # Activate the conda environment with Snakemake
-   source activate snake-env
-   
-   # Verify environment
-   python -c "import snakemake; print(snakemake.__version__)"
-   ```
-
-2. **Data Access**:
-   - Verify that input datasets are accessible from compute nodes
-   - Check that output directories have sufficient permissions
-   - Consider using mounted filesystems for large datasets
-
-3. **Resource Requirements**:
-   - Estimate memory needs for different workflow stages
-   - Plan GPU requirements for training tasks
-   - Consider storage requirements for experiment outputs
-
-For more details about environment setup, see the [Installation Guide](installation.md).
-
-### Cluster Configuration
-
-DynVision uses Snakemake's cluster profiles for efficient job management. The configuration is located in `dynvision/cluster/`:
-
-```
-dynvision/cluster/
-├── snakecharm.sh         # Main cluster execution wrapper
-├── _snakecharm.sh        # Core cluster execution script
-└── profiles/
-    └── slurm/            # SLURM cluster profile
-        └── config.yaml   # Cluster-specific settings
-```
-
-The SLURM profile (`config.yaml`) defines default resource requirements:
-
-```yaml
-# Example SLURM profile configuration
-cluster:
-  mkdir -p logs/slurm/{rule} &&
-  sbatch
-    --partition={resources.partition}
-    --cpus-per-task={threads}
-    --mem={resources.mem_mb}
-    --time={resources.time}
-    --output=logs/slurm/{rule}/{jobid}.out
-    --error=logs/slurm/{rule}/{jobid}.err
-    --gres=gpu:{resources.gpu}  # For GPU jobs
-
-# Default resources for all rules
-default-resources:
-  - partition=cpu
-  - mem_mb=32000
-  - time="24:00:00"
-  - gpu=0
-
-# Rule-specific resource overrides
-rule-specific-resources:
-  train_model:
-    - partition=gpu
-    - mem_mb=64000
-    - time="48:00:00"
-    - gpu=1
-```
-
-### Basic Cluster Execution
-
-To run workflows on a cluster using the provided SLURM profile:
-
+Basic cluster execution:
 ```bash
-# Navigate to the DynVision directory
-cd dynvision
-
-# Run all experiments with 100 parallel jobs
+# Run experiments on a cluster
 ./cluster/snakecharm.sh -j100 all_experiments
 
-# Run specific experiment with cluster configuration
+# Run specific experiment with cluster resources
 ./cluster/snakecharm.sh -j100 experiment --config \
     model_name=DyRCNNx4 \
-    data_name=cifar100 \
-    model_args="{rctype:full}"
+    data_name=cifar100
 ```
 
-The `snakecharm.sh` wrapper script handles:
-1. Environment setup and activation
-2. Cluster-specific parameter configuration
-3. Job submission and monitoring
-4. Log file management and organization
-
-### Resource Management
-
-DynVision automatically manages computational resources through Snakemake's cluster integration:
-
-1. **Rule-Specific Resources**:
-   ```python
-   rule train_model:
-       resources:
-           partition="gpu",     # GPU partition for training
-           mem_mb=64000,       # 64GB memory
-           time="48:00:00",    # 48-hour time limit
-           gpu=1               # Request 1 GPU
-   ```
-
-2. **Automatic Scaling**:
-   - CPU/Memory allocation based on rule requirements
-   - GPU scheduling for training tasks
-   - Job dependencies and parallel execution
-   - Automatic job resubmission on failure
-
-3. **Environment Detection**:
-   ```python
-   # Automatically adjust settings for cluster environment
-   batch_size = config.batch_size if project_paths.iam_on_cluster() else 3
-   enable_progress_bar = not project_paths.iam_on_cluster()
-   ```
-
-### Job Monitoring and Logging
-
-The workflow automatically organizes logs for easy monitoring:
-
-```bash
-# Log directory structure
-logs/
-└── slurm/
-    ├── train_model/           # Logs for training jobs
-    │   ├── job_12345.out     # Standard output
-    │   └── job_12345.err     # Error messages
-    ├── test_model/           # Logs for evaluation jobs
-    └── snakecharm_exp1.log   # Workflow execution log
-```
-
-Monitor jobs using standard cluster commands:
-```bash
-# View all running jobs
-squeue -u $USER
-
-# Check specific job status
-sacct -j <job_id> --format=JobID,State,Elapsed,MaxRSS,MaxVMSize
-
-# View job output in real-time
-tail -f logs/slurm/train_model/job_12345.out
-
-# Monitor GPU usage
-nvidia-smi
-```
-
-### Troubleshooting Cluster Execution
-
-Common issues and solutions:
-
-1. **Environment Problems**:
-   ```bash
-   # Verify environment activation
-   which python
-   python -c "import snakemake; print(snakemake.__version__)"
-   
-   # Check module availability
-   module list
-   module avail cuda  # For GPU support
-   ```
-
-2. **Resource Limits**:
-   ```bash
-   # Monitor memory usage
-   sstat -j <job_id> --format=MaxRSS,MaxVMSize
-   
-   # Check GPU utilization
-   nvidia-smi -l 1
-   
-   # View partition limits
-   sinfo -o "%20P %5D %14F"
-   ```
-
-3. **Job Failures**:
-   ```bash
-   # Rerun failed jobs
-   ./cluster/snakecharm.sh -j100 all_experiments --rerun-incomplete
-   
-   # Debug specific rule
-   ./cluster/snakecharm.sh -j1 train_model --debug
-   
-   # Check job error logs
-   less logs/slurm/train_model/job_12345.err
-   ```
-
-4. **Data Access**:
-   ```bash
-   # Verify paths and permissions
-   ls -l /path/to/data
-   df -h /path/to/output  # Check disk space
-   
-   # Test file system mounts
-   cd /path/to/mounted/data && touch test.txt
-   ```
-
-For more advanced cluster usage, see:
-- [Snakemake Cluster Documentation](../development/snakemake.md#cluster-execution)
-- [SLURM User Guide](https://slurm.schedmd.com/documentation.html)
-- [GPU Computing Guide](../reference/configuration.md#gpu-configuration)
+For detailed setup instructions and advanced usage, see the [Cluster Integration Guide](cluster-integration.md).
 
 ## Advanced Workflow Usage
 
@@ -492,7 +300,7 @@ snakemake --dag all_experiments | dot -Tpdf > workflow.pdf
 If a workflow is interrupted, you can resume from where it left off:
 
 ```bash
-snakemake -j1 all_experiments --rerun-incomplete
+snakemake all_experiments --rerun-incomplete
 ```
 
 ### Force Rerunning Rules
@@ -500,7 +308,7 @@ snakemake -j1 all_experiments --rerun-incomplete
 To force Snakemake to rerun a particular rule:
 
 ```bash
-snakemake -j1 all_experiments --forcerun test_model
+snakemake all_experiments --forcerun test_model
 ```
 
 ## Custom Workflow Extensions
@@ -551,47 +359,6 @@ rule my_custom_analysis:
         """
 ```
 
-## Common Workflow Patterns
-
-### Initializing and Training Multiple Models
-
-```bash
-# Initialize and train models with different recurrence types
-snakemake -j4 --config \
-  model_name=DyRCNNx4 \
-  model_args="{rctype: [full, self, depthpointwise, pointdepthwise]}" \
-  data_name=cifar100 \
-  seed=0001 \
-  expand(project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt', \
-    model_name=config.model_name, \
-    model_args=args_product(config.model_args), \
-    seed=config.seed, \
-    data_name=config.data_name)
-```
-
-### Running a Cross-Validation Experiment
-
-```bash
-# Run 5-fold cross-validation
-for i in {1..5}; do
-  snakemake -j1 experiment --config \
-    model_name=DyRCNNx4 \
-    seed=000$i \
-    experiment=contrast
-done
-```
-
-### Comparing Pre-trained Models
-
-```bash
-# Test standard pre-trained models on a dataset
-snakemake -j4 --config \
-  model_name="[AlexNet,CorNetRT,ResNet18,DyRCNNx4]" \
-  data_name=cifar100 \
-  data_group=invertebrates \
-  experiment=contrast \
-  test_standard_models
-```
 
 ## Troubleshooting Workflows
 

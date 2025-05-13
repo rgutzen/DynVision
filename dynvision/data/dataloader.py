@@ -14,6 +14,7 @@ Usage:
 
 import logging
 import multiprocessing
+import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import torch
 from torch.utils.data import DataLoader
@@ -25,13 +26,10 @@ from .operations import (
 )
 from dynvision.utils import alias_kwargs, filter_kwargs
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 # Configure worker pools
-MAX_WORKERS = min(16, multiprocessing.cpu_count() - 1)
+MAX_WORKERS = min(16, len(os.sched_getaffinity(0)) - 1)
 
 
 class StandardDataLoader(DataLoader):
@@ -372,24 +370,65 @@ class StimulusContrastDataLoader(StandardDataLoader):
     pass
 
 
-def get_data_loader(
-    dataset: torch.utils.data.Dataset, dataloader=None, **kwargs
-) -> torch.utils.data.DataLoader:
+DATALOADER_CLASSES = {
+    "StandardDataLoader": StandardDataLoader,
+    "StimulusRepetitionDataLoader": StimulusRepetitionDataLoader,
+    "StimulusDurationDataLoader": StimulusDurationDataLoader,
+    "StimulusIntervalDataLoader": StimulusIntervalDataLoader,
+    "StimulusContrastDataLoader": StimulusContrastDataLoader,
+}
 
+
+def get_data_loader(
+    dataset: torch.utils.data.Dataset, dataloader: Optional[str] = None, **kwargs
+) -> torch.utils.data.DataLoader:
+    """
+    Returns a DataLoader instance based on the specified dataloader name or class.
+
+    Args:
+        dataset (torch.utils.data.Dataset): The dataset to load.
+        dataloader (Optional[str]): The name of the DataLoader class or the class itself.
+        **kwargs: Additional arguments for the DataLoader.
+
+    Returns:
+        torch.utils.data.DataLoader: An instance of the specified DataLoader.
+
+    Raises:
+        ValueError: If the specified DataLoader name is invalid.
+        TypeError: If the provided dataloader is not a string or a valid DataLoader class.
+        Exception: If there is an error during DataLoader initialization.
+    """
+    # Default to StandardDataLoader if no dataloader is specified
     dataloader = dataloader or StandardDataLoader
 
+    # Validate and resolve the dataloader
     if isinstance(dataloader, str):
         if "DataLoader" not in dataloader:
             dataloader += "DataLoader"
-        dataloader = globals().get(dataloader)
+        if dataloader in DATALOADER_CLASSES:
+            dataloader_class = DATALOADER_CLASSES.get(dataloader)
+        else:
+            raise ValueError(f"Unknown DataLoader class: '{dataloader}'")
+    elif issubclass(dataloader, DataLoader):
+        dataloader_class = dataloader
+    else:
+        raise TypeError(
+            f"Invalid dataloader type: {type(dataloader)}. "
+            "Expected a string or a DataLoader subclass."
+        )
 
+    # Set default arguments for DataLoader
     kwargs.setdefault("num_workers", max(1, min(4, multiprocessing.cpu_count() // 2)))
     kwargs.setdefault("persistent_workers", True)
+
+    # Try to initialize the DataLoader
     try:
-        return dataloader(dataset, **kwargs)
+        return dataloader_class(dataset, **kwargs)
     except Exception as e:
-        logger.error(f"Error initializing DataLoader: {str(e)}")
-        raise
+        logger.error(
+            f"Error initializing DataLoader '{dataloader_class.__name__}': {str(e)}"
+        )
+        raise RuntimeError(f"Failed to initialize DataLoader: {str(e)}") from e
 
 
 def get_data_loader_class(dataloader=None) -> torch.utils.data.DataLoader:

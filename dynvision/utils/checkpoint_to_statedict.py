@@ -20,7 +20,7 @@ from typing import Optional, Union
 import torch
 import argparse
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(

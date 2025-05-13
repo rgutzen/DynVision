@@ -44,7 +44,7 @@ DynVision automatically handles dataset downloads and preparation. Standard data
 To trigger data preparation you can run:
 ```bash
 # Download and prepare CIFAR10 dataset
-snakemake -j1 <project_paths.data.interim>/cifar10/train_all/folder.link
+snakemake <project_paths.data.interim>/cifar10/train_all/folder.link
 ```
 
 For more information about data organization and custom datasets, see the [Data Processing Guide](user-guide/data-processing.md).
@@ -82,7 +82,7 @@ DynVision uses [Snakemake](https://snakemake.readthedocs.io/) for workflow manag
 cd dynvision/workflow
 
 # Train a model on CIFAR100 and evaluate contrast sensitivity
-snakemake -j1 --config experiment=duration model_name=AlexNet model_args='{tsteps: 20, rctype: full}' data_name=cifar100 data_group=all
+snakemake --config experiment=duration model_name=AlexNet model_args='{tsteps: 20, rctype: full}' data_name=cifar100 data_group=all
 ```
 
 This command:

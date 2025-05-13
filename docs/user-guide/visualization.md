@@ -27,7 +27,7 @@ Visualizations are typically generated automatically when running experiments:
 
 ```bash
 # Run experiment and generate visualizations
-snakemake -j1 experiment --config experiment=contrast
+snakemake experiment --config experiment=contrast
 ```
 
 Results are saved in the reports directory:
@@ -47,7 +47,7 @@ reports/
 To generate all visualizations for completed experiments:
 
 ```bash
-snakemake -j1 plot_experiments_on_models
+snakemake plot_experiments_on_models
 ```
 
 ### Generate Specific Visualizations
@@ -56,7 +56,7 @@ To generate visualizations for a specific experiment:
 
 ```bash
 # Generate contrast response visualizations
-snakemake -j1 --config experiment=contrast plot_adaption
+snakemake --config experiment=contrast plot_adaption
 ```
 
 ### Compare Models
@@ -65,7 +65,7 @@ To compare different models on the same experiment:
 
 ```bash
 # Compare different recurrence types
-snakemake -j1 --config experiment=contrast model_args="{rctype:[full,self,depthpointwise,pointdepthwise]}" plot_experiments_on_models
+snakemake --config experiment=contrast model_args="{rctype:[full,self,depthpointwise,pointdepthwise]}" plot_experiments_on_models
 ```
 
 ## Visualization Types and Interpretation
@@ -92,7 +92,7 @@ In the example figure above, we can observe:
 **Generation Command**:
 
 ```bash
-snakemake -j1 --config experiment=response plot_adaption
+snakemake --config experiment=response plot_adaption
 ```
 
 ### 2. Weight Distributions
@@ -117,7 +117,7 @@ In the example figure above, we can observe:
 **Generation Command**:
 
 ```bash
-snakemake -j1 plot_weight_distributions --config model_name=DyRCNNx4 model_args="{rctype:full}"
+snakemake plot_weight_distributions --config model_name=DyRCNNx4 model_args="{rctype:full}"
 ```
 
 ### 3. Contrast Response
@@ -143,7 +143,7 @@ In the example figure above, we can observe:
 **Generation Command**:
 
 ```bash
-snakemake -j1 --config experiment=contrast plot_adaption
+snakemake --config experiment=contrast plot_adaption
 ```
 
 ### 4. Duration Response
@@ -169,7 +169,7 @@ In the example figure above, we can observe:
 **Generation Command**:
 
 ```bash
-snakemake -j1 --config experiment=duration plot_adaption
+snakemake --config experiment=duration plot_adaption
 ```
 
 ### 5. Interval Response
@@ -195,7 +195,7 @@ In the example figure above, we can observe:
 **Generation Command**:
 
 ```bash
-snakemake -j1 --config experiment=interval plot_adaption
+snakemake --config experiment=interval plot_adaption
 ```
 
 ## Manual Visualization with Python

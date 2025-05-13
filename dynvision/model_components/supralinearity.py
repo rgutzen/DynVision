@@ -19,7 +19,7 @@ import torch.nn as nn
 from torch import Tensor
 from pytorch_lightning import LightningModule
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["SupraLinearity"]

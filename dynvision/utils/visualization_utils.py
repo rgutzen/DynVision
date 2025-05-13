@@ -21,7 +21,7 @@ import torch
 from .data_utils import load_df
 from .string_utils import extract_param_from_string
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

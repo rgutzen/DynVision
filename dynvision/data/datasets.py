@@ -35,7 +35,7 @@ from dynvision.data.transforms import (
     get_target_transform,
 )
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 # File extensions

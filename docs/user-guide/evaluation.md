@@ -23,7 +23,7 @@ To evaluate a model's classification performance:
 
 ```bash
 # Test a trained model on a dataset
-snakemake -j1 test_model --config \
+snakemake test_model --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
   data_name=cifar100 \
@@ -49,7 +49,7 @@ To visualize the evaluation results:
 
 ```bash
 # Generate confusion matrix
-snakemake -j1 plot_confusion_matrix --config \
+snakemake plot_confusion_matrix --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
   data_name=cifar100 \
@@ -67,7 +67,7 @@ Test basic temporal response properties with the `response` experiment:
 
 ```bash
 # Run response experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=response \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}"
@@ -85,7 +85,7 @@ Evaluate how the model responds to stimuli of varying contrast:
 
 ```bash
 # Run contrast experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=contrast \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}"
@@ -102,7 +102,7 @@ Assess how the model responds to stimuli of varying duration:
 
 ```bash
 # Run duration experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=duration \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}"
@@ -119,7 +119,7 @@ Measure adaptation and recovery to repeated stimuli:
 
 ```bash
 # Run interval experiment
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=interval \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}"
@@ -140,7 +140,7 @@ To compare models with different recurrence types:
 
 ```bash
 # Compare recurrence types on contrast experiment
-snakemake -j1 all_experiments --config \
+snakemake all_experiments --config \
   experiment=contrast \
   model_args="{rctype:[full,self,depthpointwise,pointdepthwise]}"
 ```
@@ -151,7 +151,7 @@ To compare different model architectures:
 
 ```bash
 # Compare architectures on contrast experiment
-snakemake -j1 test_standard_models --config \
+snakemake test_standard_models --config \
   experiment=contrast \
   model_name="[AlexNet,CorNetRT,ResNet18,DyRCNNx4]"
 ```
@@ -385,7 +385,7 @@ To run the complete evaluation pipeline:
 
 ```bash
 # Complete evaluation pipeline for a model
-snakemake -j1 all_experiments --config \
+snakemake all_experiments --config \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}" \
   seed=0001 \
@@ -404,7 +404,7 @@ To evaluate a custom model, you need to:
 
 ```bash
 # Evaluate a custom model
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=contrast \
   model_name=MyCustomModel
 ```
@@ -417,7 +417,7 @@ For reproducible evaluations, always set fixed random seeds:
 
 ```bash
 # Set random seed for reproducibility
-snakemake -j1 experiment --config seed=0001
+snakemake experiment --config seed=0001
 ```
 
 ### 2. Use Multiple Test Runs
@@ -427,7 +427,7 @@ For robust evaluations, average results over multiple runs:
 ```bash
 # Run multiple evaluations with different seeds
 for seed in 0001 0002 0003 0004 0005; do
-  snakemake -j1 experiment --config \
+  snakemake experiment --config \
     experiment=contrast \
     model_name=DyRCNNx4 \
     seed=$seed
@@ -440,7 +440,7 @@ Include control experiments for comparison:
 
 ```bash
 # Run feedforward-only experiment as control
-snakemake -j1 experiment --config \
+snakemake experiment --config \
   experiment=responseffonly \
   model_name=DyRCNNx4 \
   model_args="{rctype:full}"

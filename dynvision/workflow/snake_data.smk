@@ -12,7 +12,7 @@ The workflow supports multiple dataset types:
 
 Usage:
     # Prepare CIFAR10 dataset
-    snakemake -j1 build_ffcv_datasets --config data_name=cifar10
+    snakemake build_ffcv_datasets --config data_name=cifar10
 
 """
 

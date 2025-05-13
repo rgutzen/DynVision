@@ -1,3 +1,8 @@
 - fix feedback connections
+- rewrite standard models
 - add excitatory-inhibitory unit distinction
 - write unit tests
+- config for debug-mode (by default set when local)
+    - activate stability checks
+    - activate verbose output
+- 

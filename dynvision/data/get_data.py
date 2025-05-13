@@ -21,7 +21,9 @@ def download_data(output_folder, data_name, train):
 
     Path(output_folder).mkdir(parents=True, exist_ok=True)
 
-    dataset = getattr(datasets, data_name)(root=output_folder, train=train, download=download)
+    dataset = getattr(datasets, data_name)(
+        root=output_folder, train=train, download=download
+    )
 
     return dataset
 
@@ -30,7 +32,7 @@ def store_images(image_folder, dataset, ext="png"):
     if Path(image_folder).exists() and any(Path(image_folder).iterdir()):
         logging.warning(f"Folder {image_folder} already exists and is not empty.")
         return None
-    
+
     # Create a new folder to store the images
     image_folder.mkdir(parents=True, exist_ok=True)
 
@@ -47,7 +49,7 @@ def store_images(image_folder, dataset, ext="png"):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+
     logger = logging.getLogger(__name__)
     args = parser.parse_args()
 
@@ -56,7 +58,9 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid subset: {args.subset}")
 
-    dataset = download_data(output_folder=args.raw_data_path, data_name=args.data_name, train=train)
+    dataset = download_data(
+        output_folder=args.raw_data_path, data_name=args.data_name, train=train
+    )
 
     if args.output.suffix:  # If the output is a file
         args.output = args.output.parent

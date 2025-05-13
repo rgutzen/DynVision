@@ -676,14 +676,14 @@ using the exisitng snakemake rule structure and tuning config settings
 
 ```bash
 # Train a DyRCNNx4 model with full recurrence
-snakemake -j1 \
+snakemake \
   --config model_name=DyRCNNx4 seed=0001 model_args="{rctype:full, tsteps=:20}"
 ```
 
 or by explicitly requesting a certain output file
 
 ```bash
-snakemake -j1 \
+snakemake \
   /path/to/model_dir/DyRCNNx4/DyRCNNx4:tsteps=20+rctype:full_0001_cifar100_trained.pt"
 ```
 
@@ -699,7 +699,7 @@ snakemake -j4 all_experiments \
 
 ```bash
 # Generate visualizations for all models
-snakemake -j1 plot_experiments_on_models
+snakemake plot_experiments_on_models
 ```
 
 ### 9.4 Cluster Execution

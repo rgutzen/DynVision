@@ -15,10 +15,10 @@ This workflow handles all visualization-related tasks including:
 
 Usage:
     # Generate confusion matrix
-    snakemake -j1 plot_confusion_matrix model_name=DyRCNNx4
+    snakemake plot_confusion_matrix model_name=DyRCNNx4
 
     # Analyze classifier responses
-    snakemake -j1 plot_classifier_responses model_name=DyRCNNx4
+    snakemake plot_classifier_responses model_name=DyRCNNx4
 """
 
 logger = logging.getLogger('workflow.visualizations')
