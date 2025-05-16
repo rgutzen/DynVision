@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
-from dynvision.utils import on_same_device
 from pytorch_lightning import LightningModule
 
 
@@ -48,7 +47,6 @@ class Retina(LightningModule):
         kernel_size: Convolution kernel size (default: 9)
         bias: Whether to use bias in convolutions (default: True)
         mixed_precision: Whether to use automatic mixed precision (default: True)
-        stability_check: Whether to check numerical stability (default: True)
 
     Reference:
         Lindsey et al. (2019) doi:10.48550/arXiv.1901.00945
@@ -62,7 +60,6 @@ class Retina(LightningModule):
         kernel_size: int = 9,
         bias: bool = True,
         mixed_precision: bool = True,
-        stability_check: bool = False,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__()
@@ -73,11 +70,9 @@ class Retina(LightningModule):
         self.kernel_size = kernel_size
         self.bias = bias
         self.mixed_precision = mixed_precision
-        self.stability_check = stability_check
         self.device = device
 
         self._define_architecture()
-        self._init_parameters()
 
         # Move to specified device
         if device is not None:
@@ -127,24 +122,14 @@ class Retina(LightningModule):
         Returns:
             Processed tensor of shape (batch_size, out_channels, height, width)
         """
-        # Input validation
-        if self.stability_check:
-            validate_input(x, self.in_channels)
+        # First layer - retinal ganglion cells
+        x = self.conv1(x)
 
-        # Process with automatic mixed precision
-        with on_same_device(x=x, conv1=self.conv1, conv2=self.conv2, label="Retina"):
-            # First layer - retinal ganglion cells
-            x = self.conv1(x)
-            if self.stability_check:
-                self.check_stability(x, "conv1")
+        # Neural firing threshold
+        x = self.nonlin(x)
 
-            # Neural firing threshold
-            x = self.nonlin(x)
-
-            # Second layer - LGN processing
-            x = self.conv2(x)
-            if self.stability_check:
-                self.check_stability(x, "conv2")
+        # Second layer - LGN processing
+        x = self.conv2(x)
 
         return x
 

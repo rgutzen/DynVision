@@ -50,9 +50,9 @@ with open(runtime_config, 'w') as f:
 pylogger = logging.getLogger('workflow.utils')
 
 # Print configuration summary
-pylogger.info("Loaded configurations:")
+print("Loaded configurations:")
 for key, value in config.__dict__.items():
-    pylogger.info(f"\t{key}: {value}")
+    print(f"\t{key}: {value}")
 
 CONFIGS = project_paths.scripts.configs / 'config_runtime.yaml'
 SCRIPTS = project_paths.scripts_path

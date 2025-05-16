@@ -2,213 +2,242 @@
 
 This guide explains how to run DynVision workflows on high-performance computing (HPC) clusters. It covers setup, configuration, and best practices for efficient cluster execution.
 
+## Overview
+
+DynVision provides two methods for running workflows on HPC clusters:
+
+1. **Basic Execution**: Submit a single job script that handles environment setup and runs the entire workflow sequentially.
+2. **Advanced Execution**: Use Snakemake's built-in cluster capabilities to submit and manage individual jobs in parallel.
+
 ## Prerequisites
 
-Before running workflows on a cluster:
+Before running workflows on a cluster, ensure:
 
-1. **Environment Setup**
-```bash
-# Load required modules (example for typical HPC setup)
-module load anaconda3/2020.07
-source activate snake-env
+1. **Cluster Access**
+   You have access to a compute cluster and a directory with read and write access.
 
-# Verify environment
-python -c "import snakemake; print(snakemake.__version__)"
-```
+2. **Getting DynVision**
+   Download or sync the DynVision folder into you cluster directory
 
-2. **Data Access**
-- Ensure datasets are accessible from compute nodes
-- Check storage quotas and permissions
-- Consider using mounted filesystems for large datasets
+3. **Data Access**
+   If you are working with non-standard datasets that can be automatically downloaded within the workflow execution, make sure they are available.
 
-3. **Resource Planning**
-- Estimate memory requirements per task
-- Plan GPU allocation for training
-- Consider storage needs for outputs
+4. **Path Mangement**
+   Review your `dynvision.project_paths.py` file and set the alternative cluster paths according to your needs.
 
-## Basic Cluster Execution
+5. **Environment Setup**
+   Follow you HPC documentation to setup and environment that has dynvision and all its dependencies installed. Depending on you system, this may for example also involve setting up a docker or singularity image.
+   See the [Installation Guide](installation.md).
 
-DynVision provides a wrapper script for cluster execution:
+## Basic Execution (Single Job)
 
-```bash
-# Navigate to DynVision directory
-cd dynvision
+The basic method uses a single job script to run the entire workflow:
 
-# Run all experiments using cluster profile
-./cluster/snakecharm.sh -j100 all_experiments
+1. **Create Job Script**
+   Use the provided template in `dynvision/cluster/snakejob_example.sh`:
 
-# Run specific experiment
-./cluster/snakecharm.sh -j100 experiment --config \
-    model_name=DyRCNNx4 \
-    data_name=cifar100
-```
+   ```slurm
+   #!/usr/bin/env bash
+   #SBATCH -o /path/to/logs/slurm/%j.out
+   #SBATCH -e /path/to/logs/slurm/%j.err
+   #SBATCH --time=24:00:00
+   #SBATCH --mem=80G
+   #SBATCH --nodes=1
+   #SBATCH --ntasks-per-node=1
+   #SBATCH --cpus-per-task=16
+   #SBATCH --gres=gpu:1"
+   
+   module purge
+   
+   # If using Singularity
+   singularity exec --nv \
+       --overlay /path/to/overlay.ext3:ro \
+       /path/to/container.sif \
+       bash -c "
+   conda activate myenv
+   
+   cd ../workflow/
+   snakemake \
+       --cores 16 \
+       --resources gpu=1 \
+       --config \
+           model_name=DyRCNNx4 \
+           data_name=cifar100
+   "
+   ```
 
-The wrapper script:
-1. Sets up the environment
-2. Configures cluster parameters
-3. Submits and monitors jobs
-4. Manages log files
+2. **Submit Job**
+   ```bash
+   sbatch snakejob_example.sh
+   ```
 
-## Cluster Configuration
+3. **Monitor Job**
 
-DynVision uses Snakemake's cluster profiles for job management:
+   ```bash
+   squeue -u <user-name>
+   ```
 
-```
-dynvision/cluster/
-├── snakecharm.sh         # Wrapper script
-├── _snakecharm.sh        # Core execution script
-└── profiles/
-    └── slurm/            # SLURM cluster profile
-        └── config.yaml   # Cluster settings
-```
+   It is also recommended to make use of the Weights & Biases integration to monitor progress online.
 
-### Basic Configuration
+This method is simpler but less efficient for large workflows as it runs tasks sequentially.
 
-Example SLURM configuration (`profiles/slurm/config.yaml`):
-```yaml
-cluster:
-  mkdir -p logs/slurm/{rule} &&
-  sbatch
-    --partition={resources.partition}
-    --cpus-per-task={threads}
-    --mem={resources.mem_mb}
-    --time={resources.time}
-    --output=logs/slurm/{rule}/{jobid}.out
-    --error=logs/slurm/{rule}/{jobid}.err
+## Advanced Execution (Parallel Jobs)
 
-default-resources:
-  - partition=cpu
-  - mem_mb=32000
-  - time="24:00:00"
-  - gpu=0
-```
+The advanced method uses Snakemake's cluster capabilities to run tasks in parallel:
 
-### Rule-Specific Resources
 
-Configure resources per rule type:
-```yaml
-# In config.yaml
-rule-specific-resources:
-  train_model:
-    - partition=gpu
-    - mem_mb=64000
-    - time="48:00:00"
-    - gpu=1
-  
-  test_model:
-    - partition=cpu
-    - mem_mb=32000
-    - time="24:00:00"
-```
+1. Profile Configuration
 
-## Job Management
+   DynVision uses Snakemake's cluster profiles for job management:
 
-### Monitoring Jobs
+   ```
+   dynvision/cluster/
+   ├── snakecharm.sh         # Wrapper script
+   ├── _snakecharm.sh        # Core execution script
+   └── profiles/
+      └── slurm/            # SLURM cluster profile
+         └── config.yaml   # Cluster settings
+   ```
 
-Track job status:
-```bash
-# View all running jobs
-squeue -u $USER
+   The SLURM profile (`profiles/slurm/config.yaml`) defines default resources and rule-specific settings:
 
-# Check specific job status
-sacct -j <job_id> --format=JobID,State,Elapsed,MaxRSS,MaxVMSize
+   ```yaml
+   # General settings
+   executor: slurm
+   jobs: 150
+   default-resources:
+   runtime: 60
+   mem_mb: 16000
+   cpus_per_task: 16
 
-# View job output in real-time
-tail -f logs/slurm/train_model/job_12345.out
-```
+   # Rule-specific resources
+   set-resources:
+   train_model:
+      mem: 46000
+      runtime: 1440
+      gpu: 1
+      constraint: "a100|h100"
+      slurm_extra: "'--gres=gpu:1'"
+   ```
 
-### Resource Usage
+   For more details see the [Snakemake Executor Documentation](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html).
 
-Monitor resource utilization:
-```bash
-# Check memory usage
-sstat -j <job_id> --format=MaxRSS,MaxVMSize
+2. **Executor settings**
+   ```yaml
+   # in config_defaults.yaml
+   executor_start: "singularity exec --nv \
+   --overlay /scratch/rg5022/images/rva.ext3:ro \
+   --overlay /vast/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro \
+   --overlay /vast/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro \
+   --overlay /vast/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro \
+   /scratch/work/public/singularity/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif \
+   bash -c '\
+   source /ext3/env.sh; \
+   conda activate rva; \
+   "
+   executor_close: "'"
+   ```
 
-# Monitor GPU usage
-nvidia-smi -l 1
+   For cluster executions any python call is wrapped in these executor settings:
 
-# View partition limits
-sinfo -o "%20P %5D %14F"
-```
+   ```bash
+   {executor_start}
+   python script.py --arg1 value
+   {executor_close}
+   ```
 
-## Advanced Configuration
+   the above settings are an example, adapt them to your system.
 
-### Environment Detection
+3. **Executor Environment**
+   This advanced execution may require the creation of an additional environment if the commands of the scheduler (e.g. SLURM) are not available in the main environment (e.g. because of using singularity).
+   Therefore, create a new environment (let's call it 'snake-env') in the cluster's native filesystem (so that commands like `sbatch` and `srun` are available) and install snakemake (`pip install snakemake`).
 
-DynVision automatically adjusts settings for cluster environments:
+4. **Adapt Executor Scripts**
 
-```python
-# In snake_runtime.smk
-batch_size = config.batch_size if project_paths.iam_on_cluster() else 3
-enable_progress_bar = not project_paths.iam_on_cluster()
-```
+   Adapt the executor script `dynvision/cluster/_snakecharm.sh` as needed to activate the environment created in **3.**
+   ```bash
+   module load anaconda3/2020.07  # conda needs to be available
+   source activate snake-env  # environment that contains snakemake
+   ```
 
-### Data Management
+5. **Use Snakecharm Wrapper**
+   DynVision provides `snakecharm.sh` to manage cluster execution:
 
-Configure data paths for cluster environments:
+   ```bash
+   # Navigate to DynVision directory
+   cd dynvision
+   
+   # Run all experiments
+   ./cluster/snakecharm.sh
+   
+   # Run specific experiment
+   ./cluster/snakecharm.sh "--config experiment=duration model_name=DyRCNNx4 data_name=cifar100"
+   ```
 
-```python
-# In snake_utils.smk
-def get_data_base_dir(wildcards):
-    """Get dataset directory based on environment."""
-    if wildcards.data_name in config.mounted_datasets and \
-       project_paths.iam_on_cluster():
-        return Path(f'/{wildcards.data_name}')
-    return project_paths.data.raw / wildcards.data_name
-```
+   The wrapper script:
+   - Sets up the environment
+   - Configures cluster parameters
+   - Submits and monitors jobs
+   - Manages log files
 
-## Troubleshooting
+   You may pass any commandline arguments to the snakecharm.sh script as you would do with a regular snakemake command
 
-### Common Issues
+6. **Monitor Execution**
+   - Check logs in the configured `slurm-logdir`
+   - Monitor job status with `squeue`
+   - View detailed logs for each rule
 
-1. **Environment Problems**
-```bash
-# Verify environment
-which python
-module list
-module avail cuda  # For GPU support
-```
 
-2. **Resource Limits**
-```bash
-# Check partition limits
-sinfo -o "%20P %5D %14F"
+## Environment Adaptation
 
-# Monitor memory usage
-sstat -j <job_id> --format=MaxRSS,MaxVMSize
-```
+DynVision automatically adapts to cluster environments:
 
-3. **Job Failures**
-```bash
-# Rerun failed jobs
-./cluster/snakecharm.sh -j100 all_experiments --rerun-incomplete
+1. **Environment Detection**
+   ```python
+   # In project_paths.py
+   def iam_on_cluster(self):
+       host_name = os.popen("hostname").read()
+       cluster_names = ["hpc", "greene", "slurm", "compute"]
+       return any(x in host_name for x in cluster_names)
+   ```
 
-# Debug specific rule
-./cluster/snakecharm.sh train_model --debug
+2. **Path Management**
+   - Large data directories move to scratch partitions
+   - Logs redirect to appropriate locations
+   - Container mounts configured automatically
+   ```python
+   # in project_paths.py
+   if self.iam_on_cluster():
+      # move large folders to scratch partition
+      self.data.raw = Path("/scratch") / self.user_name / "data"
+      self.models = (
+            Path("/scratch") / self.user_name / self.project_name / "models"
+      )
+      self.reports = (
+            Path("/scratch") / self.user_name / self.project_name / "reports"
+      )
+      self.large_logs = (
+            Path("/scratch") / self.user_name / self.project_name / "logs"
+      )
+   ```
 
-# Check error logs
-less logs/slurm/train_model/job_12345.err
-```
+3. **Resource Scaling**
+   - Batch sizes adjust for development vs. production
+   - Progress bars disable on compute nodes
+   - Memory limits scale based on available resources
+   ```yaml
+   # Debugging settings
+   debug_batch_size: 3
+   debug_check_val_every_n_epoch: 1
+   debug_log_every_n_steps: 1
+   debug_accumulate_grad_batches: 1
+   debug_enable_progress_bar: True
+   ```
 
-### Best Practices
 
-1. **Resource Allocation**
-   - Request appropriate resources per rule
-   - Consider job duration and memory needs
-   - Use GPU partitions only when needed
-
-2. **Data Management**
-   - Use fast storage for frequently accessed data
-   - Clean up temporary files
-   - Monitor disk quotas
-
-3. **Job Organization**
-   - Use meaningful job names
-   - Maintain organized log directories
-   - Monitor long-running jobs
-
-## Further Reading
+## Related Resources
 
 - [Snakemake Cluster Documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html)
 - [SLURM Documentation](https://slurm.schedmd.com/documentation.html)
 - [DynVision Configuration Reference](../reference/configuration.md)
+- [Workflow Organization](workflows.md)

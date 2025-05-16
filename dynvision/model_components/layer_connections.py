@@ -10,7 +10,6 @@ import torch
 import torch.nn as nn
 from torch.amp import autocast
 import torch.nn.init as init
-from dynvision.utils import on_same_device, check_stability
 from pytorch_lightning import LightningModule
 
 
@@ -42,9 +41,6 @@ class ConnectionBase(LightningModule):
         parametrization: Callable[[torch.Tensor], torch.Tensor] = lambda x: x,
         upsample_mode: str = "nearest",
         auto_adapt: bool = False,
-        stability_check: bool = False,
-        clip_range: float = 1.0,
-        use_layer_norm: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -55,10 +51,7 @@ class ConnectionBase(LightningModule):
         self.scale_factor = scale_factor
         self.parametrization = parametrization
         self.setup_transform = True
-        self.stability_check = stability_check
         self.auto_adapt = auto_adapt
-        self.clip_range = clip_range
-        self.use_layer_norm = use_layer_norm
 
         if not auto_adapt:
             # infer in_channels, out_channels from source module
@@ -83,6 +76,13 @@ class ConnectionBase(LightningModule):
             self._setup_conv(x=x_proxy, h=h_proxy)
             self._setup_upsample(x=x_proxy, h=h_proxy, mode=upsample_mode)
 
+    def setup(self, stage: Optional[str] = None) -> None:
+        """Handle precision setup from PyTorch Lightning."""
+        super().setup(stage)
+        if stage == "fit" and self.auto_adapt:
+            # Reset transform to ensure proper initialization with correct dtype
+            self.setup_transform = True
+
     def _setup_conv(self, x: torch.Tensor, h: torch.Tensor) -> Union[nn.Module, bool]:
         if x is None or h is None:
             self.conv = False
@@ -97,28 +97,34 @@ class ConnectionBase(LightningModule):
             self.setup_transform = False
             return False
 
-        # Add layer normalization for feedback stability
-        if self.use_layer_norm:
-            self.layer_norm = nn.LayerNorm(
-                normalized_shape=[in_channels, h.shape[-2], h.shape[-1]],
-                elementwise_affine=True,
-                device=h.device,
-                dtype=h.dtype,
+        # Get device and dtype from source or input
+        device = x.device
+        dtype = x.dtype
+        if self.source is not None:
+            source_param = next(self.source.parameters())
+            device = source_param.device
+            dtype = source_param.dtype
+            logger.debug(
+                f"Feedback Connection: Using source module device={device}, dtype={dtype}"
+            )
+        else:
+            logger.debug(
+                f"Feedback Connection: Using input tensor device={device}, dtype={dtype}"
             )
 
-        with autocast(enabled=True, dtype=x.dtype, device_type=x.device.type):
-            self.conv = self.parametrization(
-                nn.Conv2d(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    kernel_size=1,
-                    stride=stride,
-                    padding=0,
-                    bias=self.bias,
-                    device=h.device,
-                    dtype=x.dtype,
-                )
+        # Create convolution with explicit device and dtype
+        self.conv = self.parametrization(
+            nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=1,
+                stride=stride,
+                padding=0,
+                bias=self.bias,
+                dtype=dtype,
+                device=device,
             )
+        )
 
         self._init_parameters(in_channels, out_channels)
         self.setup_transform = False
@@ -138,7 +144,6 @@ class ConnectionBase(LightningModule):
         self.upsample = nn.Upsample(size=x.shape[-2:], mode=mode)
 
     def reset_transform(self) -> None:
-        """Reset the transform to allow for re-initialization."""
         self.setup_transform = True
 
     def _init_parameters(self, in_channels: int = 1, out_channels: int = 1) -> None:
@@ -171,33 +176,22 @@ class ConnectionBase(LightningModule):
         if h is None:
             return x
 
-        # Setup transforms if needed
         if self.setup_transform:
             self._setup_conv(x, h)
             self._setup_upsample(x, h)
 
-        # Process hidden state with mixed precision and stability controls
-        with autocast(enabled=True, dtype=x.dtype, device_type=x.device.type):
-            # Apply layer normalization if enabled
-            if self.use_layer_norm and hasattr(self, "layer_norm"):
-                h = self.layer_norm(h)
+        if self.conv:
+            h = self.conv(h)
 
-            # Apply convolution if needed
-            if self.conv:
-                h = self.conv(h)
+        if self.upsample:
+            h = self.upsample(h)
 
-            # Apply upsampling if needed
-            if self.upsample:
-                h = self.upsample(h)
-
-            # Normalize feedback magnitude for stability
-            h_norm = torch.norm(h, p=2, dim=(1, 2, 3), keepdim=True)
-            h = h / (h_norm + 1e-6)
+        # Normalize feedback with gradient preservation
+        # h_norm = torch.norm(h, p=2, dim=(1, 2, 3), keepdim=True)
+        # scale = torch.where(h_norm > 1e-6, h_norm, torch.ones_like(h_norm))
+        # h = h / scale
 
         output = x + h
-
-        if self.stability_check:
-            check_stability(output)
 
         return output
 

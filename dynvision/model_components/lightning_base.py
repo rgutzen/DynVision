@@ -157,7 +157,7 @@ class UtilityBase(nn.Module):
         )
 
     def _determine_residual_timesteps(
-        self, max_timesteps=100, device=None, dtype=torch.float16
+        self, max_timesteps=100, device=None, dtype=None
     ) -> int:
         """
         Determine the number of residual timesteps required for an input to be processed through the unrolled model.
@@ -172,15 +172,16 @@ class UtilityBase(nn.Module):
         Raises:
             ValueError: If the number of residual timesteps exceeds max_timesteps.
         """
-        # Get model dtype from parameters
         if dtype is None:
             dtype = next(self.parameters()).dtype
-        if device is None:
-            device = next(self.parameters()).device
 
         random_input = torch.randn(
-            (1, self.n_channels, self.dim_y, self.dim_x), dtype=dtype, device=device
+            (1, self.n_channels, self.dim_y, self.dim_x),
+            dtype=dtype,
+            device=self.device,
         )
+
+        self._ensure_parameter_dtypes(target_dtype=dtype)
 
         if hasattr(self, "reset"):
             self.reset()
@@ -318,6 +319,7 @@ class UtilityBase(nn.Module):
         state_dict = self._add_missing_parameters_to_state_dict(state_dict)
         state_dict = self._remove_unexpected_parameters_from_state_dict(state_dict)
         super().load_state_dict(state_dict, **kwargs)
+        self._parameters_initialized = True
 
     def hasattr(self, *args: Any) -> bool:
         if len(args) == 1:
@@ -350,6 +352,7 @@ class UtilityBase(nn.Module):
         attributes = attribute_name.split(".")
         for attr_name in attributes:
             obj = getattr(obj, attr_name)
+
         return obj
 
     def set_trainable_parameters(
@@ -668,7 +671,7 @@ class UtilityBase(nn.Module):
         raise_error: bool = False,
     ) -> None:
         """
-        Check for NaN/Inf values in the model parameters.
+        Check for NaN/Inf values and dtype consistency in model parameters.
         """
         iterator = getattr(self, generator_name)
         if isinstance(iterator, dict):
@@ -680,7 +683,17 @@ class UtilityBase(nn.Module):
                 f"The attribute {generator_name} is neither a dict nor a generator."
             )
 
-        logger.info(f"Checking {generator_name} {data_attr}: [min - max ; norm]")
+        nonfinite_detected = False
+        model_dtype = next(self.parameters()).dtype
+        dtype_mismatches = []
+
+        logger.info(f"\nChecking {generator_name} {data_attr}:")
+        logger.info("-" * 100)
+        logger.info(
+            f"{'Module Name':<30} {'Shape':<20} {'Type':<10} {'Device':<12} {'Min':>10} {'Max':>10} {'Norm':>10}"
+        )
+        logger.info("-" * 100)
+
         for name, tensor in iterator:
             if data_attr and self.hasattr(tensor, data_attr):
                 tensor = self.getattr(tensor, data_attr)
@@ -689,16 +702,27 @@ class UtilityBase(nn.Module):
 
             if isinstance(tensor, list):
                 tensor = self._concatenate_tensors(tensor, dim=0)
+
+            # Check dtype consistency
+            if tensor.dtype != model_dtype:
+                dtype_mismatches.append((name, tensor.dtype, model_dtype))
+
             if len(tensor.size()):
                 valid_data = tensor[torch.isfinite(tensor)]
                 if valid_data.numel() > 0:
+                    shape_str = str(tensor.size()).replace("torch.Size", "")
                     logger.info(
-                        f"\t {name}: {valid_data.min().item():.4f} - {valid_data.max().item():.4f} ;\t {valid_data.norm().item():.4f}"
+                        f"{name:<30} {shape_str:<20} {str(tensor.dtype):<10} {str(tensor.device):<12} "
+                        f"{valid_data.min().item():>10.4f} {valid_data.max().item():>10.4f} {valid_data.norm().item():>10.4f}"
                     )
                 else:
-                    logger.warning(f"\t {name}: All values are NaN or Inf")
+                    logger.warning(
+                        f"{name:<30} {'[NaN/Inf]':<20} {str(tensor.dtype):<10} {str(tensor.device):<12} {'---':>10} {'---':>10} {'---':>10}"
+                    )
             else:
-                logger.info(f"\t {name}: {tensor}")
+                logger.info(
+                    f"{name:<30} {'[scalar]':<20} {str(tensor.dtype):<10} {str(tensor.device):<12} {tensor:>10.4f} {tensor:>10.4f} {tensor:>10.4f}"
+                )
 
             if (torch.isnan(tensor)).any():
                 logger.warning(f"\t NaN detected in {name}: ")
@@ -710,8 +734,18 @@ class UtilityBase(nn.Module):
                 logger.warning(
                     f"\t {(torch.isinf(tensor)).sum().item()} / {tensor.numel()}"
                 )
-            if raise_error and (~torch.isfinite(tensor)).any():
-                raise ValueError("NaN/Inf detected in model weights")
+            if (~torch.isfinite(tensor)).any():
+                nonfinite_detected = True
+
+        # Report dtype mismatches
+        if dtype_mismatches:
+            logger.warning("Detected dtype mismatches:")
+            for name, param_dtype, expected_dtype in dtype_mismatches:
+                logger.warning(f"\t {name}: {param_dtype} (expected {expected_dtype})")
+
+        if raise_error and (nonfinite_detected or dtype_mismatches):
+            raise ValueError("NaN/Inf values or dtype mismatches detected")
+
         return None
 
     def _check_gradients(self, raise_error: bool = False) -> None:
@@ -788,6 +822,59 @@ class UtilityBase(nn.Module):
             )
         return module.safely_named_parameters_dict
 
+    def _ensure_parameter_dtypes(self, target_dtype=None) -> None:
+        """Ensure all parameters have the correct dtype based on trainer precision"""
+
+        if target_dtype is None:
+            target_dtype = self._get_target_dtype()
+
+        # First initialize parameters if not done yet
+        if not self._parameters_initialized:
+            self._init_parameters()
+
+        # Then ensure correct dtype
+        dtype_changes = []
+        for name, param in self.named_parameters():
+            if param.dtype != target_dtype:
+                old_dtype = param.dtype
+                param.data = param.data.to(target_dtype)
+                dtype_changes.append((name, old_dtype, target_dtype))
+
+        # Log dtype changes only if they occurred
+        if dtype_changes:
+            logger.info("Parameter dtype changes:")
+            for name, old_dtype, new_dtype in dtype_changes:
+                logger.info(f"\t{name}: {old_dtype} -> {new_dtype}")
+
+    def _get_target_dtype(self, default=torch.float32):
+        """Determine target dtype based on trainer precision.
+
+        Returns float32 by default when no trainer is attached,
+        otherwise uses trainer's precision setting.
+        """
+        if not hasattr(self, "_trainer") or self._trainer is None:
+            logger.debug(f"No trainer attached, using default dtype: {default}")
+            return default
+
+        trainer_precision = str(self._trainer.precision)
+        logger.debug(f"Trainer precision: {trainer_precision}")
+
+        if "bf16" in trainer_precision:
+            return torch.bfloat16
+        elif "16" in trainer_precision:
+            return torch.float16
+        elif "8" in trainer_precision:
+            return torch.int8
+        elif "32" in trainer_precision:
+            return torch.float32
+        elif "64" in trainer_precision:
+            return torch.float64
+        else:
+            logger.warning(
+                f"Unknown precision: {trainer_precision}, using default: {default}"
+            )
+            return default
+
 
 class LightningBase(UtilityBase, pl.LightningModule):
     """
@@ -859,7 +946,9 @@ class LightningBase(UtilityBase, pl.LightningModule):
         self.scheduler_configs = scheduler_configs
 
         # Process the input dims and timesteps
-        x = torch.randn(1, *input_dims, device=self.device)
+        x = torch.randn(
+            1, *input_dims, dtype=self._get_target_dtype(), device=self.device
+        )
         x = self._adjust_input_dimensions(x)
         _, data_timesteps, self.n_channels, self.dim_y, self.dim_x = x.shape
 
@@ -876,6 +965,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
             )
         self.input_dims = (self.n_timesteps, self.n_channels, self.dim_y, self.dim_x)
 
+        self._parameters_initialized = False
+
         self.save_hyperparameters()  # redundant with logger?
 
     def setup(self, stage: Optional[str]) -> None:
@@ -890,11 +981,13 @@ class LightningBase(UtilityBase, pl.LightningModule):
         )
         self.reset()
         self._init_loss(self.criterion_params)
+        self._ensure_parameter_dtypes()
 
     def _define_architecture(self) -> None:
         raise NotImplementedError("Define the model architecture!")
 
     def _init_parameters(self) -> None:
+        logger.info("Initializing model parameters...")
         for module in self.children():
             if hasattr(module, "_init_parameters"):
                 module._init_parameters()
@@ -1081,7 +1174,9 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
         if not response_dict or any(v is None for v in response_dict.values()):
             random_input = torch.randn(
-                (1, self.n_channels, self.dim_y, self.dim_x), device=self.device
+                (1, self.n_channels, self.dim_y, self.dim_x),
+                dtype=self._get_target_dtype(),
+                device=self.device,
             )
             while any(v is None for v in response_dict.values()):
                 _, response_dict = self._forward(random_input, feedforward_only=True)
@@ -1465,6 +1560,11 @@ class LightningBase(UtilityBase, pl.LightningModule):
                 self._check_weights(raise_error=True)
 
     def on_train_start(self) -> None:
+        self._check_weights()
+        pass
+
+    def on_train_end(self) -> None:
+        self._check_responses()
         pass
 
     def on_train_epoch_start(self) -> None:

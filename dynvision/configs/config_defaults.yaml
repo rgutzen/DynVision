@@ -71,7 +71,7 @@ lr_parameter_groups:
   recurrence:
     lr_factor: 0.2
   feedback:
-    lr_factor: 0.1
+    lr_factor: 0.5
 
 # Learning rate
 learning_rate: 0.002
@@ -86,7 +86,7 @@ scheduler_configs:
   name: lr_scheduled
 
 # System
-log_level: debug
+log_level: info
 use_executor: False
 executor_start: "singularity exec --nv \
   --overlay /scratch/rg5022/images/rva.ext3:ro \

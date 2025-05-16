@@ -15,11 +15,24 @@ from pathlib import Path
 from typing import List, Tuple
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 
 from .data_utils import load_df
 from .string_utils import extract_param_from_string
+
+
+def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
+    """Convert tensor to numpy array with proper dtype handling.
+
+    Args:
+        tensor: PyTorch tensor in any precision format
+
+    Returns:
+        NumPy array in float32 format
+    """
+    return tensor.cpu().float().numpy()
 
 
 logger = logging.getLogger(__name__)
@@ -164,24 +177,37 @@ def load_responses(
         n_samples, n_timesteps, *_ = responses[layer_names[0]].shape
 
         for layer in layer_names:
-            if "power" in measures:
-                df[f"{layer}_power"] = (
-                    layer_power(responses[layer])
-                    .flatten()
-                    .repeat_interleave(n_classes)
+            try:
+                if "power" in measures:
+                    power_tensor = (
+                        layer_power(responses[layer])
+                        .flatten()
+                        .repeat_interleave(n_classes)
+                    )
+                    df[f"{layer}_power"] = tensor_to_numpy(power_tensor)
+
+                if "peak_time" in measures:
+                    peak_time_tensor = peak_time(responses[layer]).repeat_interleave(
+                        n_classes * n_timesteps
+                    )
+                    df[f"{layer}_peak_time"] = tensor_to_numpy(peak_time_tensor)
+
+                if "peak_height" in measures:
+                    peak_height_tensor = peak_height(
+                        responses[layer]
+                    ).repeat_interleave(n_classes * n_timesteps)
+                    df[f"{layer}_peak_height"] = tensor_to_numpy(peak_height_tensor)
+
+                if "peak_ratio" in measures:
+                    peak_ratio_tensor = peak_ratio(responses[layer]).repeat_interleave(
+                        n_classes * n_timesteps
+                    )
+                    df[f"{layer}_peak_ratio"] = tensor_to_numpy(peak_ratio_tensor)
+            except Exception as e:
+                logger.error(
+                    f"Failed to convert tensor to numpy for layer {layer}: {e}"
                 )
-            if "peak_time" in measures:
-                df[f"{layer}_peak_time"] = peak_time(
-                    responses[layer]
-                ).repeat_interleave(n_classes * n_timesteps)
-            if "peak_height" in measures:
-                df[f"{layer}_peak_height"] = peak_height(
-                    responses[layer]
-                ).repeat_interleave(n_classes * n_timesteps)
-            if "peak_ratio" in measures:
-                df[f"{layer}_peak_ratio"] = peak_ratio(
-                    responses[layer]
-                ).repeat_interleave(n_classes * n_timesteps)
+                raise
 
         dfs.append(df)
 

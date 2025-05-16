@@ -11,7 +11,6 @@ import logging
 
 import torch
 import torch.nn as nn
-from dynvision.utils import check_stability
 from pytorch_lightning import LightningModule
 
 
@@ -27,11 +26,8 @@ class BaseSolver(LightningModule):
         self,
         dt: float = 2.0,
         tau: Union[float, torch.nn.Parameter] = 5.0,
-        stability_check: bool = False,
     ) -> None:
         super().__init__()
-
-        self.stability_check = stability_check
 
         if isinstance(tau, (int, float)):
             self.tau = torch.nn.Parameter(torch.tensor(tau), requires_grad=False)
@@ -56,16 +52,14 @@ class EulerStep(BaseSolver):
     Args:
         dt: Integration time step
         tau: Time constant (can be trainable parameter)
-        stability_check: Whether to check numerical stability
     """
 
     def __init__(
         self,
         dt: float = 2.0,
         tau: Union[float, torch.nn.Parameter] = 5.0,
-        stability_check: bool = False,
     ) -> None:
-        super().__init__(dt=dt, tau=tau, stability_check=stability_check)
+        super().__init__(dt=dt, tau=tau)
 
     def forward(
         self, x: Optional[torch.Tensor], h: Optional[torch.Tensor] = None
@@ -92,10 +86,6 @@ class EulerStep(BaseSolver):
             y = self.dt / self.tau * x
         else:
             y = h + self.dt / self.tau * (x - h)
-
-        # Check stability if enabled
-        if self.stability_check:
-            check_stability(y)
 
         if use_own_hidden_state:
             self.hidden_state = y
@@ -130,9 +120,6 @@ class RungeKuttaStep(BaseSolver):
             k3 = (x - (h + self.dt * k2 / 2)) / self.tau
             k4 = (x - (h + self.dt * k3)) / self.tau
             y = h + self.dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6
-
-        if self.stability_check:
-            self.check_stability(y)
 
         if use_own_hidden_state:
             self.hidden_state = y

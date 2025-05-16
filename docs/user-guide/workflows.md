@@ -116,7 +116,7 @@ Run experiments with multiple parameter combinations:
 
 ```bash
 # Test different recurrence types
-snakemake -j4 --config \
+snakemake --config \
   experiment=contrast \
   model_args="{rctype: [full, self, depthpointwise]}"
 ```
@@ -130,7 +130,7 @@ Snakemake will:
 Evaluate different architectures:
 ```bash
 # Compare model architectures
-snakemake -j4 --config \
+snakemake --config \
   model_name="[AlexNet, DyRCNNx4]" \
   experiment=contrast
 ```

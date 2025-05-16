@@ -36,6 +36,7 @@ class RecurrenceBase(LightningModule):
     def __init__(self, max_weight_init: float = 0.05, **kwargs) -> None:
         super().__init__()
         self.max_weight_init = max_weight_init
+        self._parameters_initialized = False
 
     def validate_init_args(self, kwargs: Dict[str, Any]) -> None:
         """Validate required arguments for convolutional recurrence."""
@@ -111,7 +112,6 @@ class DepthwiseSeparableConnection(RecurrenceBase):
         self.parametrization = parametrization
 
         self._define_architecture()
-        self._init_parameters()
 
     def _define_architecture(self) -> None:
         """Define the architecture of the depthwise separable connection."""
@@ -219,7 +219,6 @@ class FullConnection(RecurrenceBase):
         self.parametrization = parametrization
 
         self._define_architecture()
-        self._init_parameters()
 
     def _define_architecture(self) -> None:
         """Define the architecture of the full connection."""
@@ -279,7 +278,6 @@ class SelfConnection(RecurrenceBase):
         self.requires_grad = fixed_weight is None
 
         self._define_architecture()
-        self._init_parameters()
 
     def _define_architecture(self) -> None:
         """Define the architecture of the self connection."""
@@ -399,7 +397,6 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
         feedforward_only: bool = False,
         **kwargs,
     ) -> None:
-        """Initialize the RecurrentConnectedConv2d."""
         super().__init__()
 
         # Store core convolution parameters
@@ -430,10 +427,12 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
         # Configure hidden state memory
         self._setup_hidden_state_memory(history_length)
 
-        # Define architecture and initialize
+        # Only define architecture, initialization happens in setup
         self._define_architecture()
-        self._init_parameters()
         self.reset()
+
+        # Flag to track initialization
+        self._parameters_initialized = False
 
     def _setup_recurrence_influence(self, influence: Union[Callable, str]) -> None:
         if isinstance(influence, str):
