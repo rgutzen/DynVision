@@ -137,6 +137,9 @@ def main():
             logger.info(f"Loading pretrained model from {pretrained_file}")
             model.load_state_dict(torch.load(pretrained_file, weights_only=True))
 
+    else:
+        model._init_parameters()
+
     config.output.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving model to {config.output}")
     if not len(model.state_dict()):

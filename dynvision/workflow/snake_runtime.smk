@@ -94,6 +94,7 @@ rule train_model:
         store_responses: Number of responses to store
         profiler: Training profiler configuration
         enable_progress_bar: Whether to show progress bar
+        execution_cmd: Complete execution command with conditional wrappers
     """
     input:
         model_state = project_paths.models \
@@ -125,8 +126,14 @@ rule train_model:
         profiler = config.profiler,
         use_ffcv = config.use_ffcv,
         enable_progress_bar = config.enable_progress_bar if project_paths.iam_on_cluster() else config.debug_enable_progress_bar,
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        use_distributed = config.use_distributed,
+        # Build complete execution command with conditional wrappers
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=getattr(config, 'use_distributed', False),
+            use_executor=getattr(config, 'use_executor', False)
+        ),
+        debug_script = SCRIPTS / 'runtime' / 'debug_ddp.py',
     output:
         model_state = project_paths.models \
             / '{model_name}' \
@@ -137,8 +144,7 @@ rule train_model:
         project_paths.benchmarks / 'train_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --config_path {params.config_path:q} \
             --input_model_state {input.model_state:q} \
             --model_name {wildcards.model_name} \
@@ -162,9 +168,7 @@ rule train_model:
             --loss {params.loss} \
             --n_timesteps {params.n_timesteps} \
             {params.model_arguments} \
-        {params.executor_close}
         """
-            # > {log} 2>&1
 
 rule test_model:
     """Evaluate a trained model on test data.

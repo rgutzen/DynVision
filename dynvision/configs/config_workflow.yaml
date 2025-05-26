@@ -23,8 +23,8 @@ model_args:
   rctype: 'full'
   # rctype: ['self', 'full', 'pointdepthwise', 'depthpointwise', 'local', 'localdepthwise']
   # rctype: ['local'] # ['localdepthwise'] 
-  skip: 'true'
-  feedback: 'true'
+  # skip: 'true'
+  # feedback: 'true'
   # supralin: [1.000000001, 1.0000001, 1.00001, 1.001, 1.1]
   # taugrad: 'true'
   # lossrt: 20
@@ -69,23 +69,3 @@ batch_size: 512
 accumulate_grad_batches: 1
 check_val_every_n_epoch: 10
 
-# Trainer configuration
-trainer:
-  # Gradient clipping settings
-  automatic_optimization: True
-  clip_gradients: True
-  gradient_clip_algorithm: "norm"  # "norm" or "value"
-  gradient_clip_val: 1.0  # global clip value
-
-  # Learning rate scaling settings
-  lr_scaling:
-    enabled: true  # whether to scale learning rate with batch size
-    ref_batch_size: 64  # reference batch size for scaling
-    threshold_factor: 8  # maximum scaling threshold
-
-  # Hardware and precision settings
-  # precision: "32"  # Changed to full precision for debugging feedback stability
-  accelerator: "auto"
-  devices: "auto"
-  strategy: "auto"
-  deterministic: false  # Consider setting to true if still unstable

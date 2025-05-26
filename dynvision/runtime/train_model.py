@@ -36,7 +36,12 @@ from dynvision.data.dataloader import (
 )
 from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
 from dynvision.project_paths import project_paths
-from dynvision.utils import parse_parameters, filter_kwargs, str_to_bool, handle_errors
+from dynvision.utils import (
+    parse_parameters,
+    filter_kwargs,
+    str_to_bool,
+    handle_errors,
+)
 from dynvision.visualization import callbacks as custom_callbacks
 
 logger = logging.getLogger(__name__)
@@ -134,24 +139,22 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--check_val_every_n_epoch",
         type=int,
-        default=1,
         help="Validation check interval",
     )
     parser.add_argument(
         "--accumulate_grad_batches",
         type=int,
-        default=1,
         help="Number of batches for gradient accumulation",
     )
     parser.add_argument(
-        "--precision", type=str, default="32", help="Numerical precision for training"
+        "--precision", type=str, help="Numerical precision for training"
     )
     parser.add_argument("--profiler", type=str, default="None", help="Profiler type")
     parser.add_argument(
-        "--benchmark", type=str_to_bool, default=False, help="Enable benchmarking mode"
+        "--benchmark", type=str_to_bool, help="Enable benchmarking mode"
     )
     parser.add_argument(
-        "--store_responses", type=int, default=0, help="Number of responses to store"
+        "--store_responses", type=int, help="Number of responses to store"
     )
     parser.add_argument(
         "--enable_progress_bar",
@@ -166,7 +169,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--loss_config", nargs="+", type=str, help="Loss function configurations"
     )
     parser.add_argument(
-        "--use_ffcv", type=str_to_bool, default=True, help="Use FFCV for data loading"
+        "--use_ffcv", type=str_to_bool, help="Use FFCV for data loading"
     )
     return parser
 
@@ -180,18 +183,89 @@ def setup_data_loaders(
     Args:
         config: Configuration object
         dataloader_args: Arguments for data loader initialization
+        trainer: PyTorch Lightning trainer (for distributed training info)
 
     Returns:
         Tuple containing:
             - Training data loader
             - Validation data loader
     """
+    is_distributed = False
 
-    if trainer is not None and hasattr(trainer, "local_rank"):
-        device = torch.device(
-            f"cuda:{trainer.local_rank}" if torch.cuda.is_available() else "cpu"
+    if (
+        trainer is not None
+        and hasattr(trainer, "world_size")
+        and trainer.world_size > 1
+    ):
+        is_distributed = True
+        current_rank = trainer.global_rank
+        current_world_size = trainer.world_size
+    elif (
+        os.environ.get("USE_DISTRIBUTED", "false").lower() == "true"
+        or int(os.environ.get("WORLD_SIZE", 1)) > 1
+    ):
+        # Fallback for singularity containers where trainer might not be fully initialized
+        is_distributed = True
+        current_rank = int(os.environ.get("RANK", "0"))
+        current_world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    else:
+        # Single GPU training
+        current_rank = 0
+        current_world_size = 1
+
+    if is_distributed:
+        # For distributed training, add rank and world size info
+        dataloader_args.update(
+            {
+                "rank": current_rank,
+                "world_size": current_world_size,
+                "distributed": True,
+            }
         )
-        dataloader_args["device"] = device
+        logger.info(
+            f"Setting up distributed data loading: rank={current_rank}, world_size={current_world_size}"
+        )
+
+    # Check if PyTorch distributed is actually initialized
+    is_distributed_initialized = (
+        torch.distributed.is_available() and torch.distributed.is_initialized()
+    )
+
+    logger.info(
+        f"Data loader setup: is_distributed={is_distributed}, "
+        f"world_size_env={current_world_size}, distributed_initialized={is_distributed_initialized}"
+    )
+
+    # Only use distributed data loading if PyTorch distributed is properly initialized
+    # Otherwise, let PyTorch Lightning handle the distributed setup later
+    if is_distributed_initialized and is_distributed:
+        current_rank = torch.distributed.get_rank()
+        current_world_size = torch.distributed.get_world_size()
+
+        dataloader_args.update(
+            {
+                "rank": current_rank,
+                "world_size": current_world_size,
+                "distributed": True,
+            }
+        )
+        logger.info(
+            f"Using distributed data loading: rank={current_rank}, world_size={current_world_size}"
+        )
+    else:
+        # Don't use distributed data loading - PyTorch Lightning will handle distribution
+        if is_distributed:
+            logger.info(
+                "Distributed training planned but process group not initialized yet - using single-process data loading"
+            )
+        else:
+            logger.info("Single GPU training - using single-process data loading")
+
+        dataloader_args.update(
+            {
+                "distributed": False,
+            }
+        )
 
     if config.use_ffcv:
         train_loader = get_ffcv_dataloader(
@@ -260,39 +334,82 @@ def setup_callbacks(config: Any) -> List[pl.Callback]:
 
 
 def setup_trainer(
-    callbacks: List[pl.Callback], config: Any, logger: pl.loggers.WandbLogger
+    callbacks: List[pl.Callback], config: Any, train_logger: pl.loggers.WandbLogger
 ) -> pl.Trainer:
-    """Set up the PyTorch Lightning trainer.
+    """Set up the PyTorch Lightning trainer."""
 
-    Args:
-        callbacks: List of callbacks
-        config: Configuration object
-        logger: WandB logger instance
-
-    Returns:
-        pl.Trainer: Configured trainer instance
-    """
-    # Get trainer settings from config
+    # Base trainer settings
     trainer_kwargs = {
         "callbacks": callbacks,
         "max_epochs": config.epochs,
-        "logger": logger,
+        "logger": train_logger,
         "precision": config.precision,
         "check_val_every_n_epoch": config.check_val_every_n_epoch,
         "accumulate_grad_batches": config.accumulate_grad_batches,
         "profiler": None if config.profiler == "None" else config.profiler,
         "enable_progress_bar": config.enable_progress_bar,
-        "benchmark": config.benchmark,
+        "benchmark": getattr(config, "benchmark", True),
         "log_every_n_steps": int(config.log_every_n_steps),
         "limit_train_batches": 1.0,  # Use full dataset
         "limit_val_batches": 0.25,  # Use smaller validation set
         "num_sanity_val_steps": 0,  # Skip sanity check
         "reload_dataloaders_every_n_epochs": 0,  # Don't reload unnecessarily
     }
+    # Check GPU availability - use PyTorch's detection
+    gpu_count = torch.cuda.device_count()
+    use_distributed = os.environ.get("USE_DISTRIBUTED", "false").lower() == "true"
 
-    # Add trainer settings from config
-    if hasattr(config, "trainer"):
-        trainer_kwargs.update(config.trainer)
+    logger.info(f"GPU configuration: gpu_count={gpu_count}")
+    logger.info(f"Distributed training enabled: {use_distributed}")
+
+    # Configure training strategy based on available resources
+    if use_distributed and gpu_count > 1:
+        # PyTorch Lightning DDP - let Lightning handle process spawning
+        logger.info(f"Using PyTorch Lightning DDP with {gpu_count} GPUs")
+
+        dist_config = config.distributed
+
+        # Set distributed training parameters
+        trainer_kwargs.update(
+            {
+                "strategy": dist_config.get("strategy", "ddp"),
+                "devices": gpu_count,  # Use all visible GPUs
+                "num_nodes": dist_config.get("num_nodes", 1),
+                "accelerator": dist_config.get("accelerator", "gpu"),
+                "sync_batchnorm": dist_config.get("sync_batchnorm", True),
+            }
+        )
+
+        # Add DDP-specific settings if using DDP
+        if trainer_kwargs["strategy"] == "ddp":
+            trainer_kwargs["strategy"] = pl.strategies.DDPStrategy(
+                find_unused_parameters=dist_config.get(
+                    "find_unused_parameters", False
+                ),
+                gradient_as_bucket_view=dist_config.get(
+                    "gradient_as_bucket_view", True
+                ),
+                process_group_backend=dist_config.get("process_group_backend", "nccl"),
+                # start_method="spawn",  # Force process spawning
+            )
+
+        # Log distributed training configuration
+        logger.info("Distributed training configuration:")
+        logger.info(f"Strategy: {trainer_kwargs.get('strategy')}")
+        logger.info(f"Number of devices: {trainer_kwargs.get('devices')}")
+        logger.info(f"Number of nodes: {trainer_kwargs.get('num_nodes')}")
+    else:
+        # Single GPU training
+        logger.info("Using single GPU training")
+        trainer_kwargs.update(
+            {
+                "devices": 1,
+                "strategy": "auto",
+                "num_nodes": 1,
+                "accelerator": "gpu" if torch.cuda.is_available() else "cpu",
+                "sync_batchnorm": False,
+            }
+        )
 
     trainer_kwargs = filter_kwargs(
         pl.Trainer,
@@ -323,10 +440,11 @@ def run_training(config) -> int:
     logger.info(f"Trying to use device {device}")
 
     # Scale learning rate if enabled
-    if hasattr(config.trainer, "lr_scaling") and config.trainer.lr_scaling.enabled:
+    print(f"Learning Rate: {config.learning_rate}")
+    if hasattr(config, "lr_scaling") and config.lr_scaling["enabled"]:
         scale = min(
-            config.batch_size / config.trainer.lr_scaling.ref_batch_size,
-            config.trainer.lr_scaling.threshold_factor,
+            config.batch_size / config.lr_scaling["ref_batch_size"],
+            config.lr_scaling["threshold_factor"],
         )
         config.learning_rate *= scale
         logger.info(
@@ -388,6 +506,10 @@ def run_training(config) -> int:
     model = model_class(**model_args).to(device)
     model.load_state_dict(state_dict)
 
+    # Determine residual timesteps before training to avoid issues in distributed mode
+    if model.hasattr("set_residual_timesteps"):
+        model.set_residual_timesteps()
+
     # Load checkpoint if available
     files = list(checkpoint_path.parent.glob(f"{checkpoint_path.name}*"))
     if files:
@@ -416,11 +538,60 @@ def run_training(config) -> int:
     return 0
 
 
+def setup_distributed_environment():
+    """Set up distributed training environment - robust minimal version."""
+    if not torch.cuda.is_available():
+        logger.warning("GPU is not available. Falling back on CPU.")
+        return
+
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+
+    # Determine if this is distributed training
+    is_distributed = world_size > 1
+
+    # Set CUDA device
+    if is_distributed:
+        # In distributed training, use LOCAL_RANK
+        logger.info(
+            f"Distributed training: world_size={world_size}, rank={rank}, local_rank={local_rank}, device=cuda:{local_rank}"
+        )
+    else:
+        # Single GPU training - use first available GPU or device 0
+        gpu_count = torch.cuda.device_count()
+        device_id = 0 if gpu_count > 0 else 0
+        logger.info(
+            f"Single GPU training: gpu_count={gpu_count}, device=cuda:{device_id}"
+        )
+
+    # Log any issues with environment setup
+    if is_distributed:
+        required_vars = ["MASTER_ADDR", "MASTER_PORT"]
+        missing_vars = [var for var in required_vars if not os.environ.get(var)]
+        if missing_vars:
+            logger.warning(
+                f"Distributed training detected but missing environment variables: {missing_vars}"
+            )
+
+
 def main() -> int:
+    """Main entry point for training."""
     parser = create_argument_parser()
     config = parse_parameters(parser)
     return run_training(config)
 
 
+def run_main():
+    """Entry point for distributed training."""
+    setup_distributed_environment()
+    return main()
+
+
 if __name__ == "__main__":
-    exit(main())
+    # Set process start method for SLURM
+    if os.environ.get("SLURM_JOB_ID"):
+        multiprocessing.set_start_method("spawn", force=True)
+
+    # Run training
+    exit(run_main())

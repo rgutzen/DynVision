@@ -351,3 +351,43 @@ rule checkpoint_to_statedict:
             > {log} 2>&1
         {config.executor_close}
         """
+
+
+def build_execution_command(script_path, use_distributed=False, use_executor=False):
+    """
+    Build the execution command with conditional wrappers.
+    
+    Args:
+        script_path: Path to the Python script to execute
+        use_distributed: Whether to use distributed setup
+        use_executor: Whether to use executor wrapper
+    
+    Returns:
+        String containing the complete execution command
+    """
+    cmd_parts = []
+    
+    # Add distributed setup if enabled
+    if use_distributed:
+        setup_script = SCRIPTS / 'cluster' / 'setup_distributed_execution.sh'
+        cmd_parts.append(f"source {setup_script} &&")
+    
+    # Add executor wrapper if enabled
+    if use_executor:
+        executor_script = SCRIPTS / 'cluster' / 'executor_wrapper.sh'
+        cmd_parts.append(str(executor_script))
+    
+    if use_distributed:
+        cmd_parts.append(
+            "torchrun "
+            "--nproc_per_node=${GPU_PER_NODE:-2} "
+            "--nnodes=${NUM_NODES:-1} "
+            "--node_rank=${NODE_RANK:-0} "
+            "--master_addr=${MASTER_ADDR} "
+            "--master_port=${MASTER_PORT} "
+            f"{script_path}"
+        )
+    else:
+        cmd_parts.append(f"python {script_path}")
+    
+    return " \\\n        ".join(cmd_parts)

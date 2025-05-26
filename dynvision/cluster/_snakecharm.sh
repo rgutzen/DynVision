@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Cluster execution script for the snakemake workflow using a cluster profile (e.g. slurm). Is being wrapped by snakecharm.sh, so call snakecharm.sh instead of this script directly.
 
-module load anaconda3/2020.07  # conda needs to be available
 source ~/.bashrc
 source ~/.bash_profile  # make sure custom commands are available
+module load anaconda3/2020.07  # conda needs to be available
 source activate snake-env  # environment that contains snakemake
 
+# Set paths
 current_dir=$(pwd)
 echo "current directory: $current_dir"
 

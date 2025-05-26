@@ -217,6 +217,10 @@ def get_ffcv_dataloader(
     train: bool = True,
     verbose: bool = False,
     device: Optional[torch.device] = None,
+    distributed: bool = False,
+    seed: int = 42,
+    rank: Optional[int] = None,
+    world_size: Optional[int] = None,
     **kwargs: Any,
 ) -> Loader:
     path = Path(path)
@@ -239,6 +243,33 @@ def get_ffcv_dataloader(
     order = optimized_params.order
     os_cache = optimized_params.os_cache
     dtype = optimized_params.dtype
+
+    if distributed:
+        # Try to get distributed info from parameters first, then from torch.distributed
+        if rank is not None and world_size is not None:
+            current_rank = rank
+            current_world_size = world_size
+        elif torch.distributed.is_available() and torch.distributed.is_initialized():
+            current_world_size = torch.distributed.get_world_size()
+            current_rank = torch.distributed.get_rank()
+        else:
+            # Fallback to environment variables (useful in singularity containers)
+            current_world_size = int(os.environ.get("WORLD_SIZE", "1"))
+            current_rank = int(os.environ.get("RANK", "0"))
+            logger.info(
+                f"Using environment variables for distributed info: rank={current_rank}, world_size={current_world_size}"
+            )
+
+        # Adjust batch size for distributed training
+        original_batch_size = batch_size
+        batch_size = max(1, batch_size // current_world_size)
+        logger.info(
+            f"Adjusted batch size from {original_batch_size} to {batch_size} for distributed training (rank {current_rank}/{current_world_size})"
+        )
+
+        order = OrderOption.RANDOM
+        os_cache = True
+        drop_last = True
 
     data_transform = get_data_transform(data_transform) or []
     target_transform = get_target_transform(target_transform) or []
@@ -279,5 +310,7 @@ def get_ffcv_dataloader(
         os_cache=os_cache,
         drop_last=drop_last,
         batches_ahead=batches_ahead,
+        distributed=distributed,
+        seed=seed,
         **kwargs,
     )

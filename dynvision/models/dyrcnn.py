@@ -27,14 +27,14 @@ from dynvision.model_components import (
     LightningBase,
     InputAdaption,
     RecurrentConnectedConv2d,
-    SkipConnection,
+    Skip,
     Feedback,
 )
 from dynvision.utils import alias_kwargs, str_to_bool
 
 __all__ = ["DyRCNNx2", "DyRCNNx4"]
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,7 +221,6 @@ class DyRCNNx4(DyRCNN, LightningBase):
                 mid_channels=36,
                 kernel_size=9,
                 bias=self.bias,
-                stability_check=self.stability_check,
             )
 
         # Common layer parameters
@@ -233,9 +232,7 @@ class DyRCNNx4(DyRCNN, LightningBase):
             history_length=self.t_feedforward,
             recurrence_delay=self.t_recurrence,
             max_weight_init=self.max_weight_init,
-            parametrization=lambda x: x,
             feedforward_only=self.feedforward_only,
-            stability_check=self.stability_check,
         )
 
         # Input adaptation
@@ -290,16 +287,13 @@ class DyRCNNx4(DyRCNN, LightningBase):
             **layer_params,
         )
         if self.skip:
-            self.addskip_V4 = SkipConnection(
+            self.addskip_V4 = Skip(
                 source=self.V1,
                 auto_adapt=True,
             )
         if self.feedback:
             self.addfeedback_V1 = Feedback(
                 source=self.V4,
-                # in_channels=self.V4.out_channels,
-                # out_channels=self.V1.in_channels,
-                # scale_factor=self.V4.dim_y / self.V1.dim_y,
                 auto_adapt=True,
             )
         self.tau_V4 = torch.nn.Parameter(
@@ -320,16 +314,13 @@ class DyRCNNx4(DyRCNN, LightningBase):
             **layer_params,
         )
         if self.skip:
-            self.addskip_IT = SkipConnection(
+            self.addskip_IT = Skip(
                 source=self.V2,
                 auto_adapt=True,
             )
         if self.feedback:
             self.addfeedback_V2 = Feedback(
                 source=self.IT,
-                # in_channels=self.IT.out_channels,
-                # out_channels=self.V2.in_channels,
-                # scale_factor=self.IT.dim_y / self.V2.dim_y,
                 auto_adapt=True,
             )
         self.tau_IT = torch.nn.Parameter(
@@ -346,18 +337,24 @@ class DyRCNNx4(DyRCNN, LightningBase):
         )
 
     def setup(self, stage: Optional[str]) -> None:
+        """Set up model for training or evaluation."""
+        # First let PyTorch Lightning set up the model (including precision)
+        super().setup(stage)
+
+        # Then initialize feedback connections
         if stage == "fit" and self.feedback:
-            # run forward pass to init feedback connections
             for layer_name in self.layer_names:
                 if hasattr(self, f"addfeedback_{layer_name}"):
-                    getattr(self, f"addfeedback_{layer_name}").reset_transform()
+                    feedback_module = getattr(self, f"addfeedback_{layer_name}")
+                    feedback_module.setup(stage)
 
-            x = torch.randn((1, *self.input_dims), device=self.device)
+            # Do a forward pass to initialize transforms
+            dtype = next(self.parameters()).dtype
+            device = next(self.parameters()).device
+            x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
             y = self.forward(x, store_responses=False)
 
             self.reset()
-
-        super().setup(stage)
 
     def _init_parameters(self) -> None:
         super()._init_parameters()
@@ -424,7 +421,6 @@ class DyRCNNx2(DyRCNN):
             tau=self.tau,
             history_length=self.t_feedforward,
             recurrence_delay=self.t_recurrence,
-            parametrization=lambda x: x,  # nn.utils.parametrizations.weight_norm,
             device=self.device,
         )
 
@@ -463,18 +459,27 @@ class DyRCNNx2(DyRCNN):
         )
 
     def setup(self, stage: Optional[str]) -> None:
+        # First let PyTorch Lightning set up the model (including precision)
+        super().setup(stage)
+
+        # Then initialize feedback connections with model's dtype
         if stage == "fit" and self.feedback:
-            # run forward pass to init feedback connections
+            # Get model dtype after Lightning setup
+            dtype = next(self.parameters()).dtype
+            device = next(self.parameters()).device
+
+            # Reset feedback transforms to force reinitialization
             for layer_name in self.layer_names:
                 if hasattr(self, f"addfeedback_{layer_name}"):
-                    getattr(self, f"addfeedback_{layer_name}").setup_transform = True
+                    feedback_module = getattr(self, f"addfeedback_{layer_name}")
+                    if feedback_module.auto_adapt:
+                        feedback_module.reset_transform()
 
-            x = torch.randn((1, *self.input_dims), device=self.device)
+            # Initialize with correct dtype
+            x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
             y = self.forward(x, store_responses=False)
 
             self.reset()
-
-        super().setup(stage)
 
     def _init_parameters(self):
         super()._init_parameters()

@@ -33,6 +33,30 @@ profiler: None
 benchmark: True
 enable_progress_bar: False
 # tbptt_length: None
+automatic_optimization: True
+clip_gradients: False
+gradient_clip_algorithm: "norm"  # "norm" or "value"
+gradient_clip_val: 1.0  # global clip value
+accelerator: "auto"
+devices: "auto"
+strategy: "auto"
+num_nodes: 1
+sync_batchnorm: False
+deterministic: False  # Consider setting to true if still unstable
+
+use_distributed: True
+distributed:
+  strategy: "ddp"  # Use standard DDP for SLURM compatibility
+  devices: 4  # Number of GPUs per node
+  num_nodes: 1  # Number of compute nodes
+  sync_batchnorm: True
+  precision: "bf16-mixed"  # Options: 32, 16-mixed, bf16-mixed
+  accelerator: "gpu"  # Explicitly set GPU accelerator
+  # Advanced DDP settings
+  find_unused_parameters: False
+  gradient_as_bucket_view: True
+  process_group_backend: "nccl"  # Use NCCL for GPU communication
+
 
 # Debugging settings
 debug_batch_size: 3
@@ -55,7 +79,7 @@ loss_configs:
     weight: 100
 loss_reaction_time: 0  # ms (+ residual time)
 non_label_index: -100
-      
+
 # Optimizer
 optimizer: Adam
 optimizer_kwargs:
@@ -84,6 +108,13 @@ scheduler_configs:
   frequency: 1
   monitor: train_loss
   name: lr_scheduled
+lr_scaling:
+  enabled: False  # whether to scale learning rate with batch size
+  ref_batch_size: 64  # reference batch size for scaling
+  threshold_factor: 8  # maximum scaling threshold
+
+# Trainer configuration
+# Gradient clipping settings
 
 # System
 log_level: info

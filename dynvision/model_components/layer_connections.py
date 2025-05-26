@@ -5,6 +5,7 @@ Modules to implement connections between non-successive layers in convolutional 
 from typing import Union, Callable, Optional, Dict, Any
 import logging
 from fractions import Fraction
+from dynvision.utils import apply_parametrization
 
 import torch
 import torch.nn as nn
@@ -38,7 +39,7 @@ class ConnectionBase(LightningModule):
         out_channels: Optional[int] = None,
         scale_factor: float = 1,
         bias: bool = True,
-        parametrization: Callable[[torch.Tensor], torch.Tensor] = lambda x: x,
+        parametrization: Callable[[torch.Tensor], torch.Tensor] = None,
         upsample_mode: str = "nearest",
         auto_adapt: bool = False,
         **kwargs: Any,
@@ -113,18 +114,18 @@ class ConnectionBase(LightningModule):
             )
 
         # Create convolution with explicit device and dtype
-        self.conv = self.parametrization(
-            nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                stride=stride,
-                padding=0,
-                bias=self.bias,
-                dtype=dtype,
-                device=device,
-            )
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+            stride=stride,
+            padding=0,
+            bias=self.bias,
+            dtype=dtype,
+            device=device,
         )
+        if self.parametrization is not None:
+            self.conv = apply_parametrization(self.conv, self.parametrization)
 
         self._init_parameters(in_channels, out_channels)
         self.setup_transform = False

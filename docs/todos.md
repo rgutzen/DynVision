@@ -1,8 +1,12 @@
-- fix feedback connections
-- rewrite standard models
+- [x] fix feedback connections
+- rewrite standard models in framework manner
 - add excitatory-inhibitory unit distinction
-- write unit tests
+- enable multi-gpu training
+    - check where attributes should be registered as buffer
+    - manage effective batch_size
+    - should learning rate be scaled with the effective batch size or overall batch size?
+- add unit tests
 - config for debug-mode (by default set when local)
-    - activate stability checks
+    - activate stability checks globally
     - activate verbose output
-- 
+- fix that tensors are not cast around dtypes too much

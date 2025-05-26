@@ -10,12 +10,13 @@ This module provides PyTorch-specific utilities:
 import logging
 import random
 from contextlib import contextmanager
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union, Callable
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 from torch.amp import autocast
+from torch import nn
 
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,8 @@ def ensure_same_device(
             index1 = device1.index if device1.index is not None else 0
             index2 = device2.index if device2.index is not None else 0
             return index1 == index2
+        if "cuda" in device1.type:
+            return device1.index == device2.index
         return True
 
     # Determine and normalize target device
@@ -170,7 +173,7 @@ def ensure_same_device(
         if inconsistent_vars:
             label_text = f" in {label}" if label else ""
             details = "\n  - " + "\n  - ".join(inconsistent_vars)
-            warnings.warn(
+            logging.warning(
                 f"After device alignment, some variables are still not on expected device{label_text}:"
                 f"{details}",
                 RuntimeWarning,
@@ -295,3 +298,24 @@ def on_same_device(
 
     with autocast(device_name, enabled=mixed_precision):
         yield args, kwargs
+
+
+def apply_parametrization(
+    module: nn.Module,
+    parametrization: Optional[Union[Callable[[nn.Module], nn.Module], str]] = None,
+) -> nn.Module:
+
+    if parametrization is None:
+        return module
+    elif callable(parametrization):
+        return parametrization(module)
+    elif isinstance(parametrization, str):
+        if parametrization == "identity":
+            return module
+        elif hasattr(nn.utils.parametrizations, parametrization):
+            parametrization_fn = getattr(nn.utils.parametrizations, parametrization)
+            return parametrization_fn(module)
+        else:
+            raise ValueError(f"Unknown parametrization: {parametrization}")
+    else:
+        raise TypeError("Parametrization must be a callable, string, or None.")

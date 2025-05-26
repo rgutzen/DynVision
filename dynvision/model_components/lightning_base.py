@@ -157,7 +157,7 @@ class UtilityBase(nn.Module):
         )
 
     def _determine_residual_timesteps(
-        self, max_timesteps=100, device=None, dtype=None
+        self, max_timesteps: int = 100, dtype: Optional[torch.dtype] = None
     ) -> int:
         """
         Determine the number of residual timesteps required for an input to be processed through the unrolled model.
@@ -165,6 +165,11 @@ class UtilityBase(nn.Module):
         This method uses a random input tensor to forward propagate through the model
         and checks for non-empty outputs. The process stops when a non-empty output
         is detected or a maximum of max_timesteps iterations is reached.
+
+        Args:
+            max_timesteps (int): Maximum number of timesteps to check. Defaults to 100.
+            dtype (Optional[torch.dtype]): Data type for the random input tensor. Defaults to None.
+            force_rerun (bool): Whether to force rerunning the determination process. Defaults to False.
 
         Returns:
             int: Number of residual timesteps required.
@@ -188,9 +193,11 @@ class UtilityBase(nn.Module):
 
         x = None
         t = -1
-        is_empty_output = lambda x: (x is None) or (
-            torch.all(x.eq(0)) or (torch.isnan(x).all()) or x.grad_fn is None
-        )
+
+        def is_empty_output(x):
+            return (x is None) or (
+                torch.all(x.eq(0)) or (torch.isnan(x).all()) or x.grad_fn is None
+            )
 
         logger.info("Determining residual timesteps...")
         with on_same_device(
@@ -212,6 +219,38 @@ class UtilityBase(nn.Module):
             self.reset()
 
         return t
+
+    def set_residual_timesteps(
+        self,
+        n_timesteps: Optional[int] = None,
+        max_timesteps: int = 100,
+        dtype: Optional[torch.dtype] = None,
+        force_rerun: bool = False,
+    ) -> None:
+        """
+        Set the number of residual timesteps for the model.
+
+        Args:
+            n_timesteps (Optional[int]): Number of residual timesteps to set. If None, it will be determined automatically.
+            max_timesteps (int): Maximum number of timesteps to check when determining residual timesteps. Defaults to 100.
+            dtype (Optional[torch.dtype]): Data type for the random input tensor used in determining residual timesteps. Defaults to None.
+            force_rerun (bool): Whether to force rerunning the determination process. Defaults to False.
+        """
+        if n_timesteps is not None:
+            if hasattr(self, "n_residual_timesteps"):
+                logger.debug(
+                    f"Overwriting existing n_residual_timesteps: {self.n_residual_timesteps} with {n_timesteps}"
+                )
+        elif hasattr(self, "n_residual_timesteps") and not force_rerun:
+            return
+        else:
+            n_timesteps = self._determine_residual_timesteps(
+                max_timesteps=max_timesteps, dtype=dtype
+            )
+
+        self.register_buffer(
+            "n_residual_timesteps", torch.tensor(n_timesteps, dtype=torch.int)
+        )
 
     def _add_missing_parameters_to_state_dict(
         self, state_dict: Dict[str, torch.Tensor]
@@ -490,16 +529,18 @@ class UtilityBase(nn.Module):
                         self.log(
                             f"{section}/{name}_{metric}",
                             getattr(param.data, metric)(),
+                            sync_dist=True,
                         )
                     elif metric == "full":
                         self.log(
                             f"{section}/{name}_{metric}",
                             param,
+                            sync_dist=True,
                         )
                     else:
                         logger.debug(f"Metric {metric} not available!")
             else:
-                self.log(f"{section}/{name}", param.data)
+                self.log(f"{section}/{name}", param.data, sync_dist=True)
 
     def get_classifier_dataframe(
         self, layer_name: str = defaults.classifier_name
@@ -690,7 +731,7 @@ class UtilityBase(nn.Module):
         logger.info(f"\nChecking {generator_name} {data_attr}:")
         logger.info("-" * 100)
         logger.info(
-            f"{'Module Name':<30} {'Shape':<20} {'Type':<10} {'Device':<12} {'Min':>10} {'Max':>10} {'Norm':>10}"
+            f"{'Module Name':<30} {'Shape':<20} {'Type':<16} {'Device':<8} {'Min':>8} {'Max':>8} {'Norm':>8}"
         )
         logger.info("-" * 100)
 
@@ -712,16 +753,16 @@ class UtilityBase(nn.Module):
                 if valid_data.numel() > 0:
                     shape_str = str(tensor.size()).replace("torch.Size", "")
                     logger.info(
-                        f"{name:<30} {shape_str:<20} {str(tensor.dtype):<10} {str(tensor.device):<12} "
-                        f"{valid_data.min().item():>10.4f} {valid_data.max().item():>10.4f} {valid_data.norm().item():>10.4f}"
+                        f"{name:<30} {shape_str:<20} {str(tensor.dtype):<16} {str(tensor.device):<8} "
+                        f"{valid_data.min().item():>8.3f} {valid_data.max().item():>8.3f} {valid_data.norm().item():>8.3f}"
                     )
                 else:
                     logger.warning(
-                        f"{name:<30} {'[NaN/Inf]':<20} {str(tensor.dtype):<10} {str(tensor.device):<12} {'---':>10} {'---':>10} {'---':>10}"
+                        f"{name:<30} {'[NaN/Inf]':<20} {str(tensor.dtype):<16} {str(tensor.device):<8} {'---':>8} {'---':>8} {'---':>8}"
                     )
             else:
                 logger.info(
-                    f"{name:<30} {'[scalar]':<20} {str(tensor.dtype):<10} {str(tensor.device):<12} {tensor:>10.4f} {tensor:>10.4f} {tensor:>10.4f}"
+                    f"{name:<30} {'[scalar]':<20} {str(tensor.dtype):<16} {str(tensor.device):<8} {tensor:>8.3f} {tensor:>8.3f} {tensor:>8.3f}"
                 )
 
             if (torch.isnan(tensor)).any():
@@ -744,7 +785,7 @@ class UtilityBase(nn.Module):
                 logger.warning(f"\t {name}: {param_dtype} (expected {expected_dtype})")
 
         if raise_error and (nonfinite_detected or dtype_mismatches):
-            raise ValueError("NaN/Inf values or dtype mismatches detected")
+            raise ValueError("NaN/Inf values or dtype mismatches detected!")
 
         return None
 
@@ -757,7 +798,7 @@ class UtilityBase(nn.Module):
 
     def _check_weights(self, raise_error: bool = False) -> None:
         self._check_tensors(
-            generator_name="named_trainable_parameters",
+            generator_name="named_parameters",
             data_attr="data",
             raise_error=raise_error,
         )
@@ -875,6 +916,27 @@ class UtilityBase(nn.Module):
             )
             return default
 
+    def _check_distributed_mode(self):
+        # Check if in distributed mode
+        if hasattr(self.trainer, "strategy") and hasattr(
+            self.trainer.strategy, "name"
+        ):
+            if "ddp" in self.trainer.strategy.name:
+                # Log distributed training info
+                world_size = torch.distributed.get_world_size()
+                local_rank = torch.distributed.get_local_rank()
+                global_rank = torch.distributed.get_rank()
+
+                logger.info(
+                    f"Distributed training: world_size={world_size}, "
+                    f"local_rank={local_rank}, global_rank={global_rank}"
+                )
+
+                # Update batch sizes for proper scaling
+                if hasattr(self, "batch_size"):
+                    self.effective_batch_size = self.batch_size * world_size
+                    logger.info(f"Global batch size: {self.effective_batch_size}")
+
 
 class LightningBase(UtilityBase, pl.LightningModule):
     """
@@ -917,6 +979,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         scheduler_kwargs: Dict[str, Any] = defaults.scheduler_kwargs,
         scheduler_configs: Dict[str, Dict[str, Any]] = defaults.scheduler_configs,
         log_level: str = defaults.log_level,
+        log_every_n_steps: int = defaults.log_every_n_steps,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -944,6 +1007,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         self.scheduler = scheduler
         self.scheduler_kwargs = scheduler_kwargs
         self.scheduler_configs = scheduler_configs
+        self.log_every_n_steps = int(log_every_n_steps)
 
         # Process the input dims and timesteps
         x = torch.randn(
@@ -976,9 +1040,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         Args:
             stage (Optional[str]): Stage of the setup process (e.g., "fit", "test").
         """
-        self.n_residual_timesteps = self._determine_residual_timesteps(
-            device=self.device
-        )
+        self.set_residual_timesteps()
         self.reset()
         self._init_loss(self.criterion_params)
         self._ensure_parameter_dtypes()
@@ -1502,7 +1564,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         loss, accuracy, *_ = self.model_step(batch, batch_idx, store_responses=False)
 
         metrics = {"train_loss": loss, "train_accuracy": accuracy}
-        self.log_dict(metrics, prog_bar=True, batch_size=batch_size)
+        self.log_dict(metrics, prog_bar=True, batch_size=batch_size, sync_dist=True)
         return loss
 
     def validation_step(
@@ -1524,7 +1586,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         )
 
         metrics = {"val_loss": loss, "val_accuracy": accuracy}
-        self.log_dict(metrics, prog_bar=True, batch_size=batch_size)
+        self.log_dict(metrics, prog_bar=True, batch_size=batch_size, sync_dist=True)
 
         self._clear_gpu_memory()
         return loss, accuracy
@@ -1548,7 +1610,9 @@ class LightningBase(UtilityBase, pl.LightningModule):
         )
 
         metrics = {"test_loss": loss, "test_accuracy": accuracy}
-        self.log_dict(metrics, prog_bar=True, on_step=True, batch_size=batch_size)
+        self.log_dict(
+            metrics, prog_bar=True, on_step=True, batch_size=batch_size, sync_dist=True
+        )
 
         return loss, accuracy
 
@@ -1573,7 +1637,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
     def on_train_batch_end(
         self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
     ) -> None:
-        self.log_param_stats()
+        if batch_idx % self.log_every_n_steps == 0:
+            self.log_param_stats()
 
     def on_test_start(self) -> None:
         self.guess_indices = []
@@ -1745,7 +1810,11 @@ class LightningBase(UtilityBase, pl.LightningModule):
         plt.savefig(buffer, format="png")
         buffer.seek(0)
         plt.close()
-        self.log({f"{key}", wandb.Image(buffer, caption=key)}, step=step)
+        self.log(
+            {f"{key}", wandb.Image(buffer, caption=key)},
+            step=step,
+            rank_zero_only=True,
+        )
 
 
 if __name__ == "__main__":

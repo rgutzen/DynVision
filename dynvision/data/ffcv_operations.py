@@ -3,7 +3,6 @@ from ffcv.pipeline.allocation_query import AllocationQuery
 from dataclasses import replace
 from typing import Callable, Optional, Tuple
 from ffcv.pipeline.state import State
-import numpy as np
 
 
 class ExtendDataTimeFFCV(Operation):
