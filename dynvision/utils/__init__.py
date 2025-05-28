@@ -61,8 +61,6 @@ from .model_utils import (
     check_weights,
     handle_errors,
     load_model_and_weights,
-    test_pickleable,
-    debug_model_pickling,
 )
 
 from .visualization_utils import (
@@ -107,6 +105,7 @@ __all__ = [
     "ensure_same_dtype",
     "on_same_device",
     "set_seed",
+    "apply_parametrization",
     # Model utilities
     "check_stability",
     "check_weights",

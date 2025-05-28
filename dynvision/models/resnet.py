@@ -21,7 +21,7 @@ from torchvision.models import resnet
 from dynvision.model_components import LightningBase
 from dynvision.utils import check_stability
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -399,11 +399,6 @@ def test_resnet_model(
 
 
 if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
 
     # Test all ResNet variants
     for model_class in [ResNet18, ResNet34, ResNet50, ResNet101, ResNet152]:

@@ -37,11 +37,6 @@ automatic_optimization: True
 clip_gradients: False
 gradient_clip_algorithm: "norm"  # "norm" or "value"
 gradient_clip_val: 1.0  # global clip value
-accelerator: "auto"
-devices: "auto"
-strategy: "auto"
-num_nodes: 1
-sync_batchnorm: False
 deterministic: False  # Consider setting to true if still unstable
 
 use_distributed: True
@@ -59,11 +54,13 @@ distributed:
 
 
 # Debugging settings
-debug_batch_size: 3
-debug_check_val_every_n_epoch: 1
-debug_log_every_n_steps: 1
-debug_accumulate_grad_batches: 1
-debug_enable_progress_bar: True
+use_debug_mode: False
+debug_mode:
+  batch_size: 3
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 1
+  accumulate_grad_batches: 1
+  enable_progress_bar: True
 
 # Test run
 logger: False

@@ -131,7 +131,7 @@ def setup_data_loader(
     Returns:
         DataLoader: Configured data loader instance
     """
-    data_args = filter_kwargs(data_loader_class, kwargs)
+    data_args, _ = filter_kwargs(data_loader_class, kwargs)
     # Remove specific arguments that should not be passed
     for arg in ["dataset", "shuffle", "num_workers"]:
         data_args.pop(arg, None)

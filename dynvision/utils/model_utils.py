@@ -12,7 +12,6 @@ from functools import wraps
 from types import SimpleNamespace
 from typing import Any, Callable, Tuple, Optional
 from pathlib import Path
-import pickle
 import traceback
 from .config_utils import filter_kwargs
 
@@ -161,7 +160,7 @@ def load_model_and_weights(
     n_classes = len(state_dict[last_key])
 
     model_class = getattr(models, model_name)
-    model_args = filter_kwargs(model_class, vars(config))
+    model_args, _ = filter_kwargs(model_class, vars(config))
     model_args.update({"n_classes": n_classes})
 
     model = model_class(**model_args)

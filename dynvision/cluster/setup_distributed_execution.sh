@@ -37,9 +37,11 @@ elif [ -n "${SLURM_JOB_GPUS:-}" ]; then
     echo "GPU count from SLURM_JOB_GPUS: $CUDA_VISIBLE_COUNT"
 else
     # Fallback: check if any GPU device files exist
-    CUDA_VISIBLE_COUNT=$(ls /dev/nvidia[0-9]* 2>/dev/null | wc -l || echo "0")
+    CUDA_VISIBLE_COUNT=$(ls /dev/nvidia[0-9]* 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
     echo "GPU count from device files: $CUDA_VISIBLE_COUNT"
 fi
+
+CUDA_VISIBLE_COUNT=$(echo "$CUDA_VISIBLE_COUNT" | tr -d '[:space:]') # Trim whitespace or newlines
 
 echo "============= Training Mode ============="
 # Use the actual number of visible GPUs for distributed training decision
@@ -58,7 +60,7 @@ NODE_RANK=${SLURM_NODEID:-0}
 LOCAL_RANK=${SLURM_LOCALID:-0}
 RANK=${SLURM_PROCID:-0}
 NUM_NODES=${SLURM_JOB_NUM_NODES:-1}
-GPU_PER_NODE=$(( ${CUDA_VISIBLE_COUNT:-1} / ${NUM_NODES:-1} ))
+GPU_PER_NODE=$(( ${CUDA_VISIBLE_COUNT:-1} / ${NUM_NODES:-1} )) || GPU_PER_NODE=1
 
 # Export all variables for both host and container environments
 export MASTER_PORT MASTER_ADDR WORLD_SIZE NODE_RANK LOCAL_RANK RANK USE_DISTRIBUTED NUM_NODES GPU_PER_NODE

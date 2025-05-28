@@ -19,7 +19,7 @@ from dynvision.utils import check_stability
 
 __all__ = ["CorNetZ", "CorNetRT"]
 
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

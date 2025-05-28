@@ -29,6 +29,9 @@ package_dir = Path(inspect.getfile(lambda: None)).parents[2].resolve()
 sys.path.insert(0, str(package_dir))
 
 from dynvision.project_paths import project_paths
+from dynvision.utils import str_to_bool
+
+pylogger = logging.getLogger('workflow.utils')
 
 # Load configuration files in priority order
 configfile: project_paths.scripts.configs / 'config_defaults.yaml'
@@ -36,6 +39,21 @@ configfile: project_paths.scripts.configs / 'config_data.yaml'
 # configfile: project_paths.scripts.configs / 'config_visualization.yaml'
 configfile: project_paths.scripts.configs / 'config_experiments.yaml'
 configfile: project_paths.scripts.configs / 'config_workflow.yaml'
+
+# Set config modes
+def set_config_modes(config: Dict[str, Any]) -> None:
+    use_mode_keys = [key for key in config.keys() if key.startswith('use_') and key.endswith('_mode')]
+    for key in use_mode_keys:
+        if config[key]:
+            mode = key.replace('use_', '').replace('_mode', '')
+            if mode in config:
+                config.update(config[mode])
+                pylogger.info(f"{mode} mode is enabled")
+    if config.get('use_debug_mode', False) or config.get('verbose', False):
+        pylogger.setLevel(logging.DEBUG)
+        config.update(config['debug_mode'])
+
+set_config_modes(config)
 
 # Convert to SimpleNamespace for dot notation access
 config = SimpleNamespace(**config)
@@ -45,9 +63,7 @@ runtime_config = project_paths.scripts.configs / 'config_runtime.yaml'
 with open(runtime_config, 'w') as f:
     f.write("# This is an automatically compiled file. Do not edit manually!\n")
     json.dump(config.__dict__, f, indent=4)
-
    
-pylogger = logging.getLogger('workflow.utils')
 
 # Print configuration summary
 print("Loaded configurations:")
@@ -76,7 +92,7 @@ wildcard_constraints:
     experiment = r'[a-z]+',
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)'
 
-localrules: all, symlink_data_subsets, symlink_data_groups, experiment, plot_adaption, plot_experiments_on_models
+localrules: all, symlink_data_subsets, symlink_data_groups, experiment
 ruleorder: symlink_data_groups > symlink_data_subsets
 
 # Set up logging
@@ -340,15 +356,12 @@ rule checkpoint_to_statedict:
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     output:
         temp(project_paths.models / '{model_identifier}.ckpt2pt')
-    # log:
-    #     project_paths.logs / "checkpoint_to_statedict_{model_identifier}.log"
     shell:
         """
         {config.executor_start}
         python {input.script:q} \
             --checkpoint_dir {input.checkpoint_dir:q} \
             --output {output:q} \
-            > {log} 2>&1
         {config.executor_close}
         """
 
@@ -377,7 +390,7 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
         executor_script = SCRIPTS / 'cluster' / 'executor_wrapper.sh'
         cmd_parts.append(str(executor_script))
     
-    if use_distributed:
+    if use_distributed:  # TODO: add check if distributed resources are available
         cmd_parts.append(
             "torchrun "
             "--nproc_per_node=${GPU_PER_NODE:-2} "

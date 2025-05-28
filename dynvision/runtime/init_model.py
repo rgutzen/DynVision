@@ -38,7 +38,7 @@ parser.add_argument(
 def init_model(model_name, **kwargs):
     if hasattr(models, model_name):
         model_class = getattr(models, model_name)
-        kwargs = filter_kwargs(model_class, kwargs)
+        kwargs, _ = filter_kwargs(model_class, kwargs)
         model = model_class(**kwargs)
         # model.setup(stage="fit")
         return model

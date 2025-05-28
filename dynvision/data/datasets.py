@@ -317,4 +317,4 @@ def get_dataset(
         **kwargs,
     )
 
-    return dataset_class(**filter_kwargs(dataset_class, dataset_kwargs))
+    return dataset_class(**filter_kwargs(dataset_class, dataset_kwargs)[0])

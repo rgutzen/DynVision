@@ -61,7 +61,7 @@ class StandardDataLoader(DataLoader):
         )
         kwargs["prefetch_factor"] = prefetch_factor
         kwargs["persistent_workers"] = persistent_workers and kwargs["num_workers"]
-        kwargs = filter_kwargs(DataLoader, kwargs)
+        kwargs, _ = filter_kwargs(DataLoader, kwargs)
 
         super().__init__(*args, **kwargs)
         self.n_timesteps = int(n_timesteps)

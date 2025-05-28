@@ -334,10 +334,10 @@ def setup_callbacks(config: Any) -> List[pl.Callback]:
 
 
 def setup_trainer(
-    callbacks: List[pl.Callback], config: Any, train_logger: pl.loggers.WandbLogger
+    config: Any,
+    train_logger: pl.loggers.WandbLogger,
+    callbacks: List[pl.Callback] = [],
 ) -> pl.Trainer:
-    """Set up the PyTorch Lightning trainer."""
-
     # Base trainer settings
     trainer_kwargs = {
         "callbacks": callbacks,
@@ -411,7 +411,7 @@ def setup_trainer(
             }
         )
 
-    trainer_kwargs = filter_kwargs(
+    trainer_kwargs, _ = filter_kwargs(
         pl.Trainer,
         trainer_kwargs,
     )
@@ -453,9 +453,7 @@ def run_training(config) -> int:
 
     # Setup training
     callbacks, checkpoint_path = setup_callbacks(config)
-
-    # Initialize trainer
-    trainer = setup_trainer(callbacks, config, pl_logger)
+    trainer = setup_trainer(callbacks=callbacks, config=config, train_logger=pl_logger)
 
     # Setup data loaders
     data_mean = config.data_statistics[config.data_name]["mean"]
@@ -502,7 +500,7 @@ def run_training(config) -> int:
     setattr(config, "n_classes", n_classes)
 
     model_class = getattr(models, config.model_name)
-    model_args = filter_kwargs(model_class, vars(config))
+    model_args, _ = filter_kwargs(model_class, vars(config))
     model = model_class(**model_args).to(device)
     model.load_state_dict(state_dict)
 
@@ -538,43 +536,6 @@ def run_training(config) -> int:
     return 0
 
 
-def setup_distributed_environment():
-    """Set up distributed training environment - robust minimal version."""
-    if not torch.cuda.is_available():
-        logger.warning("GPU is not available. Falling back on CPU.")
-        return
-
-    world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    rank = int(os.environ.get("RANK", "0"))
-    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-
-    # Determine if this is distributed training
-    is_distributed = world_size > 1
-
-    # Set CUDA device
-    if is_distributed:
-        # In distributed training, use LOCAL_RANK
-        logger.info(
-            f"Distributed training: world_size={world_size}, rank={rank}, local_rank={local_rank}, device=cuda:{local_rank}"
-        )
-    else:
-        # Single GPU training - use first available GPU or device 0
-        gpu_count = torch.cuda.device_count()
-        device_id = 0 if gpu_count > 0 else 0
-        logger.info(
-            f"Single GPU training: gpu_count={gpu_count}, device=cuda:{device_id}"
-        )
-
-    # Log any issues with environment setup
-    if is_distributed:
-        required_vars = ["MASTER_ADDR", "MASTER_PORT"]
-        missing_vars = [var for var in required_vars if not os.environ.get(var)]
-        if missing_vars:
-            logger.warning(
-                f"Distributed training detected but missing environment variables: {missing_vars}"
-            )
-
-
 def main() -> int:
     """Main entry point for training."""
     parser = create_argument_parser()
@@ -584,7 +545,6 @@ def main() -> int:
 
 def run_main():
     """Entry point for distributed training."""
-    setup_distributed_environment()
     return main()
 
 

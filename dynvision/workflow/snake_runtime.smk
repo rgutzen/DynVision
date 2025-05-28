@@ -112,20 +112,20 @@ rule train_model:
     params:
         config_path = CONFIGS,
         epochs = config.epochs,
-        batch_size = config.batch_size if project_paths.iam_on_cluster() else config.debug_batch_size,
+        batch_size = config.batch_size,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         n_timesteps = config.n_timesteps, 
         learning_rate = config.learning_rate,
         loss = config.loss,
         resolution = lambda w: config.data_resolution[w.data_name],
-        check_val_every_n_epoch = config.check_val_every_n_epoch if project_paths.iam_on_cluster() else config.debug_check_val_every_n_epoch,
-        log_every_n_steps = config.log_every_n_steps if project_paths.iam_on_cluster() else config.debug_log_every_n_steps,
-        accumulate_grad_batches = config.accumulate_grad_batches if project_paths.iam_on_cluster() else config.debug_accumulate_grad_batches,
+        check_val_every_n_epoch = config.check_val_every_n_epoch,
+        log_every_n_steps = config.log_every_n_steps,
+        accumulate_grad_batches = config.accumulate_grad_batches,
         precision = config.precision,
         store_responses = config.store_val_responses,
         profiler = config.profiler,
         use_ffcv = config.use_ffcv,
-        enable_progress_bar = config.enable_progress_bar if project_paths.iam_on_cluster() else config.debug_enable_progress_bar,
+        enable_progress_bar = config.enable_progress_bar,
         use_distributed = config.use_distributed,
         # Build complete execution command with conditional wrappers
         execution_cmd = lambda w, input: build_execution_command(
@@ -133,7 +133,6 @@ rule train_model:
             use_distributed=getattr(config, 'use_distributed', False),
             use_executor=getattr(config, 'use_executor', False)
         ),
-        debug_script = SCRIPTS / 'runtime' / 'debug_ddp.py',
     output:
         model_state = project_paths.models \
             / '{model_name}' \

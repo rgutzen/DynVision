@@ -106,12 +106,16 @@ def filter_kwargs(
         return kwargs
 
     if inspect.isclass(function):
-        filtered_kwargs = {}
+        known, unknown = {}, {}
         for base in reversed(inspect.getmro(function)):
             if base == object:
                 continue
-            filtered_kwargs.update(filter_kwargs(base.__init__, kwargs))
-        return filtered_kwargs
+
+            base_known, base_unknown = filter_kwargs(base.__init__, kwargs)
+            known.update(base_known)
+            unknown.update(base_unknown)
+
+        return known, unknown
 
     else:
         function_args = set(inspect.signature(function).parameters.keys())
@@ -127,8 +131,11 @@ def filter_kwargs(
                     if alias in kwargs:
                         function_args.add(alias)
                         function_args.discard(original)
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in function_args}
-        return filtered_kwargs
+
+        known = {k: v for k, v in kwargs.items() if k in function_args}
+        unknown = {k: v for k, v in kwargs.items() if k not in function_args}
+
+        return known, unknown
 
 
 def update_config_with_kwargs(

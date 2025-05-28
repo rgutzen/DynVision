@@ -6,7 +6,7 @@ from dynvision.model_components import (
     EulerStep,
     LightningBase,
     RecurrentConnectedConv2d,
-    SkipConnection,
+    Skip,
 )
 from dynvision.project_paths import project_paths
 from dynvision.utils import alias_kwargs, str_to_bool
@@ -202,7 +202,7 @@ class CordsNet(LightningBase):
                 setattr(
                     self,
                     f"skip_{layer_name}",
-                    SkipConnection(
+                    Skip(
                         in_channels=channels[i - 1],
                         out_channels=channels[i],
                         scale_factor=strides[i - 1],
