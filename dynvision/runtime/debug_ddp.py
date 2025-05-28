@@ -11,7 +11,7 @@ sys.path.append("/home/rg5022/DynVision")
 
 from dynvision import models
 from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
-from dynvision.runtime.train_model import setup_callbacks
+from dynvision.runtime.train_model_new import setup_callbacks
 from dynvision.project_paths import project_paths
 
 logging.basicConfig(level=logging.DEBUG)
