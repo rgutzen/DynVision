@@ -162,6 +162,8 @@ def main() -> None:
             data_transform=None,
             target_transform=f"{args.data_name}_all",
             pil_to_tensor=False,
+            dtype=None,
+            normalize=None,
         )
 
         # Split dataset

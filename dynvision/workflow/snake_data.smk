@@ -9,11 +9,6 @@ This workflow handles all data-related operations including:
 The workflow supports multiple dataset types:
 - Standard datasets (MNIST, CIFAR10, CIFAR100, TinyImageNet)
 - External datasets (ImageNet)
-
-Usage:
-    # Prepare CIFAR10 dataset
-    snakemake build_ffcv_datasets --config data_name=cifar10
-
 """
 
 logger = logging.getLogger('workflow.data')
@@ -46,30 +41,28 @@ rule get_data:
             / 'folder.link',
         ext = 'png',
         data_name = lambda w: ''.join([c.upper() if c.isalpha() else c for c in w.data_name]),
-        executor_start = get_param('executor_start') if get_param('use_executor') else '',
-        executor_close = get_param('executor_close') if get_param('use_executor') else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         flag = directory(project_paths.data.raw \
             / '{data_name}' \
             / '{data_subset}' )
     wildcard_constraints:
         data_name = r"cifar10|cifar100|mnist"
-    # log:
-    #     project_paths.logs / 'get_data_{data_name}_{data_subset}.log'
     benchmark:
         project_paths.benchmarks / 'get_data_{data_name}_{data_subset}.txt'
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --output {params.output:q} \
             --data_name {params.data_name} \
             --raw_data_path {params.raw_data_path:q} \
             --subset {wildcards.data_subset} \
-            --ext {params.ext} \
-        {params.executor_close}
+            --ext {params.ext}
         """
-            # > {log} 2>&1
 
 rule symlink_data_subsets:
     """Create symlinks for dataset subsets.
@@ -88,25 +81,18 @@ rule symlink_data_subsets:
     params:
         parent = lambda wildcards, output: Path(output.flag).parent,
         source = lambda wildcards, output: Path(output.flag).with_suffix(''),
-        executor_start = get_param('executor_start') if get_param('use_executor') else '',
-        executor_close = get_param('executor_close') if get_param('use_executor') else ''
     output:
         flag = project_paths.data.interim \
             / '{data_name}' \
             / '{data_subset}_{data_group}' \
             / '{category}.link'
     group: "dataprep"
-    # log:
-    #     project_paths.logs / 'symlink_data_subsets_{data_name}_{data_subset}_{data_group}_{category}.log'
     shell:
         """
-        {params.executor_start}
         (mkdir -p {params.parent:q} && \
         ln -sf {input:q} {params.source:q} && \
         touch {output.flag:q}) 
-        {params.executor_close}
         """
-        # > {log} 2>&1
 
 rule symlink_data_groups:
     """Create symlinks for data groups.
@@ -133,13 +119,10 @@ rule symlink_data_groups:
             / '{data_subset}_{data_group}' \
             / 'folder.link'
     group: "dataprep"
-    # log:
-    #     project_paths.logs / 'symlink_data_groups_{data_name}_{data_subset}_{data_group}.log'
     shell:
         """
         touch {output.flag:q} 
         """
-        # > {log} 2>&1
 
 rule build_ffcv_datasets:
     """Build FFCV datasets for faster data loading.
@@ -164,29 +147,27 @@ rule build_ffcv_datasets:
         data = project_paths.data.interim / '{data_name}' / 'train_all' / 'folder.link'
     params:
         train_ratio = get_param('train_ratio'),
-        max_resolution = lambda w: get_param('data_resolution')[w.data_name],
-        executor_start = get_param('executor_start') if get_param('use_executor') else '',
-        executor_close = get_param('executor_close') if get_param('use_executor') else ''
+        max_resolution = lambda w: config.data_resolution[w.data_name],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),    
     output:
         train = project_paths.data.processed / '{data_name}' / 'train_all' / 'train.beton',
         val = project_paths.data.processed / '{data_name}' / 'train_all' / 'val.beton'
-    # log:
-    #     project_paths.logs / 'build_datasets_ffcv_{data_name}.log'
     benchmark:
         project_paths.benchmarks / 'build_ffcv_datasets_{data_name}.txt'
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --input {input.data:q} \
             --output_train {output.train:q} \
             --output_val {output.val:q} \
             --train_ratio {params.train_ratio} \
             --data_name {wildcards.data_name} \
-            --max_resolution {params.max_resolution} \
-        {params.executor_close}
+            --max_resolution {params.max_resolution} 
         """
-            # > {log} 2>&1
 
 # Log workflow initialization
 logger.info("Data workflow initialized")

@@ -253,7 +253,7 @@ def get_dataset(
     target_transform: Optional[Union[str, Callable]] = None,
     dataset_class: Callable[..., Dataset] = PathFolder,
     normalize: Optional[Tuple[List[float], List[float]]] = None,
-    dtype: Optional[torch.dtype] = torch.float16,
+    dtype: Optional[torch.dtype] = None,
     cache_size: int = 1000,
     pin_memory: bool = False,
     pil_to_tensor: bool = True,
@@ -304,8 +304,8 @@ def get_dataset(
     # image -> tensor
     if pil_to_tensor:
         transform.append(tv.transforms.PILToTensor())
-    else:
-        transform.append(tv.transforms.ToTensor())
+    # else:
+    #     transform.append(tv.transforms.ToTensor())
 
     # dtype transform
     if dtype is not None:

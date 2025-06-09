@@ -6,13 +6,6 @@ This workflow handles all model-related operations including:
 - Model training
 - Model evaluation
 - Result collection
-
-Usage:
-    # Train a model
-    snakemake -c1 train_model model_name=DyRCNNx4 seed=0001
-
-    # Evaluate a model
-    snakemake -c1 test_model model_name=DyRCNNx4 seed=0001
 """
 
 logger = logging.getLogger('workflow.runtime')
@@ -42,20 +35,20 @@ rule init_model:
         config_path = CONFIGS,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         init_with_pretrained = get_param('init_with_pretrained'),
-        executor_start = get_param('executor_start') if get_param('use_executor') else '',
-        executor_close = get_param('executor_close') if get_param('use_executor') else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_init.pt'
-    # log:
-    #     project_paths.logs / 'init_model_{model_name}{model_args}_{seed}_{data_name}.log'
     benchmark:
         project_paths.benchmarks / 'init_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --config_path {params.config_path:q} \
             --model_name {wildcards.model_name} \
             --dataset {input.dataset:q} \
@@ -63,10 +56,8 @@ rule init_model:
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
             --init_with_pretrained {params.init_with_pretrained} \
-            {params.model_arguments} \
-        {params.executor_close}
+            {params.model_arguments} 
         """
-            # > {log} 2>&1
 
 rule train_model:
     """Train a model on specified dataset.
@@ -100,18 +91,18 @@ rule train_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_init.pt',
-        dataset_link = project_paths.data.interim \
+        dataset_link = lambda w: project_paths.data.interim \
             / '{data_name}' \
             / 'train_all' \
-            / 'folder.link',
-        dataset_train = project_paths.data.processed \
+            / 'folder.link' if not get_param('use_ffcv', False)(w) else [],
+        dataset_train = lambda w: project_paths.data.processed \
             / '{data_name}' \
             / 'train_all' \
-            / 'train.beton',
-        dataset_val = project_paths.data.processed \
+            / 'train.beton' if get_param('use_ffcv', False)(w) else [],
+        dataset_val = lambda w: project_paths.data.processed \
             / '{data_name}' \
             / 'train_all' \
-            / 'val.beton',
+            / 'val.beton' if get_param('use_ffcv', False)(w) else [],
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
         config_path = CONFIGS,
@@ -139,8 +130,8 @@ rule train_model:
         # Build complete execution command with conditional wrappers
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
-            use_distributed=getattr(config, 'use_distributed_mode', False),
-            use_executor=getattr(config, 'use_executor', False)
+            use_distributed=get_param('use_distributed_mode', False)(w),
+            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         model_state = project_paths.models \
@@ -171,14 +162,14 @@ rule train_model:
             --precision {params.precision} \
             --normalize {params.normalize:q} \
             --profiler {params.profiler} \
+            --enable_progress_bar {params.enable_progress_bar} \
             --store_responses {params.store_responses} \
             --use_ffcv {params.use_ffcv} \
             --loss {params.loss} \
             --n_timesteps {params.n_timesteps} \
             --data_timesteps {params.data_timesteps} \
-            {params.model_arguments} \
+            {params.model_arguments} 
         """
-            # --enable_progress_bar {params.enable_progress_bar} \
 
 rule test_model:
     """Evaluate a trained model on test data.
@@ -221,8 +212,11 @@ rule test_model:
         store_responses = get_param('store_test_responses'),
         enable_progress_bar = True,
         verbose = get_param('verbose'),
-        executor_start = get_param('executor_start') if get_param('use_executor') else '',
-        executor_close = get_param('executor_close') if get_param('use_executor') else '',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         responses = project_paths.models \
             / '{model_name}' \
@@ -230,14 +224,11 @@ rule test_model:
         results = project_paths.reports \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_outputs.csv'
-    # log:
-    #     project_paths.logs / 'test_model_{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.log'
     benchmark:
         project_paths.benchmarks / 'test_model_{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.txt'
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --config_path {params.config_path:q} \
             --input_model_state {input.model_state:q} \
             --model_name {wildcards.model_name} \
@@ -255,10 +246,8 @@ rule test_model:
             --enable_progress_bar {params.enable_progress_bar} \
             --verbose {params.verbose} \
             {params.model_arguments} \
-            {params.data_arguments} \
-        {params.executor_close}
+            {params.data_arguments}
         """
-            # > {log} 2>&1
 
 logger.info("Model workflow initialized")
 logger.info(f"Model directory: {project_paths.models}")

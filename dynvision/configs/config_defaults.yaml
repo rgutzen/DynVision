@@ -98,15 +98,4 @@ lr_scaling:
 # System
 log_level: info
 use_executor: False
-executor_start: "singularity exec --nv \
-  --overlay /scratch/rg5022/images/rva.ext3:ro \
-  --overlay /vast/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro \
-  --overlay /vast/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro \
-  --overlay /vast/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro \
-  /scratch/work/public/singularity/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif \
-  bash -c '\
-  source /ext3/env.sh; \
-  conda activate rva; \
-  "
-executor_close: "'"
 verbose: True

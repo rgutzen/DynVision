@@ -19,7 +19,13 @@ from dynvision.hyperparameters import (
     DataParams,
 )
 
-from pydantic import Field, computed_field, model_validator, ConfigDict
+from pydantic import (
+    Field,
+    computed_field,
+    model_validator,
+    ConfigDict,
+    field_validator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +54,15 @@ class TrainingParams(BaseParams):
     # === SCRIPT-SPECIFIC PARAMETERS ===
     input_model_state: Path = Field(description="Path to initial model state")
     output_model_state: Path = Field(description="Path to save trained model")
-    dataset_link: Path = Field(description="Path to training dataset")
-    dataset_train: Path = Field(description="Path to training ffcv dataset")
-    dataset_val: Path = Field(description="Path to validation ffcv dataset")
+    dataset_link: Optional[Path] = Field(
+        default=None, description="Path to training dataset"
+    )
+    dataset_train: Optional[Path] = Field(
+        default=None, description="Path to training ffcv dataset"
+    )
+    dataset_val: Optional[Path] = Field(
+        default=None, description="Path to validation ffcv dataset"
+    )
 
     model_config = ConfigDict(
         extra="allow",  # Allow additional CLI arguments
@@ -134,6 +146,13 @@ class TrainingParams(BaseParams):
         return base_lr * scaling_factor
 
     # === VALIDATION METHODS ===
+
+    @field_validator("dataset_link", "dataset_train", "dataset_val", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v is None or v == "":
+            return None
+        return v
 
     @model_validator(mode="after")
     def validate_training_configuration(self) -> "TrainingParams":

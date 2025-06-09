@@ -334,16 +334,20 @@ class BaseParams(BaseModel):
             field_type = str
 
         # Handle Optional types
+        is_optional = False
         if hasattr(field_type, "__origin__") and field_type.__origin__ is Union:
             args = field_type.__args__
             if len(args) == 2 and type(None) in args:
+                is_optional = True
                 field_type = args[0] if args[1] is type(None) else args[1]
 
         # Configure argument based on type
         if field_type == bool:
             kwargs["type"] = str_to_bool
-        elif field_type in [int, float, str]:
+        elif field_type in [int, float, str, Path]:
             kwargs["type"] = field_type
+            if is_optional:
+                kwargs["nargs"] = "?"
         elif hasattr(field_type, "__origin__") and field_type.__origin__ is list:
             kwargs["nargs"] = "+"
             if len(field_type.__args__) > 0:

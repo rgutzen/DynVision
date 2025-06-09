@@ -115,7 +115,7 @@ onstart:
     run_mode_manager()
     setup_logger()
 
-def get_param(key):
+def get_param(key, default=None) -> callable:
     """Get a parameter value from the config.
 
     Args:
@@ -124,7 +124,7 @@ def get_param(key):
     Returns:
         Value of the parameter or None if not found
     """
-    return lambda w: getattr(config, key, None)
+    return lambda w: getattr(config, key, default)
 
 def get_imagenet_classes(tiny: bool = False) -> tuple[list, dict]:
     """Get ImageNet class information.
@@ -366,15 +366,19 @@ rule checkpoint_to_statedict:
     input:
         checkpoint_dir = project_paths.large_logs / 'checkpoints',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
+    params:
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
-        temp(project_paths.models / '{model_identifier}.ckpt2pt')
+        temp(project_paths.models / '{model_identifier}.ckpt2pt'),
     shell:
         """
-        {config.executor_start}
-        python {input.script:q} \
+        {config.execution_cmd} \
             --checkpoint_dir {input.checkpoint_dir:q} \
-            --output {output:q} \
-        {config.executor_close}
+            --output {output:q}
         """
 
 
