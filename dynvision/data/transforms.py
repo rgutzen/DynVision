@@ -34,7 +34,7 @@ transform_presets = dict(
         ),
     ],
     test=[],
-    ffcv_train_mnist=[
+    ffcv_train_mnist=[  # deprecated!
         ffcv.transforms.RandomBrightness(0.2),
         ffcv.transforms.RandomContrast(0.2),
         ffcv.transforms.RandomSaturation(0.2),
@@ -42,7 +42,7 @@ transform_presets = dict(
     train_mnist=[
         tv.transforms.RandomRotation(10),
         tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
-        # tv.transforms.Grayscale(num_output_channels=1),
+        tv.transforms.Grayscale(num_output_channels=1),
     ],
     imagenet=[
         tv.transforms.Resize(256),

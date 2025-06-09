@@ -247,25 +247,30 @@ def insert_a_before_b(
 
 
 def get_dataset(
-    data_path: Path = None,
-    data_name=None,
-    data_transform=None,
-    target_transform=None,
-    dataset_class=PathFolder,
+    data_path: Path,
+    data_name: Optional[str] = None,
+    data_transform: Optional[Union[str, Callable]] = None,
+    target_transform: Optional[Union[str, Callable]] = None,
+    dataset_class: Callable[..., Dataset] = PathFolder,
+    normalize: Optional[Tuple[List[float], List[float]]] = None,
+    dtype: Optional[torch.dtype] = torch.float16,
     cache_size: int = 1000,
     pin_memory: bool = False,
     pil_to_tensor: bool = True,
-    **kwargs,
+    **kwargs: Any,
 ) -> Dataset:
     """Get dataset with optimized loading.
 
     Args:
         data_path: Path to dataset
+        data_name: Name of the dataset
         data_transform: Data transform name or callable
         target_transform: Target transform name or callable
         dataset_class: Dataset class to use
+        normalize: Normalization parameters (mean, std)
         cache_size: Size of LRU cache
         pin_memory: Whether to pin memory
+        pil_to_tensor: Whether to convert PIL images to tensors
         **kwargs: Additional arguments
 
     Returns:
@@ -288,7 +293,7 @@ def get_dataset(
         )
         data_path = data_path.parent
 
-    # get transforms
+    # image transforms
     transform = []
     additional_transforms = get_data_transform(
         transform=data_transform, data_name=data_name
@@ -296,13 +301,30 @@ def get_dataset(
     if additional_transforms is not None:
         transform.extend(additional_transforms)
 
-    # Add ToTensor after PIL transforms
+    # image -> tensor
     if pil_to_tensor:
         transform.append(tv.transforms.PILToTensor())
+    else:
+        transform.append(tv.transforms.ToTensor())
 
+    # dtype transform
+    if dtype is not None:
+        transform.append(tv.transforms.ConvertImageDtype(dtype))
+
+    # tensor transforms
+    if normalize:
+        transform.append(
+            tv.transforms.Normalize(
+                mean=torch.tensor(normalize[0]),
+                std=torch.tensor(normalize[1]),
+            )
+        )
+
+    logger.info(f"Transform sequence: {transform}")
+
+    # target transforms
     target_transform = get_target_transform(target_transform)
 
-    print(f"Transform sequence: {transform}")
     if isinstance(transform, list):
         transform = transforms.Compose(transform)
     if isinstance(target_transform, list):

@@ -76,6 +76,9 @@ def _adjust_label_dimensions(label_indices: torch.Tensor) -> torch.Tensor:
         elif label_indices.dim() == 2:
             # Already correct shape
             return label_indices
+        elif label_indices.dim() == 3:
+            # (batch_size, n_timesteps, 1) -> (batch_size, n_timesteps)
+            return label_indices.squeeze(2)
         else:
             raise ValueError(f"Invalid label shape: {label_indices.shape}")
 

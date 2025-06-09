@@ -6,6 +6,9 @@ include: "snake_experiments.smk"
 
 setup_logger()
 
+# onstart:
+#     config = run_mode_manager()
+    
 rule all:
     input:
         expand(project_paths.reports / 'experiment_{experiment}.done',

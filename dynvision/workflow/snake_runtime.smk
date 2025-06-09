@@ -41,9 +41,9 @@ rule init_model:
     params:
         config_path = CONFIGS,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        init_with_pretrained = config.init_with_pretrained,
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        init_with_pretrained = get_param('init_with_pretrained'),
+        executor_start = get_param('executor_start') if get_param('use_executor') else '',
+        executor_close = get_param('executor_close') if get_param('use_executor') else ''
     output:
         model_state = project_paths.models \
             / '{model_name}' \
@@ -87,7 +87,7 @@ rule train_model:
         model_arguments: Model-specific arguments
         learning_rate: Training learning rate
         loss: Loss function configuration
-        resolution: Input resolution
+        resolution: Input resolution 
         check_val_every_n_epoch: Validation frequency
         accumulate_grad_batches: Gradient accumulation steps
         precision: Training precision
@@ -100,6 +100,10 @@ rule train_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_init.pt',
+        dataset_link = project_paths.data.interim \
+            / '{data_name}' \
+            / 'train_all' \
+            / 'folder.link',
         dataset_train = project_paths.data.processed \
             / '{data_name}' \
             / 'train_all' \
@@ -111,34 +115,37 @@ rule train_model:
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
         config_path = CONFIGS,
-        epochs = config.epochs,
-        batch_size = config.batch_size,
+        data_group = "all",
+        epochs = get_param('epochs'),
+        batch_size = get_param('batch_size'),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        n_timesteps = config.n_timesteps, 
-        learning_rate = config.learning_rate,
-        loss = config.loss,
+        n_timesteps = get_param('n_timesteps'), 
+        data_timesteps = get_param('data_timesteps'), 
+        learning_rate = get_param('learning_rate'),
+        loss = get_param('loss'),
         resolution = lambda w: config.data_resolution[w.data_name],
-        check_val_every_n_epoch = config.check_val_every_n_epoch,
-        log_every_n_steps = config.log_every_n_steps,
-        accumulate_grad_batches = config.accumulate_grad_batches,
-        precision = config.precision,
-        store_responses = config.store_val_responses,
-        profiler = config.profiler,
-        use_ffcv = config.use_ffcv,
-        enable_progress_bar = config.enable_progress_bar,
-        use_distributed = config.use_distributed,
+        normalize = lambda w: json.dumps((
+            config.data_statistics[w.data_name]['mean'],
+            config.data_statistics[w.data_name]['std']
+        )),
+        check_val_every_n_epoch = get_param('check_val_every_n_epoch'),
+        log_every_n_steps = get_param('log_every_n_steps'),
+        accumulate_grad_batches = get_param('accumulate_grad_batches'),
+        precision = get_param('precision'),
+        store_responses = get_param('store_val_responses'),
+        profiler = get_param('profiler'),
+        use_ffcv = get_param('use_ffcv'),
+        enable_progress_bar = get_param('enable_progress_bar'),
         # Build complete execution command with conditional wrappers
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
-            use_distributed=getattr(config, 'use_distributed', False),
+            use_distributed=getattr(config, 'use_distributed_mode', False),
             use_executor=getattr(config, 'use_executor', False)
         ),
     output:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_trained.pt'
-    # log:
-    #     project_paths.logs / 'train_model_{model_name}{model_args}_{seed}_{data_name}.log'
     benchmark:
         project_paths.benchmarks / 'train_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
@@ -147,9 +154,11 @@ rule train_model:
             --config_path {params.config_path:q} \
             --input_model_state {input.model_state:q} \
             --model_name {wildcards.model_name} \
+            --dataset_link {input.dataset_link:q} \
             --dataset_train {input.dataset_train:q} \
             --dataset_val {input.dataset_val:q} \
             --data_name {wildcards.data_name} \
+            --data_group {params.data_group} \
             --output_model_state {output.model_state:q} \
             --learning_rate {params.learning_rate} \
             --epochs {params.epochs} \
@@ -160,14 +169,16 @@ rule train_model:
             --accumulate_grad_batches {params.accumulate_grad_batches} \
             --resolution {params.resolution} \
             --precision {params.precision} \
+            --normalize {params.normalize:q} \
             --profiler {params.profiler} \
             --store_responses {params.store_responses} \
-            --enable_progress_bar {params.enable_progress_bar} \
             --use_ffcv {params.use_ffcv} \
             --loss {params.loss} \
             --n_timesteps {params.n_timesteps} \
+            --data_timesteps {params.data_timesteps} \
             {params.model_arguments} \
         """
+            # --enable_progress_bar {params.enable_progress_bar} \
 
 rule test_model:
     """Evaluate a trained model on test data.
@@ -202,16 +213,16 @@ rule test_model:
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         config_path = CONFIGS,
-        batch_size = config.batch_size if project_paths.iam_on_cluster() else 3,
+        batch_size = get_param('batch_size') if project_paths.iam_on_cluster() else 3,
         data_group = lambda w: f"{w.data_name}_{w.data_group}",
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
-        loss = config.loss,
-        store_responses = config.store_test_responses,
+        loss = get_param('loss'),
+        store_responses = get_param('store_test_responses'),
         enable_progress_bar = True,
-        verbose = config.verbose,
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else '',
+        verbose = get_param('verbose'),
+        executor_start = get_param('executor_start') if get_param('use_executor') else '',
+        executor_close = get_param('executor_close') if get_param('use_executor') else '',
     output:
         responses = project_paths.models \
             / '{model_name}' \

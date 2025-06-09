@@ -15,8 +15,8 @@ import sys
 import inspect
 import logging
 from pathlib import Path
-from types import SimpleNamespace
 from collections import defaultdict
+from types import SimpleNamespace
 from itertools import product
 import json
 import os
@@ -29,7 +29,7 @@ package_dir = Path(inspect.getfile(lambda: None)).parents[2].resolve()
 sys.path.insert(0, str(package_dir))
 
 from dynvision.project_paths import project_paths
-from dynvision.utils import str_to_bool
+from dynvision.workflow.mode_manager import ConfigModeManager
 
 pylogger = logging.getLogger('workflow.utils')
 
@@ -38,41 +38,14 @@ configfile: project_paths.scripts.configs / 'config_defaults.yaml'
 configfile: project_paths.scripts.configs / 'config_data.yaml'
 # configfile: project_paths.scripts.configs / 'config_visualization.yaml'
 configfile: project_paths.scripts.configs / 'config_experiments.yaml'
+configfile: project_paths.scripts.configs / 'config_modes.yaml'
 configfile: project_paths.scripts.configs / 'config_workflow.yaml'
 
-# Set config modes
-def set_config_modes(config: Dict[str, Any]) -> None:
-    use_mode_keys = [key for key in config.keys() if key.startswith('use_') and key.endswith('_mode')]
-    for key in use_mode_keys:
-        if config[key]:
-            mode = key.replace('use_', '').replace('_mode', '')
-            if mode in config:
-                config.update(config[mode])
-                pylogger.info(f"{mode} mode is enabled")
-    if config.get('use_debug_mode', False) or config.get('verbose', False):
-        pylogger.setLevel(logging.DEBUG)
-        config.update(config['debug_mode'])
-
-set_config_modes(config)
-
-# Convert to SimpleNamespace for dot notation access
-config = SimpleNamespace(**config)
-
-# Save runtime configuration
-runtime_config = project_paths.scripts.configs / 'config_runtime.yaml'
-with open(runtime_config, 'w') as f:
-    f.write("# This is an automatically compiled file. Do not edit manually!\n")
-    json.dump(config.__dict__, f, indent=4)
-   
-
-# Print configuration summary
-print("Loaded configurations:")
-for key, value in config.__dict__.items():
-    print(f"\t{key}: {value}")
-
-CONFIGS = project_paths.scripts.configs / 'config_runtime.yaml'
+CONFIGS = project_paths.scripts.configs / 'runtime_config.yaml'
 SCRIPTS = project_paths.scripts_path
 
+config = SimpleNamespace(**config)
+    
 wildcard_constraints:
     model_name = r'[a-zA-Z0-9]+',
     data_name = r'[a-z0-9]+',
@@ -95,6 +68,30 @@ wildcard_constraints:
 localrules: all, symlink_data_subsets, symlink_data_groups, experiment
 ruleorder: symlink_data_groups > symlink_data_subsets
 
+def run_mode_manager():
+    """Initialize and apply mode manager after CLI config overrides"""
+    global mode_manager, config
+    
+    working_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else config.copy()
+
+    # Initialize mode manager with final config (including CLI overrides)
+    mode_manager = ConfigModeManager(working_config, local=(not project_paths.iam_on_cluster()))
+    mode_manager.apply_modes()
+    mode_manager.log_modes()
+    mode_manager.save_config(path=CONFIGS)
+    mode_manager.log_config()
+    
+    # Get the processed config
+    processed_config = mode_manager.get_config(return_namespace=True)   
+    if isinstance(processed_config, SimpleNamespace):
+        config.__dict__.clear()
+        config.__dict__.update(processed_config.__dict__)
+    elif isinstance(processed_config, dict):
+        config.__dict__.clear()
+        config.__dict__.update(processed_config)
+    else:
+        raise TypeError("Processed config must be a SimpleNamespace or dict")
+
 # Set up logging
 def setup_logger():
     # create logger
@@ -114,6 +111,21 @@ def setup_logger():
     # add ch to logger
     logger.addHandler(ch)
     
+onstart:
+    run_mode_manager()
+    setup_logger()
+
+def get_param(key):
+    """Get a parameter value from the config.
+
+    Args:
+        key: Parameter key to retrieve
+
+    Returns:
+        Value of the parameter or None if not found
+    """
+    return lambda w: getattr(config, key, None)
+
 def get_imagenet_classes(tiny: bool = False) -> tuple[list, dict]:
     """Get ImageNet class information.
 
@@ -401,6 +413,7 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
             f"{script_path}"
         )
     else:
-        cmd_parts.append(f"python {script_path}")
+        # comprehensive environment cleaning for single-device mode
+        cmd_parts.append(f"export WORLD_SIZE=1 && python {script_path}")
     
-    return " \\\n        ".join(cmd_parts)
+    return "\\\n        ".join(cmd_parts)

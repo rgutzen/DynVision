@@ -19,6 +19,8 @@ store_responses_on_cpu: True
 # Data
 data_name: mnist
 data_group: all
+data_timesteps: 1
+prefetch_factor: 1
 
 # Training run
 seed: "0000"
@@ -27,40 +29,20 @@ epochs: 250
 batch_size: 256
 check_val_every_n_epoch: 5
 log_every_n_steps: 20
-accumulate_grad_batches: 2
+accumulate_grad_batches: 4
 precision: "bf16-mixed"
 profiler: None
 benchmark: True
 enable_progress_bar: False
 # tbptt_length: None
+limit_val_batches: 0.25
+reload_dataloaders_every_n_epochs: 0
 automatic_optimization: True
 clip_gradients: False
 gradient_clip_algorithm: "norm"  # "norm" or "value"
 gradient_clip_val: 1.0  # global clip value
 deterministic: False  # Consider setting to true if still unstable
-
-use_distributed: True
-distributed:
-  strategy: "ddp"  # Use standard DDP for SLURM compatibility
-  devices: 4  # Number of GPUs per node
-  num_nodes: 1  # Number of compute nodes
-  sync_batchnorm: True
-  precision: "bf16-mixed"  # Options: 32, 16-mixed, bf16-mixed
-  accelerator: "gpu"  # Explicitly set GPU accelerator
-  # Advanced DDP settings
-  find_unused_parameters: False
-  gradient_as_bucket_view: True
-  process_group_backend: "nccl"  # Use NCCL for GPU communication
-
-
-# Debugging settings
-use_debug_mode: False
-debug_mode:
-  batch_size: 3
-  check_val_every_n_epoch: 1
-  log_every_n_steps: 1
-  accumulate_grad_batches: 1
-  enable_progress_bar: True
+use_distributed: False
 
 # Test run
 logger: False
@@ -71,11 +53,11 @@ loss:
 loss_configs:
   CrossEntropyLoss:
     weight: 1
-    ignore_index: -100
+    ignore_index: -1
   EnergyLoss:
     weight: 100
 loss_reaction_time: 0  # ms (+ residual time)
-non_label_index: -100
+non_label_index: -1
 
 # Optimizer
 optimizer: Adam
@@ -95,7 +77,7 @@ lr_parameter_groups:
     lr_factor: 0.5
 
 # Learning rate
-learning_rate: 0.002
+learning_rate: 0.0002
 scheduler: CosineAnnealingLR
 scheduler_kwargs:
   T_max: 250

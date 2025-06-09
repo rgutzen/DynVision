@@ -26,27 +26,21 @@ echo -n 'running workflow with snakemake version: '
 snakemake --version
     
 # Process command line arguments
-args=()
-config_found=false
-for arg in "$@"; do
-    echo "processing argument: $arg"
-    if [[ "$arg" == '--config' ]]; then
-        config_found=true
-        args+=("--config" "use_executor=True")
-    else
-        args+=("$arg")
-    fi
-done
+args=("$@")  # Start with all original arguments
 
-if [ "$config_found" = false ]; then
-    args+=("--config" "use_executor=True")
+# Check if --config exists, if not add it
+if [[ ! " $* " =~ " --config " ]]; then
+    args+=("--config")
 fi
 
-echo -n 'applying workflow arguments: '
-echo "${args[@]}"
+# Always append use_executor=True to config
+args+=("use_executor=True")
+
+echo "Final command will be:"
+echo "snakemake ${args[@]} --profile $current_dir/profiles/slurm"
 echo ""
 
 snakemake --unlock --cores=1
-snakemake "${args[@]}" --profile $current_dir/profiles/slurm
+snakemake "${args[@]}" --profile $current_dir/profiles/slurm --latency-wait 30
 
 echo -e '\n Snakecharm ended!'

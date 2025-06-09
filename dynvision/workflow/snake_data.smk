@@ -46,8 +46,8 @@ rule get_data:
             / 'folder.link',
         ext = 'png',
         data_name = lambda w: ''.join([c.upper() if c.isalpha() else c for c in w.data_name]),
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        executor_start = get_param('executor_start') if get_param('use_executor') else '',
+        executor_close = get_param('executor_close') if get_param('use_executor') else ''
     output:
         flag = directory(project_paths.data.raw \
             / '{data_name}' \
@@ -88,8 +88,8 @@ rule symlink_data_subsets:
     params:
         parent = lambda wildcards, output: Path(output.flag).parent,
         source = lambda wildcards, output: Path(output.flag).with_suffix(''),
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        executor_start = get_param('executor_start') if get_param('use_executor') else '',
+        executor_close = get_param('executor_close') if get_param('use_executor') else ''
     output:
         flag = project_paths.data.interim \
             / '{data_name}' \
@@ -163,10 +163,10 @@ rule build_ffcv_datasets:
         script = SCRIPTS / 'data' / 'ffcv_datasets.py',
         data = project_paths.data.interim / '{data_name}' / 'train_all' / 'folder.link'
     params:
-        train_ratio = config.train_ratio,
-        max_resolution = lambda w: config.data_resolution[w.data_name],
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        train_ratio = get_param('train_ratio'),
+        max_resolution = lambda w: get_param('data_resolution')[w.data_name],
+        executor_start = get_param('executor_start') if get_param('use_executor') else '',
+        executor_close = get_param('executor_close') if get_param('use_executor') else ''
     output:
         train = project_paths.data.processed / '{data_name}' / 'train_all' / 'train.beton',
         val = project_paths.data.processed / '{data_name}' / 'train_all' / 'val.beton'

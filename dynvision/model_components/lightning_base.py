@@ -28,6 +28,7 @@ import torch.nn as nn
 import wandb
 
 from dynvision import losses
+from dynvision.data.operations import _adjust_data_dimensions, _adjust_label_dimensions
 from dynvision.utils import (
     alias_kwargs,
     path_to_index,
@@ -52,59 +53,6 @@ class UtilityBase(nn.Module):
     Includes methods for adjusting input dimensions, managing state dictionaries,
     and handling tensor operations.
     """
-
-    def _adjust_input_dimensions(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Adjust the input tensor dimensions to match the expected format.
-
-        Args:
-            x (torch.Tensor): Input tensor with dimensions in one of the following formats:
-                - (dim_y, dim_x)
-                - (batch_size, dim_y, dim_x)
-                - (batch_size, dim_channels, dim_y, dim_x)
-                - (batch_size, n_timesteps, dim_channels, dim_y, dim_x)
-
-        Returns:
-            torch.Tensor: Tensor with dimensions in the format:
-                (batch_size, n_timesteps, dim_channels, dim_y, dim_x)
-        """
-        if len(x.shape) == 2:
-            x = x.unsqueeze(0).unsqueeze(0).unsqueeze(0)
-        elif len(x.shape) == 3:
-            x = x.unsqueeze(1).unsqueeze(1)
-        elif len(x.shape) == 4:
-            x = x.unsqueeze(1)
-        elif len(x.shape) == 5:
-            pass
-        elif len(x.shape) == 6:  # assume duplicate batch dim
-            x = x[0]
-        else:
-            raise ValueError(
-                f"Invalid input shape: {x.shape}. Expected formats: (dim_y, dim_x), (batch_size, dim_y, dim_x), (batch_size, channels, dim_y, dim_x), or (batch_size, n_timesteps, channels, dim_y, dim_x)"
-            )
-
-        return x
-
-    def _adjust_label_dimensions(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Adjust the label tensor dimensions to match the expected format.
-
-        Args:
-            x (torch.Tensor): Label tensor with dimensions in one of the following formats:
-                - (batch_size)
-                - (batch_size, n_timesteps)
-
-        Returns:
-            torch.Tensor: Tensor with dimensions in the format:
-                (batch_size, n_timesteps)
-        """
-        if len(x.shape) == 1:
-            x = x.unsqueeze(1)
-        elif len(x.shape) == 2:
-            pass
-        else:
-            raise ValueError(f"Invalid label shape: {x.shape}")
-        return x
 
     def _expand_input_channels(
         self, x: Optional[torch.Tensor], n_target_channels: int = 3
@@ -810,8 +758,6 @@ class UtilityBase(nn.Module):
             raise_error=raise_error,
         )
 
-        return None
-
     def _clear_gpu_memory(self) -> None:
         """
         Clear GPU memory by emptying the cache and synchronizing.
@@ -916,26 +862,95 @@ class UtilityBase(nn.Module):
             )
             return default
 
-    def _check_distributed_mode(self):
-        # Check if in distributed mode
-        if hasattr(self.trainer, "strategy") and hasattr(
-            self.trainer.strategy, "name"
-        ):
-            if "ddp" in self.trainer.strategy.name:
-                # Log distributed training info
-                world_size = torch.distributed.get_world_size()
-                local_rank = torch.distributed.get_local_rank()
-                global_rank = torch.distributed.get_rank()
+    def _log_system_info(self) -> None:
+        """Log essential system information at training start."""
+        logger.info("=" * 60)
+        logger.info("🚀 TRAINING STARTED")
+        logger.info("=" * 60)
 
-                logger.info(
-                    f"Distributed training: world_size={world_size}, "
-                    f"local_rank={local_rank}, global_rank={global_rank}"
-                )
+        # Model basics
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        logger.info(
+            f"Model: {self.__class__.__name__} | Params: {total_params:,} ({trainable_params:,} trainable)"
+        )
+        logger.info(
+            f"Config: {self.n_classes} classes | {self.n_timesteps} timesteps | non_label_idx: {self.non_label_index}"
+        )
 
-                # Update batch sizes for proper scaling
-                if hasattr(self, "batch_size"):
-                    self.effective_batch_size = self.batch_size * world_size
-                    logger.info(f"Global batch size: {self.effective_batch_size}")
+        # System info
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name()
+            logger.info(f"Device: {device_name}")
+
+    def _log_training_summary(self) -> None:
+        """Log training completion summary."""
+        if hasattr(self, "trainer") and self.trainer is not None:
+            logger.info(
+                f"✅ Training completed: {self.trainer.current_epoch} epochs | {self.trainer.global_step} steps"
+            )
+
+    def _validate_batch_data(
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, stage: str
+    ) -> None:
+        """Validate batch data for critical issues."""
+        inputs, labels = batch[:2]
+
+        # Adjust dimensions for validation
+        inputs = _adjust_data_dimensions(inputs)
+        labels = _adjust_label_dimensions(labels)
+
+        # Check for NaN/Inf in inputs
+        if torch.isnan(inputs).any() or torch.isinf(inputs).any():
+            logger.warning(
+                f"⚠️  [{stage.upper()}] Batch {batch_idx}: NaN/Inf detected in inputs"
+            )
+
+        # Validate label range
+        label_min, label_max = labels.min().item(), labels.max().item()
+        if label_min < 0 or label_max >= self.n_classes:
+            invalid_labels = labels[(labels < 0) | (labels >= self.n_classes)]
+            unique_invalid = torch.unique(invalid_labels).tolist()
+            logger.warning(
+                f"⚠️  [{stage.upper()}] Batch {batch_idx}: Invalid labels {unique_invalid} (expect 0-{self.n_classes-1})"
+            )
+
+        # Log first batch info
+        if batch_idx == 0:
+            logger.info(
+                f"📦 [{stage.upper()}] First batch: {inputs.shape} | Labels: [{label_min}, {label_max}] | Device: {inputs.device}"
+            )
+
+    def _check_training_health(self, loss: torch.Tensor, batch_idx: int) -> None:
+        """Check for training health issues."""
+        if loss is None:
+            return
+
+        # Check for NaN/Inf loss
+        if torch.isnan(loss) or torch.isinf(loss):
+            logger.warning(
+                f"⚠️  Batch {batch_idx}: Loss is {'NaN' if torch.isnan(loss) else 'Inf'}"
+            )
+
+        # Check for extremely high loss
+        loss_val = loss.item() if hasattr(loss, "item") else float(loss)
+        if loss_val > 100:
+            logger.warning(f"⚠️  Batch {batch_idx}: Very high loss {loss_val:.4f}")
+
+    def _should_log_detailed(self, batch_idx: int, stage: str) -> bool:
+        """Determine if detailed logging should occur."""
+        if not hasattr(self, "trainer") or self.trainer is None:
+            return batch_idx < 5
+
+        epoch = self.trainer.current_epoch
+
+        # Log more frequently early in training
+        if epoch < 2:
+            return batch_idx % 20 == 0
+        elif epoch < 5:
+            return batch_idx % 50 == 0
+        else:
+            return batch_idx % 100 == 0
 
 
 class LightningBase(UtilityBase, pl.LightningModule):
@@ -1013,7 +1028,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         x = torch.randn(
             1, *input_dims, dtype=self._get_target_dtype(), device=self.device
         )
-        x = self._adjust_input_dimensions(x)
+        x = _adjust_data_dimensions(x)
         _, data_timesteps, self.n_channels, self.dim_y, self.dim_x = x.shape
 
         if data_timesteps == 1:
@@ -1114,15 +1129,16 @@ class LightningBase(UtilityBase, pl.LightningModule):
                 module_name = f"{operation}_{layer_name}"
 
                 if operation == "layer":
-                    module = layer
-                    x = module(x)
+                    if hasattr(layer, "_get_name"):
+                        module_name = layer._get_name()
+                    else:
+                        module_name = "layer"
+                    x = layer(x)
 
                 elif operation == "record":
-                    module = "record_" + layer_name
                     responses[layer_name] = x
 
                 elif operation == "delay" and hasattr(layer, "set_hidden_state"):
-                    module = "delay_" + layer_name
                     layer.set_hidden_state(x)
                     x = layer.get_hidden_state(0)
 
@@ -1145,7 +1161,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
                 if x is not None and (~torch.isfinite(x)).any():
                     logger.warning(
-                        f"NaN/inf detected in {module} output! \n\t {(~torch.isfinite(x)).sum()}/{x.numel()} NaNs"
+                        f"NaN/inf detected in {module_name} output! \n\t {(~torch.isfinite(x)).sum()}/{x.numel()} NaNs"
                     )
 
         if x is None:
@@ -1179,14 +1195,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         """
         store_responses = store_responses if store_responses else self.store_responses
 
-        if (~torch.isfinite(x_0)).any():
-            logger.warning(
-                f"nan/inf detected in input data! {(~torch.isfinite(x_0)).sum()}/{x_0.numel()} nans/infs"
-            )
-            x_0 = torch.nan_to_num(x_0, nan=0.0, posinf=0.0, neginf=0.0)
-            logger.warning("nan/inf replaced with 0")
-
-        x_0 = self._adjust_input_dimensions(x_0)
+        x_0 = _adjust_data_dimensions(x_0)
         batch_size, n_timesteps, dim_channels, dim_y, dim_x = x_0.shape
 
         outputs = torch.zeros(
@@ -1335,8 +1344,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         inputs, label_indices, *extra = batch
-        inputs = self._adjust_input_dimensions(inputs)
-        label_indices = self._adjust_label_dimensions(label_indices)
+        inputs = _adjust_data_dimensions(inputs)
+        label_indices = _adjust_label_dimensions(label_indices)
 
         if inputs.size(1) == 1 and self.n_timesteps > 1:
             # input data is not yet extended
@@ -1350,8 +1359,8 @@ class LightningBase(UtilityBase, pl.LightningModule):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         inputs, label_indices, *extra = batch
 
-        inputs = self._adjust_input_dimensions(inputs)
-        label_indices = self._adjust_label_dimensions(label_indices)
+        inputs = _adjust_data_dimensions(inputs)
+        label_indices = _adjust_label_dimensions(label_indices)
 
         if self.n_residual_timesteps > 0:
             # add 0s at the end as inputs for residual timesteps
@@ -1390,6 +1399,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
         batch_idx: int,
         store_responses: bool = False,
     ) -> Tuple[torch.Tensor, float, torch.Tensor]:
+
         batch = self._expand_timesteps(batch)
         inputs, label_indices, *paths = self._extend_residual_timesteps(batch)
 
@@ -1438,6 +1448,16 @@ class LightningBase(UtilityBase, pl.LightningModule):
             else:
                 criterion_weight = 1
 
+            # Add ignore_index for cross entropy loss if not specified
+            if (
+                criterion_name.lower() in ["crossentropyloss", "cross_entropy_loss"]
+                and "ignore_index" not in criterion_config
+            ):
+                criterion_config["ignore_index"] = self.non_label_index
+                logger.info(
+                    f"Setting ignore_index={self.non_label_index} for {criterion_name}"
+                )
+
             logger.info(
                 f"Criterion: {criterion_name} with weight: {criterion_weight} and config: {criterion_config}"
             )
@@ -1473,6 +1493,17 @@ class LightningBase(UtilityBase, pl.LightningModule):
             outputs = outputs.view(-1, n_classes)
             label_indices = label_indices.view(-1)
 
+        # Quick validation (minimal overhead)
+        invalid_mask = (label_indices < 0) | (label_indices >= n_classes)
+        if invalid_mask.any():
+            valid_mask = ~invalid_mask
+            if valid_mask.any():
+                outputs = outputs[valid_mask]
+                label_indices = label_indices[valid_mask]
+            else:
+                logger.warning("All labels invalid, returning zero loss")
+                return torch.tensor(0.0, device=outputs.device, requires_grad=True)
+
         loss_values = torch.zeros(len(self.criterion), device=outputs.device)
         for i, criterion_fn in enumerate(self.criterion):
             if isinstance(criterion_fn, tuple):
@@ -1481,15 +1512,14 @@ class LightningBase(UtilityBase, pl.LightningModule):
                 weight = 1
 
             loss_value = weight * criterion_fn((outputs, responses), label_indices)
-
-            if torch.isnan(loss_value):
-                logger.warning(f"Loss Value: {criterion_fn}, {loss_value}")
-                logger.warning(f"Output contains NaNs: {torch.isnan(outputs).any()}")
-                logger.warning("Warning: Loss value is NaN")
-
             loss_values[i] = loss_value
 
         loss = loss_values.sum()
+
+        # Quick NaN check (minimal overhead)
+        if torch.isnan(loss):
+            logger.warning(f"⚠️  NaN loss detected")
+
         return loss
 
     def calc_accuracy(
@@ -1497,8 +1527,24 @@ class LightningBase(UtilityBase, pl.LightningModule):
         label_indices: torch.Tensor,
         guess_indices: torch.Tensor,
     ) -> float:
-        mask = torch.where(label_indices >= 0)
-        accuracy = (guess_indices[mask] == label_indices[mask]).float().mean().item()
+        # Create mask for valid labels (excluding non_label_index)
+        valid_mask = (
+            (label_indices >= 0)
+            & (label_indices != self.non_label_index)
+            & (label_indices < self.n_classes)
+        )
+
+        if valid_mask.sum() == 0:
+            # No valid labels, return 0 accuracy
+            logger.warning("No valid labels found for accuracy calculation")
+            return 0.0
+
+        accuracy = (
+            (guess_indices[valid_mask] == label_indices[valid_mask])
+            .float()
+            .mean()
+            .item()
+        )
         return accuracy
 
     def backward(self, loss: torch.Tensor) -> None:
@@ -1623,22 +1669,46 @@ class LightningBase(UtilityBase, pl.LightningModule):
                 self._check_gradients()
                 self._check_weights(raise_error=True)
 
+    ### HOOKS
+
     def on_train_start(self) -> None:
+        """Initialize training with weight check and basic system info."""
         self._check_weights()
-        pass
+        self._log_system_info()
 
     def on_train_end(self) -> None:
+        """Final diagnostics and cleanup."""
         self._check_responses()
-        pass
+        self._log_training_summary()
 
-    def on_train_epoch_start(self) -> None:
-        pass
+    def on_train_batch_start(
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+    ) -> None:
+        """Check for critical data issues early in training."""
+        if batch_idx < 3:  # Only check first few batches
+            self._validate_batch_data(batch, batch_idx, "train")
+
+    def on_validation_batch_start(
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+    ) -> None:
+        """Check for critical data issues in validation."""
+        if batch_idx == 0:  # Only check first validation batch
+            self._validate_batch_data(batch, batch_idx, "val")
 
     def on_train_batch_end(
         self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
     ) -> None:
+        """Monitor training progress and check for issues."""
+        loss = outputs if isinstance(outputs, torch.Tensor) else outputs.get("loss")
+        self._check_training_health(loss, batch_idx)
+
         if batch_idx % self.log_every_n_steps == 0:
             self.log_param_stats()
+
+    def on_before_optimizer_step(self, optimizer: Any) -> None:
+        """Check gradients before optimizer step."""
+        if self.log_level.upper() == "DEBUG":
+            self._check_gradients()
 
     def on_test_start(self) -> None:
         self.guess_indices = []
@@ -1648,25 +1718,6 @@ class LightningBase(UtilityBase, pl.LightningModule):
 
     def on_validation_start(self) -> None:
         self.on_test_start()
-
-    def on_test_epoch_end(self) -> None:
-        pass
-
-    def on_test_batch_end(
-        self,
-        outputs: Optional[Any] = None,
-        batch: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-        batch_idx: int = -1,
-    ) -> None:
-        pass
-
-    def on_validation_end(
-        self,
-        outputs: Optional[Any] = None,
-        batch: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-        batch_idx: int = -1,
-    ) -> None:
-        pass
 
     def _group_lr_parameters(self, base_lr: float) -> List[Dict[str, Any]]:
         """Group parameters with appropriate learning rates and gradient clipping.
@@ -1698,15 +1749,18 @@ class LightningBase(UtilityBase, pl.LightningModule):
         param_groups = []
 
         for group_name, group_params in params.items():
+
             if group_params:  # Only create groups with parameters
                 group_config = self.lr_parameter_groups.get(group_name, {})
-                lr_factor = group_config.get("lr_factor", 1.0)
-                param_groups.append(
-                    {
-                        "params": group_params,
-                        "lr": base_lr * lr_factor,
-                    }
-                )
+                group_config["name"] = group_name
+                group_config["params"] = group_params
+
+                # Set learning rate based on group configuration
+                lr_factor = group_config.pop("lr_factor", 1.0)
+                if not "lr" in group_config:
+                    group_config["lr"] = base_lr * lr_factor
+
+                param_groups.append(group_config)
 
         return param_groups
 
@@ -1739,6 +1793,7 @@ class LightningBase(UtilityBase, pl.LightningModule):
             param_groups = self._group_lr_parameters(scaled_lr)
 
             optimizer_class = getattr(torch.optim, self.optimizer)
+
             optimizer = optimizer_class(param_groups, **self.optimizer_kwargs)
             return optimizer
         else:

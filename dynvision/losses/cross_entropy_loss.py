@@ -46,7 +46,7 @@ class CrossEntropyLoss(BaseLoss):
         self,
         reduction: str = "mean",
         weight: Optional[torch.Tensor] = None,
-        ignore_index: int = -100,
+        ignore_index: int = -1,
     ) -> None:
         """Initialize the cross entropy loss function.
 

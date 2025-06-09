@@ -1,3 +1,4 @@
+data_timesteps: 1
 
 mounted_datasets:
     - imagenet

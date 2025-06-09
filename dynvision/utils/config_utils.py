@@ -115,6 +115,9 @@ def filter_kwargs(
             known.update(base_known)
             unknown.update(base_unknown)
 
+        # Remove entries in `unknown` that are already in `known`
+        unknown = {k: v for k, v in unknown.items() if k not in known}
+
         return known, unknown
 
     else:

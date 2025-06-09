@@ -1,32 +1,90 @@
-"""Train a neural network model on a dataset.
+"""Train a neural network model on a dataset with comprehensive Pydantic parameter management.
 
-This script handles the complete training pipeline, including:
-- Data loading and preprocessing
-- Model initialization and configuration
-- Training
-- Checkpointing and monitoring
-- Result saving and analysis
+This script handles the complete training pipeline for DynVision models with type-safe,
+validated parameter handling using composite Pydantic configuration classes.
 
-The script supports various training configurations and includes features like:
-- Early stopping with minimum performance threshold
-- Learning rate monitoring
-- Weight distribution tracking
-- Temporal dynamics monitoring for applicable models
+Features:
+- Composite configuration management (ModelParams + TrainerParams + DataParams)
+- Automatic parameter consistency validation and optimization
+- Learning rate scaling based on effective batch size
+- Memory optimization for large datasets and distributed training
+- Advanced error handling with informative feedback
+- Configuration export for full reproducibility
 
 Example:
-    $ python train_model.py --config_path configs/train_config.yaml --model_name MyModel
+    $ python train_model.py --config_path configs/train_config.yaml --model_name DyRCNNx4
 """
 
-import argparse
 import logging
-import multiprocessing
 import os
+import sys
+
+
+def should_clean_distributed_env():
+    """
+    Robust detection of distributed training using standard PyTorch patterns.
+
+    Returns True if we're definitely in distributed mode, False otherwise.
+    """
+
+    world_size = os.environ.get("WORLD_SIZE")
+
+    if world_size is not None and int(world_size) > 1:
+        return False
+
+    return True
+
+
+def clean_distributed_env():
+    """Clean distributed training environment variables for non-distributed training."""
+    if not should_clean_distributed_env():
+        return
+
+    print("Non-distributed mode - cleaning problematic environment variables")
+
+    distributed_vars = [
+        "RANK",
+        "LOCAL_RANK",
+        "WORLD_SIZE",
+        "LOCAL_WORLD_SIZE",
+        "MASTER_ADDR",
+        "MASTER_PORT",
+        "NODE_RANK",
+        "GROUP_RANK",
+        "SLURM_PROCID",
+        "SLURM_LOCALID",
+        "SLURM_NTASKS",
+        "SLURM_NNODES",
+    ]
+
+    cleaned_vars = []
+    for var in distributed_vars:
+        if var in os.environ:
+            # Remove empty strings or problematic values
+            if os.environ[var] in ["", "0"] or not os.environ[var].strip():
+                del os.environ[var]
+                cleaned_vars.append(var)
+
+    if cleaned_vars:
+        print(f"Cleaned environment variables: {cleaned_vars}")
+
+    # Set single-device mode explicitly for non-distributed training
+    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
+
+
+# Clean environment conditionally before ANY imports
+clean_distributed_env()
+
+import multiprocessing
+from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
+import ffcv
 
 from dynvision import models
 from dynvision.data.dataloader import (
@@ -35,36 +93,30 @@ from dynvision.data.dataloader import (
     get_train_val_loaders,
 )
 from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
+from dynvision.data.dataloader import get_train_val_loaders, get_data_loader
+from dynvision.data.datasets import get_dataset
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
-    parse_parameters,
     filter_kwargs,
     str_to_bool,
     handle_errors,
 )
 from dynvision.visualization import callbacks as custom_callbacks
 
+# Import the Pydantic parameter classes
+from dynvision.hyperparameters import TrainingParams, DynVisionConfigError
+
 logger = logging.getLogger(__name__)
 
 
 class EarlyStoppingWithMin(pl.callbacks.EarlyStopping):
-    """Enhanced early stopping with minimum performance threshold.
-
-    This callback extends the standard early stopping by adding a minimum
-    performance threshold that must be met before early stopping is considered.
-
-    Args:
-        monitor: Metric to monitor
-        patience: Number of epochs to wait for improvement
-        min_val_accuracy: Minimum validation accuracy required
-        **kwargs: Additional arguments passed to EarlyStopping
-    """
+    """Enhanced early stopping with minimum performance threshold."""
 
     def __init__(
         self,
         monitor: str = "val_accuracy",
         patience: int = 5,
-        min_val_accuracy: float = 0.75,
+        min_val_accuracy: float = 0.7,
         **kwargs: Any,
     ) -> None:
         super().__init__(monitor=monitor, patience=patience, **kwargs)
@@ -73,485 +125,543 @@ class EarlyStoppingWithMin(pl.callbacks.EarlyStopping):
     def on_validation_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
-        """Check validation metrics and update early stopping state.
-
-        Args:
-            trainer: PyTorch Lightning trainer instance
-            pl_module: The model being trained
-        """
+        """Check validation metrics and update early stopping state."""
         current_value = trainer.callback_metrics.get(self.monitor)
         if current_value is not None and current_value >= self.min_val_accuracy:
             super().on_validation_epoch_end(trainer, pl_module)
         else:
+            # Reset wait count if minimum performance not met
             self.wait_count = 0
 
 
-def create_argument_parser() -> argparse.ArgumentParser:
-    """Create and return the argument parser for model training.
+class DataModule(pl.LightningDataModule):
+    """Enhanced DataModule with unified dataloader creation and distributed handling."""
 
-    Returns:
-        argparse.ArgumentParser: Configured argument parser
-    """
-    parser = argparse.ArgumentParser(
-        description="Train a neural network model.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--config_path",
-        type=Path,
-        help="Path to the training configuration file",
-    )
-    parser.add_argument(
-        "--input_model_state",
-        type=Path,
-        required=True,
-        help="Path to initial model state",
-    )
-    parser.add_argument("--model_name", type=str, help="Name of the model class")
-    parser.add_argument(
-        "--dataset_train", type=Path, required=True, help="Path to training dataset"
-    )
-    parser.add_argument(
-        "--dataset_val", type=Path, required=True, help="Path to validation dataset"
-    )
-    parser.add_argument(
-        "--data_name",
-        type=str,
-        required=True,
-        help="Name of data used for transform",
-    )
-    parser.add_argument("--epochs", type=int, help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, help="Training batch size")
-    parser.add_argument(
-        "--output_model_state",
-        type=Path,
-        required=True,
-        help="Path to save trained model",
-    )
-    parser.add_argument("--resolution", type=int, help="Input image resolution")
-    parser.add_argument(
-        "--n_timesteps",
-        "--tsteps",
-        type=int,
-        help="Number of timesteps to repeat image",
-    )
-    parser.add_argument("--seed", type=str, help="Random seed for reproducibility")
-    parser.add_argument(
-        "--check_val_every_n_epoch",
-        type=int,
-        help="Validation check interval",
-    )
-    parser.add_argument(
-        "--accumulate_grad_batches",
-        type=int,
-        help="Number of batches for gradient accumulation",
-    )
-    parser.add_argument(
-        "--precision", type=str, help="Numerical precision for training"
-    )
-    parser.add_argument("--profiler", type=str, default="None", help="Profiler type")
-    parser.add_argument(
-        "--benchmark", type=str_to_bool, help="Enable benchmarking mode"
-    )
-    parser.add_argument(
-        "--store_responses", type=int, help="Number of responses to store"
-    )
-    parser.add_argument(
-        "--enable_progress_bar",
-        type=str_to_bool,
-        default=True,
-        help="Show progress bar during training",
-    )
-    parser.add_argument(
-        "--loss", nargs="+", type=str, required=True, help="Loss function names"
-    )
-    parser.add_argument(
-        "--loss_config", nargs="+", type=str, help="Loss function configurations"
-    )
-    parser.add_argument(
-        "--use_ffcv", type=str_to_bool, help="Use FFCV for data loading"
-    )
-    return parser
+    def __init__(self, config: TrainingParams):
+        super().__init__()
+        self.config = config
+        self.train_loader = None
+        self.val_loader = None
+        self._preview_loader = None
 
+        # Validate required parameters early
+        self._validate_config()
 
-@handle_errors(verbose=True)
-def setup_data_loaders(
-    config: Any, dataloader_args: Dict[str, Any], trainer=None
-) -> Tuple[DataLoader, DataLoader]:
-    """Set up training and validation data loaders.
+    def _validate_config(self) -> None:
+        """Validate configuration parameters."""
+        if self.config.data.use_ffcv:
+            required_paths = ["dataset_train", "dataset_val"]
+            missing = [p for p in required_paths if not getattr(self.config, p, None)]
+            if missing:
+                raise DynVisionConfigError(f"FFCV mode requires: {missing}")
+        else:
+            if not getattr(self.config, "dataset_link", None):
+                raise DynVisionConfigError("PyTorch mode requires dataset_link")
 
-    Args:
-        config: Configuration object
-        dataloader_args: Arguments for data loader initialization
-        trainer: PyTorch Lightning trainer (for distributed training info)
+    def create_preview_loader(self) -> DataLoader:
+        """Create a minimal loader for dimension inference before trainer setup."""
+        if self._preview_loader is not None:
+            return self._preview_loader
 
-    Returns:
-        Tuple containing:
-            - Training data loader
-            - Validation data loader
-    """
-    is_distributed = False
+        # Create minimal config for preview
+        preview_config = self._create_preview_config()
 
-    if (
-        trainer is not None
-        and hasattr(trainer, "world_size")
-        and trainer.world_size > 1
-    ):
-        is_distributed = True
-        current_rank = trainer.global_rank
-        current_world_size = trainer.world_size
-    elif (
-        os.environ.get("USE_DISTRIBUTED", "false").lower() == "true"
-        or int(os.environ.get("WORLD_SIZE", 1)) > 1
-    ):
-        # Fallback for singularity containers where trainer might not be fully initialized
-        is_distributed = True
-        current_rank = int(os.environ.get("RANK", "0"))
-        current_world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    else:
-        # Single GPU training
-        current_rank = 0
-        current_world_size = 1
-
-    if is_distributed:
-        # For distributed training, add rank and world size info
-        dataloader_args.update(
-            {
-                "rank": current_rank,
-                "world_size": current_world_size,
-                "distributed": True,
-            }
-        )
-        logger.info(
-            f"Setting up distributed data loading: rank={current_rank}, world_size={current_world_size}"
-        )
-
-    # Check if PyTorch distributed is actually initialized
-    is_distributed_initialized = (
-        torch.distributed.is_available() and torch.distributed.is_initialized()
-    )
-
-    logger.info(
-        f"Data loader setup: is_distributed={is_distributed}, "
-        f"world_size_env={current_world_size}, distributed_initialized={is_distributed_initialized}"
-    )
-
-    # Only use distributed data loading if PyTorch distributed is properly initialized
-    # Otherwise, let PyTorch Lightning handle the distributed setup later
-    if is_distributed_initialized and is_distributed:
-        current_rank = torch.distributed.get_rank()
-        current_world_size = torch.distributed.get_world_size()
-
-        dataloader_args.update(
-            {
-                "rank": current_rank,
-                "world_size": current_world_size,
-                "distributed": True,
-            }
-        )
-        logger.info(
-            f"Using distributed data loading: rank={current_rank}, world_size={current_world_size}"
-        )
-    else:
-        # Don't use distributed data loading - PyTorch Lightning will handle distribution
-        if is_distributed:
-            logger.info(
-                "Distributed training planned but process group not initialized yet - using single-process data loading"
+        if self.config.data.use_ffcv:
+            self._preview_loader = self._create_ffcv_loader(
+                self.config.dataset_train,
+                preview_config,
+                train=True,
             )
         else:
-            logger.info("Single GPU training - using single-process data loading")
+            self._preview_loader = self._create_pytorch_loader(preview_config)
 
-        dataloader_args.update(
+        return self._preview_loader
+
+    def _create_preview_config(self) -> Dict[str, Any]:
+        """Create minimal configuration for preview loader."""
+        base_config = self.config.data.get_dataloader_kwargs()
+        return base_config | {
+            "distributed": False,
+            "batch_size": min(base_config.get("batch_size", 32), 32),
+            "num_workers": min(base_config.get("num_workers", 4), 1),
+            "shuffle": False,  # No need to shuffle for preview
+        }
+
+    def setup(self, stage: Optional[str] = None) -> None:
+        """Set up data loaders with proper distributed configuration."""
+        if stage not in ["fit", None]:
+            return
+
+        dataloader_config = self.config.data.get_dataloader_kwargs()
+
+        if self.config.data.use_ffcv:
+            self._setup_ffcv_loaders(dataloader_config)
+        else:
+            self._setup_pytorch_loaders(dataloader_config)
+
+    def _setup_ffcv_loaders(self, config: Dict[str, Any]) -> None:
+        """Set up FFCV data loaders."""
+        self.train_loader = self._create_ffcv_loader(
+            self.config.dataset_train, config, train=True
+        )
+        self.val_loader = self._create_ffcv_loader(
+            self.config.dataset_val, config, train=False
+        )
+
+    def _create_ffcv_loader(
+        self, path: Path, config: Dict[str, Any], train: bool
+    ) -> ffcv.loader.Loader:
+        """Create a single FFCV data loader."""
+        return get_ffcv_dataloader(path=path, **config)
+
+    def _setup_pytorch_loaders(self, config: Dict[str, Any]) -> None:
+        """Set up standard PyTorch data loaders."""
+        # Create dataset once and split
+        dataset = self._create_pytorch_dataset(**config)
+
+        self.train_loader, self.val_loader = get_train_val_loaders(
+            dataset=dataset, **config
+        )
+
+    def _create_pytorch_loader(self, config: Dict[str, Any]) -> DataLoader:
+        """Create a single PyTorch loader for preview."""
+        dataset = self._create_pytorch_dataset(**config)
+        return get_data_loader(dataset, **config)
+
+    def _create_pytorch_dataset(self, **kwargs) -> Dataset:
+        """Create PyTorch dataset with consistent configuration."""
+        return get_dataset(
+            data_path=self.config.dataset_link,
+            data_name=self.config.data.data_name,
+            **kwargs,
+        )
+
+    def train_dataloader(self) -> DataLoader:
+        """Return training data loader."""
+        if self.train_loader is None:
+            raise RuntimeError("DataModule not set up. Call setup() first.")
+        return self.train_loader
+
+    def val_dataloader(self) -> DataLoader:
+        """Return validation data loader."""
+        if self.val_loader is None:
+            raise RuntimeError("DataModule not set up. Call setup() first.")
+        return self.val_loader
+
+
+class CallbackManager:
+    """Enhanced callback management with configuration integration."""
+
+    def __init__(self, config: TrainingParams):
+        self.config = config
+
+    def setup_callbacks(self) -> Tuple[List[pl.Callback], Path]:
+        """Set up training callbacks based on configuration."""
+        callbacks = []
+
+        # Add model-specific callbacks
+        if self.config.model.n_timesteps > 1:
+            callbacks.append(custom_callbacks.MonitorClassifierResponses())
+
+        callbacks.append(custom_callbacks.MonitorWeightDistributions())
+
+        # Setup checkpointing
+        checkpoint_path = self._setup_checkpointing(callbacks)
+
+        # Add early stopping if configured
+        early_stopping_kwargs = (
+            self.config.trainer.get_early_stopping_callback_kwargs()
+        )
+        if early_stopping_kwargs:
+            callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))
+
+        # Add learning rate monitor
+        callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="epoch"))
+
+        # Add additional trainer callbacks if configured
+        if hasattr(self.config.trainer, "callbacks"):
+            for callback_config in self.config.trainer.callbacks:
+                callback = self._create_callback_from_config(callback_config)
+                if callback:
+                    callbacks.append(callback)
+
+        return callbacks, checkpoint_path
+
+    def _setup_checkpointing(self, callbacks: List[pl.Callback]) -> Path:
+        """Setup model checkpointing with configuration."""
+        # Generate checkpoint path
+        checkpoint_path = (
+            self.config.output_model_state.parent
+            / "checkpoints"
+            / self.config.output_model_state.stem
+        )
+
+        # Get checkpoint configuration
+        checkpoint_kwargs = self.config.trainer.get_checkpoint_callback_kwargs()
+        checkpoint_kwargs.update(
             {
-                "distributed": False,
+                "dirpath": checkpoint_path.parent,
+                "filename": checkpoint_path.name + "-{epoch:02d}-{val_loss:.2f}",
             }
         )
 
-    if config.use_ffcv:
-        train_loader = get_ffcv_dataloader(
-            path=config.dataset_train,
-            data_transform=f"ffcv_train",
-            **dataloader_args,
+        checkpoint_callback = pl.callbacks.ModelCheckpoint(**checkpoint_kwargs)
+        callbacks.append(checkpoint_callback)
+
+        return checkpoint_path
+
+    def _create_callback_from_config(
+        self, callback_config: Dict[str, Any]
+    ) -> Optional[pl.Callback]:
+        """Create callback from configuration dictionary."""
+        # This would be extended to support various callback types
+        callback_type = callback_config.get("type")
+        if callback_type == "ModelCheckpoint":
+            return pl.callbacks.ModelCheckpoint(**callback_config.get("kwargs", {}))
+        elif callback_type == "EarlyStopping":
+            return pl.callbacks.EarlyStopping(**callback_config.get("kwargs", {}))
+        else:
+            logger.warning(f"Unknown callback type: {callback_type}")
+            return None
+
+
+class ModelManager:
+    """Enhanced model management with configuration integration."""
+
+    def __init__(self, config: TrainingParams):
+        self.config = config
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    def load_and_initialize_model(self) -> pl.LightningModule:
+        """Load and initialize model with current configuration."""
+        # Load state dict
+        state_dict = torch.load(
+            self.config.input_model_state, map_location=self.device
         )
 
-        val_loader = get_ffcv_dataloader(
-            path=config.dataset_val,
-            data_transform=f"ffcv_test",
-            **dataloader_args,
+        # Create model with current configuration
+        model_class = getattr(models, self.config.model.model_name)
+        model_kwargs = self.config.model.get_model_creation_kwargs(model_class)
+
+        logger.info(f"Creating {model_class.__name__} with:")
+        logger.info(f"  - Input dims: {model_kwargs.get('input_dims')}")
+        logger.info(f"  - N classes: {model_kwargs.get('n_classes')}")
+        logger.info(f"  - N timesteps: {model_kwargs.get('n_timesteps')}")
+
+        model = model_class(**model_kwargs).to(self.device)
+
+        # Load state dict with error handling
+        try:
+            model.load_state_dict(state_dict, strict=True)
+            logger.info("Model state loaded successfully")
+        except Exception as e:
+            logger.warning(f"Strict loading failed: {e}. Trying non-strict...")
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            if missing:
+                logger.warning(f"Missing keys: {missing}")
+            if unexpected:
+                logger.warning(f"Unexpected keys: {unexpected}")
+
+        # Initialize model-specific settings
+        if hasattr(model, "set_residual_timesteps"):
+            model.set_residual_timesteps()
+
+        return model
+
+    def save_model(self, model: pl.LightningModule) -> None:
+        """Save trained model with configuration."""
+        torch.save(model.state_dict(), self.config.output_model_state)
+
+        # Export configuration alongside model
+        config_path = self.config.output_model_state.with_suffix(".config.yaml")
+        self.config.export_full_config(config_path)
+
+        logger.info(f"Model saved to {self.config.output_model_state}")
+        logger.info(f"Configuration exported to {config_path}")
+
+
+class TrainingOrchestrator:
+    """Enhanced training orchestrator with comprehensive configuration management."""
+
+    def __init__(self, config: TrainingParams):
+        self.config = config
+        self.datamodule = DataModule(config)
+        self.callback_manager = CallbackManager(config)
+        self.model_manager = ModelManager(config)
+
+    @contextmanager
+    def training_context(self):
+        """Enhanced training context with configuration logging."""
+        try:
+            # Setup
+            torch.set_float32_matmul_precision("medium")
+            torch.cuda.empty_cache()
+
+            # Log comprehensive configuration
+            self._log_training_configuration()
+
+            yield
+
+        finally:
+            # Cleanup
+            torch.cuda.empty_cache()
+
+    def _log_training_configuration(self) -> None:
+        """Log key training configuration information."""
+        logger.info("=" * 60)
+        logger.info("TRAINING CONFIGURATION")
+        logger.info("=" * 60)
+        logger.info(f"Model: {self.config.model.model_name}")
+        logger.info(f"Dataset: {self.config.data.data_name}")
+        logger.info(f"Global batch size: {self.config.global_batch_size}")
+        logger.info(f"Effective batch size: {self.config.effective_batch_size}")
+        logger.info(
+            f"Effective Learning rate: {self.config.effective_learning_rate:.6f}"
         )
-    else:
-        # TODO: Add support for non-ffcv data loaders
-        train_loader, val_loader = get_train_val_loaders(
-            path_train=config.dataset_train,
-            path_val=config.dataset_val,
-            data_transform="ffcv_train",
-            **dataloader_args,
-        )
-    return train_loader, val_loader
+        logger.info(f"Epochs: {self.config.trainer.epochs}")
+        logger.info(f"Precision: {self.config.trainer.precision}")
+        logger.info(f"Optimizer: {self.config.model.optimizer}")
 
+        if self.config.trainer.is_distributed:
+            logger.info("Distributed training enabled")
+            logger.info(f"World size: {self.config.trainer.world_size}")
+            logger.info(f"Distributed strategy: {self.config.trainer.strategy}")
+            logger.info(f"Number of nodes: {self.config.trainer.num_nodes}")
+            logger.info(f"Devices: {self.config.trainer.devices}")
 
-def setup_callbacks(config: Any) -> List[pl.Callback]:
-    """Set up training callbacks.
+        logger.info("=" * 60)
 
-    Args:
-        model: Model instance
-        config: Configuration object
+    def _setup_trainer(
+        self, callbacks: List[pl.Callback], pl_logger: pl.loggers.Logger
+    ) -> pl.Trainer:
+        """Setup PyTorch Lightning trainer with full configuration."""
+        # Get trainer kwargs from configuration
+        trainer_kwargs = self.config.trainer.get_trainer_kwargs()
 
-    Returns:
-        List[pl.Callback]: List of configured callbacks
-    """
-    callbacks = []
-
-    if hasattr(config, "n_timesteps") and config.n_timesteps > 1:
-        callbacks.append(custom_callbacks.MonitorClassifierResponses())
-
-    callbacks.append(custom_callbacks.MonitorWeightDistributions())
-
-    # Setup checkpointing
-    checkpoint_path = (
-        project_paths.large_logs / "checkpoints" / config.output_model_state.stem
-    )
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="val_loss",
-        save_top_k=1,
-        mode="min",
-        dirpath=checkpoint_path.parent,
-        filename=checkpoint_path.name + "-{epoch:02d}-{val_loss:.2f}",
-        save_last=True,
-    )
-    callbacks.append(checkpoint_callback)
-
-    # Add early stopping
-    early_stop_callback = EarlyStoppingWithMin(
-        monitor="val_accuracy", patience=5, mode="max", min_val_accuracy=0.7
-    )
-    callbacks.append(early_stop_callback)
-
-    # Add learning rate monitor
-    callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="epoch"))
-
-    return callbacks, checkpoint_path
-
-
-def setup_trainer(
-    config: Any,
-    train_logger: pl.loggers.WandbLogger,
-    callbacks: List[pl.Callback] = [],
-) -> pl.Trainer:
-    # Base trainer settings
-    trainer_kwargs = {
-        "callbacks": callbacks,
-        "max_epochs": config.epochs,
-        "logger": train_logger,
-        "precision": config.precision,
-        "check_val_every_n_epoch": config.check_val_every_n_epoch,
-        "accumulate_grad_batches": config.accumulate_grad_batches,
-        "profiler": None if config.profiler == "None" else config.profiler,
-        "enable_progress_bar": config.enable_progress_bar,
-        "benchmark": getattr(config, "benchmark", True),
-        "log_every_n_steps": int(config.log_every_n_steps),
-        "limit_train_batches": 1.0,  # Use full dataset
-        "limit_val_batches": 0.25,  # Use smaller validation set
-        "num_sanity_val_steps": 0,  # Skip sanity check
-        "reload_dataloaders_every_n_epochs": 0,  # Don't reload unnecessarily
-    }
-    # Check GPU availability - use PyTorch's detection
-    gpu_count = torch.cuda.device_count()
-    use_distributed = os.environ.get("USE_DISTRIBUTED", "false").lower() == "true"
-
-    logger.info(f"GPU configuration: gpu_count={gpu_count}")
-    logger.info(f"Distributed training enabled: {use_distributed}")
-
-    # Configure training strategy based on available resources
-    if use_distributed and gpu_count > 1:
-        # PyTorch Lightning DDP - let Lightning handle process spawning
-        logger.info(f"Using PyTorch Lightning DDP with {gpu_count} GPUs")
-
-        dist_config = config.distributed
-
-        # Set distributed training parameters
+        # Add additional configuration
         trainer_kwargs.update(
             {
-                "strategy": dist_config.get("strategy", "ddp"),
-                "devices": gpu_count,  # Use all visible GPUs
-                "num_nodes": dist_config.get("num_nodes", 1),
-                "accelerator": dist_config.get("accelerator", "gpu"),
-                "sync_batchnorm": dist_config.get("sync_batchnorm", True),
+                "callbacks": callbacks,
+                "logger": pl_logger,
             }
         )
 
-        # Add DDP-specific settings if using DDP
-        if trainer_kwargs["strategy"] == "ddp":
-            trainer_kwargs["strategy"] = pl.strategies.DDPStrategy(
-                find_unused_parameters=dist_config.get(
-                    "find_unused_parameters", False
-                ),
-                gradient_as_bucket_view=dist_config.get(
-                    "gradient_as_bucket_view", True
-                ),
-                process_group_backend=dist_config.get("process_group_backend", "nccl"),
-                # start_method="spawn",  # Force process spawning
+        # Filter valid arguments for Trainer
+        trainer_kwargs, unknown = filter_kwargs(pl.Trainer, trainer_kwargs)
+        if unknown:
+            logger.info(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
+
+        return pl.Trainer(**trainer_kwargs)
+
+    def infer_and_update_from_data(self, pl_logger: pl.loggers.Logger) -> None:
+        """
+        Infer model parameters from training data and update configuration.
+
+        This method creates a preview loader, loads a sample batch, extracts dimensions,
+        validates consistency, and updates the model configuration accordingly.
+        """
+        try:
+            # Create preview loader (non-distributed for dimension inference)
+            preview_loader = self.datamodule.create_preview_loader()
+
+            # Load a sample from the preview dataloader
+            inputs, label_indices, *paths = next(iter(preview_loader))
+            inputs = _adjust_data_dimensions(inputs)
+            label_indices = _adjust_label_dimensions(label_indices)
+
+            # Extract actual dimensions
+            batch_size, actual_n_timesteps, *spatial_dims = inputs.shape
+            actual_input_dims = (actual_n_timesteps, *spatial_dims)
+
+            logger.info(f"Extracted from training data:")
+            logger.info(f"  - Input shape: {inputs.size()}")
+            logger.info(f"  - Input dims: {actual_input_dims}")
+            logger.info(f"  - Pixel stats: {inputs.mean():.3f} ± {inputs.std():.3f}")
+
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+            # Extract n_classes from state dict
+            state_dict = torch.load(self.config.input_model_state, map_location=device)
+            actual_n_classes = self._extract_n_classes_from_state_dict(state_dict)
+
+            # Update model parameters using the dedicated method
+            self.config.update_model_parameters_from_data(
+                input_dims=actual_input_dims,
+                n_classes=actual_n_classes,
+                validate_consistency=True,
             )
 
-        # Log distributed training configuration
-        logger.info("Distributed training configuration:")
-        logger.info(f"Strategy: {trainer_kwargs.get('strategy')}")
-        logger.info(f"Number of devices: {trainer_kwargs.get('devices')}")
-        logger.info(f"Number of nodes: {trainer_kwargs.get('num_nodes')}")
-    else:
-        # Single GPU training
-        logger.info("Using single GPU training")
-        trainer_kwargs.update(
-            {
-                "devices": 1,
-                "strategy": "auto",
-                "num_nodes": 1,
-                "accelerator": "gpu" if torch.cuda.is_available() else "cpu",
-                "sync_batchnorm": False,
-            }
-        )
+            # Log sample images
+            self._log_sample_images(inputs, label_indices, pl_logger)
 
-    trainer_kwargs, _ = filter_kwargs(
-        pl.Trainer,
-        trainer_kwargs,
-    )
-    return pl.Trainer(**trainer_kwargs)
+        except Exception as e:
+            logger.error(f"Failed to infer parameters from data: {e}")
+            logger.warning("Continuing with configuration defaults")
+
+    def _extract_n_classes_from_state_dict(
+        self, state_dict: Dict[str, torch.Tensor]
+    ) -> int:
+        """Extract number of classes from model state dict."""
+        # Look for classifier layer first
+        for key in state_dict.keys():
+            if "classifier" in key and "weight" in key:
+                n_classes = state_dict[key].shape[0]
+                logger.info(f"Found n_classes={n_classes} from {key}")
+                return n_classes
+
+        # Fallback: use last weight layer
+        weight_keys = [k for k in state_dict.keys() if "weight" in k]
+        if weight_keys:
+            last_key = weight_keys[-1]
+            n_classes = state_dict[last_key].shape[0]
+            logger.info(f"Found n_classes={n_classes} from {last_key}")
+            return n_classes
+
+        logger.warning("Could not extract n_classes from state dict")
+        return self.config.model.n_classes
+
+    def _log_sample_images(
+        self, inputs: torch.Tensor, labels: torch.Tensor, pl_logger: pl.loggers.Logger
+    ) -> None:
+        """Log sample images to the logger."""
+        if not hasattr(pl_logger, "log_image"):
+            return
+
+        try:
+            n_timesteps = inputs.shape[1]
+            sample_images = [inputs[0, t] for t in range(n_timesteps)]
+            sample_labels = [str(labels[0, t].item()) for t in range(n_timesteps)]
+
+            pl_logger.log_image(
+                key="input_samples", images=sample_images, caption=sample_labels
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log sample images: {e}")
+
+    def run_training(self) -> int:
+        """Run the complete training pipeline with comprehensive error handling."""
+        with self.training_context():
+            try:
+                # Validate configuration
+                errors, warnings = self._validate_configuration()
+                if errors:
+                    logger.error("Configuration validation failed:")
+                    for error in errors:
+                        logger.error(f"  - {error}")
+                    return 1
+
+                if warnings:
+                    logger.warning("Configuration warnings:")
+                    for warning in warnings:
+                        logger.warning(f"  - {warning}")
+
+                # Initialize logger
+                pl_logger = pl.loggers.WandbLogger(
+                    project=project_paths.project_name,
+                    save_dir=project_paths.large_logs,
+                    config=self.config.get_full_config(flat=True),
+                    tags=["train"],
+                    name=f"{self.config.output_model_state.stem}",
+                )
+                # Setup trainer components
+                callbacks, checkpoint_path = self.callback_manager.setup_callbacks()
+                trainer = self._setup_trainer(callbacks, pl_logger)
+
+                # Infer and update model parameters from preview data (before trainer setup)
+                self.infer_and_update_from_data(pl_logger)
+
+                # Load and initialize model with updated configuration
+                model = self.model_manager.load_and_initialize_model()
+
+                # Check for existing checkpoint
+                existing_checkpoint = self._find_existing_checkpoint(checkpoint_path)
+
+                # Train model using DataModule (handles distributed setup properly)
+                logger.info("Starting training...")
+                trainer.fit(
+                    model, datamodule=self.datamodule, ckpt_path=existing_checkpoint
+                )
+
+                # Save trained model
+                self.model_manager.save_model(model)
+
+                logger.info("Training completed successfully!")
+                return 0
+
+            except Exception as e:
+                logger.error(f"Training failed: {e}")
+                # if logger.isEnabledFor(logging.DEBUG):
+                import traceback
+
+                traceback.print_exc()
+                return 1
+
+    def _validate_configuration(self) -> Tuple[List[str], List[str]]:
+        """Validate configuration and return errors and warnings."""
+        errors = []
+        warnings = []
+
+        # Validate component configurations
+        try:
+            bio_issues = self.config.model.validate_biological_feasibility()
+            warnings.extend(bio_issues)
+
+            context_issues = self.config.model.validate_context_requirements()
+            warnings.extend(context_issues)
+
+            trainer_issues = self.config.trainer.validate_context_requirements()
+            warnings.extend(trainer_issues)
+
+        except Exception as e:
+            errors.append(f"Configuration validation failed: {e}")
+
+        return errors, warnings
+
+    def _find_existing_checkpoint(self, checkpoint_path: Path) -> Optional[Path]:
+        """Find existing checkpoint for resuming training."""
+        checkpoint_dir = checkpoint_path.parent
+        if not checkpoint_dir.exists():
+            return None
+
+        # Look for checkpoint files
+        checkpoint_files = list(checkpoint_dir.glob(f"{checkpoint_path.name}*.ckpt"))
+        if checkpoint_files:
+            # Return the most recent checkpoint
+            latest_checkpoint = max(checkpoint_files, key=lambda p: p.stat().st_mtime)
+            logger.info(f"Found existing checkpoint: {latest_checkpoint}")
+            return latest_checkpoint
+
+        return None
 
 
 @handle_errors(verbose=True)
-def run_training(config) -> int:
-    # Initialize logger for pytorch lightning
-    pl_logger = pl.loggers.WandbLogger(
-        project=project_paths.project_name,
-        save_dir=project_paths.large_logs,
-        config=vars(config),
-        tags=["train"],
-    )
-
-    logger.setLevel(getattr(logging, config.log_level.upper(), "INFO"))
-
-    # Log system information
-    num_cpu_cores = len(os.sched_getaffinity(0))
-    num_gpu_cores = torch.cuda.device_count()
-    logger.info(
-        f"Available compute resources: CPU={num_cpu_cores}, GPU={num_gpu_cores}"
-    )
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Trying to use device {device}")
-
-    # Scale learning rate if enabled
-    print(f"Learning Rate: {config.learning_rate}")
-    if hasattr(config, "lr_scaling") and config.lr_scaling["enabled"]:
-        scale = min(
-            config.batch_size / config.lr_scaling["ref_batch_size"],
-            config.lr_scaling["threshold_factor"],
-        )
-        config.learning_rate *= scale
-        logger.info(
-            f"Scaled learning rate by {scale:.4f} for batch size {config.batch_size}"
-        )
-
-    # Setup training
-    callbacks, checkpoint_path = setup_callbacks(config)
-    trainer = setup_trainer(callbacks=callbacks, config=config, train_logger=pl_logger)
-
-    # Setup data loaders
-    data_mean = config.data_statistics[config.data_name]["mean"]
-    data_std = config.data_statistics[config.data_name]["std"]
-    dataloader_args = {
-        # not adding time extension in the data loader causes the model to repeat input
-        # over time during the model steps which is more efficient, because it requires
-        # less GPU transfer
-        # "n_timesteps": config.n_timesteps,
-        "batch_size": config.batch_size,
-        "encoding": "image",
-        "resolution": config.resolution,
-        "normalize": (data_mean, data_std),
-    }
-    train_loader, val_loader = setup_data_loaders(
-        config, dataloader_args=dataloader_args, trainer=trainer
-    )
-
-    # Log example training data
-    inputs, label_indices, *paths = next(iter(train_loader))
-    inputs = _adjust_data_dimensions(inputs)
-    label_indices = _adjust_label_dimensions(label_indices)
-
-    logger.info(f"input shape: {inputs.size()}")
-    logger.info(f"label shape: {label_indices.size()}")
-    logger.info(
-        f"pixel values in first batch: {inputs.mean():.3f} ± {inputs.std():.3f}"
-    )
-
-    batch_size, n_timesteps, *input_shape = inputs.shape
-    pl_logger.log_image(
-        key="input_samples",
-        images=[inputs[0, t] for t in range(n_timesteps)],
-        caption=[str(label_indices[0, t]) for t in range(n_timesteps)],
-    )
-
-    # Load model
-    state_dict = torch.load(config.input_model_state, map_location=device)
-    last_key = next(reversed(state_dict))
-    n_classes = len(state_dict[last_key])
-
-    input_dims = (n_timesteps, *input_shape)
-    setattr(config, "input_dims", input_dims)
-    setattr(config, "n_classes", n_classes)
-
-    model_class = getattr(models, config.model_name)
-    model_args, _ = filter_kwargs(model_class, vars(config))
-    model = model_class(**model_args).to(device)
-    model.load_state_dict(state_dict)
-
-    # Determine residual timesteps before training to avoid issues in distributed mode
-    if model.hasattr("set_residual_timesteps"):
-        model.set_residual_timesteps()
-
-    # Load checkpoint if available
-    files = list(checkpoint_path.parent.glob(f"{checkpoint_path.name}*"))
-    if files:
-        checkpoint_path = files[-1]
-        model = model_class.load_from_checkpoint(checkpoint_path)
-        logger.info(f"Resumed from checkpoint: {checkpoint_path}")
-    else:
-        checkpoint_path = None
-
-    # Train model
-    torch.set_float32_matmul_precision("medium")
-    torch.cuda.empty_cache()
-
-    trainer.fit(
-        model,
-        train_loader,
-        val_loader,
-        ckpt_path=checkpoint_path,
-    )
-
-    # Save trained model
-    config.output_model_state.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), config.output_model_state)
-    logger.info(f"Model saved to {config.output_model_state}")
-
-    return 0
-
-
 def main() -> int:
-    """Main entry point for training."""
-    parser = create_argument_parser()
-    config = parse_parameters(parser)
-    return run_training(config)
+    """Main entry point for training with comprehensive configuration management."""
+    try:
+        config = TrainingParams.from_cli_and_config()
+        config.setup_logging()
+
+    except Exception as e:
+        logger.error(f"Failed to create training configuration: {e}")
+        return 1
+
+    try:
+        orchestrator = TrainingOrchestrator(config)
+        return orchestrator.run_training()
+    except Exception as e:
+        logger.error(f"Training orchestration failed: {e}")
+        return 1
 
 
-def run_main():
+def run_main() -> int:
     """Entry point for distributed training."""
     return main()
 
 
 if __name__ == "__main__":
-    # Set process start method for SLURM
+    # Set process start method for SLURM compatibility
     if os.environ.get("SLURM_JOB_ID"):
         multiprocessing.set_start_method("spawn", force=True)
 
     # Run training
-    exit(run_main())
+    sys.exit(run_main())

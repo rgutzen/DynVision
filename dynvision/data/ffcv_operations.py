@@ -40,16 +40,19 @@ class ExtendDataTimeFFCV(Operation):
     def declare_state_and_memory(
         self, previous_state: State
     ) -> Tuple[State, Optional[AllocationQuery]]:
-        if len(previous_state.shape) == 4:  # [batch, height, width, channels]
+        n_dims = len(previous_state.shape)
+
+        if n_dims == 4:  # [batch, height, width, channels]
             batch, height, width, channels = previous_state.shape
             new_shape = (batch, self.n_timesteps, height, width, channels)
-        elif len(previous_state.shape) == 3:  # [height, width, channels]
+        elif n_dims == 3:  # [height, width, channels]
             height, width, channels = previous_state.shape
             new_shape = (self.n_timesteps, height, width, channels)
         else:
             raise ValueError(
                 f"Expected 3D or 4D input tensor, got shape: {previous_state.shape}"
             )
+
         # Create new state with updated shape
         new_state = replace(previous_state, shape=new_shape)
         # Allocate memory for the output
@@ -92,16 +95,19 @@ class ExtendLabelTimeFFCV(Operation):
     def declare_state_and_memory(
         self, previous_state: State
     ) -> Tuple[State, Optional[AllocationQuery]]:
-        if len(previous_state.shape) == 1:  # [dim]
+        n_dims = len(previous_state.shape)
+
+        if n_dims == 1:  # [dim]
             dim = previous_state.shape[0]
             new_shape = (self.n_timesteps, dim)
-        elif len(previous_state.shape) == 2:  # [batch, dim]
+        elif n_dims == 2:  # [batch, dim]
             batch, dim = previous_state.shape
             new_shape = (batch, self.n_timesteps, dim)
         else:
             raise ValueError(
                 f"Expected 1D or 2D input tensor, got shape: {previous_state.shape}"
             )
+
         # Create new state with updated shape
         new_state = replace(previous_state, shape=new_shape)
         # Allocate memory for the output

@@ -393,7 +393,7 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
         recurrence_type: str = "self",
         recurrence_delay: float = 0,  # ms
         recurrence_influence: Union[Callable, str] = "additive",
-        history_length: Optional[float] = None,  # ms
+        history_length: Optional[int] = None,  # ms
         fixed_self_weight: Optional[float] = None,
         max_weight_init: float = 0.001,
         parametrization: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,

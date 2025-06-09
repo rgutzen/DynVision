@@ -1,0 +1,765 @@
+"""
+Model parameter handling for DynVision using Pydantic.
+
+This module provides type-safe parameter management for neural network models,
+including biological parameters, architecture settings, optimizer/scheduler 
+configuration, and loss functions.
+"""
+
+from pydantic import Field, field_validator, model_validator, ConfigDict
+from typing import Dict, Any, Optional, List, Union, Tuple, Literal
+import logging
+from pathlib import Path
+
+from dynvision.hyperparameters.base_params import BaseParams, DynVisionValidationError
+
+
+class ModelParams(BaseParams):
+    """
+    Model parameters for neural network architecture and training configuration.
+
+    Handles biological parameters, architecture settings, optimizer/scheduler
+    configuration, loss functions, and model-specific parameters.
+    """
+
+    # ===== CORE ARCHITECTURE =====
+    model_name: str = Field(
+        default="None", description="Name of the model architecture"
+    )
+    n_classes: int = Field(default=10, description="Number of output classes", ge=1)
+    input_dims: Tuple[int, ...] = Field(
+        default=(20, 3, 224, 224),
+        description="Input dimensions (timesteps, channels, height, width)",
+    )
+    n_timesteps: int = Field(
+        default=20, description="Number of timesteps for model processing", ge=1
+    )
+
+    # ===== BIOLOGICAL PARAMETERS =====
+    dt: float = Field(default=1.0, description="Integration time step (ms)", gt=0.0)
+    tau: float = Field(default=10.0, description="Neural time constant (ms)", gt=0.0)
+    t_feedforward: float = Field(
+        default=1.0, description="Feedforward delay (ms)", ge=0.0
+    )
+    t_recurrence: float = Field(
+        default=1.0, description="Recurrent delay (ms)", ge=0.0
+    )
+    dynamics_solver: Literal["euler", "rk4"] = Field(
+        default="euler", description="Dynamical systems solver"
+    )
+
+    # ===== RECURRENT ARCHITECTURE =====
+    recurrence_type: Literal[
+        "full",
+        "self",
+        "depthwise",
+        "pointwise",
+        "depthpointwise",
+        "pointdepthwise",
+        "local",
+        "localdepthwise",
+        "none",
+    ] = Field(default="full", description="Type of recurrent connections")
+
+    # ===== CONNECTIVITY =====
+    skip_connections: bool = Field(
+        default=False, description="Enable skip connections between layers"
+    )
+    feedback_connections: bool = Field(
+        default=False,
+        description="Enable feedback connections from higher to lower layers",
+    )
+
+    # ===== NONLINEARITIES =====
+    supralinearity: bool = Field(
+        default=False, description="Enable supralinear activation functions"
+    )
+    supralinear_alpha: float = Field(
+        default=1.5, description="Supralinearity exponent", gt=0.0
+    )
+
+    # ===== RESPONSE STORAGE =====
+    store_responses: int = Field(
+        default=0,
+        description="Number of responses to store during evaluation (0 = disabled)",
+        ge=0,
+        le=1000,
+    )
+    store_responses_on_cpu: bool = Field(
+        default=True, description="Store responses on CPU to save GPU memory"
+    )
+    classifier_name: str = Field(
+        default="classifier", description="Name of the classifier layer"
+    )
+
+    # ===== LOSS CONFIGURATION =====
+    loss: Union[str, List[str]] = Field(
+        default="CrossEntropyLoss",
+        description="Loss function name or list of loss functions",
+    )
+    loss_reaction_time: float = Field(
+        default=0.0, description="Reaction time for loss calculation (ms)", ge=0.0
+    )
+    # Keep the old criterion_params for backward compatibility
+    criterion_params: List[Tuple[str, Dict[str, Any]]] = Field(
+        default_factory=lambda: [("CrossEntropyLoss", {"weight": 1.0})],
+        description="Loss function parameters as (name, config) tuples",
+    )
+
+    # ===== OPTIMIZER CONFIGURATION =====
+    learning_rate: float = Field(
+        default=0.001, description="Learning rate for optimizer", gt=0.0
+    )
+    optimizer: str = Field(
+        default="Adam", description="Optimizer type (Adam, SGD, AdamW, etc.)"
+    )
+    optimizer_kwargs: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional optimizer arguments"
+    )
+    optimizer_configs: Dict[str, Any] = Field(
+        default_factory=dict, description="Optimizer configuration dictionary"
+    )
+
+    # ===== LEARNING RATE PARAMETER GROUPS =====
+    lr_parameter_groups: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Learning rate factors for different parameter groups",
+    )
+
+    # ===== SCHEDULER CONFIGURATION =====
+    scheduler: str = Field(
+        default="StepLR", description="Learning rate scheduler type"
+    )
+    scheduler_kwargs: Dict[str, Any] = Field(
+        default_factory=dict, description="Scheduler arguments"
+    )
+    scheduler_configs: Dict[str, Any] = Field(
+        default_factory=dict, description="Scheduler configuration"
+    )
+
+    # ===== TRAINING BEHAVIOR =====
+    retain_graph: bool = Field(
+        default=False,
+        description="Whether to retain computation graph for backward pass",
+    )
+    non_label_index: int = Field(
+        default=-1, description="Index for non-label timesteps"
+    )
+
+    # ===== CUSTOM MODEL PARAMETERS =====
+    model_kwargs: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional model-specific arguments"
+    )
+
+    model_config = ConfigDict(
+        extra="allow",  # Allow additional fields
+        validate_assignment=True,  # Validate fields when assigned after creation
+        use_enum_values=True,  # Use enum values in serialization
+        validate_by_name=True,  # Allow validation using field names and aliases
+    )
+
+    @classmethod
+    def get_aliases(cls) -> Dict[str, str]:
+        """Return mapping of aliases to full parameter names."""
+        aliases = super().get_aliases()
+        aliases.update(
+            {
+                "lr": "learning_rate",
+                "opt": "optimizer",
+                "sched": "scheduler",
+                "rctype": "recurrence_type",
+                "trc": "t_recurrence",
+                "tff": "t_feedforward",
+                "solver": "dynamics_solver",
+                "lossrt": "loss_reaction_time",
+                "skip": "skip_connections",
+                "feedback": "feedback_connections",
+                "supralin": "supralinearity",
+                "classes": "n_classes",
+                "steps": "n_timesteps",
+                "tsteps": "n_timesteps",
+            }
+        )
+        return aliases
+
+    @field_validator("optimizer")
+    def validate_optimizer(cls, v):
+        """Validate optimizer name."""
+        valid_optimizers = [
+            "Adam",
+            "AdamW",
+            "SGD",
+            "RMSprop",
+            "Adagrad",
+            "Adadelta",
+            "Adamax",
+            "ASGD",
+            "LBFGS",
+            "NAdam",
+            "RAdam",
+            "Rprop",
+            "SparseAdam",
+        ]
+        if v not in valid_optimizers:
+            logging.warning(
+                f"Unknown optimizer: {v}. Valid options: {valid_optimizers}"
+            )
+        return v
+
+    @field_validator("scheduler")
+    def validate_scheduler(cls, v):
+        """Validate scheduler name."""
+        valid_schedulers = [
+            "StepLR",
+            "MultiStepLR",
+            "ExponentialLR",
+            "CosineAnnealingLR",
+            "ReduceLROnPlateau",
+            "CyclicLR",
+            "OneCycleLR",
+            "CosineAnnealingWarmRestarts",
+            "LinearLR",
+            "PolynomialLR",
+            "LambdaLR",
+            "MultiplicativeLR",
+        ]
+        if v not in valid_schedulers:
+            logging.warning(
+                f"Unknown scheduler: {v}. Valid options: {valid_schedulers}"
+            )
+        return v
+
+    @field_validator("model_name")
+    def validate_model_name(cls, v):
+        """Validate model name."""
+        valid_models = [
+            "DyRCNNx4",
+            "AlexNet",
+            "ResNet18",
+            "ResNet34",
+            "ResNet50",
+            "CORnet-RT",
+            "CordsNet",
+            "BLT",
+            "TwoLayerCNN",
+        ]
+        if v not in valid_models:
+            logging.warning(
+                f"Unknown model: {v}. Consider adding to valid_models list"
+            )
+        return v
+
+    @field_validator("criterion_params")
+    def validate_criterion_params(cls, v):
+        """Validate and convert criterion_params from lists to tuples if needed."""
+        if not v:
+            return [("CrossEntropyLoss", {"weight": 1.0})]
+
+        # Convert lists to tuples for YAML compatibility
+        converted = []
+        for item in v:
+            if isinstance(item, list) and len(item) == 2:
+                # Convert [name, config] to (name, config)
+                converted.append((item[0], item[1]))
+            elif isinstance(item, tuple) and len(item) == 2:
+                # Already a tuple
+                converted.append(item)
+            else:
+                raise ValueError(
+                    f"Invalid criterion_params item: {item}. Expected [name, config] or (name, config)"
+                )
+
+        return converted
+
+    @field_validator("input_dims")
+    def validate_input_dims(cls, v):
+        """Validate input dimensions."""
+        if len(v) not in [3, 4]:
+            raise ValueError(
+                "input_dims must be (channels, height, width) or (timesteps, channels, height, width)"
+            )
+
+        # Ensure all dimensions are positive
+        if any(dim <= 0 for dim in v):
+            raise ValueError("All input dimensions must be positive")
+
+        return v
+
+    @model_validator(mode="after")
+    def setup_defaults_and_validate_constraints(self):
+        """Set up defaults and validate all constraints."""
+        # Provide default lr_parameter_groups if empty
+        if not self.lr_parameter_groups:
+            object.__setattr__(
+                self,
+                "lr_parameter_groups",
+                {
+                    "regular": {"lr_factor": 1.0},
+                    "recurrent": {"lr_factor": 1.0},
+                    "feedback": {"lr_factor": 1.0},
+                },
+            )
+            logging.info("Using default lr_parameter_groups")
+
+        # Validate lr_parameter_groups
+        for group_name, group_config in self.lr_parameter_groups.items():
+            if "lr_factor" not in group_config:
+                group_config["lr_factor"] = 1.0
+                logging.info(f"Added missing lr_factor=1.0 to group '{group_name}'")
+
+        # Provide default scheduler configs
+        if not self.scheduler_configs:
+            default_configs = {
+                "interval": "epoch",
+                "frequency": 1,
+                "monitor": "val_loss",
+                "strict": True,
+                "name": "learning_rate",
+            }
+            object.__setattr__(self, "scheduler_configs", default_configs)
+            logging.info("Using default scheduler_configs")
+
+        # Provide default scheduler kwargs based on scheduler type
+        if not self.scheduler_kwargs:
+            if self.scheduler == "StepLR":
+                object.__setattr__(
+                    self, "scheduler_kwargs", {"step_size": 30, "gamma": 0.1}
+                )
+                logging.info("Using default StepLR scheduler_kwargs")
+            elif self.scheduler == "CosineAnnealingLR":
+                object.__setattr__(self, "scheduler_kwargs", {"T_max": 100})
+                logging.info("Using default CosineAnnealingLR scheduler_kwargs")
+
+        # Scheduler configuration consistency
+        if self.scheduler == "ReduceLROnPlateau":
+            if "monitor" not in self.scheduler_configs:
+                self.scheduler_configs["monitor"] = "val_loss"
+
+        # Biological timing constraints (informational warnings only)
+        if self.dt >= self.tau:
+            logging.warning(
+                f"dt ({self.dt}) should be much smaller than tau ({self.tau}) "
+                "for numerical stability (typically dt < tau/10)"
+            )
+
+        # Delay constraints
+        if self.t_feedforward < 0 or self.t_recurrence < 0:
+            raise DynVisionValidationError(
+                "Delays (t_feedforward, t_recurrence) must be non-negative"
+            )
+
+        # Check if delays are exact multiples of dt (informational)
+        if self.t_feedforward % self.dt != 0:
+            steps = int(self.t_feedforward / self.dt)
+            logging.info(
+                f"t_feedforward ({self.t_feedforward}ms) rounds to {steps} timesteps "
+                f"(dt={self.dt}ms)"
+            )
+
+        if self.t_recurrence % self.dt != 0:
+            steps = int(self.t_recurrence / self.dt)
+            logging.info(
+                f"t_recurrence ({self.t_recurrence}ms) rounds to {steps} timesteps "
+                f"(dt={self.dt}ms)"
+            )
+
+        # Architecture consistency checks
+        if self.supralinearity and self.recurrence_type == "none":
+            logging.warning(
+                "Supralinearity enabled but no recurrence - may cause instability"
+            )
+
+        # Input dimensions consistency
+        if len(self.input_dims) == 4:
+            timesteps_from_dims = self.input_dims[0]
+            if timesteps_from_dims > 1 and timesteps_from_dims != self.n_timesteps:
+                logging.warning(
+                    f"n_timesteps ({self.n_timesteps}) doesn't match "
+                    f"input_dims timesteps ({timesteps_from_dims})"
+                )
+
+        # Input/output consistency
+        if self.n_classes < 2:
+            logging.warning(
+                f"n_classes ({self.n_classes}) should be >= 2 for meaningful classification"
+            )
+
+        return self
+
+    # ===== COMPUTED PROPERTIES (DERIVED PARAMETERS) =====
+
+    @property
+    def delay_feedforward(self) -> int:
+        """Number of timesteps for feedforward delay."""
+        return int(self.t_feedforward / self.dt)
+
+    @property
+    def delay_recurrence(self) -> int:
+        """Number of timesteps for recurrence delay."""
+        return int(self.t_recurrence / self.dt)
+
+    @property
+    def effective_tau_steps(self) -> float:
+        """Tau expressed in timesteps (tau/dt)."""
+        return self.tau / self.dt
+
+    @property
+    def total_processing_time(self) -> float:
+        """Total time for signal to propagate through all layers (ms).
+        Note: Requires layer count to be specified externally."""
+        # Default to 4 layers if not specified elsewhere
+        return 4 * self.t_feedforward
+
+    @property
+    def total_processing_steps(self) -> int:
+        """Total timesteps for signal to propagate through all layers.
+        Note: Requires layer count to be specified externally."""
+        # Default to 4 layers if not specified elsewhere
+        return 4 * self.delay_feedforward
+
+    @property
+    def stability_ratio(self) -> float:
+        """Ratio dt/tau for numerical stability assessment."""
+        return self.dt / self.tau
+
+    def get_timing_summary(self) -> Dict[str, Any]:
+        """Get comprehensive timing parameter summary."""
+        return {
+            "base_parameters": {
+                "dt": self.dt,
+                "tau": self.tau,
+                "t_feedforward": self.t_feedforward,
+                "t_recurrence": self.t_recurrence,
+            },
+            "derived_parameters": {
+                "delay_feedforward": self.delay_feedforward,
+                "delay_recurrence": self.delay_recurrence,
+                "effective_tau_steps": self.effective_tau_steps,
+                "total_processing_time": self.total_processing_time,
+                "total_processing_steps": self.total_processing_steps,
+                "stability_ratio": self.stability_ratio,
+            },
+            "assessment": {
+                "is_stable": self.stability_ratio < 0.2,
+                "delays_are_exact_multiples": (
+                    self.t_feedforward % self.dt == 0
+                    and self.t_recurrence % self.dt == 0
+                ),
+            },
+        }
+
+    def get_model_creation_kwargs(self, model_class=None) -> Dict[str, Any]:
+        """
+        Get filtered kwargs appropriate for model creation.
+
+        Args:
+            model_class: The model class to filter kwargs for
+
+        Returns:
+            Dictionary of kwargs suitable for model instantiation
+        """
+        # Base model parameters
+        model_kwargs = {
+            "n_classes": self.n_classes,
+            "input_dims": self.input_dims,
+            "n_timesteps": self.n_timesteps,
+            "dt": self.dt,
+            "tau": self.tau,
+            "t_feedforward": self.t_feedforward,
+            "t_recurrence": self.t_recurrence,
+            "dynamics_solver": self.dynamics_solver,
+            "recurrence_type": self.recurrence_type,
+            "skip_connections": self.skip_connections,
+            "feedback_connections": self.feedback_connections,
+            "supralinearity": self.supralinearity,
+            "supralinear_alpha": self.supralinear_alpha,
+            "store_responses": self.store_responses,
+            "store_responses_on_cpu": self.store_responses_on_cpu,
+            "classifier_name": self.classifier_name,
+            "loss_reaction_time": self.loss_reaction_time,
+            "criterion_params": self.criterion_params,
+            "learning_rate": self.learning_rate,
+            "optimizer": self.optimizer,
+            "optimizer_kwargs": self.optimizer_kwargs,
+            "optimizer_configs": self.optimizer_configs,
+            "lr_parameter_groups": self.lr_parameter_groups,
+            "scheduler": self.scheduler,
+            "scheduler_kwargs": self.scheduler_kwargs,
+            "scheduler_configs": self.scheduler_configs,
+            "retain_graph": self.retain_graph,
+            "non_label_index": self.non_label_index,
+        }
+
+        # Add custom model kwargs
+        model_kwargs.update(self.model_kwargs)
+
+        # Add extra fields if any
+        if hasattr(self, "__pydantic_extra__"):
+            model_kwargs.update(self.__pydantic_extra__)
+
+        # Filter kwargs if model_class is provided
+        if model_class is not None:
+            try:
+                from dynvision.utils import filter_kwargs
+
+                known, unknown = filter_kwargs(model_class, model_kwargs)
+
+                if unknown:
+                    logging.info(
+                        f"Filtered out unknown kwargs for {model_class.__name__}: {list(unknown.keys())}"
+                    )
+
+                return known
+            except ImportError:
+                logging.warning("filter_kwargs not available, returning all kwargs")
+                return model_kwargs
+
+        return model_kwargs
+
+    def get_optimizer_config(self) -> Dict[str, Any]:
+        """
+        Get optimizer configuration for PyTorch Lightning configure_optimizers.
+
+        Returns:
+            Dictionary containing optimizer and scheduler configuration
+        """
+        return {
+            "optimizer": self.optimizer,
+            "optimizer_kwargs": self.optimizer_kwargs,
+            "optimizer_configs": self.optimizer_configs,
+            "learning_rate": self.learning_rate,
+            "lr_parameter_groups": self.lr_parameter_groups,
+            "scheduler": self.scheduler,
+            "scheduler_kwargs": self.scheduler_kwargs,
+            "scheduler_configs": self.scheduler_configs,
+        }
+
+    def get_loss_config(self) -> Dict[str, Any]:
+        """
+        Get loss configuration for model training.
+
+        Returns:
+            Dictionary containing loss configuration
+        """
+        return {
+            "loss": self.loss,
+            "criterion_params": self.criterion_params,
+            "loss_reaction_time": self.loss_reaction_time,
+        }
+
+    def validate_biological_feasibility(self) -> List[str]:
+        """
+        Validate biological feasibility of parameters.
+
+        Returns:
+            List of biological feasibility issues
+        """
+        issues = []
+
+        # Time constant checks
+        if self.tau < 1.0:
+            issues.append(
+                f"tau ({self.tau}ms) is very small - typical cortical neurons have tau ~10-20ms"
+            )
+        elif self.tau > 100.0:
+            issues.append(
+                f"tau ({self.tau}ms) is very large - may be too slow for visual processing"
+            )
+
+        # Integration step checks
+        if self.dt < 0.1:
+            issues.append(
+                f"dt ({self.dt}ms) is very small - may be computationally expensive"
+            )
+        elif self.dt > 5.0:
+            issues.append(f"dt ({self.dt}ms) is large - may miss important dynamics")
+
+        # Delay checks
+        if self.t_feedforward > 10.0:
+            issues.append(
+                f"t_feedforward ({self.t_feedforward}ms) is large - typical cortical delays are 1-5ms"
+            )
+
+        if self.t_recurrence > 10.0:
+            issues.append(
+                f"t_recurrence ({self.t_recurrence}ms) is large - typical recurrent delays are 1-5ms"
+            )
+
+        # Learning rate checks for biological models
+        if self.learning_rate > 0.01:
+            issues.append(
+                f"learning_rate ({self.learning_rate}) is high for biological models"
+            )
+
+        return issues
+
+    def validate_context_requirements(self) -> List[str]:
+        """
+        Validate context-specific requirements for models.
+
+        Returns:
+            List of validation warnings/errors
+        """
+        issues = []
+
+        # Architecture-specific checks
+        if self.supralinearity and self.recurrence_type == "none":
+            issues.append(
+                "Supralinearity enabled but no recurrence - may cause instability"
+            )
+
+        # Input/output consistency
+        if self.n_classes < 2:
+            issues.append(
+                f"n_classes ({self.n_classes}) should be >= 2 for meaningful classification"
+            )
+
+        return issues
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    # Test basic instantiation with minimal required fields
+    try:
+        model_params = ModelParams(
+            model_name="DyRCNNx4",
+            n_classes=10,
+            input_dims=(20, 3, 224, 224),
+            supralinear_alpha=2.0,
+        )
+        print(f"Default model params created successfully")
+        print(f"Default criterion_params: {model_params.criterion_params}")
+    except Exception as e:
+        print(f"Error creating basic model params: {e}")
+        import traceback
+
+        traceback.print_exc()
+        exit(1)
+
+    # Test with custom biological parameters
+    try:
+        bio_params = ModelParams(
+            model_name="DyRCNNx4",
+            n_classes=100,
+            input_dims=(25, 3, 128, 128),
+            dt=1.0,
+            tau=15.0,
+            recurrence_type="full",
+            supralinearity=True,
+            supralinear_alpha=2.5,
+            learning_rate=0.001,
+            optimizer="Adam",
+        )
+        print(f"Biological model params created successfully")
+    except Exception as e:
+        print(f"Error creating biological model params: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Test loss configuration
+    try:
+        # Simple string loss
+        simple_loss = ModelParams(
+            model_name="TestModel",
+            n_classes=5,
+            input_dims=(15, 3, 64, 64),
+            supralinear_alpha=1.8,
+            loss="CrossEntropyLoss",
+        )
+        print(f"Simple loss criterion_params: {simple_loss.criterion_params}")
+
+        # List of losses
+        multi_loss = ModelParams(
+            model_name="TestModel",
+            n_classes=8,
+            input_dims=(30, 3, 32, 32),
+            supralinear_alpha=2.2,
+            loss=["CrossEntropyLoss", "MSELoss"],
+            criterion_params=[
+                ("CrossEntropyLoss", {"weight": 1.0}),
+                ("MSELoss", {"weight": 0.1}),
+            ],
+        )
+        print(f"Multi loss criterion_params: {multi_loss.criterion_params}")
+
+    except Exception as e:
+        print(f"Error testing loss configurations: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Test configuration file loading
+    import tempfile
+    import yaml
+    import os
+
+    config_data = {
+        "model_name": "DyRCNNx4",
+        "n_classes": 50,
+        "input_dims": [20, 3, 128, 128],
+        "supralinear_alpha": 2.5,
+        "dt": 1.5,
+        "tau": 10.0,
+        "t_feedforward": 2.0,
+        "t_recurrence": 1.5,
+        "recurrence_type": "full",
+        "supralinearity": True,
+        "learning_rate": 0.003,
+        "optimizer": "Adam",
+        "scheduler": "CosineAnnealingLR",
+        "loss": "CrossEntropyLoss",
+        "criterion_params": [
+            ["CrossEntropyLoss", {"weight": 1.0, "ignore_index": -1}],
+            ["EnergyLoss", {"weight": 0.1}],
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(config_data, f)
+        temp_config = f.name
+
+    try:
+        file_params = ModelParams.from_cli_and_config(config_path=temp_config)
+        print(f"Config file params created successfully")
+        print(
+            f"Loaded loss criterion_params: {len(file_params.criterion_params)} loss functions"
+        )
+
+        # Test biological validation
+        bio_issues = file_params.validate_biological_feasibility()
+        if bio_issues:
+            print(f"Biological feasibility issues: {bio_issues}")
+
+    except Exception as e:
+        print(f"Error with config file loading: {e}")
+        import traceback
+
+        traceback.print_exc()
+    finally:
+        os.unlink(temp_config)
+
+    # Test with custom model parameters
+    try:
+        custom_model_params = ModelParams(
+            model_name="CustomRCNN",
+            n_classes=12,
+            input_dims=(18, 3, 96, 96),
+            supralinear_alpha=1.9,
+            model_kwargs={
+                "custom_layer_size": 256,
+                "use_attention": True,
+                "dropout_rate": 0.1,
+            },
+        )
+
+        model_kwargs = custom_model_params.get_model_creation_kwargs()
+        print(
+            f"Custom model kwargs include: custom_layer_size={model_kwargs.get('custom_layer_size')}"
+        )
+
+    except Exception as e:
+        print(f"Error with custom model params: {e}")
+        import traceback
+
+        traceback.print_exc()

@@ -28,9 +28,6 @@ from dynvision.utils import alias_kwargs, filter_kwargs
 
 logger = logging.getLogger(__name__)
 
-# Configure worker pools
-MAX_WORKERS = min(16, len(os.sched_getaffinity(0)) - 1)
-
 
 class StandardDataLoader(DataLoader):
     """Base data loader with performance optimizations.
@@ -380,7 +377,10 @@ DATALOADER_CLASSES = {
 
 
 def get_data_loader(
-    dataset: torch.utils.data.Dataset, dataloader: Optional[str] = None, **kwargs
+    dataset: torch.utils.data.Dataset,
+    dataloader: Optional[str] = None,
+    data_timesteps: int = 1,
+    **kwargs,
 ) -> torch.utils.data.DataLoader:
     """
     Returns a DataLoader instance based on the specified dataloader name or class.
@@ -388,6 +388,7 @@ def get_data_loader(
     Args:
         dataset (torch.utils.data.Dataset): The dataset to load.
         dataloader (Optional[str]): The name of the DataLoader class or the class itself.
+        data_timesteps (int): Number of timesteps for temporal data.
         **kwargs: Additional arguments for the DataLoader.
 
     Returns:
@@ -417,18 +418,12 @@ def get_data_loader(
             "Expected a string or a DataLoader subclass."
         )
 
-    # Set default arguments for DataLoader
-    kwargs.setdefault("num_workers", max(1, min(4, multiprocessing.cpu_count() // 2)))
-    kwargs.setdefault("persistent_workers", True)
+    # Add data_timesteps to kwargs for temporal dataloaders
+    kwargs["n_timesteps"] = data_timesteps
 
-    # Try to initialize the DataLoader
-    try:
-        return dataloader_class(dataset, **kwargs)
-    except Exception as e:
-        logger.error(
-            f"Error initializing DataLoader '{dataloader_class.__name__}': {str(e)}"
-        )
-        raise RuntimeError(f"Failed to initialize DataLoader: {str(e)}") from e
+    filtered_kwargs, _ = filter_kwargs(dataloader_class, kwargs)
+
+    return dataloader_class(dataset, **filtered_kwargs)
 
 
 def get_data_loader_class(dataloader=None) -> torch.utils.data.DataLoader:
@@ -444,26 +439,49 @@ def get_data_loader_class(dataloader=None) -> torch.utils.data.DataLoader:
 
 
 def get_train_val_loaders(
-    dataset, train_ratio, batch_size, num_workers=0, n_timesteps=1
-):
+    dataset: torch.utils.data.Dataset,
+    train_ratio: float = 0.8,
+    batch_size: int = 32,
+    num_workers: int = 0,
+    data_timesteps: int = 1,  # Changed from n_timesteps for consistency
+    dataloader: Optional[str] = None,
+    **kwargs: Any,
+) -> Tuple[DataLoader, DataLoader]:
+    """Create training and validation data loaders from a dataset.
+
+    Args:
+        dataset: The dataset to split
+        train_ratio: Ratio of data to use for training
+        batch_size: Batch size for both loaders
+        num_workers: Number of worker processes
+        data_timesteps: Number of timesteps for temporal data
+        dataloader: Specific dataloader class to use
+        **kwargs: Additional arguments for dataloaders
+
+    Returns:
+        Tuple of (train_loader, val_loader)
+    """
+    # Calculate split sizes
     train_size = int(train_ratio * len(dataset))
     val_size = len(dataset) - train_size
+
+    # Split dataset
     train_dataset, val_dataset = torch.utils.data.random_split(
         dataset, [train_size, val_size]
     )
 
-    train_loader = get_data_loader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        n_timesteps=n_timesteps,
-    )
-    val_loader = get_data_loader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        n_timesteps=n_timesteps,
-    )
+    # Common loader arguments
+    common_kwargs = {
+        "batch_size": batch_size,
+        "num_workers": num_workers,
+        "data_timesteps": data_timesteps,
+        "dataloader": dataloader,
+        **kwargs,
+    }
+
+    # Create loaders with appropriate shuffle settings
+    train_loader = get_data_loader(train_dataset, shuffle=True, **common_kwargs)
+
+    val_loader = get_data_loader(val_dataset, shuffle=False, **common_kwargs)
+
     return train_loader, val_loader
