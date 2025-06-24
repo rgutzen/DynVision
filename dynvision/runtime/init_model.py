@@ -18,7 +18,7 @@ import torch
 from dynvision import models
 from dynvision.data.dataloader import StandardDataLoader
 from dynvision.data.datasets import get_dataset
-from dynvision.hyperparameters.init_params import InitParams
+from dynvision.params.init_params import InitParams
 from dynvision.utils import filter_kwargs, set_seed, str2dict, handle_errors
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def infer_dimensions_from_dataset(config: InitParams) -> None:
 
         # Update model configuration
         config.update_model_parameters_from_dataset(
-            input_dims=input_dims, n_classes=n_classes, validate_consistency=True
+            input_dims=input_dims, n_classes=n_classes, verbose=True
         )
 
     except Exception as e:
@@ -130,7 +130,7 @@ def create_and_initialize_model(config: InitParams) -> torch.nn.Module:
     model_class = getattr(models, config.model.model_name)
 
     # Get filtered kwargs for model creation
-    model_kwargs = config.get_model_creation_kwargs(model_class)
+    model_kwargs = config.get_model_kwargs(model_class)
 
     logger.info(f"Creating {config.model.model_name} with:")
     logger.info(f"  - Input dims: {model_kwargs.get('input_dims')}")
@@ -192,31 +192,26 @@ def load_pretrained_weights(model: torch.nn.Module, config: InitParams) -> None:
 @handle_errors(verbose=True)
 def main() -> int:
     """Main entry point for model initialization."""
-    try:
-        # Load configuration
-        config = InitParams.from_cli_and_config()
-        config.setup_logging()
+    # Load configuration
+    config = InitParams.from_cli_and_config()
+    config.setup_logging()
 
-        # Set random seed
-        set_seed(config.seed)
+    # Set random seed
+    set_seed(config.seed)
 
-        # Infer dimensions from dataset if provided
-        infer_dimensions_from_dataset(config)
+    # Infer dimensions from dataset if provided
+    infer_dimensions_from_dataset(config)
 
-        # Create and initialize model
-        model = create_and_initialize_model(config)
+    # Create and initialize model
+    model = create_and_initialize_model(config)
 
-        # Validate model state
-        if not len(model.state_dict()):
-            raise ValueError("Model state dict is empty. Check model initialization.")
+    # Validate model state
+    if not len(model.state_dict()):
+        raise ValueError("Model state dict is empty. Check model initialization.")
 
-        # Save initialized model
-        torch.save(model.state_dict(), config.output)
-        return 0
-
-    except Exception as e:
-        logger.error(f"Model initialization failed: {e}")
-        return 1
+    # Save initialized model
+    torch.save(model.state_dict(), config.output)
+    return 0
 
 
 if __name__ == "__main__":

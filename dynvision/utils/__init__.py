@@ -54,6 +54,8 @@ from .torch_utils import (
     on_same_device,
     set_seed,
     apply_parametrization,
+    get_effective_dtype_from_precision,
+    determine_target_dtype,
 )
 
 from .model_utils import (
@@ -106,6 +108,8 @@ __all__ = [
     "on_same_device",
     "set_seed",
     "apply_parametrization",
+    "get_effective_dtype_from_precision",
+    "determine_target_dtype",
     # Model utilities
     "check_stability",
     "check_weights",

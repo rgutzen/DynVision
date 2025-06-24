@@ -1,5 +1,5 @@
 from .dynamics_solver import *
-from .lightning_base import *
+from .base import *
 from .recurrence import *
 from .retina import *
 from .layer_connections import *

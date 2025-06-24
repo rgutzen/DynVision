@@ -321,7 +321,6 @@ def get_dataset(
         )
 
     logger.info(f"Transform sequence: {transform}")
-
     # target transforms
     target_transform = get_target_transform(target_transform)
 
@@ -338,5 +337,4 @@ def get_dataset(
         pin_memory=pin_memory,
         **kwargs,
     )
-
     return dataset_class(**filter_kwargs(dataset_class, dataset_kwargs)[0])

@@ -20,7 +20,7 @@ class project_paths_class:
             toolbox_dir = Path().home() / self.toolbox_name / self.toolbox_name.lower()
 
         if working_dir is None:
-            working_dir = Path("/home/rgutzen/Projects/rhythmic_visual_attention")
+            working_dir = Path("/home/rgutzen/01_PROJECTS/rhythmic_visual_attention")
         if toolbox_dir is None:
             toolbox_dir = self.this_file.parents[0].resolve()
 

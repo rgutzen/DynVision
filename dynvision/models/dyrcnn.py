@@ -32,26 +32,10 @@ from dynvision.model_components import (
 )
 from dynvision.utils import alias_kwargs, str_to_bool
 
-__all__ = ["DyRCNNx2", "DyRCNNx4"]
+__all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8", "FourLayerCNN", "TwoLayerCNN"]
 
 
 logger = logging.getLogger(__name__)
-
-
-def validate_biological_parameters(
-    dt: float, tau: float, t_feedforward: float, t_recurrence: float
-) -> None:
-    """Validate parameters for biological plausibility."""
-    if dt <= 0:
-        raise ValueError("Time step must be positive")
-    if tau <= 0:
-        raise ValueError("Time constant must be positive")
-    if t_feedforward < 0:
-        raise ValueError("Feedforward delay cannot be negative")
-    if t_recurrence < 0:
-        raise ValueError("Recurrent delay cannot be negative")
-    if t_recurrence > t_feedforward:
-        raise ValueError("Recurrent delay cannot exceed feedforward delay")
 
 
 class DyRCNN(LightningBase):
@@ -80,7 +64,6 @@ class DyRCNN(LightningBase):
         skip: Whether to use skip connections
         feedback: Whether to use feedback connections
         feedforward_only: Whether to disable recurrence
-        stability_check: Whether to check stability
     """
 
     @alias_kwargs(
@@ -108,7 +91,6 @@ class DyRCNN(LightningBase):
         skip: bool = False,
         feedback: bool = False,
         feedforward_only: bool = False,
-        stability_check: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -128,11 +110,7 @@ class DyRCNN(LightningBase):
             skip=str_to_bool(skip),
             feedback=str_to_bool(feedback),
             feedforward_only=str_to_bool(feedforward_only),
-            stability_check=stability_check,
             **kwargs,
-        )
-        validate_biological_parameters(
-            self.dt, self.tau, self.t_feedforward, self.t_recurrence
         )
 
         # Calculate delays in timesteps
@@ -150,22 +128,9 @@ class DyRCNN(LightningBase):
         return super().configure_optimizers()
 
 
-class DyRCNNx4(DyRCNN, LightningBase):
+class DyRCNNx4(DyRCNN):
     """
     Four-layer DyRCNN implementing a biologically-inspired visual hierarchy.
-
-    Architecture:
-    - V1: Primary visual cortex (low-level features)
-    - V2: Secondary visual cortex (intermediate features)
-    - V4: Visual area 4 (complex features)
-    - IT: Inferotemporal cortex (object recognition)
-
-    Features:
-    - Hierarchical processing
-    - Recurrent connections
-    - Skip connections (if enabled)
-    - Feedback connections (if enabled)
-    - Retinal preprocessing (if enabled)
     """
 
     def __init__(self, **kwargs: Any) -> None:
@@ -341,20 +306,20 @@ class DyRCNNx4(DyRCNN, LightningBase):
         # First let PyTorch Lightning set up the model (including precision)
         super().setup(stage)
 
-        # Then initialize feedback connections
-        if stage == "fit" and self.feedback:
-            for layer_name in self.layer_names:
-                if hasattr(self, f"addfeedback_{layer_name}"):
-                    feedback_module = getattr(self, f"addfeedback_{layer_name}")
-                    feedback_module.setup(stage)
+        # # Then initialize feedback connections
+        # if stage == "fit" and self.feedback:
+        #     for layer_name in self.layer_names:
+        #         if hasattr(self, f"addfeedback_{layer_name}"):
+        #             feedback_module = getattr(self, f"addfeedback_{layer_name}")
+        #             feedback_module.setup(stage)
 
-            # Do a forward pass to initialize transforms
-            dtype = next(self.parameters()).dtype
-            device = next(self.parameters()).device
-            x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
-            y = self.forward(x, store_responses=False)
+        #     # Do a forward pass to initialize transforms
+        #     dtype = next(self.parameters()).dtype
+        #     device = next(self.parameters()).device
+        #     x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
+        #     y = self.forward(x, store_responses=False)
 
-            self.reset()
+        #     self.reset()
 
     def _init_parameters(self) -> None:
         super()._init_parameters()
@@ -370,6 +335,212 @@ class DyRCNNx4(DyRCNN, LightningBase):
 
         nn.init.trunc_normal_(self.classifier[-1].weight, **trunc_normal_params)
         nn.init.constant_(self.classifier[-1].bias, 0)
+
+
+class DyRCNNx8(DyRCNNx4):
+    """
+    Four-layer DyRCNN (with double conv per layer) implementing a biologically-inspired visual hierarchy.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._define_architecture()
+
+    def _define_architecture(self) -> None:
+        """Define the four-layer visual hierarchy."""
+        self.layer_names = ["V1", "V2", "V4", "IT"]
+        # define operations order within layer
+        self.layer_operations = [
+            "layer",  # apply (recurrent) convolutional layer
+            "addext",  # add external input
+            "addskip",  # add skip connection
+            "addfeedback",  # add feedback connection
+            "tstep",  # apply dynamical systems ode solver step
+            "nonlin",  # apply nonlinearity
+            "delay",  # set and get delayed activations for next layer
+            "conv",  # apply additional convolutional layer
+            "nonlin",  # apply nonlinearity
+            "supralin",  # apply supralinearity
+            "record",  # record activations in responses dict
+            "pool",  # apply pooling
+            "norm",  # apply normalization
+        ]
+
+        # Activation functions
+        self.nonlin = nn.ReLU(inplace=False)
+        if hasattr(self, "supralinearity") and float(self.supralinearity) != 1:
+            self.supralin = SupraLinearity(
+                n=float(self.supralinearity), requires_grad=False
+            )
+
+        # Initialize retina
+        if self.use_retina:
+            self.bottleneck_channels = 18
+            self.retina = Retina(
+                in_channels=self.n_channels,
+                out_channels=self.bottleneck_channels,
+                mid_channels=36,
+                kernel_size=9,
+                bias=self.bias,
+            )
+
+        # Common layer parameters
+        layer_params = dict(
+            bias=self.bias,
+            recurrence_type=self.recurrence_type,
+            dt=self.dt,
+            tau=self.tau,
+            history_length=self.t_feedforward,
+            recurrence_delay=self.t_recurrence,
+            max_weight_init=self.max_weight_init,
+            feedforward_only=self.feedforward_only,
+        )
+
+        # Input adaptation
+        if self.input_adaption_weight:
+            self.input_adaption = InputAdaption(
+                fixed_weight=self.input_adaption_weight
+            )
+
+        # V1 layer
+        in_channels = self.retina.out_channels if self.use_retina else self.n_channels
+        self.V1 = RecurrentConnectedConv2d(
+            in_channels=in_channels,
+            out_channels=64,
+            kernel_size=7,
+            stride=3,
+            dim_y=self.dim_y,
+            dim_x=self.dim_x,
+            **layer_params,
+        )
+        self.conv_V1 = nn.Conv2d(
+            in_channels=self.V1.out_channels,
+            out_channels=96,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=self.bias,
+        )
+        self.tau_V1 = torch.nn.Parameter(
+            torch.tensor(self.tau, dtype=float),
+            requires_grad=self.train_tau,
+        )
+        self.tstep_V1 = EulerStep(dt=self.dt, tau=self.tau_V1)
+
+        self.pool_V1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        # V2
+        self.V2 = RecurrentConnectedConv2d(
+            in_channels=self.conv_V1.out_channels,
+            out_channels=128,
+            kernel_size=3,
+            stride=2,
+            dim_y=self.V1.dim_y
+            // self.V1.stride
+            // self.conv_V1.stride[0]
+            // self.pool_V1.stride,
+            dim_x=self.V1.dim_x
+            // self.V1.stride
+            // self.conv_V1.stride[1]
+            // self.pool_V1.stride,
+            **layer_params,
+        )
+        self.conv_V2 = nn.Conv2d(
+            in_channels=self.V2.out_channels,
+            out_channels=192,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=self.bias,
+        )
+        self.tau_V2 = torch.nn.Parameter(
+            torch.tensor(self.tau, dtype=float),
+            requires_grad=self.train_tau,
+        )
+        self.tstep_V2 = EulerStep(dt=self.dt, tau=self.tau_V2)
+
+        self.pool_V2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        # V4
+        self.V4 = RecurrentConnectedConv2d(
+            in_channels=self.conv_V2.out_channels,
+            out_channels=256,
+            kernel_size=3,
+            stride=2,
+            dim_y=self.V2.dim_y
+            // self.V2.stride
+            // self.conv_V2.stride[0]
+            // self.pool_V2.stride,
+            dim_x=self.V2.dim_x
+            // self.V2.stride
+            // self.conv_V2.stride[1]
+            // self.pool_V2.stride,
+            **layer_params,
+        )
+        self.conv_V4 = nn.Conv2d(
+            in_channels=self.V4.out_channels,
+            out_channels=384,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=self.bias,
+        )
+        if self.skip:
+            self.addskip_V4 = Skip(
+                source=self.V1,
+                auto_adapt=True,
+            )
+        if self.feedback:
+            self.addfeedback_V1 = Feedback(
+                source=self.V4,
+                auto_adapt=True,
+            )
+        self.tau_V4 = torch.nn.Parameter(
+            torch.tensor(self.tau, dtype=float),
+            requires_grad=self.train_tau,
+        )
+        self.tstep_V4 = EulerStep(dt=self.dt, tau=self.tau_V4)
+
+        # IT
+        self.IT = RecurrentConnectedConv2d(
+            in_channels=self.conv_V4.out_channels,
+            out_channels=512,
+            kernel_size=3,
+            stride=2,
+            dim_y=self.V4.dim_y // self.V4.stride // self.conv_V4.stride[0],
+            dim_x=self.V4.dim_x // self.V4.stride // self.conv_V4.stride[1],
+            **layer_params,
+        )
+        self.conv_IT = nn.Conv2d(
+            in_channels=self.IT.out_channels,
+            out_channels=768,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=self.bias,
+        )
+        if self.skip:
+            self.addskip_IT = Skip(
+                source=self.V2,
+                auto_adapt=True,
+            )
+        if self.feedback:
+            self.addfeedback_V2 = Feedback(
+                source=self.IT,
+                auto_adapt=True,
+            )
+        self.tau_IT = torch.nn.Parameter(
+            torch.tensor(self.tau, dtype=float),
+            requires_grad=self.train_tau,
+        )
+        self.tstep_IT = EulerStep(dt=self.dt, tau=self.tau_IT)
+
+        # Classifier
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(self.conv_IT.out_channels, self.n_classes),
+        )
 
 
 class DyRCNNx2(DyRCNN):
@@ -496,6 +667,10 @@ class DyRCNNx2(DyRCNN):
         nn.init.trunc_normal_(self.classifier[-1].weight, **trunc_normal_params)
         nn.init.constant_(self.classifier[-1].bias, 0)
 
+
+# Aliases for compatibility
+FourLayerCNN = DyRCNNx4
+TwoLayerCNN = DyRCNNx2
 
 if __name__ == "__main__":
     # Test configuration

@@ -157,7 +157,7 @@ def validate_custom_parameter(cls, v):
 ```
 
 **Step 3: Use in Model Classes**
-The parameter becomes automatically available in model kwargs through `get_model_creation_kwargs()`.
+The parameter becomes automatically available in model kwargs through `get_model_kwargs()`.
 
 ### How to Add a Parameter Alias
 
@@ -264,7 +264,7 @@ snakemake train_model --config \
 For advanced users who want to bypass Snakemake:
 
 ```python
-from dynvision.hyperparameters import TrainingParams
+from dynvision.params import TrainingParams
 
 # Load with automatic validation and mode detection
 params = TrainingParams.from_cli_and_config()
@@ -273,7 +273,7 @@ params = TrainingParams.from_cli_and_config()
 params.apply_parameter_scaling()
 
 # Create model with validated parameters
-model = create_model(**params.model.get_model_creation_kwargs())
+model = create_model(**params.model.get_model_kwargs())
 ```
 
 ### Parameter Inspection and Debugging

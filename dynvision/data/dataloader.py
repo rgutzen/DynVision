@@ -47,17 +47,8 @@ class StandardDataLoader(DataLoader):
         memory_format: torch.memory_format = torch.contiguous_format,
         dtype: torch.dtype = torch.float16,
         device: Optional[str] = None,
-        prefetch_factor: Optional[int] = None,
-        persistent_workers: bool = True,
         **kwargs,
     ):
-        # Configure performance features
-        kwargs["pin_memory"] = kwargs.get("pin_memory", True)
-        kwargs["num_workers"] = kwargs.get(
-            "num_workers", min(4, multiprocessing.cpu_count() // 2)
-        )
-        kwargs["prefetch_factor"] = prefetch_factor
-        kwargs["persistent_workers"] = persistent_workers and kwargs["num_workers"]
         kwargs, _ = filter_kwargs(DataLoader, kwargs)
 
         super().__init__(*args, **kwargs)
@@ -65,11 +56,6 @@ class StandardDataLoader(DataLoader):
         self.memory_format = memory_format
         self.dtype = dtype
         self.device = device
-
-        logger.info(
-            f"Initialized {self.__class__.__name__} with {self.num_workers} workers "
-            f"and prefetch factor {self.prefetch_factor}"
-        )
 
     def __iter__(self):
         try:
@@ -113,7 +99,7 @@ class StimulusDurationDataLoader(StandardDataLoader):
         *args,
         n_timesteps: int = 20,
         stimulus_duration: int = 5,
-        intro_duration: int = 2,
+        intro_duration: int = 0,
         non_label_index: int = -1,
         void_value: float = 0,
         **kwargs,
@@ -212,7 +198,7 @@ class StimulusIntervalDataLoader(StandardDataLoader):
         *args,
         n_timesteps: int = 30,
         stimulus_duration: int = 2,
-        intro_duration: int = 1,
+        intro_duration: int = 0,
         interval_duration: int = 2,
         non_label_index: int = -1,
         void_value: float = 0,
@@ -478,6 +464,7 @@ def get_train_val_loaders(
         "dataloader": dataloader,
         **kwargs,
     }
+    common_kwargs.pop("shuffle", None)
 
     # Create loaders with appropriate shuffle settings
     train_loader = get_data_loader(train_dataset, shuffle=True, **common_kwargs)

@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 import torch
 
 # Import the Pydantic parameter classes
-from dynvision.hyperparameters import (
+from dynvision.params import (
     BaseParams,
     DynVisionValidationError,
     DynVisionConfigError,
@@ -76,7 +76,7 @@ class TrainingParams(BaseParams):
         input_dims: Tuple[int, ...],
         n_classes: Optional[int] = None,
         batch_size: Optional[int] = None,
-        validate_consistency: bool = True,
+        verbose: bool = True,
     ) -> None:
         """
         Update model parameters based on actual data characteristics.
@@ -85,33 +85,25 @@ class TrainingParams(BaseParams):
             input_dims: Actual input dimensions from data (n_timesteps, channels, height, width)
             n_classes: Number of classes (if None, keeps current value)
             batch_size: Actual batch size from dataloader (if None, keeps current value)
-            validate_consistency: Whether to log warnings for mismatches
+            verbose: Whether to log warnings for mismatches
         """
 
         # Update input dimensions
         if self.model.input_dims != input_dims:
-            self.model.update_field(
-                "input_dims", input_dims, verbose=validate_consistency
-            )
+            self.model.update_field("input_dims", input_dims, verbose=verbose)
 
         # Update n_timesteps from input_dims
         n_timesteps = input_dims[0]
         if n_timesteps > 1 and self.model.n_timesteps != n_timesteps:
-            self.model.update_field(
-                "n_timesteps", n_timesteps, verbose=validate_consistency
-            )
+            self.model.update_field("n_timesteps", n_timesteps, verbose=verbose)
 
         # Update n_classes if provided
         if n_classes is not None and self.model.n_classes != n_classes:
-            self.model.update_field(
-                "n_classes", n_classes, verbose=validate_consistency
-            )
+            self.model.update_field("n_classes", n_classes, verbose=verbose)
 
         # Update batch size if provided
         if batch_size is not None and self.data.batch_size != batch_size:
-            self.data.update_field(
-                "batch_size", batch_size, verbose=validate_consistency
-            )
+            self.data.update_field("batch_size", batch_size, verbose=verbose)
 
     # === COMPUTED PROPERTIES ===
 
@@ -123,9 +115,15 @@ class TrainingParams(BaseParams):
 
     # @computed_field
     @property
+    def local_batch_size(self) -> int:
+        """Calculate local batch size per gpu."""
+        return self.data.batch_size // self.trainer.world_size
+
+    # @computed_field
+    @property
     def global_batch_size(self) -> int:
-        """Calculate global batch size across all devices (effective_batch_size x world_size)."""
-        return self.data.batch_size * self.trainer.world_size
+        """Calculate global batch size across all devices."""
+        return self.data.batch_size
 
     # @computed_field
     @property
@@ -134,7 +132,7 @@ class TrainingParams(BaseParams):
         base_lr = self.model.learning_rate
 
         # Calculate effective batch size without triggering recursion
-        global_batch_size = self.data.batch_size * self.trainer.world_size
+        global_batch_size = self.data.batch_size
         effective_batch_size = global_batch_size * self.trainer.accumulate_grad_batches
 
         # Linear scaling for small batches, square root scaling for large batches
@@ -170,6 +168,36 @@ class TrainingParams(BaseParams):
 
         return self
 
+    @model_validator(mode="after")
+    def coordinate_component_dtypes(self):
+        """
+        Ensure all components (trainer, data, model) use consistent dtypes.
+        """
+        # Get the effective dtype from trainer precision
+        trainer_dtype = self.trainer.get_effective_dtype()
+
+        # Ensure data uses the same dtype
+        if self.data.dtype != trainer_dtype:
+            logging.warning(
+                f"Data dtype ({self.data.dtype}) differs from trainer dtype ({trainer_dtype}). "
+                f"Aligning data dtype to trainer."
+            )
+            self.data.dtype = trainer_dtype
+
+        # Store for model initialization
+        self._coordinated_dtype = trainer_dtype
+
+        logging.info(f"Coordinated dtype across all components: {trainer_dtype}")
+
+        return self
+
+    def get_coordinated_dtype(self) -> torch.dtype:
+        """Get the dtype that all components should use."""
+        if hasattr(self, "_coordinated_dtype"):
+            return self._coordinated_dtype
+        else:
+            return self.trainer.get_effective_dtype()
+
     def _validate_data_selection(self) -> None:
         if self.data.data_group != "all":
             logger.warning(
@@ -187,14 +215,14 @@ class TrainingParams(BaseParams):
         eps = 1e-6
 
         # Log scaling information without modifying the actual parameters
-        if abs(self.global_batch_size - self.data.batch_size) > eps:
+        if abs(self.local_batch_size - self.data.batch_size) > eps:
             logger.info(
                 f"Distributed training detected: "
                 f"batch_size ({self.data.batch_size}) scaled to "
-                f"global_batch_size ({self.global_batch_size}) "
+                f"local batch_size ({self.local_batch_size}) "
                 f"according to world size ({self.trainer.world_size})"
             )
-            self.data.update_field("batch_size", self.global_batch_size)
+            self.data.update_field("batch_size", self.local_batch_size)
 
         if abs(self.model.learning_rate - self.effective_learning_rate) > eps:
             logger.info(
@@ -378,60 +406,42 @@ class TrainingParams(BaseParams):
                 else:
                     base_params[key] = value
             else:
-                # Use mutually exclusive assignment logic
+                # Assign to ALL component classes that have this field
+                assigned_to = []
+
+                if key in model_fields:
+                    model_params[key] = value
+                    assigned_to.append("model")
+                if key in trainer_fields:
+                    trainer_params[key] = value
+                    assigned_to.append("trainer")
                 if key in data_fields:
                     data_params[key] = value
-                elif key in trainer_fields:
-                    trainer_params[key] = value
-                elif key in base_fields:
+                    assigned_to.append("data")
+                if key in base_fields:
                     base_params[key] = value
-                elif key in model_fields:
-                    model_params[key] = value
+                    assigned_to.append("base")
+
+                if assigned_to:
+                    # Log when parameters are shared across components
+                    if len(assigned_to) > 1:
+                        logger.debug(
+                            f"Parameter '{key}' assigned to multiple components: {assigned_to}"
+                        )
                 else:
                     # Unknown parameters go to model_params as fallback
                     model_params[key] = value
                     logger.debug(
                         f"Assigning unknown parameter '{key}' to model_params"
                     )
-
-        components = {}
-
+        # Create component instances
         try:
-            logger.debug("Creating DataParams...")
-            components["data"] = DataParams(**data_params)
-            logger.debug("DataParams created successfully")
+            components = {
+                "model": ModelParams(**model_params),
+                "trainer": TrainerParams(**trainer_params),
+                "data": DataParams(**data_params),
+                **base_params,
+            }
+            return components
         except Exception as e:
-            logger.error(f"Failed to create DataParams: {e}")
-            raise DynVisionValidationError(f"DataParams creation failed: {e}")
-
-        try:
-            logger.debug("Creating ModelParams...")
-            components["model"] = ModelParams(**model_params)
-            logger.debug("ModelParams created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create ModelParams: {e}")
-            raise DynVisionValidationError(f"ModelParams creation failed: {e}")
-
-        try:
-            logger.debug("Creating TrainerParams...")
-            components["trainer"] = TrainerParams(**trainer_params)
-            logger.debug("TrainerParams created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create TrainerParams: {e}")
-            logger.error(f"TrainerParams data: {trainer_params}")
-            raise DynVisionValidationError(f"TrainerParams creation failed: {e}")
-
-        # Add base params
-        components.update(base_params)
-        return components
-        # # Create component instances
-        # try:
-        #     components = {
-        #         "model": ModelParams(**model_params),
-        #         "trainer": TrainerParams(**trainer_params),
-        #         "data": DataParams(**data_params),
-        #         **base_params,
-        #     }
-        #     return components
-        # except Exception as e:
-        #     raise DynVisionValidationError(f"Component configuration failed: {e}")
+            raise DynVisionValidationError(f"Component configuration failed: {e}")

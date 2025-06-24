@@ -436,6 +436,12 @@ class BaseParams(BaseModel):
         If both an alias and its full name are provided, the alias value takes precedence
         (since aliases are typically provided later in the precedence chain).
 
+        Additionally, if an alias resolves to a more specific (dotted) parameter name
+        (e.g., 'model.n_timesteps'), and a less specific parameter (e.g., 'n_timesteps')
+        also exists, the more specific one prevails and the less specific is removed.
+        If there are multiple specific parameters (e.g., 'model.n_timesteps', 'data.n_timesteps'),
+        they are all kept.
+
         Args:
             params: Dictionary of parameters with potential aliases
 
@@ -457,7 +463,44 @@ class BaseParams(BaseModel):
                 resolved[full_name] = value
                 logging.debug(f"Resolved alias '{key}' -> '{full_name}' = {value}")
 
+        # Remove less specific keys if a more specific one exists
+        # For example, if both 'n_timesteps' and 'model.n_timesteps' exist, remove 'n_timesteps'
+        specific_keys = [k for k in resolved if "." in k]
+        for spec_key in specific_keys:
+            base = spec_key.split(".")[-1]
+            if base in resolved:
+                # Only remove the base key if a more specific one exists
+                logging.debug(
+                    f"Removing less specific parameter '{base}' because '{spec_key}' exists"
+                )
+                resolved.pop(base)
+
         return resolved
+
+    @classmethod
+    def update_kwargs(cls, config: dict, updates: dict, verbose: bool = True) -> dict:
+        """
+        Update a configuration dictionary with another dictionary.
+
+        Logs all changes to values if verbose=True.
+
+        Args:
+            config: The original configuration dictionary to update.
+            updates: A dictionary of updates to apply.
+            verbose: Whether to log changes.
+
+        Returns:
+            The updated configuration dictionary.
+        """
+        for key, value in updates.items():
+            old_value = config.get(key, None)
+            if old_value != value:
+                if verbose:
+                    logging.info(
+                        f"Parameter '{key}' changed from {old_value} to {value}."
+                    )
+                config[key] = value
+        return config
 
     def update_field(
         self,

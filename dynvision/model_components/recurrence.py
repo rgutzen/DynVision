@@ -9,8 +9,8 @@ from dynvision.model_components.topographic_recurrence import (
     LocalLateralConnection,
     LocalSeparableConnection,
 )
-from dynvision.utils import apply_parametrization
-from dynvision.utils import str_to_bool
+from dynvision.model_components.base import DtypeDeviceCoordinatorMixin
+from dynvision.utils import apply_parametrization, str_to_bool
 from pytorch_lightning import LightningModule
 import logging
 
@@ -28,7 +28,7 @@ __all__ = [
 ]
 
 
-class RecurrenceBase(LightningModule):
+class RecurrenceBase(LightningModule, DtypeDeviceCoordinatorMixin):
     """
     Base class for recurrent connections providing common parameter initialization
     and argument validation.
@@ -37,7 +37,7 @@ class RecurrenceBase(LightningModule):
     def __init__(self, max_weight_init: float = 0.05, **kwargs) -> None:
         super().__init__()
         self.max_weight_init = max_weight_init
-        self._parameters_initialized = False
+        self.is_root_node = False
 
     def validate_init_args(self, kwargs: Dict[str, Any]) -> None:
         """Validate required arguments for convolutional recurrence."""
@@ -65,14 +65,77 @@ class RecurrenceBase(LightningModule):
                 if hasattr(module, "bias") and module.bias is not None:
                     nn.init.constant_(module.bias, 0)
 
+    def get_target_dtype(self) -> torch.dtype:
+        if hasattr(self, "parameters") and len(list(self.parameters())) > 0:
+            return next(self.parameters()).dtype
+        return None
 
-class ConvolutionalRecurrenceBase(RecurrenceBase):
+    def get_target_device(self) -> torch.device:
+        return self.device
+
+
+class ForwardRecurrenceBase(RecurrenceBase):
     """
     Base class for recurrence types that use convolutions.
     Provides common validation for convolution-specific parameters.
     """
 
-    pass
+    def reset(self) -> None:
+        self.hidden_states: Deque[torch.Tensor] = deque(maxlen=self.n_hidden_states)
+
+    def get_hidden_state(self, i: Optional[int] = None) -> Optional[torch.Tensor]:
+        """
+        Get the hidden state at a specific index.
+
+        Args:
+            i (Optional[int]): Index of the hidden state. Default is None.
+
+        Returns:
+            Optional[torch.Tensor]: Hidden state tensor.
+        """
+        if i is None:
+            return self.hidden_states
+        elif i >= 0:
+            i -= self.n_hidden_states
+
+        if abs(i) > len(self.hidden_states):
+            return None
+        else:
+            return self.hidden_states[i]
+
+    def set_hidden_state(self, h: torch.Tensor, i: Optional[int] = None) -> None:
+        """Fast reference storage - only coordinate if actually needed."""
+        if i is None:
+            self.hidden_states.append(h)
+        else:
+            self.hidden_states[i] = h
+
+    def sync_persistent_state(self) -> None:
+        """Only sync if there's actually a mismatch."""
+        if not hasattr(self, "hidden_states") or not self.hidden_states:
+            return
+
+        target_dtype = self.get_target_dtype()
+        target_device = self.get_target_device()
+
+        # Check if any tensor needs syncing
+        needs_sync = any(
+            h.dtype != target_dtype or h.device != target_device
+            for h in self.hidden_states
+        )
+
+        if needs_sync:
+            # Only then do the coordination (preserves references when possible)
+            synced_states = deque(maxlen=self.n_hidden_states)
+            for hidden in self.hidden_states:
+                if hidden.dtype != target_dtype or hidden.device != target_device:
+                    synced_states.append(
+                        hidden.to(dtype=target_dtype, device=target_device)
+                    )
+                else:
+                    synced_states.append(hidden)  # Keep original reference
+
+            self.hidden_states = synced_states
 
 
 class DepthwiseSeparableConnection(RecurrenceBase):
@@ -369,7 +432,7 @@ class InputAdaption(LightningModule):
             return h
 
 
-class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
+class RecurrentConnectedConv2d(ForwardRecurrenceBase):
     """
     Implements a recurrently connected convolutional layer.
 
@@ -434,9 +497,6 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
         self._define_architecture()
         self.reset()
 
-        # Flag to track initialization
-        self._parameters_initialized = False
-
     def _additive_influence(self, x, h):
         return x + h
 
@@ -459,7 +519,7 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
         self.history_length = (
             self.recurrence_delay if history_length is None else history_length
         )
-        self.n_deque = int(self.history_length / self.dt) + 1
+        self.n_hidden_states = int(self.history_length / self.dt) + 1
         self.recurrence_delay_i = int(self.recurrence_delay / self.dt)
 
     def _define_architecture(self) -> None:
@@ -530,43 +590,6 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
             nn.init.constant_(self.conv.bias, 0)
         if hasattr(self.recurrence, "_init_parameters"):
             self.recurrence._init_parameters()
-
-    def reset(self) -> None:
-        self.hidden_states: Deque[torch.Tensor] = deque(maxlen=self.n_deque)
-
-    def get_hidden_state(self, i: Optional[int] = None) -> Optional[torch.Tensor]:
-        """
-        Get the hidden state at a specific index.
-
-        Args:
-            i (Optional[int]): Index of the hidden state. Default is None.
-
-        Returns:
-            Optional[torch.Tensor]: Hidden state tensor.
-        """
-        if i is None:
-            return self.hidden_states
-        elif i >= 0:
-            i -= self.n_deque
-
-        if abs(i) > len(self.hidden_states):
-            return None
-        else:
-            return self.hidden_states[i]
-
-    def set_hidden_state(self, h: torch.Tensor, i: Optional[int] = None) -> None:
-        """
-        Set the hidden state at a specific index.
-
-        Args:
-            h (torch.Tensor): Hidden state tensor.
-            i (Optional[int]): Index of the hidden state. Default is None.
-        """
-        if i is None:
-            self.hidden_states.append(h)
-        else:
-            self.hidden_states[i] = h
-        return None
 
     def forward(
         self,

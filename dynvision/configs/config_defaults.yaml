@@ -2,7 +2,7 @@
 classifier_name: classifier
 
 # Model
-retain_graph: True  # retain the computational graph for repeated backprop paths
+retain_graph: False  # retain the computational graph for repeated backprop paths
 status: trained
 n_timesteps: 20
 dt: 2  # ms
@@ -11,8 +11,8 @@ t_recurrence: 6  # ms
 t_feedforward: 10  # ms
 recurrence_influence: 'additive'  # 'additive' or 'multiplicative'
 init_with_pretrained: False
-store_train_responses: 0  # n_samples
-store_val_responses: 0  # n_samples
+store_train_responses: 0 # n_samples
+store_val_responses: 10  # n_samples (currently no in use)
 store_test_responses: 100  # n_samples
 store_responses_on_cpu: True
 
@@ -25,9 +25,9 @@ prefetch_factor: 1
 # Training run
 seed: "0000"
 train_ratio: 0.8
-epochs: 250
+epochs: 200
 batch_size: 256
-check_val_every_n_epoch: 5
+check_val_every_n_epoch: 10
 log_every_n_steps: 20
 accumulate_grad_batches: 4
 precision: "bf16-mixed"

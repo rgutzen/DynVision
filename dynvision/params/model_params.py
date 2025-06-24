@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, List, Union, Tuple, Literal
 import logging
 from pathlib import Path
 
-from dynvision.hyperparameters.base_params import BaseParams, DynVisionValidationError
+from dynvision.params.base_params import BaseParams, DynVisionValidationError
 
 
 class ModelParams(BaseParams):
@@ -28,11 +28,11 @@ class ModelParams(BaseParams):
     )
     n_classes: int = Field(default=10, description="Number of output classes", ge=1)
     input_dims: Tuple[int, ...] = Field(
-        default=(20, 3, 224, 224),
+        default=(1, 3, 224, 224),
         description="Input dimensions (timesteps, channels, height, width)",
     )
     n_timesteps: int = Field(
-        default=20, description="Number of timesteps for model processing", ge=1
+        default=1, description="Number of timesteps for model processing", ge=1
     )
 
     # ===== BIOLOGICAL PARAMETERS =====
@@ -82,7 +82,7 @@ class ModelParams(BaseParams):
     store_responses: int = Field(
         default=0,
         description="Number of responses to store during evaluation (0 = disabled)",
-        ge=0,
+        ge=-1,
         le=1000,
     )
     store_responses_on_cpu: bool = Field(
@@ -181,6 +181,15 @@ class ModelParams(BaseParams):
             }
         )
         return aliases
+
+    @field_validator("store_responses")
+    def convert_store_responses(cls, v) -> int:
+        """Convert store_responses to int, handling string inputs."""
+        if isinstance(v, str):
+            if v.lower() == "all":
+                return -1  # Use -1 to indicate "all responses"
+            return int(v)
+        return int(v)
 
     @field_validator("optimizer")
     def validate_optimizer(cls, v):
@@ -448,7 +457,7 @@ class ModelParams(BaseParams):
             },
         }
 
-    def get_model_creation_kwargs(self, model_class=None) -> Dict[str, Any]:
+    def get_model_kwargs(self, model_class=None) -> Dict[str, Any]:
         """
         Get filtered kwargs appropriate for model creation.
 
@@ -504,9 +513,9 @@ class ModelParams(BaseParams):
 
                 known, unknown = filter_kwargs(model_class, model_kwargs)
 
-                if unknown:
+                if known:
                     logging.info(
-                        f"Filtered out unknown kwargs for {model_class.__name__}: {list(unknown.keys())}"
+                        f"Filtered known model kwargs for {model_class.__name__}: {list(known.keys())}"
                     )
 
                 return known
@@ -753,7 +762,7 @@ if __name__ == "__main__":
             },
         )
 
-        model_kwargs = custom_model_params.get_model_creation_kwargs()
+        model_kwargs = custom_model_params.get_model_kwargs()
         print(
             f"Custom model kwargs include: custom_layer_size={model_kwargs.get('custom_layer_size')}"
         )

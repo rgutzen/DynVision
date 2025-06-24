@@ -2,7 +2,7 @@
 {
     "use_ffcv": false,
     "classifier_name": "classifier",
-    "retain_graph": true,
+    "retain_graph": false,
     "status": "trained",
     "n_timesteps": 20,
     "dt": 2,
@@ -12,14 +12,14 @@
     "recurrence_influence": "additive",
     "init_with_pretrained": false,
     "store_train_responses": 0,
-    "store_val_responses": 0,
+    "store_val_responses": 10,
     "store_test_responses": 100,
     "store_responses_on_cpu": true,
     "data_name": "cifar100",
     "data_group": "invertebrates",
     "data_timesteps": 1,
     "prefetch_factor": 1,
-    "seed": "0015",
+    "seed": "0016",
     "train_ratio": 0.8,
     "epochs": 200,
     "batch_size": 32,
@@ -91,8 +91,6 @@
     },
     "log_level": "info",
     "use_executor": false,
-    "executor_start": "singularity exec --nv --overlay /scratch/rg5022/images/rva.ext3:ro --overlay /vast/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro --overlay /vast/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro --overlay /vast/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro /scratch/work/public/singularity/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif bash -c 'source /ext3/env.sh; conda activate rva; ",
-    "executor_close": "'",
     "verbose": true,
     "mounted_datasets": [
         "imagenet"
@@ -296,9 +294,7 @@
                 "depthpointwise",
                 "pointdepthwise",
                 "full",
-                "self",
-                "local",
-                "localdepthwise"
+                "self"
             ],
             "supralin": [
                 1.00000001,
@@ -353,14 +349,10 @@
             "parameter": "stim",
             "data_loader": "StimulusDuration",
             "data_args": {
-                "tsteps": 100,
+                "intro": 10,
+                "tsteps": 60,
                 "stim": [
-                    1,
-                    5,
-                    10,
-                    15,
-                    20,
-                    25
+                    20
                 ]
             }
         },
@@ -387,13 +379,12 @@
             "parameter": "interval",
             "data_loader": "StimulusInterval",
             "data_args": {
-                "tsteps": 100,
+                "tsteps": 50,
                 "stim": 5,
                 "interval": [
                     2,
-                    10,
-                    20,
-                    30
+                    5,
+                    10
                 ]
             }
         },
@@ -465,7 +456,8 @@
         "strategy_kwargs": {
             "find_unused_parameters": false,
             "gradient_as_bucket_view": true,
-            "process_group_backend": "nccl"
+            "process_group_backend": "nccl",
+            "static_graph": true
         }
     },
     "use_large_dataset_mode": false,

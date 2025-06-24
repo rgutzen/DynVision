@@ -44,25 +44,23 @@ rule plot_confusion_matrix:
         script = SCRIPTS / 'visualization' / 'plot_confusion_matrix.py'
     params:
         palette = 'cividis',
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         plot = project_paths.figures / '{path}_{data_name}_confusion.{format}'
-    # log:
-    #     project_paths.logs / 'plot_confusion_matrix_{path}_{data_name}_{format}.log'
     group: "visualization"
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --input {input.test_results:q} \
             --output {output.plot:q} \
             --dataset {input.dataset} \
             --palette {params.palette} \
             --format {wildcards.format} \
-        {params.executor_close}
         """
-            # > {log} 2>&1
 
 rule plot_classifier_responses:
     """Analyze and visualize classifier responses.
@@ -84,25 +82,23 @@ rule plot_classifier_responses:
         script = SCRIPTS / 'visualization' / 'plot_classifier_responses.py'
     params:
         n_units = 10,
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         directory(project_paths.figures \
             / 'classifier_response' \
             / '{model_name}{data_identifier}')
-    # log:
-    #     project_paths.logs / 'plot_classifier_responses_{model_name}{data_identifier}.log'
     group: "visualization"
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --input {input.dataframe:q} \
             --output {output:q} \
             --n_units {params.n_units}
-        {params.executor_close}
         """
-            # > {log} 2>&1
 
 rule plot_weight_distributions:
     """Visualize model weight distributions.
@@ -123,25 +119,23 @@ rule plot_weight_distributions:
             / '{model_name}{data_identifier}_{status}.pt',
         script = SCRIPTS / 'visualization' / 'plot_weight_distributions.py'
     params:
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         plot = project_paths.figures \
             / 'weight_distributions' \
             / '{model_name}{data_identifier}_{status}_weights.{format}'
-    # log:
-    #     project_paths.logs / 'plot_weight_distributions_{model_name}{data_identifier}_{status}_{format}.log'
     group: "visualization"
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --input {input.state:q} \
             --output {output.plot:q} \
             --format {wildcards.format} 
-        {params.executor_close}
         """
-            # > {log} 2>&1
 
 rule plot_experiment_outputs:
     """Visualize experiment results.
@@ -168,26 +162,24 @@ rule plot_experiment_outputs:
         script = SCRIPTS / 'visualization' / 'plot_experiment_outputs.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         plot = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{category}=*_{seed}_{data_name}_{status}_{data_group}' / 'experiment_outputs_label{label_target}.{format}'
-    # log:
-    #     project_paths.logs / 'plot_experiment_outputs_{experiment}_{model_name}:{category}=*_{seed}_{data_name}_{status}_{data_group}_{label_target}_{format}.log'
     group: "visualization"
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --test_outputs {input.test_outputs:q} \
             --output {output.plot:q} \
             --parameter {params.parameter} \
             --category {wildcards.category} \
-            --format {params.format} \
-            --style {params.style} \
-        {params.executor_close}
+            --format {wildcards.format} \
+            --style {params.style} 
         """
-            # > {log} 2>&1
 
 checkpoint plot_adaption:
     """Analyze and visualize model adaptation.
@@ -222,27 +214,24 @@ checkpoint plot_adaption:
     params:
         measures = ['power', 'peak_height', 'peak_time'],
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        executor_start = config.executor_start if config.use_executor else '',
-        executor_close = config.executor_close if config.use_executor else ''
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
     output:
         flag = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / '{plot}.flag'
-    # log:
-    #     project_paths.logs / 'plot_adaption_{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}_{plot}.log'
     group: "visualization"
     shell:
         """
-        {params.executor_start}
-        python {input.script:q} \
+        {params.execution_cmd} \
             --responses {input.responses:q} \
             --test_outputs {input.test_outputs:q} \
             --output {output.flag:q} \
             --parameter {params.parameter} \
             --category {wildcards.category} \
-            --measures {params.measures} \
-            --format {wildcards.format} 
-        {params.executor_close}
+            --measures {params.measures} 
         """
-            # > {log} 2>&1
 
 rule plot_experiments:
     """Collect and organize experiment visualizations.
@@ -281,13 +270,10 @@ rule plot_experiments_on_models:
         )
     output:
         temp(project_paths.figures / 'plot_experiments_on_models{model_args}.done')
-    # log:
-    #     project_paths.logs / 'plot_experiments_on_models{model_args}.log'
     shell:
         """
         touch {output:q} 
         """
-        # > {log} 2>&1
 
 # Log workflow initialization
 logger.info("Visualization workflow initialized")

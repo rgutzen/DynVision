@@ -11,9 +11,9 @@ import logging
 
 from pydantic import Field, model_validator, ConfigDict
 
-from dynvision.hyperparameters.base_params import BaseParams, DynVisionValidationError
-from dynvision.hyperparameters.model_params import ModelParams
-from dynvision.hyperparameters.data_params import DataParams
+from dynvision.params.base_params import BaseParams, DynVisionValidationError
+from dynvision.params.model_params import ModelParams
+from dynvision.params.data_params import DataParams
 
 logger = logging.getLogger(__name__)
 
@@ -76,25 +76,33 @@ class InitParams(BaseParams):
         # Ensure output directory exists
         if self.output:
             self.output.parent.mkdir(parents=True, exist_ok=True)
-
-        # Force initialization-friendly settings using update_field
-        # This happens after DataParams is created but before it's finalized
-        self.data.update_field("use_ffcv", False, verbose=True, validate=False)
-        self.data.update_field("use_distributed", False, verbose=True, validate=False)
-        self.data.update_field(
-            "batch_size", min(self.data.batch_size, 2), verbose=True, validate=False
-        )
-        self.data.update_field("num_workers", 0, verbose=True, validate=False)
-
-        logger.info("Applied initialization overrides to DataParams")
-
         return self
+
+    @classmethod
+    def validate_data_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        update_dict = {
+            "use_ffcv": False,
+            "use_distributed": False,
+            "batch_size": 32,
+            "num_workers": 0,
+            "pin_memory": False,
+        }
+        config = cls.update_kwargs(config, update_dict, verbose=True)
+        return config
+
+    @classmethod
+    def validate_model_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        update_dict = {
+            "store_responses": 0,
+        }
+        config = cls.update_kwargs(config, update_dict, verbose=True)
+        return config
 
     def update_model_parameters_from_dataset(
         self,
         input_dims: Tuple[int, ...],
         n_classes: int,
-        validate_consistency: bool = True,
+        verbose: bool = True,
     ) -> None:
         """
         Update model parameters based on dataset characteristics.
@@ -102,64 +110,30 @@ class InitParams(BaseParams):
         Args:
             input_dims: Input dimensions from dataset (channels, height, width) or (timesteps, channels, height, width)
             n_classes: Number of classes in dataset
-            validate_consistency: Whether to log warnings for parameter changes
+            verbose: Whether to log warnings for parameter changes
         """
         # Update input dimensions
         if self.model.input_dims != input_dims:
-            self.model.update_field(
-                "input_dims", input_dims, verbose=validate_consistency
-            )
+            self.model.update_field("input_dims", input_dims, verbose=verbose)
 
         # Update n_timesteps if provided in input_dims
         if len(input_dims) == 4:  # (timesteps, channels, height, width)
             n_timesteps = input_dims[0]
             if n_timesteps > 1 and self.model.n_timesteps != n_timesteps:
-                self.model.update_field(
-                    "n_timesteps", n_timesteps, verbose=validate_consistency
-                )
+                self.model.update_field("n_timesteps", n_timesteps, verbose=verbose)
 
         # Update n_classes
         if self.model.n_classes != n_classes:
-            self.model.update_field(
-                "n_classes", n_classes, verbose=validate_consistency
-            )
+            self.model.update_field("n_classes", n_classes, verbose=verbose)
 
-    def get_model_creation_kwargs(self, model_class=None) -> Dict[str, Any]:
-        """
-        Get filtered kwargs appropriate for model initialization.
-
-        Args:
-            model_class: The model class to filter kwargs for
-
-        Returns:
-            Dictionary of kwargs suitable for model instantiation
-        """
-        # Get model creation kwargs, excluding training-specific parameters
-        model_kwargs = self.model.get_model_creation_kwargs(model_class)
-
-        # For initialization, we don't need response storage
-        model_kwargs.update(
-            {
-                "store_responses": 0,  # No response storage during initialization
-            }
-        )
-
-        return model_kwargs
+    def get_model_kwargs(self, model_class=None) -> Dict[str, Any]:
+        return self.model.get_model_kwargs(model_class)
 
     def get_dataset_kwargs(self) -> Dict[str, Any]:
-        """Get basic dataset loading kwargs for dimension inference."""
-        return self.data.get_dataloader_kwargs() | {
-            "data_name": self.data.data_name,
-            "pin_memory": False,  # Keep it simple for initialization
-        }
+        return self.data.get_dataset_kwargs()
 
     def get_dataloader_kwargs(self) -> Dict[str, Any]:
-        """Get basic dataloader kwargs for dimension inference."""
-        return self.data.get_dataloader_kwargs() | {
-            "data_name": self.data.data_name,
-            "shuffle": False,  # No need to shuffle for dimension inference
-            "pin_memory": False,  # Keep it simple
-        }
+        return self.data.get_dataloader_kwargs()
 
     @classmethod
     def from_cli_and_config(
@@ -223,6 +197,10 @@ class InitParams(BaseParams):
                     logger.debug(
                         f"Assigning unknown parameter '{key}' to model_params"
                     )
+
+        # Validate component configurations
+        cls.validate_data_config(data_params)
+        cls.validate_model_config(model_params)
 
         # Create component instances
         try:

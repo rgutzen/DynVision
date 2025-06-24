@@ -37,6 +37,7 @@ distributed:
     find_unused_parameters: False  # Set to True if your model has unused parameters
     gradient_as_bucket_view: True  # Use bucket views for gradients
     process_group_backend: "nccl"  # Use NCCL for GPU communication
+    static_graph: True
 
 # Large Dataset Settings
 use_large_dataset_mode: False

@@ -397,10 +397,10 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
     cmd_parts = []
     
     # Add distributed setup if enabled
-    if use_distributed:
-        setup_script = SCRIPTS / 'cluster' / 'setup_distributed_execution.sh'
-        cmd_parts.append(f"source {setup_script} &&")
-    
+    # if use_distributed:
+    setup_script = SCRIPTS / 'cluster' / 'setup_distributed_execution.sh'
+    cmd_parts.append(f"source {setup_script} &&")
+
     # Add executor wrapper if enabled
     if use_executor:
         executor_script = SCRIPTS / 'cluster' / 'executor_wrapper.sh'
@@ -418,6 +418,6 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
         )
     else:
         # comprehensive environment cleaning for single-device mode
-        cmd_parts.append(f"export WORLD_SIZE=1 && python {script_path}")
+        cmd_parts.append(f"python {script_path}")
     
     return "\\\n        ".join(cmd_parts)

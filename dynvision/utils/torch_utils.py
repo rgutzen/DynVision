@@ -182,6 +182,43 @@ def ensure_same_device(
     return args, kwargs
 
 
+def determine_target_dtype(
+    *args: Union[torch.Tensor, torch.nn.Module],
+    target_dtype: Optional[torch.dtype] = None,
+    label: Optional[str] = None,
+    default_dtype: torch.dtype = torch.bfloat16,
+    **kwargs: Union[torch.Tensor, torch.nn.Module],
+) -> torch.dtype:
+    """
+    Determine the target dtype from a collection of tensors and modules.
+
+    Args:
+        args: Positional tensor or module arguments to analyze.
+        kwargs: Keyword tensor or module arguments to analyze.
+        target_dtype: If provided, returns this dtype directly.
+        label: Optional label for logging context.
+
+    Returns:
+        torch.dtype: The determined target dtype.
+    """
+    # If target dtype is explicitly provided, return it
+    if target_dtype is not None:
+        return target_dtype
+
+    for var in list(args) + list(kwargs.values()):
+        if hasattr(var, "get_target_dtype"):
+            try:
+                lightning_dtype = var.get_target_dtype()
+                logger.info(
+                    f"Using Lightning target dtype: {lightning_dtype} for {label}"
+                )
+                return lightning_dtype
+            except:
+                pass
+
+    return default_dtype
+
+
 def ensure_same_dtype(
     *args: Union[torch.Tensor, torch.nn.Module],
     target_dtype: Optional[torch.dtype] = None,
@@ -200,54 +237,32 @@ def ensure_same_dtype(
     Returns:
         Tuple of (args, kwargs) with variables cast to the same dtype.
     """
-    if target_dtype is None:
-        return args, kwargs
+    # Determine the target dtype
+    target_dtype = determine_target_dtype(
+        *args, target_dtype=target_dtype, label=label, **kwargs
+    )
 
-    # Collect dtypes
-    dtypes = set()
-
-    def process_dtype(var):
+    # Cast function
+    def cast_to_dtype(var):
         if isinstance(var, torch.Tensor):
-            dtypes.add(var.dtype)
-        elif isinstance(var, torch.nn.Module) and len(list(var.parameters())) > 0:
-            dtypes.add(next(var.parameters()).dtype)
-
-    for var in args:
-        process_dtype(var)
-    for var in kwargs.values():
-        process_dtype(var)
-
-    # Handle dtype mismatches
-    if len(dtypes) > 1:
-        label_text = f" in {label}" if label else ""
-        logger.warning(f"Variables have different dtypes{label_text}")
-
-        # Log dtype info for each variable
-        for i, var in enumerate(args):
-            if isinstance(var, torch.Tensor):
-                logger.info(f"param_{i}: {var.dtype}")
-            elif isinstance(var, torch.nn.Module) and len(list(var.parameters())) > 0:
-                logger.info(f"param_{i}: {next(var.parameters()).dtype}")
-
-        for name, var in kwargs.items():
-            if isinstance(var, torch.Tensor):
-                logger.info(f"{name}: {var.dtype}")
-            elif isinstance(var, torch.nn.Module) and len(list(var.parameters())) > 0:
-                logger.info(f"{name}: {next(var.parameters()).dtype}")
-
-        logger.info(f"Casting variables to {target_dtype} dtype")
-
-        def cast_to_dtype(var):
-            if isinstance(var, torch.Tensor):
+            if var.dtype != target_dtype:
+                logger.info(f"Casting: {var.dtype} -> {target_dtype}")
                 return var.to(dtype=target_dtype)
-            elif isinstance(var, torch.nn.Module) and len(list(var.parameters())) > 0:
-                return var.to(dtype=target_dtype)
-            return var
+        elif isinstance(var, torch.nn.Module):
+            if len(list(var.parameters())) > 0:
+                param_dtype = next(var.parameters()).dtype
+                if param_dtype != target_dtype:
+                    logger.info(
+                        f"Casting module parameters: {param_dtype} -> {target_dtype}"
+                    )
+                    return var.to(dtype=target_dtype)
+        return var
 
-        args = tuple(cast_to_dtype(var) for var in args)
-        kwargs = {name: cast_to_dtype(var) for name, var in kwargs.items()}
+    # Cast all variables
+    new_args = tuple(cast_to_dtype(var) for var in args)
+    new_kwargs = {name: cast_to_dtype(var) for name, var in kwargs.items()}
 
-    return args, kwargs
+    return new_args, new_kwargs
 
 
 @contextmanager
@@ -286,9 +301,10 @@ def on_same_device(
     )
 
     # Then handle dtype if specified (optional)
-    args, kwargs = ensure_same_dtype(
-        *args, target_dtype=target_dtype, label=label, **kwargs
-    )
+    if target_dtype is not None:
+        args, kwargs = ensure_same_dtype(
+            *args, target_dtype=target_dtype, label=label, **kwargs
+        )
 
     # Get the actual device name for autocast
     if target_device is None:
@@ -319,3 +335,29 @@ def apply_parametrization(
             raise ValueError(f"Unknown parametrization: {parametrization}")
     else:
         raise TypeError("Parametrization must be a callable, string, or None.")
+
+
+def get_effective_dtype_from_precision(precision: str) -> str:
+    """
+    Get the actual dtype that PyTorch Lightning will use for a given precision.
+
+    This matches Lightning's internal logic to avoid dtype mismatches.
+    """
+    # Lightning's actual behavior for mixed precision
+    if precision in ["16-mixed", "bf16-mixed"]:
+        # Lightning prefers bfloat16 for mixed precision on supported hardware
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+            return "bfloat16"
+        else:
+            return "float16"
+
+    # Direct mappings for non-mixed precision
+    precision_to_dtype = {
+        "16": "float16",
+        "bf16": "bfloat16",
+        "bfloat16": "bfloat16",
+        "32": "float32",
+        "64": "float64",
+    }
+
+    return precision_to_dtype.get(precision, "float32")

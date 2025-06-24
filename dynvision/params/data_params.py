@@ -12,7 +12,8 @@ import torch
 from ffcv.loader import OrderOption
 import json
 import os
-from dynvision.hyperparameters.base_params import BaseParams
+from dynvision.params.base_params import BaseParams
+from dynvision.utils import get_effective_dtype_from_precision
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,11 @@ class DataParams(BaseParams):
     )
 
     batches_ahead: int = Field(
-        default=3, ge=1, description="Number of batches to prefetch"
+        default=3, ge=1, description="Number of batches to prefetch with ffcv"
+    )
+
+    prefetch_factor: Optional[int] = Field(
+        default=None, ge=1, description="Number of batches to prefetch per worker"
     )
 
     order: OrderOption = Field(
@@ -124,6 +129,22 @@ class DataParams(BaseParams):
     os_cache: Optional[bool] = Field(
         default=None,
         description="Whether to use OS caching (None for auto-optimization)",
+    )
+
+    cache_size: Optional[int] = Field(
+        default=1000,
+        ge=0,
+        description="Size of the cache in bytes",
+    )
+
+    pin_memory: bool = Field(
+        default=False,
+        description="Whether to pin memory for faster data transfer to GPU",
+    )
+
+    shuffle: bool = Field(
+        default=True,
+        description="Whether to shuffle the dataset",
     )
 
     # === Custom Dataloader Arguments ===
@@ -177,6 +198,17 @@ class DataParams(BaseParams):
             raise ValueError("data_name cannot be empty")
         return v.strip().lower()
 
+    @field_validator("pin_memory", mode="after")
+    @classmethod
+    def validate_pin_memory(cls, v: bool) -> bool:
+        """Ensure pin_memory is only True if CUDA is available."""
+        if v and not torch.cuda.is_available():
+            logger.warning(
+                "pin_memory=True but CUDA is not available. Setting pin_memory=False."
+            )
+            return False
+        return v
+
     @field_validator("num_workers", mode="after")
     @classmethod
     def validate_num_workers(cls, v: int) -> int:
@@ -188,6 +220,22 @@ class DataParams(BaseParams):
             )
 
         return min(max_workers, v)
+
+    @field_validator("prefetch_factor", mode="after")
+    @classmethod
+    def validate_prefetch_factor(cls, v, info):
+        """
+        Ensure prefetch_factor is only set when num_workers > 0.
+        """
+        # info.data contains the current field values
+        num_workers = info.data.get("num_workers", 1)
+        if v is not None and num_workers == 0:
+            logger.warning(
+                "prefetch_factor option could only be specified in multiprocessing. "
+                "Set num_workers > 0 to enable multiprocessing, otherwise set prefetch_factor to None."
+            )
+            return None
+        return v
 
     @field_validator("normalize", mode="before")
     @classmethod
@@ -288,13 +336,22 @@ class DataParams(BaseParams):
 
     @model_validator(mode="after")
     def validate_distributed_settings(self) -> "DataParams":
-        """
-        Update parameters when distributed is True.
-        """
         if self.use_distributed:
             self.update_field("order", OrderOption.RANDOM, verbose=True)
             self.update_field("os_cache", True, verbose=True)
             self.update_field("drop_last", True, verbose=True)
+        return self
+
+    @model_validator(mode="after")
+    def validate_persistent_workers(self) -> "DataParams":
+        if self.num_workers == 0 and self.persistent_workers:
+            logger.info(
+                "persistent_workers option needs num_workers > 0. "
+                "Setting persistent_workers = False."
+            )
+            self.update_field(
+                "persistent_workers", False, verbose=True, validate=False
+            )
         return self
 
     @model_validator(mode="after")
@@ -347,36 +404,40 @@ class DataParams(BaseParams):
     @model_validator(mode="after")
     def resolve_dtype_precision_compatibility(self):
         """
-        Resolve dtype/precision compatibility and derive dtype if not specified.
-
-        Priority:
-        1. If dtype explicitly set, validate compatibility with precision
-        2. If dtype not set, derive from precision
-        3. Ensure final values are compatible
+        Resolve dtype/precision compatibility using shared logic with TrainerParams.
         """
-
-        # Define precision to dtype mapping
-        precision_to_dtype = {
-            "16": "float16",
-            "16-mixed": "float16",
-            "bf16": "bfloat16",
-            "bf16-mixed": "bfloat16",
-            "bfloat16": "bfloat16",
-            "32": "float32",
-            "64": "float64",
-        }
 
         # Derive dtype if not explicitly set
         if self.dtype is None:
-            if self.precision in precision_to_dtype:
-                self.dtype = precision_to_dtype[self.precision]
-                logging.info(
-                    f"Derived data dtype '{self.dtype}' from precision '{self.precision}'"
-                )
+            derived_dtype_str = get_effective_dtype_from_precision(self.precision)
+
+            # Convert string to torch.dtype
+            dtype_map = {
+                "float16": torch.float16,
+                "float32": torch.float32,
+                "float64": torch.float64,
+                "bfloat16": torch.bfloat16,
+            }
+
+            self.dtype = dtype_map[derived_dtype_str]
+            logging.info(
+                f"Derived data dtype '{derived_dtype_str}' from precision '{self.precision}'"
+            )
 
         return self
 
     # === Loader Factory Interface ===
+    def get_dataset_kwargs(self) -> Dict[str, Any]:
+        """Get dataset configuration optimized for testing."""
+        kwargs = self.get_dataloader_kwargs()
+        kwargs.update(
+            {
+                "data_name": self.data_name,
+                "cache_size": self.cache_size,
+                "pin_memory": self.pin_memory,
+            }
+        )
+        return kwargs
 
     def get_dataloader_kwargs(self) -> Dict[str, Any]:
         """
@@ -405,6 +466,7 @@ class DataParams(BaseParams):
             "data_timesteps": self.data_timesteps,
             "distributed": self.use_distributed,
             "train": self.train,
+            "shuffle": self.shuffle,
         }
 
         # Add custom dataloader kwargs

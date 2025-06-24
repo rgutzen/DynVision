@@ -123,7 +123,7 @@ rule train_model:
         log_every_n_steps = get_param('log_every_n_steps'),
         accumulate_grad_batches = get_param('accumulate_grad_batches'),
         precision = get_param('precision'),
-        store_responses = get_param('store_val_responses'),
+        store_responses = get_param('store_train_responses'),
         profiler = get_param('profiler'),
         use_ffcv = get_param('use_ffcv'),
         enable_progress_bar = get_param('enable_progress_bar'),
@@ -205,9 +205,12 @@ rule test_model:
     params:
         config_path = CONFIGS,
         batch_size = get_param('batch_size') if project_paths.iam_on_cluster() else 3,
-        data_group = lambda w: f"{w.data_name}_{w.data_group}",
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
+        normalize = lambda w: json.dumps((
+            config.data_statistics[w.data_name]['mean'],
+            config.data_statistics[w.data_name]['std']
+        )),
         loss = get_param('loss'),
         store_responses = get_param('store_test_responses'),
         enable_progress_bar = True,
@@ -237,9 +240,9 @@ rule test_model:
             --data_loader {wildcards.data_loader} \
             --output_results {output.results:q} \
             --output_responses {output.responses:q} \
-            --data_transform {wildcards.data_name} \
-            --target_transform {params.data_group} \
+            --data_group {wildcards.data_group} \
             --loss {params.loss} \
+            --normalize {params.normalize:q} \
             --batch_size {params.batch_size} \
             --seed {wildcards.seed} \
             --store_responses {params.store_responses} \

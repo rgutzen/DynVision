@@ -27,12 +27,21 @@ def should_clean_distributed_env():
     Returns True if we're definitely in distributed mode, False otherwise.
     """
 
-    world_size = os.environ.get("WORLD_SIZE")
+    devices = os.environ.get("CUDA_VISIBLE_DEVICES")
 
-    if world_size is not None and int(world_size) > 1:
-        return False
+    if isinstance(devices, list):
+        devices = len(devices)
+    elif isinstance(devices, str):
+        # Handle comma-separated devices
+        devices = devices.split(",")
+        devices = len(devices)
+    else:
+        pass
 
-    return True
+    if devices is None or int(devices) <= 1:
+        return True
+
+    return False
 
 
 def clean_distributed_env():
@@ -104,7 +113,7 @@ from dynvision.utils import (
 from dynvision.visualization import callbacks as custom_callbacks
 
 # Import the Pydantic parameter classes
-from dynvision.hyperparameters import TrainingParams, DynVisionConfigError
+from dynvision.params import TrainingParams, DynVisionConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -259,21 +268,21 @@ class CallbackManager:
         """Set up training callbacks based on configuration."""
         callbacks = []
 
-        # Add model-specific callbacks
-        if self.config.model.n_timesteps > 1:
-            callbacks.append(custom_callbacks.MonitorClassifierResponses())
+        # # Add model-specific callbacks
+        # if self.config.model.n_timesteps > 1:
+        #     callbacks.append(custom_callbacks.MonitorClassifierResponses())
 
-        callbacks.append(custom_callbacks.MonitorWeightDistributions())
+        # callbacks.append(custom_callbacks.MonitorWeightDistributions())
 
         # Setup checkpointing
         checkpoint_path = self._setup_checkpointing(callbacks)
 
-        # Add early stopping if configured
-        early_stopping_kwargs = (
-            self.config.trainer.get_early_stopping_callback_kwargs()
-        )
-        if early_stopping_kwargs:
-            callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))
+        # # Add early stopping if configured
+        # early_stopping_kwargs = (
+        #     self.config.trainer.get_early_stopping_callback_kwargs()
+        # )
+        # if early_stopping_kwargs:
+        #     callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))
 
         # Add learning rate monitor
         callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="epoch"))
@@ -336,12 +345,12 @@ class ModelManager:
         """Load and initialize model with current configuration."""
         # Load state dict
         state_dict = torch.load(
-            self.config.input_model_state, map_location=self.device
+            self.config.input_model_state, map_location=self.device, weights_only=True
         )
 
         # Create model with current configuration
         model_class = getattr(models, self.config.model.model_name)
-        model_kwargs = self.config.model.get_model_creation_kwargs(model_class)
+        model_kwargs = self.config.model.get_model_kwargs(model_class)
 
         logger.info(f"Creating {model_class.__name__} with:")
         logger.info(f"  - Input dims: {model_kwargs.get('input_dims')}")
@@ -460,43 +469,39 @@ class TrainingOrchestrator:
         This method creates a preview loader, loads a sample batch, extracts dimensions,
         validates consistency, and updates the model configuration accordingly.
         """
-        try:
-            # Create preview loader (non-distributed for dimension inference)
-            preview_loader = self.datamodule.create_preview_loader()
+        # Create preview loader (non-distributed for dimension inference)
+        preview_loader = self.datamodule.create_preview_loader()
 
-            # Load a sample from the preview dataloader
-            inputs, label_indices, *paths = next(iter(preview_loader))
-            inputs = _adjust_data_dimensions(inputs)
-            label_indices = _adjust_label_dimensions(label_indices)
+        # Load a sample from the preview dataloader
+        inputs, label_indices, *paths = next(iter(preview_loader))
+        inputs = _adjust_data_dimensions(inputs)
+        label_indices = _adjust_label_dimensions(label_indices)
 
-            # Extract actual dimensions
-            batch_size, actual_n_timesteps, *spatial_dims = inputs.shape
-            actual_input_dims = (actual_n_timesteps, *spatial_dims)
+        # Extract actual dimensions
+        batch_size, actual_n_timesteps, *spatial_dims = inputs.shape
+        actual_input_dims = (actual_n_timesteps, *spatial_dims)
 
-            logger.info(f"Extracted from training data:")
-            logger.info(f"  - Input shape: {inputs.size()}")
-            logger.info(f"  - Input dims: {actual_input_dims}")
-            logger.info(f"  - Pixel stats: {inputs.mean():.3f} ± {inputs.std():.3f}")
+        logger.info(f"Extracted from training data:")
+        logger.info(f"  - Input shape: {inputs.size()}")
+        logger.info(f"  - Input dims: {actual_input_dims}")
+        logger.info(f"  - Pixel stats: {inputs.mean():.3f} ± {inputs.std():.3f}")
 
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-            # Extract n_classes from state dict
-            state_dict = torch.load(self.config.input_model_state, map_location=device)
-            actual_n_classes = self._extract_n_classes_from_state_dict(state_dict)
+        # Extract n_classes from state dict
+        state_dict = torch.load(
+            self.config.input_model_state, map_location=device, weights_only=True
+        )
+        actual_n_classes = self._extract_n_classes_from_state_dict(state_dict)
 
-            # Update model parameters using the dedicated method
-            self.config.update_model_parameters_from_data(
-                input_dims=actual_input_dims,
-                n_classes=actual_n_classes,
-                validate_consistency=True,
-            )
-
-            # Log sample images
-            self._log_sample_images(inputs, label_indices, pl_logger)
-
-        except Exception as e:
-            logger.error(f"Failed to infer parameters from data: {e}")
-            logger.warning("Continuing with configuration defaults")
+        # Update model parameters using the dedicated method
+        self.config.update_model_parameters_from_data(
+            input_dims=actual_input_dims,
+            n_classes=actual_n_classes,
+            verbose=True,
+        )
+        # Log sample images
+        self._log_sample_images(inputs, label_indices, pl_logger)
 
     def _extract_n_classes_from_state_dict(
         self, state_dict: Dict[str, torch.Tensor]

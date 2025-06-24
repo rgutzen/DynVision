@@ -12,7 +12,8 @@ import logging
 from pathlib import Path
 import torch
 import os
-from dynvision.hyperparameters.base_params import BaseParams, DynVisionValidationError
+from dynvision.params.base_params import BaseParams, DynVisionValidationError
+from dynvision.utils import get_effective_dtype_from_precision
 
 
 class TrainerParams(BaseParams):
@@ -49,11 +50,11 @@ class TrainerParams(BaseParams):
 
     # Distributed Training Parameters
     strategy: Optional[str] = Field(
-        default=None,
+        default="auto",
         description="Distributed strategy (None=auto-detect, ddp, ddp_spawn, fsdp, deepspeed, etc.)",
     )
     devices: Union[int, str, None] = Field(
-        default=None,
+        default="auto",
         description="Number of devices (GPUs) per node or device specification (None=auto-detect)",
     )
     num_nodes: int = Field(default=1, description="Number of compute nodes", ge=1)
@@ -80,14 +81,6 @@ class TrainerParams(BaseParams):
     )
     benchmark: bool = Field(
         default=False, description="Enable PyTorch cudnn benchmark for performance"
-    )
-
-    # Response Storage (for analysis during evaluation)
-    store_responses: int = Field(
-        default=0, description="Number of responses to store (0 = disabled)", ge=0
-    )
-    store_responses_on_cpu: bool = Field(
-        default=True, description="Store responses on CPU to save GPU memory"
     )
 
     # Advanced Training Options
@@ -196,6 +189,7 @@ class TrainerParams(BaseParams):
         """Validate distributed strategy."""
         if v is not None:
             valid_strategies = [
+                "auto",
                 "ddp",
                 "ddp_spawn",
                 "ddp_sharded",
@@ -292,6 +286,24 @@ class TrainerParams(BaseParams):
         if v not in valid_modes:
             raise ValueError(f"Invalid mode: {v}. Valid options: {valid_modes}")
         return v
+
+    @model_validator(mode="after")
+    def ensure_dtype_precision_consistency(self):
+        """
+        Ensure trainer precision aligns with expected dtypes.
+        """
+        # Use the same shared function as DataParams
+        expected_dtype_str = get_effective_dtype_from_precision(str(self.precision))
+
+        # Log what dtype this precision will actually use
+        logging.info(
+            f"Trainer precision '{self.precision}' will use dtype '{expected_dtype_str}'"
+        )
+
+        # Store the effective dtype for coordination with other components
+        self._effective_dtype = expected_dtype_str
+
+        return self
 
     @model_validator(mode="after")
     def validate_distributed_consistency(self):
@@ -527,6 +539,22 @@ class TrainerParams(BaseParams):
                 trainer_kwargs["devices"] = self.devices
 
         return trainer_kwargs
+
+    def get_effective_dtype(self) -> torch.dtype:
+        """Get the actual torch.dtype that this trainer configuration will use."""
+        dtype_map = {
+            "float16": torch.float16,
+            "float32": torch.float32,
+            "float64": torch.float64,
+            "bfloat16": torch.bfloat16,
+        }
+
+        if hasattr(self, "_effective_dtype"):
+            return dtype_map[self._effective_dtype]
+        else:
+            # Fallback to derivation
+            dtype_str = get_effective_dtype_from_precision(str(self.precision))
+            return dtype_map[dtype_str]
 
     def get_early_stopping_callback_kwargs(self) -> Optional[Dict[str, Any]]:
         """Get early stopping callback configuration."""
