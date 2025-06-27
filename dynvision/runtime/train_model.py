@@ -547,19 +547,6 @@ class TrainingOrchestrator:
         """Run the complete training pipeline with comprehensive error handling."""
         with self.training_context():
             try:
-                # Validate configuration
-                errors, warnings = self._validate_configuration()
-                if errors:
-                    logger.error("Configuration validation failed:")
-                    for error in errors:
-                        logger.error(f"  - {error}")
-                    return 1
-
-                if warnings:
-                    logger.warning("Configuration warnings:")
-                    for warning in warnings:
-                        logger.warning(f"  - {warning}")
-
                 # Initialize logger
                 pl_logger = pl.loggers.WandbLogger(
                     project=project_paths.project_name,
@@ -600,27 +587,6 @@ class TrainingOrchestrator:
 
                 traceback.print_exc()
                 return 1
-
-    def _validate_configuration(self) -> Tuple[List[str], List[str]]:
-        """Validate configuration and return errors and warnings."""
-        errors = []
-        warnings = []
-
-        # Validate component configurations
-        try:
-            bio_issues = self.config.model.validate_biological_feasibility()
-            warnings.extend(bio_issues)
-
-            context_issues = self.config.model.validate_context_requirements()
-            warnings.extend(context_issues)
-
-            trainer_issues = self.config.trainer.validate_context_requirements()
-            warnings.extend(trainer_issues)
-
-        except Exception as e:
-            errors.append(f"Configuration validation failed: {e}")
-
-        return errors, warnings
 
     def _find_existing_checkpoint(self, checkpoint_path: Path) -> Optional[Path]:
         """Find existing checkpoint for resuming training."""

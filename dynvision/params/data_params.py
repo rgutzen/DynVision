@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Union, Any
+from typing import Dict, List, Optional, Tuple, Union, Any, Literal
 from pydantic import (
     BaseModel,
     Field,
@@ -72,6 +72,14 @@ class DataParams(BaseParams):
     )
 
     # === Data Processing ===
+
+    train_ratio: float = Field(
+        default=0.8,
+        ge=0,
+        le=1,
+        description="Ratio of training data to total data",
+    )
+
     data_transform: Union[str, List[str]] = Field(
         default=None,
         description="Transform specification (e.g., 'ffcv_train', 'ffcv_test')",
@@ -105,9 +113,31 @@ class DataParams(BaseParams):
 
     encoding: str = Field(default="image", description="FFCV encoding type")
 
+    writer_mode: Literal["jpg", "raw", "smart", "proportion"] = Field(
+        default="jpg", description="FFCV writer type"
+    )
+
+    max_resolution: int = Field(default=224, description="Max resolution for images")
+
+    compress_probability: float = Field(
+        default=1.0, description="Probability of compression applied to images"
+    )
+
+    jpeg_quality: int = Field(
+        default=100, description="Quality of JPEG compression (1-100)"
+    )
+
+    chunksize: int = Field(
+        default=100, description="Size of the chunks for data processing"
+    )
+
+    page_size: Optional[int] = Field(
+        default=4 * 1024 * 1024, description="Size of the page for data processing"
+    )
+
     dtype: Optional[Union[str, torch.dtype]] = Field(
         default=None,
-        description="Data type for tensors - if None, derived from precision",
+        description="Data type for tensors - if None`, derived from precision",
     )
 
     precision: Optional[str] = Field(

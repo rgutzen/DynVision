@@ -160,12 +160,6 @@ class TrainingParams(BaseParams):
 
         # Resolve parameter consistency issues
         self._resolve_parameter_conflicts()
-
-        # Validate biological feasibility
-        bio_issues = self.model.validate_biological_feasibility()
-        if bio_issues:
-            logger.warning(f"Biological feasibility concerns: {bio_issues}")
-
         return self
 
     @model_validator(mode="after")

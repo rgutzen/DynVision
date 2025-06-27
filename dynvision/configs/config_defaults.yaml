@@ -81,7 +81,6 @@ learning_rate: 0.0002
 scheduler: CosineAnnealingLR
 scheduler_kwargs:
   T_max: 250
-  eta_min: 0.0001
 scheduler_configs:
   interval: epoch
   frequency: 1

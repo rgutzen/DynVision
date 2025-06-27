@@ -71,11 +71,8 @@ class ModelParams(BaseParams):
     )
 
     # ===== NONLINEARITIES =====
-    supralinearity: bool = Field(
-        default=False, description="Enable supralinear activation functions"
-    )
-    supralinear_alpha: float = Field(
-        default=1.5, description="Supralinearity exponent", gt=0.0
+    supralinearity: float = Field(
+        default=1, description="Supralinearity exponent", gt=0.0
     )
 
     # ===== RESPONSE STORAGE =====
@@ -373,7 +370,7 @@ class ModelParams(BaseParams):
             )
 
         # Architecture consistency checks
-        if self.supralinearity and self.recurrence_type == "none":
+        if self.supralinearity != 1 and self.recurrence_type == "none":
             logging.warning(
                 "Supralinearity enabled but no recurrence - may cause instability"
             )
@@ -481,7 +478,6 @@ class ModelParams(BaseParams):
             "skip_connections": self.skip_connections,
             "feedback_connections": self.feedback_connections,
             "supralinearity": self.supralinearity,
-            "supralinear_alpha": self.supralinear_alpha,
             "store_responses": self.store_responses,
             "store_responses_on_cpu": self.store_responses_on_cpu,
             "classifier_name": self.classifier_name,
@@ -556,75 +552,6 @@ class ModelParams(BaseParams):
             "loss_reaction_time": self.loss_reaction_time,
         }
 
-    def validate_biological_feasibility(self) -> List[str]:
-        """
-        Validate biological feasibility of parameters.
-
-        Returns:
-            List of biological feasibility issues
-        """
-        issues = []
-
-        # Time constant checks
-        if self.tau < 1.0:
-            issues.append(
-                f"tau ({self.tau}ms) is very small - typical cortical neurons have tau ~10-20ms"
-            )
-        elif self.tau > 100.0:
-            issues.append(
-                f"tau ({self.tau}ms) is very large - may be too slow for visual processing"
-            )
-
-        # Integration step checks
-        if self.dt < 0.1:
-            issues.append(
-                f"dt ({self.dt}ms) is very small - may be computationally expensive"
-            )
-        elif self.dt > 5.0:
-            issues.append(f"dt ({self.dt}ms) is large - may miss important dynamics")
-
-        # Delay checks
-        if self.t_feedforward > 10.0:
-            issues.append(
-                f"t_feedforward ({self.t_feedforward}ms) is large - typical cortical delays are 1-5ms"
-            )
-
-        if self.t_recurrence > 10.0:
-            issues.append(
-                f"t_recurrence ({self.t_recurrence}ms) is large - typical recurrent delays are 1-5ms"
-            )
-
-        # Learning rate checks for biological models
-        if self.learning_rate > 0.01:
-            issues.append(
-                f"learning_rate ({self.learning_rate}) is high for biological models"
-            )
-
-        return issues
-
-    def validate_context_requirements(self) -> List[str]:
-        """
-        Validate context-specific requirements for models.
-
-        Returns:
-            List of validation warnings/errors
-        """
-        issues = []
-
-        # Architecture-specific checks
-        if self.supralinearity and self.recurrence_type == "none":
-            issues.append(
-                "Supralinearity enabled but no recurrence - may cause instability"
-            )
-
-        # Input/output consistency
-        if self.n_classes < 2:
-            issues.append(
-                f"n_classes ({self.n_classes}) should be >= 2 for meaningful classification"
-            )
-
-        return issues
-
 
 # Example usage and testing
 if __name__ == "__main__":
@@ -634,7 +561,7 @@ if __name__ == "__main__":
             model_name="DyRCNNx4",
             n_classes=10,
             input_dims=(20, 3, 224, 224),
-            supralinear_alpha=2.0,
+            supralinearity=2.0,
         )
         print(f"Default model params created successfully")
         print(f"Default criterion_params: {model_params.criterion_params}")
@@ -654,8 +581,7 @@ if __name__ == "__main__":
             dt=1.0,
             tau=15.0,
             recurrence_type="full",
-            supralinearity=True,
-            supralinear_alpha=2.5,
+            supralinearity=2.5,
             learning_rate=0.001,
             optimizer="Adam",
         )
@@ -673,7 +599,7 @@ if __name__ == "__main__":
             model_name="TestModel",
             n_classes=5,
             input_dims=(15, 3, 64, 64),
-            supralinear_alpha=1.8,
+            supralinearity=1.8,
             loss="CrossEntropyLoss",
         )
         print(f"Simple loss criterion_params: {simple_loss.criterion_params}")
@@ -683,7 +609,7 @@ if __name__ == "__main__":
             model_name="TestModel",
             n_classes=8,
             input_dims=(30, 3, 32, 32),
-            supralinear_alpha=2.2,
+            supralinearity=2.2,
             loss=["CrossEntropyLoss", "MSELoss"],
             criterion_params=[
                 ("CrossEntropyLoss", {"weight": 1.0}),
@@ -707,7 +633,7 @@ if __name__ == "__main__":
         "model_name": "DyRCNNx4",
         "n_classes": 50,
         "input_dims": [20, 3, 128, 128],
-        "supralinear_alpha": 2.5,
+        "supralinearity": 2.5,
         "dt": 1.5,
         "tau": 10.0,
         "t_feedforward": 2.0,
@@ -735,11 +661,6 @@ if __name__ == "__main__":
             f"Loaded loss criterion_params: {len(file_params.criterion_params)} loss functions"
         )
 
-        # Test biological validation
-        bio_issues = file_params.validate_biological_feasibility()
-        if bio_issues:
-            print(f"Biological feasibility issues: {bio_issues}")
-
     except Exception as e:
         print(f"Error with config file loading: {e}")
         import traceback
@@ -754,7 +675,7 @@ if __name__ == "__main__":
             model_name="CustomRCNN",
             n_classes=12,
             input_dims=(18, 3, 96, 96),
-            supralinear_alpha=1.9,
+            supralinearity=1.9,
             model_kwargs={
                 "custom_layer_size": 256,
                 "use_attention": True,

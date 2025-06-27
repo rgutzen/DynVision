@@ -1,6 +1,5 @@
 # This is an automatically compiled file. Do not edit manually!
 {
-    "use_ffcv": false,
     "classifier_name": "classifier",
     "retain_graph": false,
     "status": "trained",
@@ -72,11 +71,10 @@
             "lr_factor": 0.5
         }
     },
-    "learning_rate": 0.001,
+    "learning_rate": 0.0002,
     "scheduler": "CosineAnnealingLR",
     "scheduler_kwargs": {
-        "T_max": 250,
-        "eta_min": 0.0001
+        "T_max": 250
     },
     "scheduler_configs": {
         "interval": "epoch",
@@ -95,6 +93,7 @@
     "mounted_datasets": [
         "imagenet"
     ],
+    "use_ffcv": true,
     "data_resolution": {
         "mnist": 28,
         "cifar10": 32,
@@ -454,7 +453,7 @@
         "num_workers": 16,
         "presistent_workers": true,
         "strategy_kwargs": {
-            "find_unused_parameters": false,
+            "find_unused_parameters": true,
             "gradient_as_bucket_view": true,
             "process_group_backend": "nccl",
             "static_graph": true

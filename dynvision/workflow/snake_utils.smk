@@ -41,7 +41,7 @@ configfile: project_paths.scripts.configs / 'config_experiments.yaml'
 configfile: project_paths.scripts.configs / 'config_modes.yaml'
 configfile: project_paths.scripts.configs / 'config_workflow.yaml'
 
-CONFIGS = project_paths.scripts.configs / 'runtime_config.yaml'
+CONFIGS = project_paths.scripts.configs / 'config_runtime.yaml'
 SCRIPTS = project_paths.scripts_path
 
 config = SimpleNamespace(**config)

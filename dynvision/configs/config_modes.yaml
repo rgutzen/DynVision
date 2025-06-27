@@ -31,10 +31,10 @@ distributed:
   accumulate_grad_batches: 2
   batch_size: 256
   num_workers: 16
-  presistent_workers: True
+  persistent_workers: True
   # Advanced DDP settings
   strategy_kwargs:
-    find_unused_parameters: False  # Set to True if your model has unused parameters
+    find_unused_parameters: True  # Set to True if your model has unused parameters
     gradient_as_bucket_view: True  # Use bucket views for gradients
     process_group_backend: "nccl"  # Use NCCL for GPU communication
     static_graph: True
@@ -43,4 +43,9 @@ distributed:
 use_large_dataset_mode: False
 large_dataset:
   batch_size: 64
+  persistent_workers: False
+  num_workers: 4
+  pin_memory: False
+  os_cache: False
+  chunksize: 10000
   

@@ -28,183 +28,66 @@ from torchvision.transforms import ToPILImage
 
 
 from dynvision.data.datasets import get_dataset, load_raw_data
+from dynvision.params.data_params import DataParams
 
 logger = logging.getLogger(__name__)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Create FFCV datasets with optimized performance",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--input", type=Path, required=True, help="Input data directory"
-    )
-    parser.add_argument(
-        "--output_train",
-        type=Path,
-        required=True,
-        help="Output path for training dataset",
-    )
-    parser.add_argument(
-        "--output_val",
-        type=Path,
-        required=True,
-        help="Output path for validation dataset",
-    )
-    parser.add_argument("--data_name", type=str, required=True, help="Dataset name")
-    parser.add_argument(
-        "--train_ratio", type=float, default=0.8, help="Training set ratio"
-    )
-    parser.add_argument(
-        "--writer_mode", type=str, default="jpg", help="jpg | raw | proportion"
-    )
-    parser.add_argument(
-        "--max_resolution", type=int, default=224, help="Maximum image resolution"
-    )
-    parser.add_argument(
-        "--compress_probability",
-        type=float,
-        default=1.0,
-        help="Probability of compressing an image",
-    )
-    parser.add_argument(
-        "--jpeg_quality", type=int, default=100, help="JPEG compression quality"
-    )
-
-    args = parser.parse_args()
-
-    # Validate arguments
-    if not args.input.exists():
-        raise ValueError(f"Input directory does not exist: {args.input}")
-    if not 0 < args.train_ratio < 1:
-        raise ValueError(f"Invalid train ratio: {args.train_ratio}")
-    if not 0 <= args.compress_probability <= 1:
-        raise ValueError(f"Invalid compress probability: {args.compress_probability}")
-    if not 0 <= args.jpeg_quality <= 100:
-        raise ValueError(f"Invalid JPEG quality: {args.jpeg_quality}")
-
-    return args
-
-
-def get_writer_config(
-    data_sample: Union[PIL.Image.Image, torch.Tensor],
-    writer_mode: str,
-    max_resolution: int,
-    compress_probability: float,
-    jpeg_quality: int,
-) -> Dict[str, Any]:
-    """Get FFCV writer configuration based on data type.
-
-    Args:
-        data_sample: Sample data item
-        max_resolution: Maximum image resolution
-        compress_probability: Probability of compression
-        jpeg_quality: JPEG quality setting
-
-    Returns:
-        Dict[str, Any]: Writer configuration
-
-    Raises:
-        ValueError: If data type is not supported
-    """
-    if True:  # isinstance(data_sample, PIL.Image.Image):
-        logger.info("Configuring RGB image encoding")
-        data_shape = data_sample.size
-        # Configure writer specifically for the dataset characteristics
-        image_writer = RGBImageField(
-            write_mode=writer_mode,
-            compress_probability=compress_probability,
-            max_resolution=max_resolution,
-            jpeg_quality=jpeg_quality,
-        )
-    elif isinstance(data_sample, torch.Tensor):
-        logger.info("Configuring tensor encoding")
-        data_shape = data_sample.shape
-        image_writer = TorchTensorField(shape=data_shape, dtype=torch.float16)
-    else:
-        raise ValueError(f"Unsupported data type: {type(data_sample)}")
-
-    return {"image": image_writer, "label": IntField()}
-
-
-def write_dataset_subset(
-    writer: DatasetWriter, dataset: torch.utils.data.Dataset, subset_name: str
-) -> None:
-    """Write dataset subset with progress tracking.
-
-    Args:
-        writer: FFCV dataset writer
-        dataset: Dataset to write
-        subset_name: Name of the subset
-    """
-    try:
-        logger.info(f"Writing {subset_name} dataset with {len(dataset)} samples")
-        # Write dataset with explicit page size
-        writer.from_indexed_dataset(dataset)
-        logger.info(f"Finished writing {subset_name} dataset")
-    except Exception as e:
-        logger.error(f"Error writing {subset_name} dataset: {str(e)}")
-        raise
-
-
 def main() -> None:
     """Main function with error handling and resource management."""
-    try:
-        args = parse_args()
+    config = DataParams.from_cli_and_config()
 
-        # Load dataset
-        dataset = get_dataset(
-            args.input,
-            dataset_class=datasets.DatasetFolder,
-            loader=load_raw_data,
-            extensions=IMG_EXTENSIONS,
-            data_transform=None,
-            target_transform=f"{args.data_name}_all",
-            pil_to_tensor=False,
-            dtype=None,
-            normalize=None,
+    # Load dataset
+    dataset = get_dataset(
+        Path(config.input),
+        dataset_class=datasets.DatasetFolder,
+        loader=load_raw_data,
+        extensions=IMG_EXTENSIONS,
+        data_transform=None,
+        target_transform=f"{config.data_name}_all",
+        pil_to_tensor=False,
+        dtype=None,
+        normalize=None,
+    )
+
+    # Split dataset
+    data_size = len(dataset)
+    train_size = int(config.train_ratio * data_size)
+    val_size = data_size - train_size
+
+    logger.info(f"Splitting dataset: {train_size} train, {val_size} validation")
+    data = {}
+    data["train"], data["val"] = torch.utils.data.random_split(
+        dataset, [train_size, val_size]
+    )
+
+    # Get writer configuration
+    data_sample = dataset[0][0]
+
+    image_writer = RGBImageField(
+        write_mode=config.writer_mode,
+        compress_probability=config.compress_probability,
+        max_resolution=config.max_resolution,
+        jpeg_quality=config.jpeg_quality,
+    )
+    label_writer = IntField()
+    fields = {"image": image_writer, "label": label_writer}
+
+    # Write datasets sequentially
+    for subset, output_path in zip(
+        ["train", "val"], [Path(config.output_train), Path(config.output_val)]
+    ):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_str = str(output_path.resolve())
+
+        writer = DatasetWriter(
+            output_str,
+            fields,
+            num_workers=config.num_workers,
+            page_size=config.page_size,
         )
-
-        # Split dataset
-        data_size = len(dataset)
-        train_size = int(args.train_ratio * data_size)
-        val_size = data_size - train_size
-
-        logger.info(f"Splitting dataset: {train_size} train, {val_size} validation")
-        data = {}
-        data["train"], data["val"] = torch.utils.data.random_split(
-            dataset, [train_size, val_size]
-        )
-
-        # Get writer configuration
-        data_sample = dataset[0][0]
-
-        writer_config = get_writer_config(
-            data_sample,
-            writer_mode=args.writer_mode,
-            max_resolution=args.max_resolution,
-            compress_probability=args.compress_probability,
-            jpeg_quality=args.jpeg_quality,
-        )
-
-        # Write datasets sequentially
-        for subset, output in zip(
-            ["train", "val"], [args.output_train, args.output_val]
-        ):
-            output.parent.mkdir(parents=True, exist_ok=True)
-            writer = DatasetWriter(output, writer_config, num_workers=0)
-            try:
-                write_dataset_subset(writer, data[subset], subset)
-            except Exception as e:
-                logger.error(f"Failed to write {subset} dataset: {str(e)}")
-                raise e
-
-        logger.info("Successfully created FFCV datasets")
-
-    except Exception as e:
-        logger.error(f"Error creating FFCV datasets: {str(e)}")
-        raise e
+        logger.info(f"Writing {subset} dataset with {len(data[subset])} samples")
+        writer.from_indexed_dataset(data[subset], chunksize=config.chunksize)
 
 
 if __name__ == "__main__":

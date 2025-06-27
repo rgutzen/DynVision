@@ -48,24 +48,24 @@ set-resources:
     cpus_per_task: 16 # use 16 cores
     slurm_extra: "'--gres=gpu:1'"
 
-  # train_model:
-  #   mem: 32000 # use 32GB of memory
-  #   runtime: 360 # run for 24 hours
-  #   gpu: 1 # use one GPU
-  #   cpu: 32
-  #   cpus_per_task: 32 # use 32 cores
-  #   constraint: "a100|h100" # limit to fast GPUs
-  #   slurm_extra: "'--gres=gpu:1'"
-
-  train_model: # distributed
-    mem: 32000          # 32GB memory
-    runtime: 360        # 6 hours
-    cpus_per_task: 32   # 32 CPU cores
-    gpus_per_node: 4    # Use 4 GPUs per node
-    ntasks: 1           # Single task
-    nodes: 1            # Run on a single node
+  train_model:
+    mem: 32000 # use 32GB of memory
+    runtime: 360 # run for 24 hours
+    gpu: 1 # use one GPU
+    cpu: 32
+    cpus_per_task: 32 # use 32 cores
     constraint: "a100|h100" # limit to fast GPUs
-    slurm_extra: "'--gres=gpu:4'"
+    slurm_extra: "'--gres=gpu:1'"
+
+  # train_model: # distributed
+  #   mem: 32000          # 32GB memory
+  #   runtime: 360        # 6 hours
+  #   cpus_per_gpu: 16   # 32 CPU cores
+  #   gpus_per_node: 4    # Use 4 GPUs per node
+  #   ntasks: 1           # Single task
+  #   nodes: 1            # Run on a single node
+  #   constraint: "a100|h100" # limit to fast GPUs
+  #   slurm_extra: "'--gres=gpu:4'"
 
   symlink_data_subsets:
     mem: 4000 # use 4GB of memory
@@ -81,6 +81,7 @@ set-resources:
     # mem: 64000 # use 64GB of memory
     mem: 240000 # use 240GB of memory
     runtime: 1440 # run for 24 hours
-    cpus_per_task: 64
+    cpu: 32
+    cpus_per_task: 32
     # constraint: "a100|h100" # limit to fast GPUs
     # slurm_extra: "'--gres=gpu:1'"

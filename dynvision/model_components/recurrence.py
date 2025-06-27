@@ -447,6 +447,7 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         out_channels: int,
         kernel_size: int,
         stride: int = 1,
+        mid_channels: Optional[int] = None,
         padding: Optional[int] = None,
         bias: bool = True,
         dim_y: Optional[int] = None,
@@ -467,6 +468,7 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
 
         # Store core convolution parameters
         self.in_channels = in_channels
+        self.mid_channels = mid_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
@@ -532,15 +534,34 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
 
     def _setup_feedforward_conv(self) -> None:
         padding = self.kernel_size // 2 if self.padding is None else self.padding
-
-        self.conv = nn.Conv2d(
-            in_channels=self.in_channels,
-            out_channels=self.out_channels,
+        conv_kwargs = dict(
             kernel_size=self.kernel_size,
             stride=self.stride,
             padding=padding,
             bias=self.bias,
         )
+
+        if self.mid_channels is None:
+            self.conv = nn.Conv2d(
+                in_channels=self.in_channels,
+                out_channels=self.out_channels,
+                **conv_kwargs,
+            )
+        else:
+            self.conv = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=self.in_channels,
+                    out_channels=self.mid_channels,
+                    **conv_kwargs,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(
+                    in_channels=self.mid_channels,
+                    out_channels=self.out_channels,
+                    **conv_kwargs,
+                ),
+            )
+
         if self.parametrization is not None:
             self.conv = apply_parametrization(self.conv, self.parametrization)
 
@@ -580,14 +601,24 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             self.recurrence = recurrence_class(**recurrence_params)
 
     def _init_parameters(self) -> None:
-        if hasattr(self.conv, "weight.original0"):
-            self.conv.weight.original0.data.fill_(1.0)
-        if hasattr(self.conv, "weight.original1"):
-            nn.init.kaiming_normal_(self.conv.weight.original1, nonlinearity="relu")
-        elif hasattr(self.conv, "weight"):
-            nn.init.kaiming_normal_(self.conv.weight, nonlinearity="relu")
-        if hasattr(self.conv, "bias") and self.conv.bias is not None:
-            nn.init.constant_(self.conv.bias, 0)
+        def init_conv_layer(conv_layer):
+            if hasattr(conv_layer, "weight.original0"):
+                conv_layer.weight.original0.data.fill_(1.0)
+            if hasattr(conv_layer, "weight.original1"):
+                nn.init.kaiming_normal_(
+                    conv_layer.weight.original1, nonlinearity="relu"
+                )
+            elif hasattr(conv_layer, "weight"):
+                nn.init.kaiming_normal_(conv_layer.weight, nonlinearity="relu")
+            if hasattr(conv_layer, "bias") and conv_layer.bias is not None:
+                nn.init.constant_(conv_layer.bias, 0)
+
+        if self.mid_channels is None:
+            init_conv_layer(self.conv)
+        else:
+            init_conv_layer(self.conv[0])
+            init_conv_layer(self.conv[2])
+
         if hasattr(self.recurrence, "_init_parameters"):
             self.recurrence._init_parameters()
 

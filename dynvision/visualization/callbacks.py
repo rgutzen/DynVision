@@ -14,6 +14,7 @@ from dynvision.visualization.plot_classifier_responses import (
 from dynvision.visualization.plot_weight_distributions import (
     plot_weight_distributions,
 )
+from dynvision.utils import on_same_device
 
 
 class MonitorWeightDistributions(pl.Callback):
@@ -29,8 +30,31 @@ class MonitorWeightDistributions(pl.Callback):
 
 
 class MonitorClassifierResponses(pl.Callback):
+
+    def run_one_forward_pass(self, trainer, model):
+        # Run one forward pass to generate responses
+        model.eval()
+        sample = next(iter(trainer.val_dataloaders))
+
+        with on_same_device(
+            x_0=sample[0], **{k: v for k, v in model.named_parameters()}
+        ):
+            model.validation_step(sample, batch_idx=0, store_responses=True)
+            model.reset()
+
+    def clear_responses(self, model):
+        if hasattr(model, "responses"):
+            del model.responses
+        torch.cuda.empty_cache()
+
     def on_validation_end(self, trainer, model):
+
         df = model.get_classifier_dataframe()
+
+        # if not len(df):
+        #     self.run_one_forward_pass(trainer, model)
+        #     df = model.get_classifier_dataframe()
+        #     self.clear_responses(model)
 
         if len(df):
             fig, ax = plot_classifier_responses(df)

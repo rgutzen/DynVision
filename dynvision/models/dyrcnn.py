@@ -357,10 +357,8 @@ class DyRCNNx8(DyRCNNx4):
             "addfeedback",  # add feedback connection
             "tstep",  # apply dynamical systems ode solver step
             "nonlin",  # apply nonlinearity
-            "delay",  # set and get delayed activations for next layer
-            "conv",  # apply additional convolutional layer
-            "nonlin",  # apply nonlinearity
             "supralin",  # apply supralinearity
+            "delay",  # set and get delayed activations for next layer
             "record",  # record activations in responses dict
             "pool",  # apply pooling
             "norm",  # apply normalization
@@ -406,20 +404,13 @@ class DyRCNNx8(DyRCNNx4):
         in_channels = self.retina.out_channels if self.use_retina else self.n_channels
         self.V1 = RecurrentConnectedConv2d(
             in_channels=in_channels,
-            out_channels=64,
-            kernel_size=7,
-            stride=3,
+            mid_channels=64,
+            out_channels=96,
+            kernel_size=5,
+            stride=2,
             dim_y=self.dim_y,
             dim_x=self.dim_x,
             **layer_params,
-        )
-        self.conv_V1 = nn.Conv2d(
-            in_channels=self.V1.out_channels,
-            out_channels=96,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=self.bias,
         )
         self.tau_V1 = torch.nn.Parameter(
             torch.tensor(self.tau, dtype=float),
@@ -431,27 +422,20 @@ class DyRCNNx8(DyRCNNx4):
 
         # V2
         self.V2 = RecurrentConnectedConv2d(
-            in_channels=self.conv_V1.out_channels,
-            out_channels=128,
+            in_channels=self.V1.out_channels,
+            mid_channels=128,
+            out_channels=192,
             kernel_size=3,
             stride=2,
             dim_y=self.V1.dim_y
             // self.V1.stride
-            // self.conv_V1.stride[0]
+            // self.V1.stride
             // self.pool_V1.stride,
             dim_x=self.V1.dim_x
             // self.V1.stride
-            // self.conv_V1.stride[1]
+            // self.V1.stride
             // self.pool_V1.stride,
             **layer_params,
-        )
-        self.conv_V2 = nn.Conv2d(
-            in_channels=self.V2.out_channels,
-            out_channels=192,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=self.bias,
         )
         self.tau_V2 = torch.nn.Parameter(
             torch.tensor(self.tau, dtype=float),
@@ -463,27 +447,20 @@ class DyRCNNx8(DyRCNNx4):
 
         # V4
         self.V4 = RecurrentConnectedConv2d(
-            in_channels=self.conv_V2.out_channels,
-            out_channels=256,
+            in_channels=self.V2.out_channels,
+            mid_channels=256,
+            out_channels=384,
             kernel_size=3,
             stride=2,
             dim_y=self.V2.dim_y
             // self.V2.stride
-            // self.conv_V2.stride[0]
+            // self.V2.stride
             // self.pool_V2.stride,
             dim_x=self.V2.dim_x
             // self.V2.stride
-            // self.conv_V2.stride[1]
+            // self.V2.stride
             // self.pool_V2.stride,
             **layer_params,
-        )
-        self.conv_V4 = nn.Conv2d(
-            in_channels=self.V4.out_channels,
-            out_channels=384,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=self.bias,
         )
         if self.skip:
             self.addskip_V4 = Skip(
@@ -503,21 +480,14 @@ class DyRCNNx8(DyRCNNx4):
 
         # IT
         self.IT = RecurrentConnectedConv2d(
-            in_channels=self.conv_V4.out_channels,
-            out_channels=512,
-            kernel_size=3,
-            stride=2,
-            dim_y=self.V4.dim_y // self.V4.stride // self.conv_V4.stride[0],
-            dim_x=self.V4.dim_x // self.V4.stride // self.conv_V4.stride[1],
-            **layer_params,
-        )
-        self.conv_IT = nn.Conv2d(
-            in_channels=self.IT.out_channels,
+            in_channels=self.V4.out_channels,
+            mid_channels=512,
             out_channels=768,
             kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=self.bias,
+            stride=2,
+            dim_y=self.V4.dim_y // self.V4.stride // self.V4.stride,
+            dim_x=self.V4.dim_x // self.V4.stride // self.V4.stride,
+            **layer_params,
         )
         if self.skip:
             self.addskip_IT = Skip(
@@ -539,7 +509,7 @@ class DyRCNNx8(DyRCNNx4):
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(self.conv_IT.out_channels, self.n_classes),
+            nn.Linear(self.IT.out_channels, self.n_classes),
         )
 
 
