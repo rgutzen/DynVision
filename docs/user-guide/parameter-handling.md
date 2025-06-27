@@ -279,9 +279,6 @@ model = create_model(**params.model.get_model_kwargs())
 ### Parameter Inspection and Debugging
 
 ```python
-# Check biological feasibility
-bio_issues = params.model.validate_biological_feasibility()
-
 # Get comprehensive parameter summary
 timing_info = params.model.get_timing_summary()
 
