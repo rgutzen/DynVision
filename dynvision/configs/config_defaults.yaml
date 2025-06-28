@@ -12,7 +12,7 @@ t_feedforward: 10  # ms
 recurrence_influence: 'additive'  # 'additive' or 'multiplicative'
 init_with_pretrained: False
 store_train_responses: 0 # n_samples
-store_val_responses: 10  # n_samples (currently no in use)
+store_val_responses: 0  # n_samples (currently no in use)
 store_test_responses: 100  # n_samples
 store_responses_on_cpu: True
 
@@ -26,7 +26,7 @@ prefetch_factor: 1
 seed: "0000"
 train_ratio: 0.8
 epochs: 200
-batch_size: 256
+batch_size: 257
 check_val_every_n_epoch: 10
 log_every_n_steps: 20
 accumulate_grad_batches: 4

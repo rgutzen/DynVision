@@ -34,7 +34,6 @@ rule init_model:
     params:
         config_path = CONFIGS,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        init_with_pretrained = get_param('init_with_pretrained'),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -55,7 +54,6 @@ rule init_model:
             --data_name {wildcards.data_name} \
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
-            --init_with_pretrained {params.init_with_pretrained} \
             {params.model_arguments} 
         """
 
@@ -107,27 +105,12 @@ rule train_model:
     params:
         config_path = CONFIGS,
         data_group = "all",
-        epochs = get_param('epochs'),
-        batch_size = get_param('batch_size'),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        n_timesteps = get_param('n_timesteps'), 
-        data_timesteps = get_param('data_timesteps'), 
-        learning_rate = get_param('learning_rate'),
-        loss = get_param('loss'),
         resolution = lambda w: config.data_resolution[w.data_name],
         normalize = lambda w: json.dumps((
             config.data_statistics[w.data_name]['mean'],
             config.data_statistics[w.data_name]['std']
         )),
-        check_val_every_n_epoch = get_param('check_val_every_n_epoch'),
-        log_every_n_steps = get_param('log_every_n_steps'),
-        accumulate_grad_batches = get_param('accumulate_grad_batches'),
-        precision = get_param('precision'),
-        store_responses = get_param('store_train_responses'),
-        profiler = get_param('profiler'),
-        use_ffcv = get_param('use_ffcv'),
-        enable_progress_bar = get_param('enable_progress_bar'),
-        # Build complete execution command with conditional wrappers
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=get_param('use_distributed_mode', False)(w),
@@ -151,23 +134,8 @@ rule train_model:
             --data_name {wildcards.data_name} \
             --data_group {params.data_group} \
             --output_model_state {output.model_state:q} \
-            --learning_rate {params.learning_rate} \
-            --epochs {params.epochs} \
-            --batch_size {params.batch_size} \
-            --seed {wildcards.seed} \
-            --check_val_every_n_epoch {params.check_val_every_n_epoch} \
-            --log_every_n_steps {params.log_every_n_steps} \
-            --accumulate_grad_batches {params.accumulate_grad_batches} \
             --resolution {params.resolution} \
-            --precision {params.precision} \
             --normalize {params.normalize:q} \
-            --profiler {params.profiler} \
-            --enable_progress_bar {params.enable_progress_bar} \
-            --store_responses {params.store_responses} \
-            --use_ffcv {params.use_ffcv} \
-            --loss {params.loss} \
-            --n_timesteps {params.n_timesteps} \
-            --data_timesteps {params.data_timesteps} \
             {params.model_arguments} 
         """
 
@@ -204,17 +172,13 @@ rule test_model:
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         config_path = CONFIGS,
-        batch_size = get_param('batch_size') if project_paths.iam_on_cluster() else 3,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
         normalize = lambda w: json.dumps((
             config.data_statistics[w.data_name]['mean'],
             config.data_statistics[w.data_name]['std']
         )),
-        loss = get_param('loss'),
-        store_responses = get_param('store_test_responses'),
         enable_progress_bar = True,
-        verbose = get_param('verbose'),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -241,13 +205,8 @@ rule test_model:
             --output_results {output.results:q} \
             --output_responses {output.responses:q} \
             --data_group {wildcards.data_group} \
-            --loss {params.loss} \
             --normalize {params.normalize:q} \
-            --batch_size {params.batch_size} \
-            --seed {wildcards.seed} \
-            --store_responses {params.store_responses} \
             --enable_progress_bar {params.enable_progress_bar} \
-            --verbose {params.verbose} \
             {params.model_arguments} \
             {params.data_arguments}
         """

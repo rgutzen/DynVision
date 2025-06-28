@@ -100,13 +100,13 @@ class ConfigModeManager:
             return self.config
 
     def save_config(self, path: str) -> None:
-        import json
+        import yaml
 
         with open(path, "w") as f:
             f.write(
                 "# This is an automatically compiled file. Do not edit manually!\n"
             )
-            json.dump(self.config, f, indent=4)
+            yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
 
     # detection functions
     def _detect_local_mode(self) -> bool:

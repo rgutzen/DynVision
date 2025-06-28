@@ -1,5 +1,5 @@
 # Local Settings
-use_local_mode: "auto"
+use_local_mode: False
 local:
   enable_progress_bar: True
   use_debug_mode: True
@@ -42,7 +42,8 @@ distributed:
 # Large Dataset Settings
 use_large_dataset_mode: False
 large_dataset:
-  batch_size: 64
+  use_ffcv: True
+  batch_size: 32
   persistent_workers: False
   num_workers: 4
   pin_memory: False

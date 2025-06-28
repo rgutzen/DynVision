@@ -1931,61 +1931,6 @@ class LightningBase(UtilityBase, pl.LightningModule, DtypeDeviceCoordinatorMixin
         times_indices = times_indices.unsqueeze(0).expand(batch_size, n_timesteps)
         self.times_indices.append(times_indices)
 
-    def monitor_resources(self) -> Dict[str, Any]:
-        """Monitor system resources for debugging memory/threading issues."""
-        process = psutil.Process(os.getpid())
-
-        # Memory info
-        memory_info = process.memory_info()
-        memory_percent = process.memory_percent()
-
-        # Thread info
-        thread_count = process.num_threads()
-        active_threads = threading.active_count()
-
-        # System info
-        system_memory = psutil.virtual_memory()
-
-        # GPU info (if available)
-        gpu_info = {}
-        if torch.cuda.is_available():
-            gpu_info = {
-                "allocated_mb": torch.cuda.memory_allocated() / 1024**2,
-                "reserved_mb": torch.cuda.memory_reserved() / 1024**2,
-                "max_allocated_mb": torch.cuda.max_memory_allocated() / 1024**2,
-            }
-
-        stats = {
-            "timestamp": time.time(),
-            "process_ram_mb": memory_info.rss / 1024**2,
-            "process_ram_percent": memory_percent,
-            "system_ram_available_mb": system_memory.available / 1024**2,
-            "system_ram_percent": system_memory.percent,
-            "process_threads": thread_count,
-            "python_threads": active_threads,
-            "gpu": gpu_info,
-        }
-
-        return stats
-
-    # Add this to your LightningBase class
-    def log_resource_stats(self, stage: str = "", batch_idx: int = 0):
-        """Log resource usage for debugging."""
-        if batch_idx % 20 == 0:  # Log every 20 batches
-            stats = self.monitor_resources()
-            logger.warning(
-                f"[{stage}] Batch {batch_idx}: "
-                f"RAM: {stats['process_ram_mb']:.0f}MB ({stats['process_ram_percent']:.1f}%), "
-                f"Threads: {stats['process_threads']}, "
-                f"GPU: {stats['gpu'].get('allocated_mb', 0):.0f}MB"
-            )
-
-            # Alert on concerning values
-            if stats["process_ram_percent"] > 80:
-                logger.error(f"⚠️ High RAM usage: {stats['process_ram_percent']:.1f}%")
-            if stats["process_threads"] > 100:
-                logger.error(f"⚠️ High thread count: {stats['process_threads']}")
-
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
@@ -1999,8 +1944,6 @@ class LightningBase(UtilityBase, pl.LightningModule, DtypeDeviceCoordinatorMixin
         Returns:
             torch.Tensor: Training loss.
         """
-        self.log_resource_stats("TRAIN", batch_idx)  # debugging
-
         batch_size = batch[0].size(0)
         loss, accuracy, *_ = self.model_step(batch, batch_idx, store_responses=False)
 
@@ -2024,7 +1967,21 @@ class LightningBase(UtilityBase, pl.LightningModule, DtypeDeviceCoordinatorMixin
         Returns:
             Tuple[torch.Tensor, float]: Validation loss and accuracy.
         """
-        self.log_resource_stats("VAL", batch_idx)  # debugging
+        # Memory before processing
+        ###################33
+        import psutil
+
+        process = psutil.Process(os.getpid())
+
+        mem_before = process.memory_info().rss / 1024**2
+        gpu_before = (
+            torch.cuda.memory_allocated() / 1024**2 if torch.cuda.is_available() else 0
+        )
+
+        logger.warning(
+            f"VAL STEP START - Batch {batch_idx}: RAM: {mem_before:.0f}MB, GPU: {gpu_before:.0f}MB"
+        )
+        ###################33
 
         if store_responses is None:
             store_responses = self.store_responses
@@ -2033,6 +1990,30 @@ class LightningBase(UtilityBase, pl.LightningModule, DtypeDeviceCoordinatorMixin
         loss, accuracy = self._shared_eval_step(
             batch, batch_idx, store_responses=store_responses
         )
+
+        # Memory after processing
+        ############33333
+        mem_after = process.memory_info().rss / 1024**2
+        gpu_after = (
+            torch.cuda.memory_allocated() / 1024**2 if torch.cuda.is_available() else 0
+        )
+        mem_increase = mem_after - mem_before
+        gpu_increase = gpu_after - gpu_before
+
+        logger.warning(
+            f"VAL STEP END - Batch {batch_idx}: RAM: +{mem_increase:.0f}MB, GPU: +{gpu_increase:.0f}MB"
+        )
+
+        # Emergency cleanup if memory usage is too high
+        if mem_increase > 1000:  # More than 1GB increase
+            logger.error(
+                f"🚨 EMERGENCY: {mem_increase:.0f}MB increase in validation step!"
+            )
+            self._clear_gpu_memory()
+            import gc
+
+            gc.collect()
+        ###################33
 
         metrics = {"val_loss": loss, "val_accuracy": accuracy}
         self.log_dict(metrics, prog_bar=True, batch_size=batch_size, sync_dist=True)
