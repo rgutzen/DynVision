@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional, Tuple
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Dataset
+import wandb
 
 from dynvision import models
 from dynvision.data.dataloader import (
@@ -32,6 +33,7 @@ from dynvision.data.dataloader import (
     _adjust_data_dimensions,
     _adjust_label_dimensions,
 )
+from dynvision.data.dataloader import get_data_loader
 from dynvision.data.datasets import get_dataset
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
@@ -82,15 +84,22 @@ class TestingDataModule:
             self.setup_dataset()
 
         # Get dataloader configuration (already optimized by TestingParams)
+        dataloader_name = self.config.data.data_loader
         dataloader_config = self.config.get_dataloader_kwargs()
 
         logger.info(
-            f"Creating DataLoader with batch_size={dataloader_config['batch_size']}, "
+            f"Creating DataLoader {dataloader_name} "
+            f"with batch_size={dataloader_config['batch_size']}, "
             f"num_workers={dataloader_config['num_workers']}, "
-            f"shuffle={dataloader_config['shuffle']}"
+            f"shuffle={dataloader_config['shuffle']}, "
+            f"non_label_index{dataloader_config['non_label_index']}, "
+            f"non_input_value{dataloader_config['non_input_value']}, "
         )
 
-        self.dataloader = StandardDataLoader(self.dataset, **dataloader_config)
+        self.dataloader = get_data_loader(
+            dataset=self.dataset, dataloader=dataloader_name, **dataloader_config
+        )
+
         return self.dataloader
 
     def get_sample_batch(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -280,6 +289,7 @@ class TestingOrchestrator:
         if hasattr(self.config, "logger") and getattr(self.config, "logger", None):
             trainer_kwargs["logger"] = pl.loggers.WandbLogger(
                 project=project_paths.project_name,
+                save_dir=project_paths.large_logs,
                 config=(
                     self.config.get_full_config(flat=True)
                     if hasattr(self.config, "get_full_config")
@@ -294,6 +304,7 @@ class TestingOrchestrator:
         if unknown:
             logger.debug(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
 
+        wandb.init()  # hack to log histograms
         return pl.Trainer(**trainer_kwargs)
 
     def save_results(self, model: pl.LightningModule) -> None:
@@ -302,7 +313,7 @@ class TestingOrchestrator:
 
         # Save test results (CSV)
         try:
-            results_df = model.get_classifier_dataframe()
+            results_df = model.storage.get_dataframe()
             results_df.to_csv(self.config.output_results, index=False)
             logger.info(f"Test results saved to {self.config.output_results}")
             logger.info(f"Results shape: {results_df.shape}")
@@ -311,20 +322,25 @@ class TestingOrchestrator:
 
         # Save model responses (tensors)
         try:
-            if hasattr(model, "responses") and model.responses:
+            if hasattr(model, "storage"):
                 logger.info("Saving model responses...")
                 total_size_mb = 0
-                for layer, response in model.responses.items():
-                    size_mb = response.nbytes / (1024 * 1024)
+                response_data = model.storage.responses.get_all()
+                responses = {}
+                for layer in response_data[0].keys():
+                    layer_responses = [item[layer] for item in response_data]
+                    responses[layer] = torch.cat(layer_responses, dim=0)
+                    size_mb = responses[layer].nbytes / (1024 * 1024)
                     total_size_mb += size_mb
                     logger.info(
-                        f"  Layer {layer}: {response.shape} -> {size_mb:.2f} MB"
+                        f"  Layer {layer}: {responses[layer].shape} -> {size_mb:.2f} MB"
                     )
 
-                torch.save(model.responses, self.config.output_responses)
+                torch.save(responses, self.config.output_responses)
                 logger.info(f"Model responses saved to {self.config.output_responses}")
                 logger.info(f"Total response size: {total_size_mb:.2f} MB")
             else:
+                torch.save({}, self.config.output_responses)
                 logger.warning("No model responses to save")
         except Exception as e:
             logger.error(f"Failed to save model responses: {e}")

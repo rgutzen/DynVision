@@ -102,8 +102,8 @@ class TrainingParams(BaseParams):
             self.model.update_field("n_classes", n_classes, verbose=verbose)
 
         # Update batch size if provided
-        if batch_size is not None and self.data.batch_size != batch_size:
-            self.data.update_field("batch_size", batch_size, verbose=verbose)
+        # if batch_size is not None and self.data.batch_size != batch_size:
+        #     self.data.update_field("batch_size", batch_size, verbose=verbose)
 
     # === COMPUTED PROPERTIES ===
 
@@ -236,17 +236,21 @@ class TrainingParams(BaseParams):
                 f"Input model state not found: {self.input_model_state}"
             )
 
-        if self.data.use_ffcv and not self.dataset_train.exists():
+        print(
+            f"use ffcv {self.data.use_ffcv}, {self.dataset_train}, {self.dataset_val}, {self.dataset_link}"
+        )  # debugging
+
+        if not self.dataset_train.exists():
             raise DynVisionValidationError(
                 f"Training dataset not found: {self.dataset_train}"
             )
 
-        if self.data.use_ffcv and not self.dataset_val.exists():
+        if not self.dataset_val.exists():
             raise DynVisionValidationError(
                 f"Validation dataset not found: {self.dataset_val}"
             )
 
-        if not self.data.use_ffcv and not self.dataset_link.exists():
+        if not self.dataset_link.exists():
             raise DynVisionValidationError(
                 f"dataset folder link not found: {self.dataset_link}"
             )
@@ -307,9 +311,33 @@ class TrainingParams(BaseParams):
         """Export complete configuration for reproducibility."""
         config_dict = self.get_full_config(flat=flat)
 
+        # Clean config for YAML serialization
+        def clean_for_yaml(obj):
+            if obj is None or isinstance(obj, (str, int, float, bool)):
+                return obj
+            elif isinstance(obj, (Path,)):
+                return str(obj)
+            elif isinstance(obj, dict):
+                return {
+                    str(k): clean_for_yaml(v)
+                    for k, v in obj.items()
+                    if clean_for_yaml(v) is not None
+                }
+            elif isinstance(obj, (list, tuple)):
+                return [
+                    clean_for_yaml(item)
+                    for item in obj
+                    if clean_for_yaml(item) is not None
+                ]
+            else:
+                # Skip non-serializable objects
+                return None
+
+        cleaned_config = clean_for_yaml(config_dict)
+
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
-            yaml.dump(config_dict, f, indent=2, default_flow_style=False)
+            yaml.dump(cleaned_config, f, indent=4, default_flow_style=False)
 
         logger.info(f"Configuration exported to {path}")
 
@@ -363,6 +391,8 @@ class TrainingParams(BaseParams):
 
         # Separate into component configurations
         separated_params = cls._separate_component_configs(params)
+
+        print("Training Params:\n", separated_params)
 
         # Create the TrainingParams instance
         try:

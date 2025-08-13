@@ -102,8 +102,12 @@ class DataParams(BaseParams):
 
     # === Temporal Parameters ===
     data_timesteps: int = Field(
-        default=1, ge=1, description="Number of timesteps for temporal data"
+        default=1, ge=1, description="number of timesteps to load"
     )
+
+    non_input_value: int = Field(default=-3, description="null input value")
+
+    non_label_index: int = Field(default=-1, description="label index to ignore")
 
     # === Advanced Loader Parameters ===
     use_distributed: bool = Field(
@@ -152,8 +156,8 @@ class DataParams(BaseParams):
         default=None, ge=1, description="Number of batches to prefetch per worker"
     )
 
-    order: OrderOption = Field(
-        default=OrderOption.RANDOM, description="Data traversal order"
+    order: OrderOption | Literal["RANDOM", "QUASI_RANDOM", "SEQUENTIAL"] = Field(
+        default=OrderOption.QUASI_RANDOM, description="Data traversal order"
     )
 
     os_cache: Optional[bool] = Field(
@@ -213,7 +217,7 @@ class DataParams(BaseParams):
         aliases.update(
             {
                 "use_distributed_mode": "use_distributed",
-                "dtsteps": "data_timesteps",
+                "dsteps": "data_timesteps",
             }
         )
         return aliases
@@ -357,20 +361,8 @@ class DataParams(BaseParams):
     def validate_order(cls, v: Union[OrderOption, str]) -> OrderOption:
         """Validate and convert order specification."""
         if isinstance(v, str):
-            try:
-                return OrderOption(v.lower())
-            except ValueError:
-                valid_orders = [opt.value for opt in OrderOption]
-                raise ValueError(f"order must be one of {valid_orders}, got {v}")
+            return getattr(OrderOption, v)
         return v
-
-    @model_validator(mode="after")
-    def validate_distributed_settings(self) -> "DataParams":
-        if self.use_distributed:
-            self.update_field("order", OrderOption.RANDOM, verbose=True)
-            self.update_field("os_cache", True, verbose=True)
-            self.update_field("drop_last", True, verbose=True)
-        return self
 
     @model_validator(mode="after")
     def validate_persistent_workers(self) -> "DataParams":
@@ -478,33 +470,38 @@ class DataParams(BaseParams):
         Includes any additional custom arguments provided.
         """
 
+        # Add extra fields if any
+        kwargs = {}
+        if hasattr(self, "__pydantic_extra__"):
+            kwargs.update(self.__pydantic_extra__)
+
         # Base dataloader arguments
-        kwargs = {
-            "batch_size": self.batch_size,
-            "num_workers": self.num_workers,
-            "persistent_workers": self.persistent_workers,
-            "encoding": self.encoding,
-            "resolution": self.resolution,
-            "normalize": self.normalize,
-            "data_transform": self.data_transform,
-            "target_transform": self.target_transform,
-            "drop_last": self.drop_last,
-            "dtype": self.dtype,
-            "batches_ahead": self.batches_ahead,
-            "order": self.order,
-            "os_cache": self.os_cache,
-            "data_timesteps": self.data_timesteps,
-            "distributed": self.use_distributed,
-            "train": self.train,
-            "shuffle": self.shuffle,
-        }
+        kwargs.update(
+            {
+                "batch_size": self.batch_size,
+                "num_workers": self.num_workers,
+                "persistent_workers": self.persistent_workers,
+                "encoding": self.encoding,
+                "resolution": self.resolution,
+                "normalize": self.normalize,
+                "data_transform": self.data_transform,
+                "target_transform": self.target_transform,
+                "drop_last": self.drop_last,
+                "dtype": self.dtype,
+                "batches_ahead": self.batches_ahead,
+                "order": self.order,
+                "os_cache": self.os_cache,
+                "data_timesteps": self.data_timesteps,
+                "distributed": self.use_distributed,
+                "train": self.train,
+                "shuffle": self.shuffle,
+                "non_label_index": self.non_label_index,
+                "non_input_value": self.non_input_value,
+            }
+        )
 
         # Add custom dataloader kwargs
         kwargs.update(self.dataloader_kwargs)
-
-        # Add extra fields if any
-        if hasattr(self, "__pydantic_extra__"):
-            kwargs.update(self.__pydantic_extra__)
 
         return kwargs
 

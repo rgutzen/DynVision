@@ -34,38 +34,46 @@ class ModelParams(BaseParams):
     n_timesteps: int = Field(
         default=1, description="Number of timesteps for model processing", ge=1
     )
+    data_presentation_pattern: List[int] = Field(
+        default=[1],
+        description="Pattern for data presentation across timesteps (1 = present, 0 = absent)",
+    )
 
     # ===== BIOLOGICAL PARAMETERS =====
     dt: float = Field(default=1.0, description="Integration time step (ms)", gt=0.0)
     tau: float = Field(default=10.0, description="Neural time constant (ms)", gt=0.0)
     t_feedforward: float = Field(
-        default=1.0, description="Feedforward delay (ms)", ge=0.0
+        default=0.0, description="Feedforward delay (ms)", ge=0.0
     )
     t_recurrence: float = Field(
-        default=1.0, description="Recurrent delay (ms)", ge=0.0
+        default=1.0, description="Recurrent delay (ms)", ge=1.0
     )
+    t_feedback: float = Field(default=1.0, description="Feedback delay (ms)", ge=1.0)
+    t_skip: float = Field(default=1.0, description="Skip delay (ms)", ge=1.0)
     dynamics_solver: Literal["euler", "rk4"] = Field(
         default="euler", description="Dynamical systems solver"
     )
 
     # ===== RECURRENT ARCHITECTURE =====
-    recurrence_type: Literal[
-        "full",
-        "self",
-        "depthwise",
-        "pointwise",
-        "depthpointwise",
-        "pointdepthwise",
-        "local",
-        "localdepthwise",
-        "none",
-    ] = Field(default="full", description="Type of recurrent connections")
+    recurrence_type: Optional[
+        Literal[
+            "full",
+            "self",
+            "depthwise",
+            "pointwise",
+            "depthpointwise",
+            "pointdepthwise",
+            "local",
+            "localdepthwise",
+            "none",
+        ]
+    ] = Field(default="none", description="Type of recurrent connections")
 
     # ===== CONNECTIVITY =====
-    skip_connections: bool = Field(
+    skip: bool = Field(
         default=False, description="Enable skip connections between layers"
     )
-    feedback_connections: bool = Field(
+    feedback: bool = Field(
         default=False,
         description="Enable feedback connections from higher to lower layers",
     )
@@ -94,15 +102,12 @@ class ModelParams(BaseParams):
         default="CrossEntropyLoss",
         description="Loss function name or list of loss functions",
     )
+    loss_configs: Dict[str, Dict] = Field(
+        default_factory=dict, description="Configurations for the loss function"
+    )
     loss_reaction_time: float = Field(
         default=0.0, description="Reaction time for loss calculation (ms)", ge=0.0
     )
-    # Keep the old criterion_params for backward compatibility
-    criterion_params: List[Tuple[str, Dict[str, Any]]] = Field(
-        default_factory=lambda: [("CrossEntropyLoss", {"weight": 1.0})],
-        description="Loss function parameters as (name, config) tuples",
-    )
-
     # ===== OPTIMIZER CONFIGURATION =====
     learning_rate: float = Field(
         default=0.001, description="Learning rate for optimizer", gt=0.0
@@ -165,12 +170,14 @@ class ModelParams(BaseParams):
                 "opt": "optimizer",
                 "sched": "scheduler",
                 "rctype": "recurrence_type",
+                "rctarget": "recurrence_target",
                 "trc": "t_recurrence",
                 "tff": "t_feedforward",
+                "tfb": "t_feedback",
+                "tsk": "t_skip",
+                "pattern": "data_presentation_pattern",
                 "solver": "dynamics_solver",
                 "lossrt": "loss_reaction_time",
-                "skip": "skip_connections",
-                "feedback": "feedback_connections",
                 "supralin": "supralinearity",
                 "classes": "n_classes",
                 "steps": "n_timesteps",
@@ -188,9 +195,21 @@ class ModelParams(BaseParams):
             return int(v)
         return int(v)
 
+    @field_validator("recurrence_type")
+    def validate_recurrence_type(cls, v):
+        if v is None:
+            return "none"
+        return v
+
+    @field_validator("loss")
+    def validate_loss(cls, v) -> list:
+        if isinstance(v, list):
+            return v
+        else:
+            return [v]
+
     @field_validator("optimizer")
     def validate_optimizer(cls, v):
-        """Validate optimizer name."""
         valid_optimizers = [
             "Adam",
             "AdamW",
@@ -255,28 +274,6 @@ class ModelParams(BaseParams):
             )
         return v
 
-    @field_validator("criterion_params")
-    def validate_criterion_params(cls, v):
-        """Validate and convert criterion_params from lists to tuples if needed."""
-        if not v:
-            return [("CrossEntropyLoss", {"weight": 1.0})]
-
-        # Convert lists to tuples for YAML compatibility
-        converted = []
-        for item in v:
-            if isinstance(item, list) and len(item) == 2:
-                # Convert [name, config] to (name, config)
-                converted.append((item[0], item[1]))
-            elif isinstance(item, tuple) and len(item) == 2:
-                # Already a tuple
-                converted.append(item)
-            else:
-                raise ValueError(
-                    f"Invalid criterion_params item: {item}. Expected [name, config] or (name, config)"
-                )
-
-        return converted
-
     @field_validator("input_dims")
     def validate_input_dims(cls, v):
         """Validate input dimensions."""
@@ -294,6 +291,19 @@ class ModelParams(BaseParams):
     @model_validator(mode="after")
     def setup_defaults_and_validate_constraints(self):
         """Set up defaults and validate all constraints."""
+        if not self.loss_configs:
+            object.__setattr__(
+                self,
+                "loss_configs",
+                {
+                    "CrossEntropyLoss": {"weight": 1.0, "ignore_index": -1},
+                    "EnergyLoss": {"weight": 100},
+                },
+            )
+        for loss in self.loss:
+            if loss not in self.loss_configs:
+                logging.warning(f"Loss configuration for '{loss}' not found.")
+
         # Provide default lr_parameter_groups if empty
         if not self.lr_parameter_groups:
             object.__setattr__(
@@ -349,9 +359,9 @@ class ModelParams(BaseParams):
             )
 
         # Delay constraints
-        if self.t_feedforward < 0 or self.t_recurrence < 0:
+        if self.t_feedforward < 0 or self.t_recurrence < 1:
             raise DynVisionValidationError(
-                "Delays (t_feedforward, t_recurrence) must be non-negative"
+                "t_feedforward must be non-negative, t_recurrence must be at least 1."
             )
 
         # Check if delays are exact multiples of dt (informational)
@@ -405,28 +415,16 @@ class ModelParams(BaseParams):
         return int(self.t_recurrence / self.dt)
 
     @property
-    def effective_tau_steps(self) -> float:
-        """Tau expressed in timesteps (tau/dt)."""
-        return self.tau / self.dt
-
-    @property
-    def total_processing_time(self) -> float:
-        """Total time for signal to propagate through all layers (ms).
-        Note: Requires layer count to be specified externally."""
-        # Default to 4 layers if not specified elsewhere
-        return 4 * self.t_feedforward
-
-    @property
-    def total_processing_steps(self) -> int:
-        """Total timesteps for signal to propagate through all layers.
-        Note: Requires layer count to be specified externally."""
-        # Default to 4 layers if not specified elsewhere
-        return 4 * self.delay_feedforward
-
-    @property
     def stability_ratio(self) -> float:
         """Ratio dt/tau for numerical stability assessment."""
         return self.dt / self.tau
+
+    @property
+    def criterion_params(self) -> List[Tuple[str, Dict[str, Any]]]:
+        """Get the parameters for the criterion used in the model."""
+        if not isinstance(self.loss, list):
+            self.loss = [self.loss]
+        return [(l, self.loss_configs[l]) for l in self.loss]
 
     def get_timing_summary(self) -> Dict[str, Any]:
         """Get comprehensive timing parameter summary."""
@@ -469,14 +467,17 @@ class ModelParams(BaseParams):
             "n_classes": self.n_classes,
             "input_dims": self.input_dims,
             "n_timesteps": self.n_timesteps,
+            "data_presentation_pattern": self.data_presentation_pattern,
             "dt": self.dt,
             "tau": self.tau,
             "t_feedforward": self.t_feedforward,
             "t_recurrence": self.t_recurrence,
+            "t_feedback": self.t_feedback,
+            "t_skip": self.t_skip,
             "dynamics_solver": self.dynamics_solver,
             "recurrence_type": self.recurrence_type,
-            "skip_connections": self.skip_connections,
-            "feedback_connections": self.feedback_connections,
+            "skip": self.skip,
+            "feedback": self.feedback,
             "supralinearity": self.supralinearity,
             "store_responses": self.store_responses,
             "store_responses_on_cpu": self.store_responses_on_cpu,
@@ -515,6 +516,7 @@ class ModelParams(BaseParams):
                     )
 
                 return known
+
             except ImportError:
                 logging.warning("filter_kwargs not available, returning all kwargs")
                 return model_kwargs
@@ -537,19 +539,6 @@ class ModelParams(BaseParams):
             "scheduler": self.scheduler,
             "scheduler_kwargs": self.scheduler_kwargs,
             "scheduler_configs": self.scheduler_configs,
-        }
-
-    def get_loss_config(self) -> Dict[str, Any]:
-        """
-        Get loss configuration for model training.
-
-        Returns:
-            Dictionary containing loss configuration
-        """
-        return {
-            "loss": self.loss,
-            "criterion_params": self.criterion_params,
-            "loss_reaction_time": self.loss_reaction_time,
         }
 
 

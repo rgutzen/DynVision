@@ -56,6 +56,7 @@ from .torch_utils import (
     apply_parametrization,
     get_effective_dtype_from_precision,
     determine_target_dtype,
+    calculate_conv_out_dim,
 )
 
 from .model_utils import (
@@ -72,6 +73,7 @@ from .visualization_utils import (
     peak_ratio,
     calculate_accuracy,
     load_responses,
+    load_responses_in_batches,
     save_plot,
 )
 
@@ -110,6 +112,7 @@ __all__ = [
     "apply_parametrization",
     "get_effective_dtype_from_precision",
     "determine_target_dtype",
+    "calculate_conv_out_dim",
     # Model utilities
     "check_stability",
     "check_weights",
@@ -122,5 +125,6 @@ __all__ = [
     "peak_ratio",
     "calculate_accuracy",
     "load_responses",
+    "load_responses_in_batches",
     "save_plot",
 ]

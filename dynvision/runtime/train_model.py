@@ -16,6 +16,7 @@ Example:
 """
 
 import logging
+import wandb
 import os
 import sys
 
@@ -178,8 +179,7 @@ class DataModule(pl.LightningDataModule):
         if self.config.data.use_ffcv:
             self._preview_loader = self._create_ffcv_loader(
                 self.config.dataset_train,
-                preview_config,
-                train=True,
+                preview_config | {"train": False, "distributed": False},
             )
         else:
             self._preview_loader = self._create_pytorch_loader(preview_config)
@@ -211,14 +211,16 @@ class DataModule(pl.LightningDataModule):
     def _setup_ffcv_loaders(self, config: Dict[str, Any]) -> None:
         """Set up FFCV data loaders."""
         self.train_loader = self._create_ffcv_loader(
-            self.config.dataset_train, config, train=True
+            self.config.dataset_train,
+            config | {"train": True},
         )
         self.val_loader = self._create_ffcv_loader(
-            self.config.dataset_val, config, train=False
+            self.config.dataset_val,
+            config | {"train": False},
         )
 
     def _create_ffcv_loader(
-        self, path: Path, config: Dict[str, Any], train: bool
+        self, path: Path, config: Dict[str, Any]
     ) -> ffcv.loader.Loader:
         """Create a single FFCV data loader."""
         return get_ffcv_dataloader(path=path, **config)
@@ -268,21 +270,22 @@ class CallbackManager:
         """Set up training callbacks based on configuration."""
         callbacks = []
 
-        # # Add model-specific callbacks
-        # if self.config.model.n_timesteps > 1:
-        #     callbacks.append(custom_callbacks.MonitorClassifierResponses())
+        # Add model-specific callbacks
+        print(f"timesteps: {self.config.model.n_timesteps}")
+        if self.config.model.n_timesteps > 1:
+            callbacks.append(custom_callbacks.MonitorClassifierResponses())
 
-        # callbacks.append(custom_callbacks.MonitorWeightDistributions())
+        callbacks.append(custom_callbacks.MonitorWeightDistributions())
 
         # Setup checkpointing
         checkpoint_path = self._setup_checkpointing(callbacks)
 
-        # # Add early stopping if configured
-        # early_stopping_kwargs = (
-        #     self.config.trainer.get_early_stopping_callback_kwargs()
-        # )
-        # if early_stopping_kwargs:
-        #     callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))
+        # Add early stopping if configured
+        early_stopping_kwargs = (
+            self.config.trainer.get_early_stopping_callback_kwargs()
+        )
+        if early_stopping_kwargs:
+            callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))
 
         # Add learning rate monitor
         callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="epoch"))
@@ -380,12 +383,11 @@ class ModelManager:
     def save_model(self, model: pl.LightningModule) -> None:
         """Save trained model with configuration."""
         torch.save(model.state_dict(), self.config.output_model_state)
+        logger.info(f"Model saved to {self.config.output_model_state}")
 
         # Export configuration alongside model
         config_path = self.config.output_model_state.with_suffix(".config.yaml")
         self.config.export_full_config(config_path)
-
-        logger.info(f"Model saved to {self.config.output_model_state}")
         logger.info(f"Configuration exported to {config_path}")
 
 
@@ -422,6 +424,7 @@ class TrainingOrchestrator:
         logger.info("=" * 60)
         logger.info(f"Model: {self.config.model.model_name}")
         logger.info(f"Dataset: {self.config.data.data_name}")
+        logger.info(f"Data batch size: {self.config.data.batch_size}")
         logger.info(f"Global batch size: {self.config.global_batch_size}")
         logger.info(f"Effective batch size: {self.config.effective_batch_size}")
         logger.info(
@@ -568,10 +571,15 @@ class TrainingOrchestrator:
                 # Check for existing checkpoint
                 existing_checkpoint = self._find_existing_checkpoint(checkpoint_path)
 
+                # Hack to log histograms
+                wandb.init()
+
                 # Train model using DataModule (handles distributed setup properly)
                 logger.info("Starting training...")
                 trainer.fit(
-                    model, datamodule=self.datamodule, ckpt_path=existing_checkpoint
+                    model,
+                    datamodule=self.datamodule,
+                    ckpt_path=existing_checkpoint,
                 )
 
                 # Save trained model

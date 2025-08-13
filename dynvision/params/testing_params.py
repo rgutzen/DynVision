@@ -125,7 +125,7 @@ class TestingParams(BaseParams):
         """Apply testing-specific optimizations to the data configuration."""
         updates = {
             "train": False,
-            "shuffle": True,
+            "shuffle": False,
             "use_distributed": False,
             "use_ffcv": False,
             "pin_memory": True,
@@ -274,6 +274,7 @@ class TestingParams(BaseParams):
                 "devices": "trainer.devices",
                 # Data aliases (routed to data component)
                 "data_name": "data.data_name",
+                "dsteps": "data.data_timesteps",
                 "batch_size": "data.batch_size",
                 "resolution": "data.resolution",
                 "data_loader": "data.data_loader",

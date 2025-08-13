@@ -10,32 +10,24 @@ model_name:
   # - ResNet18
   # - ResNet1202
   # - ResNet44
-seed: "0016"
+seed: "0000"
 model_args:
-  # tsteps: 20
-  # tau: [5, 8, 11, 14, 17]
-  # trc: [5, 10, 15, 20]
-  # tff: 25
-  # dt: 2
-  # tau: 8
-  # trc: 6
-  # tff: 10
+  tsteps: 50
   rctype: 'full'
-  # rctype: ['self', 'full', 'pointdepthwise', 'depthpointwise', 'local', 'localdepthwise']
-  # rctype: ['local'] # ['localdepthwise'] 
-  # skip: 'true'
-  # feedback: 'true'
-  # supralin: [1.000000001, 1.0000001, 1.00001, 1.001, 1.1]
-  # taugrad: 'true'
-  # lossrt: 20
-  # inadapt: 0.9
-  # inadapt: [0.3, 0.6, 0.9]
+  dt: 2
+  tau: 9
+  tff: 10
+  trc: 6
+  rctype: ['self', 'full', 'pointdepthwise', 'depthpointwise', 'local', 'localdepthwise']
+  skip: 'true'
+  feedback: 'true'
 
 init_with_pretrained: False
 
 # data_name: imagenet
 # data_name: tinyimagenet
-data_name: cifar100
+data_name: imagenette
+# data_name: cifar100
 # data_name: cifar10
 # data_name: mnist
 # data_name: snakenet
@@ -44,21 +36,19 @@ data_name: cifar100
 # data_group: "imagenette"  # imagenet
 # data_group: "89"  # mnist
 # data_group: "mollusks"  # tinyimagenet
-data_group: "invertebrates"  # cifar100
-# data_group: "all"
+# data_group: "invertebrates"  # cifar100
+data_group: "all"
 
 experiment: 
   - response
   - responseffonly
   - duration
-  # - stability
+  - stability
   - contrast
   - interval
-  # - noiseadaption
-  # - spatialsplit
 
 # Training parameters
 loss: 
-  - CrossEntropyLoss  # CrossEntropySpatialCorrelationLoss 
-  # - EnergyLoss
+  - CrossEntropyLoss
+  - EnergyLoss
 

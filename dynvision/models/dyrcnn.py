@@ -24,12 +24,12 @@ from dynvision.model_components import (
     EulerStep,
     SupraLinearity,
     Retina,
-    LightningBase,
     InputAdaption,
     RecurrentConnectedConv2d,
     Skip,
     Feedback,
 )
+from dynvision.base import BaseModel
 from dynvision.utils import alias_kwargs, str_to_bool
 
 __all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8", "FourLayerCNN", "TwoLayerCNN"]
@@ -38,7 +38,7 @@ __all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8", "FourLayerCNN", "TwoLayerCNN"]
 logger = logging.getLogger(__name__)
 
 
-class DyRCNN(LightningBase):
+class DyRCNN(BaseModel):
     """
     Base class for DyRCNN models implementing core biological features.
 
@@ -72,16 +72,22 @@ class DyRCNN(LightningBase):
         winit="max_weight_init",
         inadapt="input_adaption_weight",
         ffonly="feedforward_only",
+        trc="t_recurrence",
+        tff="t_feedforward",
+        rctype="recurrence_type",
     )
     def __init__(
         self,
-        n_classes: int = 200,
-        input_dims: tuple = (14, 3, 64, 64),  # (t, c, y, x)
+        # Core neural network parameters (passed to TemporalBase)
         dt: float = 2,  # ms
         tau: float = 8,  # ms
         t_feedforward: float = 10,  # ms
         t_recurrence: float = 6,  # ms
-        recurrence_type: str = "none",
+        t_feedback: float = 14,
+        t_skip: float = 14,
+        recurrence_type: str = "full",
+        recurrence_target: str = "output",  # Target for recurrent connections
+        # DyRCNN-specific biological parameters
         train_tau: bool = False,
         bias: bool = True,
         max_weight_init: float = 0.001,
@@ -93,49 +99,42 @@ class DyRCNN(LightningBase):
         feedforward_only: bool = False,
         **kwargs: Any,
     ) -> None:
+
+        # Store DyRCNN-specific biological attributes
+        self.train_tau = str_to_bool(train_tau)
+        self.bias = str_to_bool(bias)
+        self.max_weight_init = float(max_weight_init)
+        self.supralinearity = float(supralinearity)
+        self.input_adaption_weight = float(input_adaption_weight)
+        self.use_retina = str_to_bool(use_retina)
+        self.skip = str_to_bool(skip)
+        self.feedback = str_to_bool(feedback)
+        self.feedforward_only = str_to_bool(feedforward_only)
+
+        # Pass core neural network parameters to parent classes
+        # BaseModel will distribute these properly to TemporalBase and LightningBase
         super().__init__(
-            n_classes=n_classes,
-            input_dims=input_dims,
+            # Core parameters for TemporalBase
             dt=float(dt),
             tau=float(tau),
             t_feedforward=float(t_feedforward),
             t_recurrence=float(t_recurrence),
+            t_feedback=float(t_feedback),
+            t_skip=float(t_skip),
             recurrence_type=recurrence_type,
-            train_tau=str_to_bool(train_tau),
-            bias=str_to_bool(bias),
-            max_weight_init=float(max_weight_init),
-            supralinearity=float(supralinearity),
-            input_adaption_weight=float(input_adaption_weight),
-            use_retina=str_to_bool(use_retina),
-            skip=str_to_bool(skip),
-            feedback=str_to_bool(feedback),
-            feedforward_only=str_to_bool(feedforward_only),
+            recurrence_target=recurrence_target,
+            # All other Lightning/training parameters pass through kwargs
             **kwargs,
         )
 
-        # Calculate delays in timesteps
-        self.delay_ff = int(self.t_feedforward / self.dt)
-        self.delay_rc = int(self.t_recurrence / self.dt)
-
-    def setup(self, stage: Optional[str]) -> None:
-        """Set up model for training or evaluation."""
-        super().setup(stage)
-
     def _define_architecture(self) -> None:
         raise NotImplementedError("Define the model architecture!")
-
-    def configure_optimizers(self):
-        return super().configure_optimizers()
 
 
 class DyRCNNx4(DyRCNN):
     """
     Four-layer DyRCNN implementing a biologically-inspired visual hierarchy.
     """
-
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._define_architecture()
 
     def reset(self) -> None:
         """Reset model state."""
@@ -152,6 +151,7 @@ class DyRCNNx4(DyRCNN):
         if hasattr(self, "retina") and hasattr(self.retina, "reset"):
             self.retina.reset()
 
+    # DyRCNNx4 specific architecture definition
     def _define_architecture(self) -> None:
         """Define the four-layer visual hierarchy."""
         self.layer_names = ["V1", "V2", "V4", "IT"]
@@ -194,10 +194,11 @@ class DyRCNNx4(DyRCNN):
             recurrence_type=self.recurrence_type,
             dt=self.dt,
             tau=self.tau,
-            history_length=self.t_feedforward,
-            recurrence_delay=self.t_recurrence,
+            history_length=self.history_length,
+            t_recurrence=self.t_recurrence,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
+            recurrence_target=self.recurrence_target,
         )
 
         # Input adaptation
@@ -218,7 +219,7 @@ class DyRCNNx4(DyRCNN):
             **layer_params,
         )
         self.tau_V1 = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V1 = EulerStep(dt=self.dt, tau=self.tau_V1)
@@ -235,7 +236,7 @@ class DyRCNNx4(DyRCNN):
             **layer_params,
         )
         self.tau_V2 = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V2 = EulerStep(dt=self.dt, tau=self.tau_V2)
@@ -262,7 +263,7 @@ class DyRCNNx4(DyRCNN):
                 auto_adapt=True,
             )
         self.tau_V4 = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V4 = EulerStep(dt=self.dt, tau=self.tau_V4)
@@ -289,7 +290,7 @@ class DyRCNNx4(DyRCNN):
                 auto_adapt=True,
             )
         self.tau_IT = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_IT = EulerStep(dt=self.dt, tau=self.tau_IT)
@@ -342,10 +343,6 @@ class DyRCNNx8(DyRCNNx4):
     Four-layer DyRCNN (with double conv per layer) implementing a biologically-inspired visual hierarchy.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._define_architecture()
-
     def _define_architecture(self) -> None:
         """Define the four-layer visual hierarchy."""
         self.layer_names = ["V1", "V2", "V4", "IT"]
@@ -358,10 +355,10 @@ class DyRCNNx8(DyRCNNx4):
             "tstep",  # apply dynamical systems ode solver step
             "nonlin",  # apply nonlinearity
             "supralin",  # apply supralinearity
+            "norm",  # apply normalization
             "delay",  # set and get delayed activations for next layer
             "record",  # record activations in responses dict
             "pool",  # apply pooling
-            "norm",  # apply normalization
         ]
 
         # Activation functions
@@ -388,10 +385,11 @@ class DyRCNNx8(DyRCNNx4):
             recurrence_type=self.recurrence_type,
             dt=self.dt,
             tau=self.tau,
-            history_length=self.t_feedforward,
-            recurrence_delay=self.t_recurrence,
+            history_length=self.history_length,
+            t_recurrence=self.t_recurrence,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
+            recurrence_target=self.recurrence_target,
         )
 
         # Input adaptation
@@ -405,15 +403,15 @@ class DyRCNNx8(DyRCNNx4):
         self.V1 = RecurrentConnectedConv2d(
             in_channels=in_channels,
             mid_channels=64,
-            out_channels=96,
+            out_channels=64,
             kernel_size=5,
-            stride=2,
+            stride=(2, 1),
             dim_y=self.dim_y,
             dim_x=self.dim_x,
             **layer_params,
         )
         self.tau_V1 = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V1 = EulerStep(dt=self.dt, tau=self.tau_V1)
@@ -423,22 +421,22 @@ class DyRCNNx8(DyRCNNx4):
         # V2
         self.V2 = RecurrentConnectedConv2d(
             in_channels=self.V1.out_channels,
-            mid_channels=128,
-            out_channels=192,
+            mid_channels=144,
+            out_channels=144,
             kernel_size=3,
-            stride=2,
+            stride=(2, 1),
             dim_y=self.V1.dim_y
-            // self.V1.stride
-            // self.V1.stride
+            // self.V1.stride[0]
+            // self.V1.stride[1]
             // self.pool_V1.stride,
             dim_x=self.V1.dim_x
-            // self.V1.stride
-            // self.V1.stride
+            // self.V1.stride[0]
+            // self.V1.stride[1]
             // self.pool_V1.stride,
             **layer_params,
         )
         self.tau_V2 = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V2 = EulerStep(dt=self.dt, tau=self.tau_V2)
@@ -449,16 +447,16 @@ class DyRCNNx8(DyRCNNx4):
         self.V4 = RecurrentConnectedConv2d(
             in_channels=self.V2.out_channels,
             mid_channels=256,
-            out_channels=384,
+            out_channels=256,
             kernel_size=3,
-            stride=2,
+            stride=(2, 1),
             dim_y=self.V2.dim_y
-            // self.V2.stride
-            // self.V2.stride
+            // self.V2.stride[0]
+            // self.V2.stride[1]
             // self.pool_V2.stride,
             dim_x=self.V2.dim_x
-            // self.V2.stride
-            // self.V2.stride
+            // self.V2.stride[0]
+            // self.V2.stride[1]
             // self.pool_V2.stride,
             **layer_params,
         )
@@ -473,7 +471,7 @@ class DyRCNNx8(DyRCNNx4):
                 auto_adapt=True,
             )
         self.tau_V4 = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V4 = EulerStep(dt=self.dt, tau=self.tau_V4)
@@ -481,12 +479,12 @@ class DyRCNNx8(DyRCNNx4):
         # IT
         self.IT = RecurrentConnectedConv2d(
             in_channels=self.V4.out_channels,
-            mid_channels=512,
-            out_channels=768,
+            mid_channels=529,
+            out_channels=529,
             kernel_size=3,
-            stride=2,
-            dim_y=self.V4.dim_y // self.V4.stride // self.V4.stride,
-            dim_x=self.V4.dim_x // self.V4.stride // self.V4.stride,
+            stride=(2, 1),
+            dim_y=self.V4.dim_y // self.V4.stride[0] // self.V4.stride[1],
+            dim_x=self.V4.dim_x // self.V4.stride[0] // self.V4.stride[1],
             **layer_params,
         )
         if self.skip:
@@ -500,7 +498,7 @@ class DyRCNNx8(DyRCNNx4):
                 auto_adapt=True,
             )
         self.tau_IT = torch.nn.Parameter(
-            torch.tensor(self.tau, dtype=float),
+            torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_IT = EulerStep(dt=self.dt, tau=self.tau_IT)
@@ -514,9 +512,6 @@ class DyRCNNx8(DyRCNNx4):
 
 
 class DyRCNNx2(DyRCNN):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._define_architecture()
 
     def reset(self):
         self.layer1.reset()
@@ -560,9 +555,9 @@ class DyRCNNx2(DyRCNN):
             recurrence_type=self.recurrence_type,
             dt=self.dt,
             tau=self.tau,
-            history_length=self.t_feedforward,
-            recurrence_delay=self.t_recurrence,
-            device=self.device,
+            history_length=self.history_length,
+            t_recurrence=self.t_recurrence,
+            recurrence_target=self.recurrence_target,
         )
 
         # Define the convolutional layers
@@ -606,8 +601,8 @@ class DyRCNNx2(DyRCNN):
         # Then initialize feedback connections with model's dtype
         if stage == "fit" and self.feedback:
             # Get model dtype after Lightning setup
-            dtype = next(self.parameters()).dtype
-            device = next(self.parameters()).device
+            dtype = self.get_target_dtype()
+            device = self.get_target_device()
 
             # Reset feedback transforms to force reinitialization
             for layer_name in self.layer_names:
@@ -638,7 +633,7 @@ class DyRCNNx2(DyRCNN):
         nn.init.constant_(self.classifier[-1].bias, 0)
 
 
-# Aliases for compatibility
+# Aliases for backwards compatibility
 FourLayerCNN = DyRCNNx4
 TwoLayerCNN = DyRCNNx2
 

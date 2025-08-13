@@ -40,6 +40,7 @@ class StandardDataLoader(DataLoader):
     - Enable mixed precision with dtype=torch.float16
     """
 
+    @alias_kwargs(data_timesteps="n_timesteps")
     def __init__(
         self,
         *args,
@@ -90,9 +91,11 @@ class StimulusDurationDataLoader(StandardDataLoader):
 
     @alias_kwargs(
         tsteps="n_timesteps",
+        data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
         voidid="non_label_index",
+        voidinput="non_input_value",
     )
     def __init__(
         self,
@@ -101,7 +104,7 @@ class StimulusDurationDataLoader(StandardDataLoader):
         stimulus_duration: int = 5,
         intro_duration: int = 0,
         non_label_index: int = -1,
-        void_value: float = 0,
+        non_input_value: float = 0,
         **kwargs,
     ):
         super().__init__(*args, n_timesteps=n_timesteps, **kwargs)
@@ -110,7 +113,7 @@ class StimulusDurationDataLoader(StandardDataLoader):
         self.stimulus_duration = int(stimulus_duration)
         self.intro_duration = int(intro_duration)
         self.non_label_index = int(non_label_index)
-        self.void_value = float(void_value)
+        self.non_input_value = float(non_input_value)
         self.outro_duration = (
             self.n_timesteps - self.stimulus_duration - self.intro_duration
         )
@@ -145,7 +148,7 @@ class StimulusDurationDataLoader(StandardDataLoader):
                     memory_format=self.memory_format,
                 )
                 void = torch.full_like(
-                    data, self.void_value, memory_format=self.memory_format
+                    data, self.non_input_value, memory_format=self.memory_format
                 )
 
                 # Combine sequences efficiently
@@ -188,10 +191,12 @@ class StimulusIntervalDataLoader(StandardDataLoader):
 
     @alias_kwargs(
         tsteps="n_timesteps",
+        data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
         interval="interval_duration",
         voidid="non_label_index",
+        voidinput="non_input_value",
     )
     def __init__(
         self,
@@ -201,7 +206,7 @@ class StimulusIntervalDataLoader(StandardDataLoader):
         intro_duration: int = 0,
         interval_duration: int = 2,
         non_label_index: int = -1,
-        void_value: float = 0,
+        non_input_value: float = 0,
         **kwargs,
     ):
         super().__init__(*args, n_timesteps=n_timesteps, **kwargs)
@@ -211,7 +216,7 @@ class StimulusIntervalDataLoader(StandardDataLoader):
         self.intro_duration = int(intro_duration)
         self.interval_duration = int(interval_duration)
         self.non_label_index = int(non_label_index)
-        self.void_value = float(void_value)
+        self.non_input_value = float(non_input_value)
         self.outro_duration = (
             self.n_timesteps
             - 2 * self.stimulus_duration
@@ -250,7 +255,7 @@ class StimulusIntervalDataLoader(StandardDataLoader):
                     memory_format=self.memory_format,
                 )
                 void = torch.full_like(
-                    data, self.void_value, memory_format=self.memory_format
+                    data, self.non_input_value, memory_format=self.memory_format
                 )
 
                 # Combine sequences efficiently
@@ -286,10 +291,12 @@ class StimulusIntervalDataLoader(StandardDataLoader):
 class StimulusContrastDataLoader(StandardDataLoader):
     @alias_kwargs(
         tsteps="n_timesteps",
+        data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
         contrast="stimulus_contrast",
         voidid="non_label_index",
+        voidinput="non_input_value",
     )
     def __init__(
         self,
@@ -299,7 +306,7 @@ class StimulusContrastDataLoader(StandardDataLoader):
         intro_duration=2,
         stimulus_contrast=1.0,
         non_label_index=-1,
-        void_value=0,
+        non_input_value=0,
         **kwargs,
     ):
         super().__init__(*args, n_timesteps=n_timesteps, **kwargs)
@@ -307,7 +314,7 @@ class StimulusContrastDataLoader(StandardDataLoader):
         self.intro_duration = int(intro_duration)
         self.stimulus_contrast = float(stimulus_contrast)
         self.non_label_index = int(non_label_index)
-        self.void_value = float(void_value)
+        self.non_input_value = float(non_input_value)
         self.outro_duration = (
             self.n_timesteps - self.stimulus_duration - self.intro_duration
         )
@@ -327,7 +334,7 @@ class StimulusContrastDataLoader(StandardDataLoader):
             label_indices = _adjust_label_dimensions(label_indices)
 
             non_label_indices = torch.ones_like(label_indices) * self.non_label_index
-            void = torch.ones_like(data) * self.void_value
+            void = torch.ones_like(data) * self.non_input_value
 
             data = torch.cat(
                 (
@@ -365,7 +372,6 @@ DATALOADER_CLASSES = {
 def get_data_loader(
     dataset: torch.utils.data.Dataset,
     dataloader: Optional[str] = None,
-    data_timesteps: int = 1,
     **kwargs,
 ) -> torch.utils.data.DataLoader:
     """
@@ -403,9 +409,6 @@ def get_data_loader(
             f"Invalid dataloader type: {type(dataloader)}. "
             "Expected a string or a DataLoader subclass."
         )
-
-    # Add data_timesteps to kwargs for temporal dataloaders
-    kwargs["n_timesteps"] = data_timesteps
 
     filtered_kwargs, _ = filter_kwargs(dataloader_class, kwargs)
 

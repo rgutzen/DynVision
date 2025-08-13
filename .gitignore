@@ -5,13 +5,14 @@ Makefile
 config_runtime.yaml
 
 # temporary files 
-temp*
+temp_*
 *old
 
 # data
 /data/
 /data/*
 /reports/
+
 
 # images
 *.png
