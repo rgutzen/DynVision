@@ -14,9 +14,9 @@ temp_*
 /reports/
 
 
-# images
-*.png
-*.jpg
+# # images
+# *.png
+# *.jpg
 
 # logs
 logs/

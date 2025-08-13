@@ -9,7 +9,7 @@ This section provides step-by-step tutorials to help beginners learn how to use 
 - [**Custom Model Creation**](custom-model-creation.md): Create your own neural network architecture
 <!-- - [**Experiment Design**](experiment-design.md): Design and run experiments with Snakemake -->
 
-**...more to come***
+*...more to come...*
 
 <!-- ## Working with Data
 

@@ -6,16 +6,9 @@ DynVision models the dynamics of neural activity using continuous-time different
 
 The core of DynVision's dynamics is the following differential equation:
 
-$$\tau \frac{dx}{dt} = -x + \Phi[f(t, r_n, r_{n-1})]$$
-
-Where:
-- $\tau$ is the time constant of the neural dynamics
-- $x$ is the neural activity
-- $\Phi$ is a nonlinearity
-- $f(t, r_n, r_{n-1})$ represents the input to the neuron, which may include:
-  - External input ($I(t)$)
-  - Feedforward input from previous layers ($J_{FF} \cdot r_{n-1}(t-\Delta_{FF})$)
-  - Recurrent input from the same layer ($J_{RC} \cdot r_n(t-\Delta_{RC})$)
+<p align="center">
+  <img src="docs/assets/dynamical_systems_equation.png" alt="Dynamical Systems ODE" width="800"/>
+</p>
 
 This equation is solved numerically using one of the available solvers in DynVision.
 
@@ -27,7 +20,7 @@ DynVision provides two main solvers for the neural dynamics equation:
 
 The Euler method is a first-order numerical procedure for solving ordinary differential equations (ODEs). It provides a simple approximation:
 
-$$x(t+dt) = x(t) + \frac{dt}{\tau} \cdot [-x(t) + W(x(t))]$$
+$$x(t+dt) = x(t) + \frac{dt}{\tau} \cdot [-x(t) + J(x(t))]$$
 
 **Advantages**:
 - Computational efficiency
