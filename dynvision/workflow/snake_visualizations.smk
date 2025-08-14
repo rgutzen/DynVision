@@ -1,8 +1,66 @@
 """Visualization workflow for model analysis and results.
+
+This workflow handles all visualization-related tasks including:
+- Confusion matrix generation
+- Classifier response analysis
+- Weight distribution visualization
+- Experiment result plotting
+- Adaptation analysis
+- Interactive notebook generation
+- Enhanced model visualization
+- Model architecture visualization
+- Enhanced weight analysis
+- Temporal dynamics visualization
+- Interactive notebook generation
+
+Usage:
+    # Generate confusion matrix
+    snakemake plot_confusion_matrix model_name=DyRCNNx4
+
+    # Analyze classifier responses
+    snakemake plot_classifier_responses model_name=DyRCNNx4
 """
 
 logger = logging.getLogger('workflow.visualizations')
 
+
+rule plot_confusion_matrix:
+    """Generate and save confusion matrix visualization.
+
+    Input:
+        test_results: Model evaluation results
+        dataset: Test dataset for class information
+        script: Plotting script
+    
+    Output:
+        Confusion matrix plot
+
+    Parameters:
+        palette: Color palette for visualization
+    """
+    input:
+        test_results = project_paths.reports / '{path}_{data_name}_testing_results.csv',
+        dataset = project_paths.data.interim / '{data_name}_test' / 'folder.link',
+        script = SCRIPTS / 'visualization' / 'plot_confusion_matrix.py'
+    params:
+        palette = 'cividis',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        plot = project_paths.figures / '{path}_{data_name}_confusion.{format}'
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --input {input.test_results:q} \
+            --output {output.plot:q} \
+            --dataset {input.dataset} \
+            --palette {params.palette} \
+            --format {wildcards.format} \
+        """
 
 rule plot_classifier_responses:
     """Analyze and visualize classifier responses.
@@ -33,7 +91,7 @@ rule plot_classifier_responses:
         directory(project_paths.figures \
             / 'classifier_response' \
             / '{model_name}{data_identifier}')
-    group: "visualization"
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -70,7 +128,7 @@ rule plot_weight_distributions:
         plot = project_paths.figures \
             / 'weight_distributions' \
             / '{model_name}{data_identifier}_{status}_weights.{format}'
-    group: "visualization"
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -150,6 +208,7 @@ rule process_plotting_data:
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -161,6 +220,24 @@ rule process_plotting_data:
             --measures {params.measures} 
         """
 
+rule reduce_plotting_data_size:
+    input:
+        data = project_paths.figures / '{path}' / 'layer_power.csv',
+        script = SCRIPTS / 'visualization' / 'reduce_plotting_data_size.py'
+    params:
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / '{path}' / 'layer_power_small.csv',
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} 
+        """
 
 checkpoint plot_adaption:
     """Analyze and visualize model adaptation.
@@ -189,6 +266,7 @@ checkpoint plot_adaption:
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / '{plot}.flag',
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -219,7 +297,6 @@ rule plot_experiments:
         )
     group: "visualization"
 
-
 rule plot_experiments_on_models:
     """Generate comparative visualizations across models.
 
@@ -242,3 +319,101 @@ rule plot_experiments_on_models:
         touch {output:q} 
         """
 
+rule plot_accuracy:
+    input:
+        outputs = project_paths.figures / 'duration' \
+            / 'duration_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' \ 
+            / 'layer_power_small.csv',
+        training_csv = project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_train_accuracy.csv',
+        validation_csv = project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_val_accuracy.csv',
+        memory_csv = project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_gpu_mem_alloc.csv',
+        energy_csv= project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_energyloss.csv',
+        cross_entropy_csv= project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_crossentropyloss.csv',
+        script = SCRIPTS / 'visualization' / 'plot_accuracy.py'
+    params:
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / 'accuracy' / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}.png',
+    # group: "visualization"
+    shell:
+        """
+        python {input.script:q} \
+            --testing_csv {input.outputs:q} \
+            --training_csv {input.training_csv:q} \
+            --validation_csv {input.validation_csv:q} \
+            --energy_csv {input.energy_csv:q} \
+            --cross_entropy_csv {input.cross_entropy_csv:q} \
+            --output {output:q} 
+        """
+            # --memory_csv {input.memory_csv:q} \
+        # {params.execution_cmd} \
+
+rule plot_dynamics:
+    input:
+        data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        focus_layer = 'V2',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'dynamics.png',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --experiment {wildcards.experiment} \
+            --category {wildcards.category} \
+            --focus_layer {params.focus_layer} 
+        """
+
+use rule plot_dynamics as plot_dynamics_local with:
+    input:
+        data = project_paths.figures / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
+        script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
+    output:
+        project_paths.figures / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'dynamics.png',
+
+rule plot_response:
+    input:
+        data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        script = SCRIPTS / 'visualization' / 'plot_response.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'response.png',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --category {wildcards.category}
+        """

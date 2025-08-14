@@ -1,12 +1,3 @@
-"""
-This module defines the `project_paths_class`, which provides a structured way to manage and access various project and toolbox directory paths for the 'rhythmic_visual_attention' project. It automatically detects if the code is running on a cluster and adapts paths accordingly, including moving large folders to a scratch partition when necessary.
-
-Note:
-    This file contains hardcoded paths and project-specific settings. 
-    **You must adapt this file to fit your own path organization and project structure.**
-    Update the `project_name`, `toolbox_name`, `user_name`, and default directory paths as needed for your environment.
-"""
-
 import inspect
 import os
 from pathlib import Path
@@ -19,9 +10,9 @@ logger = logging.getLogger(__name__)
 class project_paths_class:
 
     this_file = Path(inspect.getfile(lambda: None)).resolve()
-    project_name = "<name_of_project_folder>"
+    project_name = "rhythmic_visual_attention"
     toolbox_name = "DynVision"
-    user_name = "<cluster_user_name>"
+    user_name = "rg5022"
 
     def __init__(self, working_dir=None, toolbox_dir=None):
         if self.iam_on_cluster():
@@ -29,7 +20,7 @@ class project_paths_class:
             toolbox_dir = Path().home() / self.toolbox_name / self.toolbox_name.lower()
 
         if working_dir is None:
-            working_dir = Path(f"~/{self.project_name}").expanduser().resolve()
+            working_dir = Path("/home/rgutzen/01_PROJECTS/rhythmic_visual_attention")
         if toolbox_dir is None:
             toolbox_dir = self.this_file.parents[0].resolve()
 
