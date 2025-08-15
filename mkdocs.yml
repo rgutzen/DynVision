@@ -1,0 +1,131 @@
+site_name: DynVision Documentation
+site_description: A toolbox for biologically plausible recurrent convolutional networks
+site_author: Robin Gutzen
+site_url: https://rgutzen.github.io/DynVision  # Replace with your GitHub username
+
+# Configuration
+docs_dir: docs  # Documentation files are in the docs/ directory
+
+# Repository
+repo_name: Lindsay-Lab/DynVision
+repo_url: https://github.com/Lindsay-Lab/DynVision
+
+# Navigation
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - User Guide:
+    - user-guide/index.md
+    - Installation: user-guide/installation.md
+    - Data Processing: user-guide/data-processing.md
+    - Custom Models: user-guide/custom-models.md
+    - Parameter Handling: user-guide/parameter-handling.md
+    - Workflows: user-guide/workflows.md
+    - Evaluation: user-guide/evaluation.md
+    - Visualization: user-guide/visualization.md
+    - Cluster Integration: user-guide/cluster-integration.md
+  - Reference:
+    - reference/index.md
+    - Organization: reference/organization.md
+    - Model Base: reference/model-base.md
+    - Model Components: reference/model-components.md
+    - Recurrence Types: reference/recurrence-types.md
+    - Dynamics Solvers: reference/dynamics-solvers.md
+    - Configuration: reference/configuration.md
+    - Models: reference/models.md
+  - Tutorials:
+    - tutorial/index.md
+    - Basic Model Training: tutorial/basic-model-training.md
+    - Custom Model Development: tutorial/custom-model.md
+  - Explanation:
+    - explanation/index.md
+    - Design Principles: explanation/design-philosophy.md
+    - Temporal Dynamics: explanation/temporal-dynamics.md
+    - Biological Plausibility: explanation/biological-plausibility.md
+  - Development:
+    - development/index.md
+    - Contributing: development/contributing.md
+    - Documentation Style: development/documentation-style.md
+    - Structure Strategy: development/structure-strategy.md
+    - Research Software: development/research-software.md 
+    - Software Patterns: development/software-patterns.md
+    - Snakemake: development/snakemake.md
+    - Pytorch Lightning: development/pytorch-lightning.md
+    - Multi-GPU Planning: development/multi-gpu-imagenet-plan.md
+# Theme
+theme:
+  name: material
+  logo: material/brain  # Material Design brain icon
+  favicon: material/brain
+  # custom_dir: overrides  # Optional: for template overrides
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+
+# Extra CSS and JavaScript
+extra_css:
+  - assets/stylesheets/custom.css
+
+# Plugins
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [../]  # Path to your Python code
+          options:
+            docstring_style: numpy
+            show_source: true
+
+# Markdown extensions
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - footnotes
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Lindsay-Lab/DynVision
+    # - icon: fontawesome/brands/python
+    #   link: https://pypi.org/project/dynvision/  # If you publish to PyPI
+
+# Copyright
+copyright: Copyright &copy; 2025 Robin Gutzen

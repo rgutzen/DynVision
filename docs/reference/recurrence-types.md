@@ -9,7 +9,7 @@ Recurrent connections are abundant in the primate visual system. In the ventral 
 DynVision implements several types of recurrent connections, each with different computational properties and biological interpretations.
 
 <p align="center">
-  <img src="docs/assets/recurrence_types.png" alt="Recurrence Types" width="800"/>
+  <img src="docs/assets/gfx/recurrence_types.png" alt="Recurrence Types" width="800"/>
 </p>
 
 ## Available Recurrence Types

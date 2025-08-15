@@ -1,0 +1,374 @@
+/* DynVision Custom Color Scheme */
+/* Primary Colors: #98239f (purple), #5c7c58 (green), #b3894f (brown) */
+
+:root {
+  /* Main brand colors */
+  --dynvision-purple: #98239f;
+  --dynvision-green: #5c7c58;
+  --dynvision-brown: #b3894f;
+  
+  /* Purple variations */
+  --purple-light: #b347ba;
+  --purple-lighter: #d171d6;
+  --purple-dark: #7a1c80;
+  --purple-darker: #5c1560;
+  --purple-transparent: #98239f1a;
+  --purple-semi: #98239f80;
+  
+  /* Green variations */
+  --green-light: #6d8c69;
+  --green-lighter: #7e9d7a;
+  --green-dark: #4a6547;
+  --green-darker: #3a4f37;
+  --green-transparent: #5c7c581a;
+  --green-semi: #5c7c5880;
+  
+  /* Brown variations */
+  --brown-light: #c39960;
+  --brown-lighter: #d4aa71;
+  --brown-dark: #9a7840;
+  --brown-darker: #816030;
+  --brown-transparent: #b3894f1a;
+  --brown-semi: #b3894f80;
+  
+  /* Light mode color assignments */
+  --md-primary-fg-color: var(--dynvision-purple);
+  --md-primary-fg-color--light: var(--purple-light);
+  --md-primary-fg-color--dark: var(--purple-dark);
+  --md-accent-fg-color: var(--dynvision-green);
+  --md-accent-fg-color--transparent: var(--green-transparent);
+  
+  /* Text and background overrides */
+  --md-typeset-color: #2d3748;
+  --md-typeset-a-color: var(--dynvision-purple);
+  --md-default-bg-color: #ffffff;
+  --md-default-fg-color: #2d3748;
+  
+  /* Code styling */
+  --md-code-bg-color: #f7fafc;
+  --md-code-fg-color: var(--purple-dark);
+  --md-code-hl-color: var(--brown-transparent);
+  
+  /* Borders and dividers */
+  --md-typeset-table-color: var(--green-transparent);
+  --md-footer-bg-color: var(--purple-dark);
+  --md-footer-fg-color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] {
+  /* Dark mode color assignments */
+  --md-primary-fg-color: var(--purple-light);
+  --md-primary-fg-color--light: var(--purple-lighter);
+  --md-primary-fg-color--dark: var(--dynvision-purple);
+  --md-accent-fg-color: var(--green-light);
+  --md-accent-fg-color--transparent: var(--green-semi);
+  
+  /* Dark mode text and backgrounds */
+  --md-typeset-color: #e2e8f0;
+  --md-typeset-a-color: var(--purple-lighter);
+  --md-default-bg-color: #1a202c;
+  --md-default-fg-color: #e2e8f0;
+  
+  /* Dark mode code styling */
+  --md-code-bg-color: #2d3748;
+  --md-code-fg-color: var(--purple-lighter);
+  --md-code-hl-color: var(--brown-semi);
+  
+  /* Dark mode borders */
+  --md-typeset-table-color: var(--green-semi);
+  --md-footer-bg-color: var(--purple-darker);
+}
+
+/* Enhanced Header with Gradient */
+.md-header {
+  background: linear-gradient(135deg, var(--dynvision-purple) 0%, var(--dynvision-green) 50%, var(--dynvision-brown) 100%);
+  box-shadow: 0 4px 20px rgba(152, 35, 159, 0.2);
+}
+
+.md-header__title {
+  color: white;
+  font-weight: 600;
+}
+
+.md-header .md-nav__link {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.md-header .md-nav__link:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+/* Navigation Enhancements */
+.md-nav__title {
+  color: var(--dynvision-purple);
+  font-weight: 600;
+  border-bottom: 2px solid var(--green-transparent);
+}
+
+.md-nav__item--active > .md-nav__link {
+  background: linear-gradient(90deg, var(--purple-transparent), transparent);
+  border-left: 3px solid var(--dynvision-purple);
+  color: var(--dynvision-purple);
+  font-weight: 500;
+}
+
+.md-nav__link:hover {
+  background-color: var(--green-transparent);
+  border-radius: 4px;
+}
+
+/* Table of Contents Styling */
+.md-sidebar--secondary .md-toc__list {
+  border-left: 2px solid var(--dynvision-green);
+}
+
+.md-sidebar--secondary .md-toc__item--active > .md-toc__link {
+  color: var(--dynvision-purple);
+  font-weight: 600;
+  border-left: 2px solid var(--dynvision-brown);
+  padding-left: 0.8rem;
+}
+
+/* Button Styling */
+.md-button {
+  background: linear-gradient(45deg, var(--dynvision-purple), var(--purple-light));
+  border: none;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px var(--purple-transparent);
+}
+
+.md-button:hover {
+  background: linear-gradient(45deg, var(--purple-light), var(--dynvision-purple));
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px var(--purple-semi);
+}
+
+.md-button--primary {
+  background: linear-gradient(45deg, var(--dynvision-green), var(--green-light));
+}
+
+.md-button--primary:hover {
+  background: linear-gradient(45deg, var(--green-light), var(--dynvision-green));
+}
+
+/* Code Block Enhancements */
+.md-typeset .highlight {
+  border-radius: 8px;
+  border-left: 4px solid var(--dynvision-brown);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: var(--md-code-bg-color);
+}
+
+.md-typeset .highlight .filename {
+  background: var(--dynvision-brown);
+  color: white;
+  padding: 0.5rem 1rem;
+  margin: -0.5rem -0.5rem 0.5rem -0.5rem;
+  border-radius: 4px 4px 0 0;
+}
+
+/* Inline Code */
+.md-typeset code {
+  background: var(--brown-transparent);
+  color: var(--dynvision-purple);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+}
+
+/* Custom Admonitions */
+.md-typeset .admonition.dynvision,
+.md-typeset details.dynvision {
+  border-color: var(--dynvision-purple);
+  background: linear-gradient(135deg, var(--purple-transparent), var(--green-transparent));
+}
+
+.md-typeset .admonition.dynvision > .admonition-title,
+.md-typeset details.dynvision > .admonition-title {
+  background: linear-gradient(90deg, var(--dynvision-purple), var(--dynvision-green));
+  color: white;
+  font-weight: 600;
+}
+
+.md-typeset .admonition.dynvision > .admonition-title::before,
+.md-typeset details.dynvision > .admonition-title::before {
+  content: "🧠";
+  margin-right: 0.5rem;
+}
+
+/* Neural Network Admonition */
+.md-typeset .admonition.neural,
+.md-typeset details.neural {
+  border-color: var(--dynvision-purple);
+  background: var(--purple-transparent);
+}
+
+.md-typeset .admonition.neural > .admonition-title,
+.md-typeset details.neural > .admonition-title {
+  background: var(--dynvision-purple);
+  color: white;
+}
+
+.md-typeset .admonition.neural > .admonition-title::before,
+.md-typeset details.neural > .admonition-title::before {
+  content: "🔗";
+}
+
+/* Biology Admonition */
+.md-typeset .admonition.bio,
+.md-typeset details.bio {
+  border-color: var(--dynvision-green);
+  background: var(--green-transparent);
+}
+
+.md-typeset .admonition.bio > .admonition-title,
+.md-typeset details.bio > .admonition-title {
+  background: var(--dynvision-green);
+  color: white;
+}
+
+.md-typeset .admonition.bio > .admonition-title::before,
+.md-typeset details.bio > .admonition-title::before {
+  content: "🧬";
+}
+
+/* Performance Admonition */
+.md-typeset .admonition.performance,
+.md-typeset details.performance {
+  border-color: var(--dynvision-brown);
+  background: var(--brown-transparent);
+}
+
+.md-typeset .admonition.performance > .admonition-title,
+.md-typeset details.performance > .admonition-title {
+  background: var(--dynvision-brown);
+  color: white;
+}
+
+.md-typeset .admonition.performance > .admonition-title::before,
+.md-typeset details.performance > .admonition-title::before {
+  content: "⚡";
+}
+
+/* Table Styling */
+.md-typeset table {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.md-typeset table th {
+  background: linear-gradient(90deg, var(--dynvision-purple), var(--dynvision-green));
+  color: white;
+  font-weight: 600;
+}
+
+.md-typeset table tr:nth-child(even) {
+  background: var(--green-transparent);
+}
+
+.md-typeset table tr:hover {
+  background: var(--brown-transparent);
+}
+
+/* Search Styling */
+.md-search__input {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.md-search__input:focus {
+  border-color: var(--dynvision-green);
+  box-shadow: 0 0 0 2px var(--green-transparent);
+}
+
+/* Footer Styling */
+.md-footer {
+  background: linear-gradient(135deg, var(--purple-dark), var(--green-dark));
+  color: white;
+}
+
+.md-footer__link {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.md-footer__link:hover {
+  color: white;
+}
+
+/* Tabs Enhancement */
+.md-tabs {
+  background: linear-gradient(90deg, var(--purple-transparent), var(--green-transparent));
+  border-bottom: 2px solid var(--dynvision-brown);
+}
+
+.md-tabs__link {
+  color: var(--dynvision-purple);
+  font-weight: 500;
+}
+
+.md-tabs__link--active {
+  color: var(--dynvision-green);
+  border-bottom: 2px solid var(--dynvision-green);
+}
+
+/* Hero Section (if used) */
+.md-hero {
+  background: linear-gradient(-45deg, var(--dynvision-purple), var(--dynvision-green), var(--dynvision-brown), var(--purple-light));
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+  color: white;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Scrollbar Styling (Webkit browsers) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--green-transparent);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--dynvision-purple);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--purple-light);
+}
+
+/* Link Styling */
+.md-typeset a {
+  color: var(--dynvision-purple);
+  text-decoration: none;
+  border-bottom: 1px solid var(--purple-transparent);
+  transition: all 0.3s ease;
+}
+
+.md-typeset a:hover {
+  color: var(--purple-light);
+  border-bottom-color: var(--dynvision-purple);
+}
+
+/* Badge/Label Styling */
+.md-typeset .badge {
+  background: var(--dynvision-brown);
+  color: white;
+  padding: 0.2em 0.6em;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+}
+
+.md-typeset .badge.purple { background: var(--dynvision-purple); }
+.md-typeset .badge.green { background: var(--dynvision-green); }
+.md-typeset .badge.brown { background: var(--dynvision-brown); }

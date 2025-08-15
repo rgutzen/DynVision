@@ -7,7 +7,7 @@ DynVision models the dynamics of neural activity using continuous-time different
 The core of DynVision's dynamics is the following differential equation:
 
 <p align="center">
-  <img src="docs/assets/dynamical_systems_equation.png" alt="Dynamical Systems ODE" width="800"/>
+  <img src="docs/assets/gfx/dynamical_systems_equation.png" alt="Dynamical Systems ODE" width="800"/>
 </p>
 
 This equation is solved numerically using one of the available solvers in DynVision.
