@@ -1,0 +1,35 @@
+# MkDocs and theme
+mkdocs>=1.5.0
+mkdocs-material>=9.4.0
+
+# Plugins for enhanced functionality
+mkdocstrings[python]>=0.24.0
+mkdocs-git-revision-date-localized-plugin>=1.2.0
+
+# Python dependencies (if needed for API docs)
+# Add your package dependencies here if mkdocstrings needs to import your code
+-e ../
+# torch>=2.0.0
+# pytorch-lightning>=2.0.0
+# numpy>=1.24.0
+
+# Optional: PDF and advanced features
+# mkdocs-pdf-export-plugin>=0.5.10
+# mkdocs-with-pdf>=0.9.3
+
+# For processing Python docstrings
+pydantic>=2.0.0
+
+# If you want to include Jupyter notebooks
+# mkdocs-jupyter>=0.24.0
+
+# Additional useful plugins (uncomment as needed)
+mkdocs-awesome-pages-plugin>=2.9.0
+mkdocs-section-index>=0.3.0
+mkdocs-literate-nav>=0.6.0
+mkdocs-gen-files>=0.5.0
+
+# For better search
+# mkdocs-minify-plugin>=0.7.0
+
+# Install package for API

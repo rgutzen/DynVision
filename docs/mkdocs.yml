@@ -1,10 +1,10 @@
 site_name: DynVision Documentation
 site_description: A toolbox for biologically plausible recurrent convolutional networks
 site_author: Robin Gutzen
-site_url: https://rgutzen.github.io/DynVision  # Replace with your GitHub username
+site_url: https://dynvision.readthedocs.org/  # Replace with your GitHub username
 
 # Configuration
-docs_dir: docs  # Documentation files are in the docs/ directory
+docs_dir: source  # Documentation files are in the source/ directory
 
 # Repository
 repo_name: Lindsay-Lab/DynVision

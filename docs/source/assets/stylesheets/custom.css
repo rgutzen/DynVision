@@ -81,7 +81,7 @@
 
 /* Enhanced Header with Gradient */
 .md-header {
-  background: linear-gradient(135deg, var(--dynvision-purple) 0%, var(--dynvision-green) 50%, var(--dynvision-brown) 100%);
+  background: linear-gradient(90deg, var(--dynvision-green) 0%, var(--dynvision-brown) 100%);
   box-shadow: 0 4px 20px rgba(152, 35, 159, 0.2);
 }
 

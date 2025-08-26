@@ -7,7 +7,7 @@
 DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks and how these networks can be aligned with properties of biological visual systems.
 
 <p align="center">
-  <img src="docs/assets/gfx/overview.png" alt="DynVision Overview" width="600"/>
+  <img src="docs/source/assets/gfx/overview.png" alt="DynVision Overview" width="600"/>
 </p>
 
 ## Key Features
@@ -25,7 +25,7 @@ DynVision is a modular toolbox for constructing and evaluating recurrent convolu
 - **Efficient Workflow Management**: Leverages Snakemake for reproducible experiments and parameter sweeps
 - **PyTorch Lightning Integration**: Standardized training with minimal boilerplate
 - **Optimized Performance**: Fast data loading with FFCV, GPU acceleration, mixed precision
-- **Comprehensive Model Zoo**: Access pre-implemented architectures like AlexNet, CorNetRT, ResNet, CordsNet, and DyRCNNx4
+- **Comprehensive Model Zoo**: Access pre-implemented architectures like AlexNet, CorNetRT, ResNet, CordsNet, and DyRCNN
 
 ## Installation
 
@@ -42,7 +42,7 @@ conda activate dynvision
 pip install -e .
 ```
 
-For more detailed installation instructions, see the [Installation Guide](docs/user-guide/installation.md).
+For more detailed installation instructions, see the [Installation Guide](docs/source/user-guide/installation.md).
 
 ## Quick Start
 
@@ -66,7 +66,7 @@ batch = torch.randn(1, 20, 3, 224, 224)  # (batch, timesteps, channels, height, 
 outputs = model(batch)
 ```
 
-For a step-by-step tutorial, see the [Getting Started](docs/getting-started.md) guide.
+For a step-by-step tutorial, see the [Getting Started](docs/source/getting-started.md) guide.
 
 ## Example Experiments
 
@@ -81,33 +81,26 @@ snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rcty
 ```
 
 <p align="center">
-  <img src="docs/assets/gfx/tau.png" alt="Temporal Dynamics Example" width="600"/>
+  <img src="docs/source/assets/gfx/rctype_training.png" alt="Temporal Dynamics Example" width="600"/>
 </p>
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md): Beginner's tutorial
-- [User Guide](docs/user-guide/index.md): How-to guides for common tasks
-- [API Reference](docs/reference/index.md): Technical documentation
-- [Concepts](docs/explanation/concepts.md): Explanation of core concepts
-- [Contributing](docs/contributing.md): How to contribute to the project
+- [Getting Started](docs/source/getting-started.md): Beginner's tutorial
+- [User Guide](docs/source/user-guide/index.md): How-to guides for common tasks
+- [API Reference](docs/source/reference/index.md): Technical documentation
+- [Contributing](docs/source/contributing.md): How to contribute to the project
 
-<!-- ## Citation
+## Citation
 
 If you use DynVision in your research, please cite our paper:
 
-```bibtex
-@article{dynvision2023,
-  title={DynVision: A Modeling Toolbox for Biologically Plausible Recurrent Visual Networks},
-  author={Anonymous},
-  journal={ArXiv},
-  year={2023}
-}
-``` 
+> Gutzen, R., & Lindsay, G. W. (2025). DynVision: A Toolbox for Biologically Plausible Recurrent Convolutional Networks (p. 2025.08.11.669756). bioRxiv. https://doi.org/10.1101/2025.08.11.669756
 
-TODO: add rrid, zenodo
+<!-- 
+TODO: add rrid, zenodo -->
 
--->
+
 
 ## License
 
