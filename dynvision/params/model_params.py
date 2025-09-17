@@ -49,7 +49,7 @@ class ModelParams(BaseParams):
         default=1.0, description="Recurrent delay (ms)", ge=1.0
     )
     t_feedback: float = Field(default=1.0, description="Feedback delay (ms)", ge=1.0)
-    t_skip: float = Field(default=1.0, description="Skip delay (ms)", ge=1.0)
+    t_skip: float = Field(default=1.0, description="Skip delay (ms)", ge=0.0)
     dynamics_solver: Literal["euler", "rk4"] = Field(
         default="euler", description="Dynamical systems solver"
     )
@@ -73,7 +73,7 @@ class ModelParams(BaseParams):
     skip: bool = Field(
         default=False, description="Enable skip connections between layers"
     )
-    feedback: bool = Field(
+    feedback: Union[bool, str] = Field(
         default=False,
         description="Enable feedback connections from higher to lower layers",
     )
@@ -121,6 +121,10 @@ class ModelParams(BaseParams):
     optimizer_configs: Dict[str, Any] = Field(
         default_factory=dict, description="Optimizer configuration dictionary"
     )
+    target_dtype: Optional[str] = Field(
+        default="float16",
+        description="Target data type for model outputs (e.g., 'float32', 'int64')",
+    )
 
     # ===== LEARNING RATE PARAMETER GROUPS =====
     lr_parameter_groups: Dict[str, Dict[str, Any]] = Field(
@@ -151,6 +155,11 @@ class ModelParams(BaseParams):
     # ===== CUSTOM MODEL PARAMETERS =====
     model_kwargs: Dict[str, Any] = Field(
         default_factory=dict, description="Additional model-specific arguments"
+    )
+
+    cached_model_kwargs: Dict[Any, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Cached filtered model kwargs for different model classes",
     )
 
     model_config = ConfigDict(
@@ -462,6 +471,12 @@ class ModelParams(BaseParams):
         Returns:
             Dictionary of kwargs suitable for model instantiation
         """
+        if (
+            hasattr(self, "cached_model_kwargs")
+            and model_class in self.cached_model_kwargs
+        ):
+            return self.cached_model_kwargs[model_class]
+
         # Base model parameters
         model_kwargs = {
             "n_classes": self.n_classes,
@@ -521,7 +536,135 @@ class ModelParams(BaseParams):
                 logging.warning("filter_kwargs not available, returning all kwargs")
                 return model_kwargs
 
+        self.cached_model_kwargs[model_class] = model_kwargs
+
         return model_kwargs
+
+    def log_configuration(self, model_kwargs: Dict[str, Any]) -> None:
+        """
+        Log model configuration parameters in a structured, readable format.
+
+        Args:
+            model_kwargs: Dictionary of model parameters
+            model_class: Optional model class for naming
+        """
+        # Core Architecture
+        logging.info(f"  🏗️  Core Architecture:")
+        logging.info(f"     • Model name: {getattr(self, 'model_name', 'unset')}")
+        logging.info(f"     • Input dims: {model_kwargs.get('input_dims', 'unset')}")
+        logging.info(f"     • N classes: {model_kwargs.get('n_classes', 'unset')}")
+        logging.info(f"     • N timesteps: {model_kwargs.get('n_timesteps', 'unset')}")
+        logging.info(
+            f"     • Data presentation: {model_kwargs.get('data_presentation_pattern', 'unset')}"
+        )
+
+        # Temporal Dynamics
+        logging.info(f"  ⏱️  Temporal Dynamics:")
+        dt_val = model_kwargs.get("dt", "unset")
+        tau_val = model_kwargs.get("tau", "unset")
+        t_ff_val = model_kwargs.get("t_feedforward", "unset")
+        t_rc_val = model_kwargs.get("t_recurrence", "unset")
+        t_fb_val = model_kwargs.get("t_feedback", "unset")
+        t_sk_val = model_kwargs.get("t_skip", "unset")
+
+        logging.info(f"     • dt: {dt_val}{' ms' if dt_val != 'unset' else ''}")
+        logging.info(f"     • tau: {tau_val}{' ms' if tau_val != 'unset' else ''}")
+        logging.info(
+            f"     • Dynamics solver: {model_kwargs.get('dynamics_solver', 'unset')}"
+        )
+        logging.info(
+            f"     • t_feedforward: {t_ff_val}{' ms' if t_ff_val != 'unset' else ''}"
+        )
+        logging.info(
+            f"     • t_recurrence: {t_rc_val}{' ms' if t_rc_val != 'unset' else ''}"
+        )
+        logging.info(
+            f"     • t_feedback: {t_fb_val}{' ms' if t_fb_val != 'unset' else ''}"
+        )
+        logging.info(
+            f"     • t_skip: {t_sk_val}{' ms' if t_sk_val != 'unset' else ''}"
+        )
+
+        # Network Connectivity
+        logging.info(f"  🔗 Network Connectivity:")
+        logging.info(
+            f"     • Recurrence type: {model_kwargs.get('recurrence_type', 'unset')}"
+        )
+        logging.info(f"     • Skip connections: {model_kwargs.get('skip', 'unset')}")
+        logging.info(
+            f"     • Feedback connections: {model_kwargs.get('feedback', 'unset')}"
+        )
+        logging.info(
+            f"     • Supralinearity: {model_kwargs.get('supralinearity', 'unset')}"
+        )
+
+        # Training Configuration
+        logging.info(f"  🎯 Training Configuration:")
+        logging.info(
+            f"     • Learning rate: {model_kwargs.get('learning_rate', 'unset')}"
+        )
+        logging.info(f"     • Optimizer: {model_kwargs.get('optimizer', 'unset')}")
+        logging.info(f"     • Scheduler: {model_kwargs.get('scheduler', 'unset')}")
+        loss_rt_val = model_kwargs.get("loss_reaction_time", "unset")
+        logging.info(
+            f"     • Loss reaction time: {loss_rt_val}{' ms' if loss_rt_val != 'unset' else ''}"
+        )
+
+        # Storage & Monitoring
+        logging.info(f"  💾 Storage & Monitoring:")
+        logging.info(
+            f"     • Store responses: {model_kwargs.get('store_responses', 'unset')}"
+        )
+        logging.info(
+            f"     • Store on CPU: {model_kwargs.get('store_responses_on_cpu', 'unset')}"
+        )
+        logging.info(
+            f"     • Classifier name: {model_kwargs.get('classifier_name', 'unset')}"
+        )
+
+        # Define standard parameters to exclude from custom section
+        standard_params = {
+            "input_dims",
+            "n_classes",
+            "n_timesteps",
+            "data_presentation_pattern",
+            "dt",
+            "tau",
+            "dynamics_solver",
+            "t_feedforward",
+            "t_recurrence",
+            "t_feedback",
+            "t_skip",
+            "recurrence_type",
+            "skip",
+            "feedback",
+            "supralinearity",
+            "learning_rate",
+            "optimizer",
+            "scheduler",
+            "loss_reaction_time",
+            "store_responses",
+            "store_responses_on_cpu",
+            "classifier_name",
+            "criterion_params",
+            "optimizer_kwargs",
+            "optimizer_configs",
+            "lr_parameter_groups",
+            "scheduler_kwargs",
+            "scheduler_configs",
+            "retain_graph",
+            "non_label_index",
+        }
+
+        # Additional custom parameters if present
+        custom_params = {
+            k: v for k, v in model_kwargs.items() if k not in standard_params
+        }
+
+        if custom_params:
+            logging.info(f"  ⚙️  Custom Parameters:")
+            for key, value in custom_params.items():
+                logging.info(f"     • {key}: {value}")
 
     def get_optimizer_config(self) -> Dict[str, Any]:
         """

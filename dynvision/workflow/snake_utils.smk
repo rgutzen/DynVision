@@ -23,29 +23,25 @@ import os
 import subprocess
 import re
 from typing import Dict, List, Optional, Union, Any
+from datetime import datetime
 
 # Add the parent directory to the system path
 package_dir = Path(inspect.getfile(lambda: None)).parents[2].resolve()
 sys.path.insert(0, str(package_dir))
 
 from dynvision.project_paths import project_paths
-from dynvision.workflow.mode_manager import ConfigModeManager
+from dynvision.workflow.config_handler import ConfigHandler
 
 pylogger = logging.getLogger('workflow.utils')
 
 # Load configuration files in priority order
 configfile: project_paths.scripts.configs / 'config_defaults.yaml'
 configfile: project_paths.scripts.configs / 'config_data.yaml'
-# configfile: project_paths.scripts.configs / 'config_visualization.yaml'
+configfile: project_paths.scripts.configs / 'config_visualization.yaml'
 configfile: project_paths.scripts.configs / 'config_experiments.yaml'
 configfile: project_paths.scripts.configs / 'config_modes.yaml'
 configfile: project_paths.scripts.configs / 'config_workflow.yaml'
 
-CONFIGS = project_paths.scripts.configs / 'config_runtime.yaml'
-SCRIPTS = project_paths.scripts_path
-
-config = SimpleNamespace(**config)
-    
 wildcard_constraints:
     model_name = r'[a-zA-Z0-9]+',
     data_name = r'[a-z0-9]+',
@@ -68,29 +64,64 @@ wildcard_constraints:
 localrules: all, symlink_data_subsets, symlink_data_groups, experiment
 ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model
 
-def run_mode_manager():
-    """Initialize and apply mode manager after CLI config overrides"""
-    global mode_manager, config
+def initialize_config_handler():
+    """Initialize the global config handler after CLI config overrides."""
+    global config_handler, config
     
     working_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else config.copy()
-
-    # Initialize mode manager with final config (including CLI overrides)
-    mode_manager = ConfigModeManager(working_config, local=(not project_paths.iam_on_cluster()))
-    mode_manager.apply_modes()
-    mode_manager.log_modes()
-    mode_manager.save_config(path=CONFIGS)
-    mode_manager.log_config()
     
-    # Get the processed config
-    processed_config = mode_manager.get_config(return_namespace=True)   
-    if isinstance(processed_config, SimpleNamespace):
-        config.__dict__.clear()
-        config.__dict__.update(processed_config.__dict__)
-    elif isinstance(processed_config, dict):
-        config.__dict__.clear()
-        config.__dict__.update(processed_config)
-    else:
-        raise TypeError("Processed config must be a SimpleNamespace or dict")
+    # Initialize config handler
+    config_handler = ConfigHandler(
+        base_config=working_config, 
+        project_paths=project_paths,
+        local=(not project_paths.iam_on_cluster())
+    )
+    
+    config_handler.log_available_modes()
+
+def process_configs(config: Any, wildcards: Any = None) -> Path:
+    """Process configuration with modes and wildcards for a specific rule.
+    
+    This function should be used in rule params as:
+    config_path = lambda w: process_configs(config, wildcards=w)
+    
+    Args:
+        config: Current snakemake config (includes file + CLI settings)
+        wildcards: Snakemake wildcards object
+        
+    Returns:
+        Path to the generated config file that can be used in shell commands
+    """
+    if config_handler is None:
+        raise RuntimeError("ConfigHandler not initialized. Call initialize_config_handler() first.")
+    
+    return config_handler.process_configs(config, wildcards)
+
+# def run_mode_manager(configs_path=None):
+#     """Initialize and apply mode manager after CLI config overrides"""
+#     global mode_manager, config
+    
+#     working_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else config.copy()
+
+#     # Initialize mode manager with final config (including CLI overrides)
+#     mode_manager = ConfigModeManager(working_config, local=(not project_paths.iam_on_cluster()))
+#     mode_manager.apply_modes()
+#     mode_manager.log_modes()
+
+#     if configs_path:
+#         mode_manager.save_config(path=configs_path)
+#         mode_manager.log_config()
+    
+#     # Get the processed config
+#     processed_config = mode_manager.get_config(return_namespace=True)   
+#     if isinstance(processed_config, SimpleNamespace):
+#         config.__dict__.clear()
+#         config.__dict__.update(processed_config.__dict__)
+#     elif isinstance(processed_config, dict):
+#         config.__dict__.clear()
+#         config.__dict__.update(processed_config)
+#     else:
+#         raise TypeError("Processed config must be a SimpleNamespace or dict")
 
 # Set up logging
 def setup_logger():
@@ -111,10 +142,6 @@ def setup_logger():
     # add ch to logger
     logger.addHandler(ch)
     
-onstart:
-    run_mode_manager()
-    setup_logger()
-
 def get_param(key, default=None) -> callable:
     """Get a parameter value from the config.
 
@@ -415,3 +442,10 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
         cmd_parts.append(f"python {script_path}")
     
     return "\\\n        ".join(cmd_parts)
+
+config = SimpleNamespace(**config)
+
+SCRIPTS = project_paths.scripts_path
+
+initialize_config_handler()
+setup_logger()

@@ -49,7 +49,7 @@ class ConnectionBase(LightningModule):
         super().__init__()
 
         self.source = source
-        self.delay_index = delay_index
+        self.delay_index = int(delay_index)
         self.bias = bias
         self.scale_factor = scale_factor
         self.integration_strategy = integration_strategy
@@ -108,24 +108,21 @@ class ConnectionBase(LightningModule):
             device = source_param.device
             dtype = source_param.dtype
             logger.debug(
-                f"Feedback Connection: Using source module device={device}, dtype={dtype}"
-            )
-        else:
-            logger.debug(
-                f"Feedback Connection: Using input tensor device={device}, dtype={dtype}"
+                f"Connection: Creating Conv2d with device={device}, dtype={dtype}, "
+                f"in_channels={in_channels}, out_channels={out_channels}"
             )
 
-        # Create convolution with explicit device and dtype
-        self.conv = nn.Conv2d(
+        # Create convolution
+        conv = nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=1,
             stride=1,
             padding=0,
             bias=self.bias,
-            dtype=dtype,
-            device=device,
-        )
+        ).to(device=device, dtype=dtype)
+        self.add_module("conv", conv)
+
         if self.parametrization is not None:
             self.conv = apply_parametrization(self.conv, self.parametrization)
 
@@ -180,7 +177,12 @@ class ConnectionBase(LightningModule):
         if h is None:
             return x
 
+        # Setup transform if needed (but avoid during training)
         if self.setup_transform:
+            if self.training:
+                logger.debug(
+                    "Setting up connection transform during training - this may break gradients"
+                )
             self._setup_conv(x, h)
             self._setup_upsample(x, h)
 
@@ -190,10 +192,6 @@ class ConnectionBase(LightningModule):
         if self.upsample:
             h = self.upsample(h)
 
-        # Normalize feedback with gradient preservation
-        # h_norm = torch.norm(h, p=2, dim=(1, 2, 3), keepdim=True)
-        # scale = torch.where(h_norm > 1e-6, h_norm, torch.ones_like(h_norm))
-        # h = h / scale
         output = self.integrate_signal(x, h)
         return output
 

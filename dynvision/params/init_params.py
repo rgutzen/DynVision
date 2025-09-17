@@ -83,7 +83,6 @@ class InitParams(BaseParams):
         update_dict = {
             "use_ffcv": False,
             "use_distributed": False,
-            "batch_size": 32,
             "num_workers": 0,
             "pin_memory": False,
         }

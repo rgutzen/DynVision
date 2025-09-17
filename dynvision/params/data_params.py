@@ -53,7 +53,7 @@ class DataParams(BaseParams):
     )
 
     batch_size: int = Field(
-        default=32, ge=1, description="Base batch size for data loading"
+        default=128, ge=1, description="Base batch size for data loading"
     )
 
     num_workers: int = Field(
@@ -105,7 +105,7 @@ class DataParams(BaseParams):
         default=1, ge=1, description="number of timesteps to load"
     )
 
-    non_input_value: int = Field(default=-3, description="null input value")
+    non_input_value: int = Field(default=0, description="null input value")
 
     non_label_index: int = Field(default=-1, description="label index to ignore")
 
@@ -118,21 +118,21 @@ class DataParams(BaseParams):
     encoding: str = Field(default="image", description="FFCV encoding type")
 
     writer_mode: Literal["jpg", "raw", "smart", "proportion"] = Field(
-        default="jpg", description="FFCV writer type"
+        default="proportion", description="FFCV writer type"
     )
 
     max_resolution: int = Field(default=224, description="Max resolution for images")
 
     compress_probability: float = Field(
-        default=1.0, description="Probability of compression applied to images"
+        default=0.25, description="Probability of compression applied to images"
     )
 
     jpeg_quality: int = Field(
-        default=100, description="Quality of JPEG compression (1-100)"
+        default=60, description="Quality of JPEG compression (1-100)"
     )
 
     chunksize: int = Field(
-        default=100, description="Size of the chunks for data processing"
+        default=1000, description="Size of the chunks for data processing"
     )
 
     page_size: Optional[int] = Field(
@@ -145,7 +145,7 @@ class DataParams(BaseParams):
     )
 
     precision: Optional[str] = Field(
-        default="32", description="Training precision (PyTorch Lightning format)"
+        default="16", description="Training precision (PyTorch Lightning format)"
     )
 
     batches_ahead: int = Field(
@@ -204,7 +204,7 @@ class DataParams(BaseParams):
                 "int32": torch.int32,
                 "int64": torch.int64,
             }
-            return dtype_map.get(self.dtype, torch.float32)
+            return dtype_map.get(self.dtype, torch.float16)
 
         return None
 
@@ -504,6 +504,262 @@ class DataParams(BaseParams):
         kwargs.update(self.dataloader_kwargs)
 
         return kwargs
+
+    def log_configuration(
+        self, dataloader: Optional[Any] = None, dataloader_name: str = "DataLoader"
+    ) -> None:
+        """
+        Log dataloader configuration parameters in a structured, readable format.
+
+        Args:
+            dataloader: Optional dataloader instance to compare against pydantic config
+            dataloader_name: Name of the dataloader being created
+        """
+
+        # Track mismatches for summary logging
+        mismatches = []
+
+        # Extract relevant attributes from dataloader instance if provided
+        def get_dataloader_attr(attr_name: str) -> Any:
+            if dataloader is None:
+                return None
+
+            # Common dataloader attribute mappings
+            attr_mappings = {
+                "batch_size": ["batch_size"],
+                "num_workers": ["num_workers"],
+                "shuffle": ["shuffle"],
+                "drop_last": ["drop_last"],
+                "pin_memory": ["pin_memory"],
+                "persistent_workers": ["persistent_workers"],
+                "prefetch_factor": ["prefetch_factor"],
+                "use_distributed": ["distributed", "use_distributed"],
+                "dtype": ["dtype"],
+            }
+
+            possible_attrs = attr_mappings.get(attr_name, [attr_name])
+
+            for possible_attr in possible_attrs:
+                if hasattr(dataloader, possible_attr):
+                    return getattr(dataloader, possible_attr)
+
+            return None
+
+        # Get value with mismatch detection
+        def get_value(attr_name: str, default: str = "unset") -> Any:
+            # Get pydantic value
+            pydantic_value = None
+            if hasattr(self, attr_name):
+                pydantic_value = getattr(self, attr_name)
+                pydantic_value = pydantic_value if pydantic_value is not None else None
+
+            # Get dataloader value
+            dataloader_value = get_dataloader_attr(attr_name)
+
+            # Check for mismatch
+            if (
+                pydantic_value is not None
+                and dataloader_value is not None
+                and pydantic_value != dataloader_value
+            ):
+
+                # Format both values for display
+                def format_value(val):
+                    if hasattr(val, "__name__"):
+                        return val.__name__
+                    return str(val)
+
+                pydantic_display = format_value(pydantic_value)
+                dataloader_display = format_value(dataloader_value)
+
+                # Track mismatch for summary
+                mismatches.append(
+                    {
+                        "param": attr_name,
+                        "pydantic": pydantic_display,
+                        "dataloader": dataloader_display,
+                    }
+                )
+
+                return (
+                    f"{dataloader_display} (differs from pydantic: {pydantic_display})"
+                )
+
+            # Normal priority: dataloader first, then pydantic, then default
+            if dataloader_value is not None:
+                return dataloader_value
+            elif pydantic_value is not None:
+                return pydantic_value
+            else:
+                return default
+
+        logging.info(f"Creating {dataloader_name} with configuration:")
+
+        # Core Dataset Configuration
+        logging.info(f"  📊 Dataset Configuration:")
+        logging.info(f"     • Data name: {get_value('data_name')}")
+        logging.info(f"     • Data group: {get_value('data_group')}")
+        logging.info(f"     • Training mode: {get_value('train')}")
+        logging.info(f"     • Use FFCV: {get_value('use_ffcv')}")
+
+        # Batch & Worker Configuration
+        logging.info(f"  🔄 Batch & Worker Settings:")
+        logging.info(f"     • Batch size: {get_value('batch_size')}")
+        logging.info(f"     • Num workers: {get_value('num_workers')}")
+        logging.info(f"     • Persistent workers: {get_value('persistent_workers')}")
+        logging.info(f"     • Drop last: {get_value('drop_last')}")
+        logging.info(f"     • Shuffle: {get_value('shuffle')}")
+
+        # Data Processing
+        logging.info(f"  🎨 Data Processing:")
+        logging.info(f"     • Resolution: {get_value('resolution')}")
+        logging.info(f"     • Data transform: {get_value('data_transform')}")
+        logging.info(f"     • Target transform: {get_value('target_transform')}")
+        logging.info(f"     • Normalize: {get_value('normalize')}")
+        logging.info(f"     • Train ratio: {get_value('train_ratio')}")
+
+        # Temporal Parameters
+        logging.info(f"  ⏱️  Temporal Settings:")
+        logging.info(f"     • Data timesteps: {get_value('data_timesteps')}")
+        logging.info(f"     • Non-input value: {get_value('non_input_value')}")
+        logging.info(f"     • Non-label index: {get_value('non_label_index')}")
+
+        # FFCV-Specific Settings (only show if using FFCV)
+        use_ffcv = get_value("use_ffcv")
+        if (
+            use_ffcv
+            and use_ffcv != "unset"
+            and str(use_ffcv).lower() not in ["false", "0"]
+        ):
+            logging.info(f"  🚀 FFCV Optimization:")
+            logging.info(f"     • Encoding: {get_value('encoding')}")
+            logging.info(f"     • Writer mode: {get_value('writer_mode')}")
+            logging.info(f"     • Max resolution: {get_value('max_resolution')}")
+            logging.info(
+                f"     • Compress probability: {get_value('compress_probability')}"
+            )
+            logging.info(f"     • JPEG quality: {get_value('jpeg_quality')}")
+            logging.info(f"     • Batches ahead: {get_value('batches_ahead')}")
+            logging.info(f"     • Order: {get_value('order')}")
+            logging.info(f"     • OS cache: {get_value('os_cache')}")
+            page_size_val = get_value("page_size")
+            if (
+                isinstance(page_size_val, str)
+                and "differs from pydantic" in page_size_val
+            ):
+                logging.info(f"     • Page size: {page_size_val}")
+            else:
+                logging.info(
+                    f"     • Page size: {page_size_val}{' bytes' if page_size_val != 'unset' and page_size_val else ''}"
+                )
+            chunk_val = get_value("chunksize")
+            if isinstance(chunk_val, str) and "differs from pydantic" in chunk_val:
+                logging.info(f"     • Chunk size: {chunk_val}")
+            else:
+                logging.info(
+                    f"     • Chunk size: {chunk_val}{' items' if chunk_val != 'unset' and chunk_val else ''}"
+                )
+
+        # Advanced Settings
+        logging.info(f"  ⚙️  Advanced Settings:")
+        dtype_val = get_value("dtype")
+        logging.info(f"     • Data type: {dtype_val}")
+        logging.info(f"     • Precision: {get_value('precision')}")
+        logging.info(f"     • Use distributed: {get_value('use_distributed')}")
+        logging.info(f"     • Pin memory: {get_value('pin_memory')}")
+        cache_val = get_value("cache_size")
+        if isinstance(cache_val, str) and "differs from pydantic" in cache_val:
+            logging.info(f"     • Cache size: {cache_val}")
+        else:
+            logging.info(
+                f"     • Cache size: {cache_val}{' bytes' if cache_val != 'unset' and cache_val else ''}"
+            )
+        logging.info(f"     • Prefetch factor: {get_value('prefetch_factor')}")
+
+        # Collect custom parameters
+        standard_params = {
+            "data_name",
+            "data_group",
+            "train",
+            "use_ffcv",
+            "batch_size",
+            "num_workers",
+            "persistent_workers",
+            "drop_last",
+            "shuffle",
+            "resolution",
+            "data_transform",
+            "target_transform",
+            "normalize",
+            "train_ratio",
+            "data_timesteps",
+            "non_input_value",
+            "non_label_index",
+            "encoding",
+            "writer_mode",
+            "max_resolution",
+            "compress_probability",
+            "jpeg_quality",
+            "batches_ahead",
+            "order",
+            "os_cache",
+            "page_size",
+            "chunksize",
+            "dtype",
+            "precision",
+            "use_distributed",
+            "pin_memory",
+            "cache_size",
+            "prefetch_factor",
+        }
+
+        # Get custom parameters from pydantic instance
+        custom_params = {}
+
+        # Add pydantic extra fields
+        if hasattr(self, "__pydantic_extra__"):
+            custom_params.update(self.__pydantic_extra__)
+
+        # Add dataloader_kwargs from pydantic instance
+        if hasattr(self, "dataloader_kwargs") and self.dataloader_kwargs:
+            custom_params.update(self.dataloader_kwargs)
+
+        # Add any additional attributes from dataloader instance
+        if dataloader is not None:
+            for attr in dir(dataloader):
+                if (
+                    not attr.startswith("_")
+                    and attr not in standard_params
+                    and not callable(getattr(dataloader, attr, None))
+                ):
+                    try:
+                        value = getattr(dataloader, attr)
+                        # Only include simple types
+                        if isinstance(value, (str, int, float, bool, list, tuple)):
+                            custom_params[f"dataloader_{attr}"] = value
+                    except:
+                        pass  # Skip attributes that can't be accessed
+
+        # Remove any None values from custom params
+        custom_params = {k: v for k, v in custom_params.items() if v is not None}
+
+        if custom_params:
+            logging.info(f"  🔧 Custom Parameters:")
+            for key, value in custom_params.items():
+                # Handle torch.dtype display in custom params too
+                if hasattr(value, "__name__"):
+                    display_value = value.__name__
+                else:
+                    display_value = value
+                logging.info(f"     • {key}: {display_value}")
+
+        # Log summary of mismatches if any occurred
+        if mismatches:
+            logging.warning(f"  ⚠️  Configuration Mismatches Detected:")
+            for mismatch in mismatches:
+                logging.warning(
+                    f"     • {mismatch['param']}: dataloader={mismatch['dataloader']} vs pydantic={mismatch['pydantic']}"
+                )
 
 
 # === Usage Examples ===

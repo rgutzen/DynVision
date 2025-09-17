@@ -112,7 +112,7 @@ def get_ffcv_dataloader(
     resolution: int = 224,
     drop_last: bool = True,
     dtype: Optional[torch.dtype] = torch.float16,
-    batches_ahead: int = 3,
+    batches_ahead: int = 2,
     train: bool = True,
     verbose: bool = False,
     device: Optional[torch.device] = None,
@@ -136,7 +136,7 @@ def get_ffcv_dataloader(
 
     target_transform = get_target_transform(target_transform) or []
 
-    if train:    
+    if train:
         data_transform = get_data_transform(data_transform) or []
     else:
         encoding = "image"

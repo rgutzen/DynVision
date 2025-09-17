@@ -15,17 +15,34 @@ class DtypeDeviceCoordinator:
     Uses auto-discovery to build coordination networks for modules with persistent state.
     """
 
+    dtype_map = {
+        "bf16": torch.bfloat16,
+        "bf16-mixed": torch.bfloat16,
+        "16": torch.float16,
+        "16-mixed": torch.float16,
+        "32": torch.float32,
+        "32-true": torch.float32,
+        "64": torch.float64,
+        "64-true": torch.float64,
+    }
+
     def __init__(self, target_dtype: Optional[torch.dtype] = None):
         self.is_root_node = False
         self.child_nodes: List["DtypeDeviceCoordinator"] = []
         self.parent_node: Optional["DtypeDeviceCoordinator"] = None
-        self._target_dtype: Optional[torch.dtype] = target_dtype
+        self._target_dtype: Optional[torch.dtype] = self.map_dtype(target_dtype)
 
         # Let lightning handle coordination in distributed setups
         if os.environ.get("WORLD_SIZE", "1") == "1":
             self._coordination_built = False
         else:
             self._coordination_built = True
+
+    def map_dtype(self, dtype: Optional[str]) -> torch.dtype:
+        if dtype is None:
+            return None
+        dtype = dtype.replace("torch.", "").replace("float", "").lower()
+        return self.dtype_map.get(dtype)
 
     def connect_child_node(self, child: "DtypeDeviceCoordinator") -> None:
         """Connect a child node to this coordinator."""
@@ -108,18 +125,7 @@ class DtypeDeviceCoordinator:
         try:
             precision = str(self.trainer.precision)
 
-            dtype_map = {
-                "bf16": torch.bfloat16,
-                "bf16-mixed": torch.bfloat16,
-                "16": torch.float16,
-                "16-mixed": torch.float16,
-                "32": torch.float32,
-                "32-true": torch.float32,
-                "64": torch.float64,
-                "64-true": torch.float64,
-            }
-
-            target_dtype = dtype_map.get(precision, torch.float32)
+            target_dtype = self.dtype_map.get(precision, torch.float16)
             logger.info(
                 f"Determined target dtype from Lightning trainer: {target_dtype} (precision: {precision})"
             )
@@ -134,11 +140,11 @@ class DtypeDeviceCoordinator:
             try:
                 return list(self.parameters())[-1].dtype
             except Exception as e:
-                logger.error(
-                    f"Error determining dtype from parameters: {e}. Defaulting to torch.float32."
+                logger.warning(
+                    f"Error determining dtype from parameters: {e}. Defaulting to torch.float16."
                 )
                 pass
-        return torch.float32
+        return torch.float16
 
     def create_aligned_tensor(self, *args, **kwargs) -> torch.Tensor:
         """Create tensor with correct dtype and device for this coordination network."""

@@ -360,8 +360,11 @@ def get_effective_dtype_from_precision(precision: str) -> str:
         "64": "float64",
     }
 
-    return precision_to_dtype.get(precision, "float32")
+    return precision_to_dtype.get(precision, "float16")
 
-def calculate_conv_out_dim(in_dim: int, kernel_size: int, padding: int, stride: int = 1) -> int:
+
+def calculate_conv_out_dim(
+    in_dim: int, kernel_size: int, padding: int, stride: int = 1
+) -> int:
     out_dim = int((in_dim + 2 * padding - kernel_size) / stride) + 1
     return out_dim

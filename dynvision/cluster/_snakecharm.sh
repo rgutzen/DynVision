@@ -5,6 +5,7 @@ source ~/.bashrc
 source ~/.bash_profile  # make sure custom commands are available
 module load anaconda3/2020.07  # conda needs to be available
 source activate snake-env  # environment that contains snakemake
+source ./clean_env_vars.sh
 
 # Set paths
 current_dir=$(pwd)
@@ -25,6 +26,7 @@ cd "$workflow_dir"
 echo -n 'running workflow with snakemake version: '
 snakemake --version
     
+
 # Process command line arguments
 args=("$@")  # Start with all original arguments
 
@@ -41,6 +43,7 @@ echo "snakemake ${args[@]} --profile $current_dir/profiles/slurm"
 echo ""
 
 snakemake --unlock --cores=1
+# snakemake --dry-run --printshellcmds "${args[@]}" --profile $current_dir/profiles/slurm --latency-wait 30
 snakemake "${args[@]}" --profile $current_dir/profiles/slurm --latency-wait 30
 
 echo -e '\n Snakecharm ended!'

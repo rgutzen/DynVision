@@ -117,15 +117,18 @@ class TrainerParams(BaseParams):
 
     # Checkpoint Configuration
     save_top_k: int = Field(
-        default=1, description="Number of best checkpoints to save"
+        default=2, description="Number of best checkpoints to save"
     )
     monitor_checkpoint: str = Field(
-        default="val_loss", description="Metric to monitor for checkpoint saving"
+        default="train_loss", description="Metric to monitor for checkpoint saving"
     )
     checkpoint_mode: str = Field(
         default="min", description="Checkpoint mode (min, max)"
     )
     save_last: bool = Field(default=True, description="Save the last checkpoint")
+    every_n_epochs: int = Field(
+        default=20, description="Save a checkpoint every n epochs"
+    )
 
     model_config = ConfigDict(
         extra="allow",
@@ -418,6 +421,7 @@ class TrainerParams(BaseParams):
     def _validate_fsdp_kwargs(self):
         """Validate FSDP-specific kwargs."""
         valid_fsdp_kwargs = [
+            "state_dict_type",
             "sharding_strategy",
             "cpu_offload",
             "mixed_precision",
@@ -584,6 +588,8 @@ class TrainerParams(BaseParams):
             "mode": self.checkpoint_mode,
             "save_last": self.save_last,
             "auto_insert_metric_name": False,
+            "save_on_train_epoch_end": True,
+            "every_n_epochs": self.every_n_epochs,
         }
 
 

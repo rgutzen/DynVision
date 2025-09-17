@@ -209,14 +209,14 @@ class TrainingParams(BaseParams):
         eps = 1e-6
 
         # Log scaling information without modifying the actual parameters
-        if abs(self.local_batch_size - self.data.batch_size) > eps:
-            logger.info(
-                f"Distributed training detected: "
-                f"batch_size ({self.data.batch_size}) scaled to "
-                f"local batch_size ({self.local_batch_size}) "
-                f"according to world size ({self.trainer.world_size})"
-            )
-            self.data.update_field("batch_size", self.local_batch_size)
+        # if abs(self.local_batch_size - self.data.batch_size) > eps:
+        #     logger.info(
+        #         f"Distributed training detected: "
+        #         f"batch_size ({self.data.batch_size}) scaled to "
+        #         f"local batch_size ({self.local_batch_size}) "
+        #         f"according to world size ({self.trainer.world_size})"
+        #     )
+        #     self.data.update_field("batch_size", self.local_batch_size)
 
         if abs(self.model.learning_rate - self.effective_learning_rate) > eps:
             logger.info(

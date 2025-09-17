@@ -4,7 +4,7 @@
 executor: slurm
 
 # CHANGE WITH CARE
-restart-times: "1"
+restart-times: "0"
 max-jobs-per-second: "30"
 max-status-checks-per-second: "2"
 local-cores: 2
@@ -23,13 +23,13 @@ slurm-keep-successful-logs: true
 slurm-delete-logfiles-older-than: 5 # specify the number of days
 
 default-resources:
-  runtime: 60  # 1 hour
+  runtime: 30  # 1 hour
   mem_mb: 16000  # 16 GB
   disk_mb: 100000  # 100 GB
   cpus_per_task: 16
   cpu: 16
 
-# dynamic resources keywords
+# dynamic resources keywords:
 # max(1.5 * input.size_mb, 100)
 # attempt * 200
 
@@ -43,31 +43,34 @@ set-resources:
 
   test_model:
     mem: 80G # use 80GB of memory
+    # disk: 200G  # 100 GB
     runtime: 60 # run for 2 hours
     gpu: 1 # use one GPU
     cpus_per_task: 16 # use 16 cores
+    # constraint: "a100|h100"
     slurm_extra: "'--gres=gpu:1'"
 
   train_model:
     mem: 80G # use 80GB of memory
-    runtime: 360 # run for 6 hours
+    runtime: 480 # run for 8 hours
     # mem_mb_per_cpu: 8000  # 80GB total process memory
-    gpu: 1 # use one GPU
-    cpu: 32
-    cpus_per_task: 32 # use 32 cores
-    constraint: "a100|h100" # limit to fast GPUs
+    ntasks: 1 # use one GPU
+    # cpu: 32
+    cpus_per_gpu: 16 # use 16 cores
+    # constraint: "a100|h100" # limit to fast GPUs
+    constraint: "a100" # limit to fast GPUs
     slurm_extra: "'--gres=gpu:1'"
 
   train_model_distributed:
-    mem: 80G # use 120GB of memory
-    runtime: 720        # 12 hours
-    # mem_mb_per_cpu: 16000  # 80GB total process memory
-    cpus_per_gpu: 16    # 64 CPU cores
-    gpus_per_node: 4    # Use 4 GPUs per node
-    ntasks: 1           # Single task
-    nodes: 1            # Run on a single node
-    constraint: "a100|h100" # limit to fast GPUs
-    slurm_extra: "'--gres=gpu:4'"
+    mem: 120G               
+    disk: 400G  # 100 GB
+    runtime: 6000             # 100 hours
+    cpus_per_gpu: 16          # This sets --cpus-per-task automatically
+    # ntasks: 4               # This sets --ntasks-per-node automatically
+    # ntasks_per_node: 4      # This sets --ntasks-per-node automatically
+    nodes: 1                
+    constraint: "a100|h100"
+    slurm_extra: "'--ntasks-per-node=4' '--gres=gpu:4'"
 
   symlink_data_subsets:
     mem: 4000 # use 4GB of memory
@@ -96,11 +99,6 @@ set-resources:
   plot_adaption:
     mem: 32G # use 64GB of memory
     runtime: 10 # run for 1 hour
-    cpus_per_task: 8
-
-  temp:
-    mem: 32G # use 64GB of memory
-    runtime: 5 # run for 1 hour
     cpus_per_task: 8
 
   checkpoint_to_statedict:

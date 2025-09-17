@@ -19,72 +19,6 @@ import logging
 import wandb
 import os
 import sys
-
-
-def should_clean_distributed_env():
-    """
-    Robust detection of distributed training using standard PyTorch patterns.
-
-    Returns True if we're definitely in distributed mode, False otherwise.
-    """
-
-    devices = os.environ.get("CUDA_VISIBLE_DEVICES")
-
-    if isinstance(devices, list):
-        devices = len(devices)
-    elif isinstance(devices, str):
-        # Handle comma-separated devices
-        devices = devices.split(",")
-        devices = len(devices)
-    else:
-        pass
-
-    if devices is None or int(devices) <= 1:
-        return True
-
-    return False
-
-
-def clean_distributed_env():
-    """Clean distributed training environment variables for non-distributed training."""
-    if not should_clean_distributed_env():
-        return
-
-    print("Non-distributed mode - cleaning problematic environment variables")
-
-    distributed_vars = [
-        "RANK",
-        "LOCAL_RANK",
-        "WORLD_SIZE",
-        "LOCAL_WORLD_SIZE",
-        "MASTER_ADDR",
-        "MASTER_PORT",
-        "NODE_RANK",
-        "GROUP_RANK",
-        "SLURM_PROCID",
-        "SLURM_LOCALID",
-        "SLURM_NTASKS",
-        "SLURM_NNODES",
-    ]
-
-    cleaned_vars = []
-    for var in distributed_vars:
-        if var in os.environ:
-            # Remove empty strings or problematic values
-            if os.environ[var] in ["", "0"] or not os.environ[var].strip():
-                del os.environ[var]
-                cleaned_vars.append(var)
-
-    if cleaned_vars:
-        print(f"Cleaned environment variables: {cleaned_vars}")
-
-    # Set single-device mode explicitly for non-distributed training
-    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
-
-
-# Clean environment conditionally before ANY imports
-clean_distributed_env()
-
 import multiprocessing
 from contextlib import contextmanager
 from datetime import datetime
@@ -191,7 +125,6 @@ class DataModule(pl.LightningDataModule):
         base_config = self.config.data.get_dataloader_kwargs()
         return base_config | {
             "distributed": False,
-            "batch_size": min(base_config.get("batch_size", 32), 32),
             "num_workers": min(base_config.get("num_workers", 4), 1),
             "shuffle": False,  # No need to shuffle for preview
         }
@@ -216,7 +149,12 @@ class DataModule(pl.LightningDataModule):
         )
         self.val_loader = self._create_ffcv_loader(
             self.config.dataset_val,
-            config | {"train": False},
+            config
+            | {
+                "train": False,
+                "num_workers": max(config["num_workers"] // 4, 1),
+                "batch_size": max(config["batch_size"] // 4, 32),
+            },
         )
 
     def _create_ffcv_loader(
@@ -313,7 +251,7 @@ class CallbackManager:
         checkpoint_kwargs.update(
             {
                 "dirpath": checkpoint_path.parent,
-                "filename": checkpoint_path.name + "-{epoch:02d}-{val_loss:.2f}",
+                "filename": checkpoint_path.name + "-{epoch:02d}-{train_loss:.2f}",
             }
         )
 
@@ -572,7 +510,7 @@ class TrainingOrchestrator:
                 existing_checkpoint = self._find_existing_checkpoint(checkpoint_path)
 
                 # Hack to log histograms
-                wandb.init()
+                wandb.init(settings=wandb.Settings(init_timeout=120))
 
                 # Train model using DataModule (handles distributed setup properly)
                 logger.info("Starting training...")
@@ -594,6 +532,13 @@ class TrainingOrchestrator:
                 import traceback
 
                 traceback.print_exc()
+
+                # Attempt to save checkpoint on failure
+                trainer.save_checkpoint(checkpoint_path)
+                logger.info(
+                    f"Checkpoint before training failure saved to {checkpoint_path}"
+                )
+
                 return 1
 
     def _find_existing_checkpoint(self, checkpoint_path: Path) -> Optional[Path]:

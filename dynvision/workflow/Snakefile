@@ -4,9 +4,69 @@ include: "snake_runtime.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 
-setup_logger()
-
 rule all:
     input:
         expand(project_paths.reports / 'experiment_{experiment}.done',
             experiment = config.experiment)
+
+SEED = "0026"
+
+rule lossrt:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "response.png",
+        seed=SEED,
+        experiment=['response'])
+
+# rule time_params:
+#     input:
+
+rule imagenet:
+    input:
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=14+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenet_trained.pt",
+        seed="0030",
+        )
+
+rule feedback:
+    input:
+        # expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_{seed}_imagenette_trained_all" / "response.png",
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=50+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=*_{seed}_imagenette_trained_all" / "response.png",
+        seed="0026",
+        experiment=["response", 'responseffonly'])
+
+rule unrolling:
+    input:
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=20+tfb=14+skip=true+feedback=true_{seed}_imagenette_trained.pt",
+        seed="0029"),
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=true_{seed}_imagenette_trained.pt",
+        seed="0029")
+
+rule recurrence:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "dynamics.png",
+        seed=SEED,
+        experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly'])
+
+rule rctarget:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "response.png",
+        seed=SEED,
+        experiment=['response', 'responseffonly'])
+
+rule timeparams:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=4+skip=true_{seed}_imagenette_trained_all" / "response.png",
+        seed=SEED,
+        experiment=["stability", 'duration', 'contrast', 'interval', 'response', 'responseffonly']),
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=*+tsk=4+skip=true_{seed}_imagenette_trained_all" / "response.png",
+        seed=SEED,
+        experiment=["stability", 'duration', 'contrast', 'interval', 'response', 'responseffonly']),
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=*+skip=true_{seed}_imagenette_trained_all" / "response.png",
+        seed=SEED,
+        experiment=["response"]),
+
+rule checkpoint:
+    input:
+        a = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=20+rctype=depthpointwise+dt=2+tau=9+tff=0+trc=6+skip=true_0026_imagenette_trained.ckpt2pt",
+        b = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=true_0026_imagenette_trained.ckpt2pt",
+        c = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=false_0026_imagenette_trained.ckpt2pt",
+        d = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=true+fbmode=multiplicative_0026_imagenette_trained.ckpt2pt",

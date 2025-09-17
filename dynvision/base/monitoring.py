@@ -108,6 +108,19 @@ class Monitoring:
             data_attr="grad.data",
             raise_error=raise_error,
         )
+        connection_issues = []
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                connection_issues.append(f"Not trainable: {name}")
+            elif param.grad is None:
+                connection_issues.append(f"No gradient: {name}")
+            elif param.grad.abs().sum() == 0:
+                connection_issues.append(f"Zero gradient: {name}")
+
+        if connection_issues:
+            logger.warning("Connection gradient issues:")
+            for issue in connection_issues:
+                logger.warning(f"  {issue}")
 
     def _check_weights(self, raise_error: bool = False) -> None:
         self._check_tensors(
@@ -188,7 +201,7 @@ class Monitoring:
                 metrics = [m for m in metrics if m != "hist"]
             else:
                 return
-        
+
         for name, param in self.named_parameters():
             if log_only_trainable and not param.requires_grad:
                 continue
@@ -213,7 +226,12 @@ class Monitoring:
                     else:
                         logger.debug(f"Metric {metric} not available!")
             else:
-                self.log(f"{section}/{name}", param.detach().data, sync_dist=True, rank_zero_only=True)
+                self.log(
+                    f"{section}/{name}",
+                    param.detach().data,
+                    sync_dist=True,
+                    rank_zero_only=True,
+                )
 
     # System monitoring
     ###################
@@ -414,6 +432,10 @@ class MonitoringMixin(Monitoring, LightningModule):
         if torch.isnan(loss) or torch.isinf(loss):
             logger.warning(
                 f"⚠️  Batch {batch_idx}: Loss is {'NaN' if torch.isnan(loss) else 'Inf'}"
+            )
+        elif batch_idx == 0:
+            logger.info(
+                f"\t Batch {batch_idx}: Loss {loss.item() if hasattr(loss, 'item') else loss}"
             )
 
         # Check for extremely high loss

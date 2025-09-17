@@ -6,11 +6,12 @@ experiment_config:
     pattern: ['01110', '11100', '1']
     dsteps: [20]
     dt: [2]
-    tau: [7, 9, 11, 13]
+    tau: [3, 9, 15]
     tff: [0, 10]
-    trc: [4, 6, 8, 10]
-    tsk: [0, 2, 4, 6]
-    lossrt: [0, 20, 60, 90, 98]
+    trc: [2, 6, 10]
+    tsk: [0, 4, 8]
+    lossrt: [0, 5, 10, 15, 19]
+    feedback: ['add','false', 'mul']
     
   response:
     status: trained
@@ -18,7 +19,7 @@ experiment_config:
     data_loader: StimulusDuration
     data_args:
       dsteps: 50
-      intro: 1
+      intro: 0
       stim: [30]
 
   responseffonly:
@@ -27,8 +28,9 @@ experiment_config:
     data_loader: StimulusDuration
     data_args:
       dsteps: 50
-      intro: 1
+      intro: 0
       stim: [30]
+      ffonly: true
 
   stability:
     status: trained
@@ -45,7 +47,7 @@ experiment_config:
     data_args:
       dsteps: 50
       intro: 0
-      stim: [2,4,6,8,10,20]
+      stim: [1,2,4,6,10,20]
 
   contrast:
     status: trained
@@ -55,7 +57,7 @@ experiment_config:
       dsteps: 50
       intro: 0
       stim: 30
-      contrast: [0.2, 0.4, 0.6, 0.8, 1.0]  
+      contrast: [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]  
 
   interval:
     status: trained
@@ -63,6 +65,6 @@ experiment_config:
     data_loader: StimulusInterval
     data_args:
       dsteps: 50
-      intro: 10
-      stim: 10
-      interval: [1, 2, 4, 10, 16]
+      intro: 0
+      stim: 6
+      interval: [1, 2, 4, 8, 16]

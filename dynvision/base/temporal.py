@@ -40,6 +40,8 @@ class TemporalBase(nn.Module):
         t_feedback: Optional[float] = None,
         t_skip: Optional[float] = None,
         data_presentation_pattern: Union[List[int], str] = [1],
+        non_label_index: int = -1,
+        non_input_value: float = 0.0,
         # Architecture configuration
         classifier_name: str = "classifier",
         dynamics_solver: str = "euler",
@@ -65,6 +67,8 @@ class TemporalBase(nn.Module):
         self.recurrence_type = str(recurrence_type)
         self.recurrence_target = str(recurrence_target)
         self.data_presentation_pattern = data_presentation_pattern
+        self.non_label_index = int(non_label_index)
+        self.non_input_value = float(non_input_value)
 
         # Process feedforward delay
         self.delay_feedforward = int(t_feedforward / dt)
@@ -196,9 +200,6 @@ class TemporalBase(nn.Module):
         responses = {}
 
         batch_size, n_channels, y_dim, x_dim = x.shape
-
-        # if x.max() < 0 and x.min() == x.max():  # ToDO: revaluate null input
-        #     x = None
 
         if hasattr(self, "input_adaption"):
             x = self.input_adaption(x)
@@ -537,6 +538,7 @@ class TemporalBase(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         inputs, label_indices, *extra = batch
+        batch_size, n_timesteps, _, _, _ = inputs.shape
 
         inputs = _adjust_data_dimensions(inputs)
         label_indices = _adjust_label_dimensions(label_indices)
@@ -545,24 +547,27 @@ class TemporalBase(nn.Module):
             # add 0s at the end as inputs for residual timesteps
             new_shape = (
                 inputs.size(0),
-                self.n_timesteps + self.n_residual_timesteps,
+                n_timesteps + self.n_residual_timesteps,
                 *inputs.shape[2:],
             )
-            new_inputs = torch.zeros(
-                new_shape, device=inputs.device, dtype=inputs.dtype
+            new_inputs = torch.full(
+                new_shape,
+                self.non_input_value,
+                device=inputs.device,
+                dtype=inputs.dtype,
             )
-            new_inputs[:, : self.n_timesteps, ...] = inputs
+            new_inputs[:, :n_timesteps, ...] = inputs
 
             # add voidid buffer labels at the beginning for residual timesteps
 
-            new_shape = (inputs.size(0), self.n_timesteps + self.n_residual_timesteps)
+            new_shape = (inputs.size(0), n_timesteps + self.n_residual_timesteps)
             new_label_indices = torch.full(
                 new_shape,
                 self.non_label_index,
                 device=label_indices.device,
                 dtype=label_indices.dtype,
             )
-            new_label_indices[:, -self.n_timesteps :] = label_indices
+            new_label_indices[:, :n_timesteps] = label_indices
 
             batch = (new_inputs, new_label_indices, *extra)
 

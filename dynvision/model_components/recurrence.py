@@ -9,7 +9,8 @@ from dynvision.model_components.topographic_recurrence import (
     LocalLateralConnection,
     LocalSeparableConnection,
 )
-from dynvision.model_components.base import DtypeDeviceCoordinatorMixin
+
+# from dynvision.base import DtypeDeviceCoordinatorMixin
 from dynvision.model_components.integration_strategy import setup_integration_strategy
 from dynvision.utils import apply_parametrization, str_to_bool, calculate_conv_out_dim
 from pytorch_lightning import LightningModule
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 
-class RecurrenceBase(LightningModule, DtypeDeviceCoordinatorMixin):
+class RecurrenceBase(LightningModule):
     """
     Base class for recurrent connections providing common parameter initialization
     and argument validation.
@@ -350,7 +351,7 @@ class SelfConnection(RecurrenceBase):
 
     def __init__(
         self,
-        fixed_weight: Optional[float] = None,
+        in_channels: int,
         max_weight_init: float = 0.2,
         bias: bool = True,
         **kwargs,
@@ -366,33 +367,22 @@ class SelfConnection(RecurrenceBase):
         super().__init__(max_weight_init=max_weight_init, **kwargs)
 
         # Store initialization arguments as attributes
-        self.fixed_weight = fixed_weight
-        self.bias_enabled = bias
-        self.requires_grad = fixed_weight is None
-
+        self.bias = bias
+        self.in_channels = in_channels
         self._define_architecture()
 
     def _define_architecture(self) -> None:
-        """Define the architecture of the self connection."""
-        self.weight = nn.Parameter(torch.Tensor([1]), requires_grad=self.requires_grad)
-        if self.bias_enabled:
-            self.bias = nn.Parameter(torch.Tensor([0]), requires_grad=True)
+        """Define the architecture of the self connection using Conv2d."""
+        self.conv = nn.Conv2d(
+            in_channels=self.in_channels,
+            out_channels=self.in_channels,
+            kernel_size=1,
+            groups=self.in_channels,
+            bias=self.bias,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if hasattr(self, "bias"):
-            return x * self.weight + self.bias
-        return x * self.weight
-
-    def _init_parameters(self) -> None:
-        """
-        Initialize parameters for the self-connection.
-        """
-        if self.requires_grad:
-            nn.init.uniform_(self.weight, a=-self.max_weight_init, b=0)
-        else:
-            self.weight.data.fill_(self.fixed_weight)
-        if hasattr(self, "bias"):
-            nn.init.constant_(self.bias, 0)
+        return self.conv(x)
 
 
 class InputAdaption(LightningModule):
@@ -680,6 +670,7 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
                 nn.init.constant_(conv_layer.bias, 0)
 
         init_conv_layer(self.conv)
+
         if self.mid_channels is not None:
             init_conv_layer(self.conv2)
 

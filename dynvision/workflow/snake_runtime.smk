@@ -32,7 +32,7 @@ rule init_model:
             / 'train_all' \
             / 'folder.link'
     params:
-        config_path = CONFIGS,
+        config_path = lambda w: process_configs(config, wildcards=w),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -47,14 +47,18 @@ rule init_model:
         project_paths.benchmarks / 'init_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
         """
+        cp {params.config_path:q} {output.model_state:q}.config.yaml
+
         {params.execution_cmd} \
-            --config_path {params.config_path:q} \
+            --config_path {output.model_state:q}.config.yaml \
             --model_name {wildcards.model_name} \
             --dataset {input.dataset:q} \
             --data_name {wildcards.data_name} \
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
-            {params.model_arguments} 
+            {params.model_arguments}
+        
+        rm {params.config_path:q}
         """
 
 rule train_model:
@@ -70,7 +74,7 @@ rule train_model:
         Trained model state dict
 
     Parameters:
-        config_path: Path to configuration file
+        config_path: Path to configuration file with wildcards and modes applied
         epochs: Number of training epochs
         batch_size: Training batch size
         model_arguments: Model-specific arguments
@@ -80,7 +84,6 @@ rule train_model:
         check_val_every_n_epoch: Validation frequency
         accumulate_grad_batches: Gradient accumulation steps
         precision: Training precision
-        store_responses: Number of responses to store
         profiler: Training profiler configuration
         enable_progress_bar: Whether to show progress bar
         execution_cmd: Complete execution command with conditional wrappers
@@ -103,7 +106,7 @@ rule train_model:
             / 'val.beton',
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
-        config_path = CONFIGS,
+        config_path = lambda w: process_configs(config, wildcards=w),
         data_group = "all",
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         resolution = lambda w: config.data_resolution[w.data_name],
@@ -124,8 +127,10 @@ rule train_model:
         project_paths.benchmarks / 'train_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
         """
+        cp {params.config_path:q} {output.model_state:q}.config.yaml
+
         {params.execution_cmd} \
-            --config_path {params.config_path:q} \
+            --config_path {output.model_state:q}.config.yaml \
             --input_model_state {input.model_state:q} \
             --output_model_state {output.model_state:q} \
             --model_name {wildcards.model_name} \
@@ -137,7 +142,9 @@ rule train_model:
             --seed {wildcards.seed} \
             --resolution {params.resolution} \
             --normalize {params.normalize:q} \
-            {params.model_arguments} 
+            {params.model_arguments}
+
+        rm {params.config_path:q}
         """
 
 use rule train_model as train_model_distributed with:
@@ -160,13 +167,12 @@ rule test_model:
         results: Evaluation results
 
     Parameters:
-        config_path: Path to configuration file
+        config_path: Path to configuration file with wildcards and modes applied
         batch_size: Evaluation batch size
         data_group: Data grouping configuration
         model_arguments: Model-specific arguments
         data_arguments: Data-specific arguments
         loss: Loss function configuration
-        store_responses: Number of responses to store
         enable_progress_bar: Whether to show progress bar
     """
     input:
@@ -179,7 +185,7 @@ rule test_model:
             / 'folder.link',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
-        config_path = CONFIGS,
+        config_path = lambda w: process_configs(config, wildcards=w),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
         normalize = lambda w: json.dumps((
@@ -203,8 +209,10 @@ rule test_model:
         project_paths.benchmarks / 'test_model_{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.txt'
     shell:
         """
+        cp {params.config_path:q} {output.results:q}.config.yaml
+
         {params.execution_cmd} \
-            --config_path {params.config_path:q} \
+            --config_path {output.results:q}.config.yaml \
             --input_model_state {input.model_state:q} \
             --output_results {output.results:q} \
             --output_responses {output.responses:q} \
@@ -218,6 +226,8 @@ rule test_model:
             --enable_progress_bar {params.enable_progress_bar} \
             {params.model_arguments} \
             {params.data_arguments}
+
+        rm {params.config_path:q}
         """
 
 logger.info("Model workflow initialized")

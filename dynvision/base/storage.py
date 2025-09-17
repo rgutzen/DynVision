@@ -1,8 +1,8 @@
 """
-Refined data buffer for DynVision PyTorch Lightning workflows.
+Enhanced data buffer for DynVision PyTorch Lightning workflows.
 
 Provides efficient storage for neural network responses and records with
-clear indexing behavior, thread safety, and efficient tensor operations.
+flexible strategy alignment, unlimited storage option, and improved memory management.
 """
 
 import logging
@@ -77,10 +77,27 @@ class CyclicStrategy(SamplingStrategy):
             return max(0, min(requested_index, buffer_size - 1))
         else:
             # Buffer full - circular indexing
-            # Negative indexing: -1 is newest, -2 is second newest, etc.
-            # Positive indexing: 0 is oldest, 1 is second oldest, etc.
             physical_index = (self.head + requested_index) % max_size
             return physical_index
+
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for the most recent n_items."""
+        n_items = min(n_items, buffer_size)
+        if buffer_size < max_size:
+            # Buffer not full - take last n_items
+            return list(range(buffer_size - n_items, buffer_size))
+        else:
+            # Buffer full - take last n_items from circular buffer
+            indices = []
+            for i in range(n_items):
+                logical_idx = -(n_items - i)  # -n_items, -(n_items-1), ..., -1
+                physical_idx = self.get_logical_index(
+                    logical_idx, buffer_size, max_size
+                )
+                indices.append(physical_idx)
+            return indices
 
     def reset(self) -> None:
         self.head = 0
@@ -117,6 +134,52 @@ class FixedStrategy(SamplingStrategy):
         if requested_index < 0:
             requested_index = buffer_size + requested_index
         return max(0, min(requested_index, buffer_size - 1))
+
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for the most recent n_items."""
+        n_items = min(n_items, buffer_size)
+        return list(range(buffer_size - n_items, buffer_size))
+
+    def reset(self) -> None:
+        pass
+
+
+class UnlimitedStrategy(SamplingStrategy):
+    """
+    Unlimited storage strategy - stores all samples without size limit.
+
+    Indexing behavior:
+    - get(0): first item stored
+    - get(-1): last item stored
+    - get(-x): x-th from last item stored
+
+    Similar to fixed strategy but without size restrictions.
+    """
+
+    def should_store(self, buffer_size: int, total_seen: int, max_size: int) -> bool:
+        return True  # Always store
+
+    def get_storage_index(
+        self, buffer_size: int, total_seen: int, max_size: int
+    ) -> int | None:
+        return buffer_size  # Always append to end
+
+    def get_logical_index(
+        self, requested_index: int, buffer_size: int, max_size: int
+    ) -> int:
+        """Convert logical index to physical storage index."""
+        if requested_index < 0:
+            requested_index = buffer_size + requested_index
+        return max(0, min(requested_index, buffer_size - 1))
+
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for the most recent n_items."""
+        n_items = min(n_items, buffer_size)
+        return list(range(buffer_size - n_items, buffer_size))
 
     def reset(self) -> None:
         pass
@@ -165,28 +228,35 @@ class ReservoirStrategy(SamplingStrategy):
             requested_index = buffer_size + requested_index
         return max(0, min(requested_index, buffer_size - 1))
 
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for recent items (order not meaningful for reservoir)."""
+        n_items = min(n_items, buffer_size)
+        return list(range(min(n_items, buffer_size)))
+
     def reset(self) -> None:
         pass
 
 
 class DataBuffer:
     """
-    High-performance buffer for neural network data.
+    High-performance buffer for neural network data with flexible sizing.
 
     Thread Safety:
     - self._lock: Ensures thread-safe operations for multi-GPU distributed training
-    - When multiple processes access the buffer simultaneously, the lock prevents
-      data corruption and ensures consistent state updates
 
     Indexing Behavior:
     - Depends on the sampling strategy used
     - CyclicStrategy: Maintains temporal order (newest/oldest semantics)
     - FixedStrategy: Simple list-like indexing (predictable order)
+    - UnlimitedStrategy: Stores all data without size limit
     - ReservoirStrategy: Order not guaranteed (for statistical sampling)
 
     Memory Management:
     - Explicit cleanup to prevent memory leaks
     - Efficient tensor operations with minimal copying
+    - Support for unlimited growth when max_size < 0
     """
 
     __slots__ = [
@@ -201,6 +271,7 @@ class DataBuffer:
         "_total_seen",
         "_lock",
         "name",
+        "_unlimited",
     ]
 
     def __init__(
@@ -216,34 +287,41 @@ class DataBuffer:
         Initialize data buffer.
 
         Args:
-            max_size: Maximum number of samples to store
-            strategy: Sampling strategy ("cyclic", "fixed", "reservoir")
+            max_size: Maximum number of samples to store, or -1 for unlimited
+            strategy: Sampling strategy ("cyclic", "fixed", "reservoir", "unlimited")
             cpu_offload: Move data to CPU to save GPU memory
             detach_tensors: Detach tensors from computation graph
             thread_safe: Use thread-safe operations (important for distributed training)
             name: Buffer name for debugging
         """
-        self.max_size = max_size
-        self.strategy_name = strategy
+        # Handle unlimited storage
+        if max_size < 0 or strategy == "unlimited":
+            self._unlimited = True
+            self.max_size = -1
+            self.strategy_name = "unlimited"
+            self._storage: List[Any] = []
+        else:
+            self._unlimited = False
+            self.max_size = max_size
+            self.strategy_name = strategy
+            # Pre-allocate storage for efficiency
+            self._storage: List[Any] = [None] * max_size if max_size > 0 else []
+
         self.cpu_offload = cpu_offload
         self.detach_tensors = detach_tensors
         self.thread_safe = thread_safe
         self.name = name
 
-        # Pre-allocate storage for efficiency
-        self._storage: List[Any] = [None] * max_size if max_size > 0 else []
-        self._strategy = self._create_strategy(strategy)
+        self._strategy = self._create_strategy(self.strategy_name)
         self._size = 0
         self._total_seen = 0
 
         # Thread safety for distributed training
-        # This lock prevents race conditions when multiple GPU processes
-        # access the buffer simultaneously (e.g., in distributed validation)
         self._lock = threading.RLock() if thread_safe else None
 
         logger.debug(
-            f"Created {self.name}: max_size={max_size}, strategy={strategy}, "
-            f"thread_safe={thread_safe}"
+            f"Created {self.name}: max_size={max_size}, strategy={self.strategy_name}, "
+            f"thread_safe={thread_safe}, unlimited={self._unlimited}"
         )
 
     def _create_strategy(self, strategy: str) -> SamplingStrategy:
@@ -252,6 +330,7 @@ class DataBuffer:
             "cyclic": CyclicStrategy,
             "fixed": FixedStrategy,
             "reservoir": ReservoirStrategy,
+            "unlimited": UnlimitedStrategy,
         }
 
         if strategy not in strategies:
@@ -262,16 +341,24 @@ class DataBuffer:
         return strategies[strategy]()
 
     def _preprocess_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Preprocess tensor for storage."""
-        # Detach from computation graph to prevent memory leaks
+        """Enhanced preprocessing with immediate GPU memory release."""
+        # Detach from computation graph
         if self.detach_tensors and tensor.requires_grad:
             tensor = tensor.detach()
 
-        # Move to CPU if requested (saves GPU memory)
+        # Move to CPU if requested with immediate GPU cleanup
         if self.cpu_offload and tensor.device.type != "cpu":
-            tensor = tensor.cpu()
+            # Clone to CPU and immediately clear GPU reference
+            cpu_tensor = tensor.cpu()
 
-        # Ensure contiguous memory layout for efficiency
+            # Force immediate GPU memory release
+            del tensor
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            tensor = cpu_tensor
+
+        # Ensure contiguous memory layout
         if not tensor.is_contiguous():
             tensor = tensor.contiguous()
 
@@ -290,7 +377,10 @@ class DataBuffer:
 
     def should_store(self) -> bool:
         """Determine if the current data should be stored based on the strategy."""
-        return self._strategy.should_store(self._size, self._total_seen, self.max_size)
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
+        return self._strategy.should_store(
+            self._size, self._total_seen, effective_max_size
+        )
 
     def append(self, data: Any) -> bool:
         """
@@ -314,6 +404,12 @@ class DataBuffer:
 
     def _append_impl(self, data: Any) -> bool:
         """Internal append implementation."""
+        # For unlimited storage, expand storage as needed
+        if self._unlimited:
+            effective_max_size = len(self._storage)
+        else:
+            effective_max_size = self.max_size
+
         # Check if strategy wants to store this sample
         if not self.should_store():
             self._total_seen += 1
@@ -321,7 +417,7 @@ class DataBuffer:
 
         # Get storage index from strategy
         storage_idx = self._strategy.get_storage_index(
-            self._size, self._total_seen, self.max_size
+            self._size, self._total_seen, effective_max_size
         )
         if storage_idx is None:
             self._total_seen += 1
@@ -335,8 +431,13 @@ class DataBuffer:
             self._total_seen += 1
             return False
 
+        # For unlimited storage, expand list if needed
+        if self._unlimited:
+            while len(self._storage) <= storage_idx:
+                self._storage.append(None)
+
         # Store data with explicit cleanup of old data
-        if storage_idx < self._size and self._storage[storage_idx] is not None:
+        if storage_idx < len(self._storage) and self._storage[storage_idx] is not None:
             # Clear old reference to prevent memory leaks
             self._storage[storage_idx] = None
 
@@ -355,7 +456,7 @@ class DataBuffer:
 
         Indexing behavior depends on strategy:
         - Cyclic: get(0)=oldest, get(-1)=newest
-        - Fixed: get(0)=first stored, get(-1)=last stored
+        - Fixed/Unlimited: get(0)=first stored, get(-1)=last stored
         - Reservoir: order not meaningful
 
         Args:
@@ -379,8 +480,9 @@ class DataBuffer:
             raise IndexError("Buffer is empty")
 
         # Convert logical index to physical storage index
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
         physical_index = self._strategy.get_logical_index(
-            index, self._size, self.max_size
+            index, self._size, effective_max_size
         )
 
         if physical_index < 0 or physical_index >= self._size:
@@ -395,7 +497,7 @@ class DataBuffer:
         Get all stored data in logical order.
 
         For cyclic strategy: returns oldest to newest
-        For fixed strategy: returns first stored to last stored
+        For fixed/unlimited strategy: returns first stored to last stored
         For reservoir strategy: arbitrary order
         """
         if self.max_size == 0:
@@ -413,15 +515,53 @@ class DataBuffer:
             return []
 
         result = []
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
+
         for i in range(self._size):
             try:
                 physical_index = self._strategy.get_logical_index(
-                    i, self._size, self.max_size
+                    i, self._size, effective_max_size
                 )
-                if self._storage[physical_index] is not None:
+                if (
+                    physical_index < len(self._storage)
+                    and self._storage[physical_index] is not None
+                ):
                     result.append(self._storage[physical_index])
             except IndexError:
                 break
+
+        return result
+
+    def get_recent_items(self, n_items: int) -> List[Any]:
+        """
+        Get the most recent n_items from the buffer.
+
+        Args:
+            n_items: Number of recent items to retrieve
+
+        Returns:
+            List of recent items in chronological order (oldest to newest)
+        """
+        if self.max_size == 0 or self._size == 0:
+            return []
+
+        if self._lock:
+            with self._lock:
+                return self._get_recent_items_impl(n_items)
+        else:
+            return self._get_recent_items_impl(n_items)
+
+    def _get_recent_items_impl(self, n_items: int) -> List[Any]:
+        """Internal implementation for getting recent items."""
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
+        indices = self._strategy.get_recent_indices(
+            self._size, effective_max_size, n_items
+        )
+
+        result = []
+        for idx in indices:
+            if idx < len(self._storage) and self._storage[idx] is not None:
+                result.append(self._storage[idx])
 
         return result
 
@@ -439,12 +579,16 @@ class DataBuffer:
         for i in range(len(self._storage)):
             self._storage[i] = None
 
+        # For unlimited storage, also reset the list
+        if self._unlimited:
+            self._storage = []
+
         # Reset state
         self._size = 0
         self._total_seen = 0
         self._strategy.reset()
 
-        # clear GPU memory if offloading
+        # Clear GPU memory if offloading
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
@@ -516,7 +660,6 @@ class DataBuffer:
 
             if tensors:
                 try:
-                    # This can be expensive for large dicts with many keys
                     result[key] = torch.cat(tensors, dim=dim)
                 except RuntimeError as e:
                     logger.warning(
@@ -528,7 +671,9 @@ class DataBuffer:
     def get_storage_size(self, unit="GB") -> float:
         """Return the current size of the storage in specified unit (GB, MB, or bytes)."""
         total_bytes = 0
-        for item in self._storage:
+        storage_to_check = self._storage[: self._size] if self._size > 0 else []
+
+        for item in storage_to_check:
             if isinstance(item, torch.Tensor):
                 total_bytes += item.element_size() * item.nelement()
             elif isinstance(item, dict):
@@ -558,8 +703,13 @@ class DataBuffer:
         return self.get(index)
 
     def __repr__(self) -> str:
+        size_str = (
+            f"{self._size}/unlimited"
+            if self._unlimited
+            else f"{self._size}/{self.max_size}"
+        )
         return (
-            f"DataBuffer(name='{self.name}', size={self._size}/{self.max_size}, "
+            f"DataBuffer(name='{self.name}', size={size_str}, "
             f"strategy={self.strategy_name})"
         )
 
@@ -600,22 +750,20 @@ class Record:
 
 class StorageBuffer:
     """
-    High-level buffer management for DynVision.
+    High-level buffer management for DynVision with flexible strategy alignment.
 
     Combines response and record storage with efficient operations.
-    Designed to be created in Lightning hooks and cleared when done.
+    Supports different buffer sizes and strategies with intelligent alignment.
 
     Usage:
-        # In on_validation_start():
-        self.storage = StorageBuffer(max_responses=1000, max_records=500)
+        # Different sizes and strategies are now supported
+        self.storage = StorageBuffer(
+            max_responses=100, response_strategy="cyclic",
+            max_records=1000, record_strategy="unlimited"
+        )
 
-        # In validation steps:
-        self.storage.store_responses(response_dict)
-        self.storage.store_records(guess_indices, label_indices, image_indices)
-
-        # In on_validation_end():
+        # Alignment happens automatically in get_dataframe()
         df = self.storage.get_dataframe()
-        self.storage.clear_all()
     """
 
     def __init__(
@@ -692,14 +840,174 @@ class StorageBuffer:
 
         return self.records.append(record)
 
+    def _align_data(
+        self, response_data: List[Any], record_data: List[Any]
+    ) -> Tuple[List[Any], List[Any]]:
+        """
+        Align response and record data when using different strategies.
+
+        This function handles the complex alignment between different sampling strategies,
+        taking into account their temporal characteristics and indexing behavior.
+
+        Strategy temporal characteristics:
+        - Fixed: Chronological samples [0, N), stops when full
+        - Unlimited: All chronological samples [0, M)
+        - Cyclic: Most recent N samples, maintains temporal order in get_all()
+        - Reservoir: Random samples, no temporal meaning
+
+        Args:
+            response_data: List of response dictionaries from get_all()
+            record_data: List of record objects from get_all()
+
+        Returns:
+            Tuple of (aligned_responses, aligned_records)
+        """
+        if not response_data or not record_data:
+            return [], []
+
+        resp_strategy = self.responses.strategy_name
+        rec_strategy = self.records.strategy_name
+        min_length = min(len(response_data), len(record_data))
+
+        # Same strategy: straightforward alignment
+        if resp_strategy == rec_strategy:
+            if resp_strategy in ["cyclic"]:
+                # Both cyclic: both contain most recent samples in chronological order
+                # Take the overlap of most recent samples
+                return response_data[-min_length:], record_data[-min_length:]
+            else:
+                # Both fixed/unlimited: both contain chronological samples from start
+                # Take the overlap from the beginning
+                return response_data[:min_length], record_data[:min_length]
+
+        # Mixed strategies: need careful alignment
+        return self._align_mixed_strategies(
+            response_data, record_data, resp_strategy, rec_strategy, min_length
+        )
+
+    def _align_mixed_strategies(
+        self,
+        response_data: List[Any],
+        record_data: List[Any],
+        resp_strategy: str,
+        rec_strategy: str,
+        min_length: int,
+    ) -> Tuple[List[Any], List[Any]]:
+        """
+        Handle alignment between different strategy combinations.
+
+        Key insight: We need to understand what samples each buffer actually contains
+        relative to the total sequence of samples processed.
+
+        Assumptions for simultaneous buffer filling:
+        - Fixed buffer contains samples [0, N) if total_seen >= N, else [0, total_seen)
+        - Cyclic buffer contains samples [max(0, total_seen-N), total_seen)
+        - Unlimited buffer contains samples [0, total_seen)
+        """
+
+        # Get buffer metadata for smarter alignment
+        resp_total_seen = getattr(self.responses, "_total_seen", len(response_data))
+        rec_total_seen = getattr(self.records, "_total_seen", len(record_data))
+        resp_max_size = (
+            self.responses.max_size if self.responses.max_size > 0 else float("inf")
+        )
+        rec_max_size = (
+            self.records.max_size if self.records.max_size > 0 else float("inf")
+        )
+
+        logger.debug(
+            f"Aligning {resp_strategy}(seen={resp_total_seen}, max={resp_max_size}) "
+            f"with {rec_strategy}(seen={rec_total_seen}, max={rec_max_size})"
+        )
+
+        # Strategy combination handling
+        if resp_strategy == "fixed" and rec_strategy == "unlimited":
+            # Fixed: [0, min(resp_max_size, resp_total_seen))
+            # Unlimited: [0, rec_total_seen)
+            # Overlap: [0, min(len(response_data), len(record_data)))
+            return response_data[:min_length], record_data[:min_length]
+
+        elif resp_strategy == "unlimited" and rec_strategy == "fixed":
+            # Symmetric case
+            return response_data[:min_length], record_data[:min_length]
+
+        elif resp_strategy == "fixed" and rec_strategy == "cyclic":
+            # Fixed: [0, min(resp_max_size, resp_total_seen))
+            # Cyclic: [max(0, rec_total_seen - rec_max_size), rec_total_seen)
+
+            # Check if there's temporal overlap
+            fixed_end = min(resp_max_size, resp_total_seen)
+            cyclic_start = max(0, rec_total_seen - rec_max_size)
+
+            if fixed_end <= cyclic_start:
+                # No temporal overlap - warn user
+                logger.warning(
+                    f"No temporal overlap between fixed buffer [0, {fixed_end}) "
+                    f"and cyclic buffer [{cyclic_start}, {rec_total_seen}). "
+                    f"Taking most recent data from each buffer for analysis."
+                )
+                # Take last samples from fixed, recent samples from cyclic
+                return response_data[-min_length:], record_data[-min_length:]
+            else:
+                # There is overlap - try to align overlapping period
+                # This is complex without sample timestamps, so fall back to recent data
+                logger.info(
+                    f"Partial temporal overlap detected. Taking recent data from each buffer."
+                )
+                return response_data[-min_length:], record_data[-min_length:]
+
+        elif resp_strategy == "cyclic" and rec_strategy == "fixed":
+            # Symmetric case of above
+            fixed_end = min(rec_max_size, rec_total_seen)
+            cyclic_start = max(0, resp_total_seen - resp_max_size)
+
+            if fixed_end <= cyclic_start:
+                logger.warning(
+                    f"No temporal overlap between cyclic buffer [{cyclic_start}, {resp_total_seen}) "
+                    f"and fixed buffer [0, {fixed_end}). "
+                    f"Taking most recent data from each buffer for analysis."
+                )
+                return response_data[-min_length:], record_data[-min_length:]
+            else:
+                logger.info(
+                    f"Partial temporal overlap detected. Taking recent data from each buffer."
+                )
+                return response_data[-min_length:], record_data[-min_length:]
+
+        elif resp_strategy == "cyclic" and rec_strategy == "unlimited":
+            # Cyclic: most recent samples
+            # Unlimited: all samples, so take the most recent to match cyclic
+            return response_data[-min_length:], record_data[-min_length:]
+
+        elif resp_strategy == "unlimited" and rec_strategy == "cyclic":
+            # Symmetric case
+            return response_data[-min_length:], record_data[-min_length:]
+
+        elif resp_strategy == "unlimited" and rec_strategy == "unlimited":
+            # Both unlimited: should contain the same samples if filled simultaneously
+            # Take from beginning to get the full overlap (most data)
+            # Or take from end if we prefer most recent data
+            if min_length == len(response_data) == len(record_data):
+                # Same length - they should be identical sequences
+                return response_data, record_data
+            else:
+                # Different lengths - take overlapping portion from the beginning
+                return response_data[:min_length], record_data[:min_length]
+
+        else:
+            # Handle reservoir or unknown strategies
+            logger.warning(
+                f"Alignment between '{resp_strategy}' and '{rec_strategy}' may not be meaningful. "
+                f"Taking first {min_length} samples from each buffer."
+            )
+            return response_data[:min_length], record_data[:min_length]
+
     def get_dataframe(self, layer_name: str = "classifier") -> pd.DataFrame:
         """
-        Generate classifier DataFrame efficiently.
+        Generate classifier DataFrame efficiently with automatic strategy alignment.
 
-        IMPORTANT: This function requires both response and record buffers to use
-        the same sampling strategy to ensure proper alignment between responses and records.
-
-        Generates sample_indices and times_indices on-the-fly to save memory.
+        Now supports different buffer sizes and strategies by intelligently aligning the data.
+        The alignment logic prioritizes data recency and logical sample correspondence.
         """
 
         try:
@@ -707,32 +1015,54 @@ class StorageBuffer:
             if self.responses.max_size == 0 or self.records.max_size == 0:
                 return pd.DataFrame()
 
-            # Critical alignment check: ensure both buffers use same strategy
-            if self.responses.strategy_name != self.records.strategy_name:
-                logger.error(
-                    f"Cannot combine responses (strategy='{self.responses.strategy_name}') "
-                    f"with records (strategy='{self.records.strategy_name}'). "
-                    f"Different strategies lead to misaligned data. Both buffers must use the same strategy."
-                )
-                return pd.DataFrame()
-
             # Get raw data from buffers
             response_data = self.responses.get_all()
             record_data = self.records.get_all()
+
+            # Log format and shapes for debugging
+            logger.info(
+                f"Response data format: {type(response_data)}, length: {len(response_data)}"
+            )
+            if response_data:
+                logger.info(f"First response item type: {type(response_data[0])}")
+                if isinstance(response_data[0], dict):
+                    for key, value in response_data[0].items():
+                        if isinstance(value, torch.Tensor):
+                            logger.info(f"  {key}: {value.shape}")
+                        else:
+                            logger.info(f"  {key}: {type(value)}")
+
+            logger.info(
+                f"Record data format: {type(record_data)}, length: {len(record_data)}"
+            )
+            if record_data:
+                logger.info(f"First record item type: {type(record_data[0])}")
+                if hasattr(record_data[0], "guess_indices"):
+                    logger.info(
+                        f"  guess_indices: {record_data[0].guess_indices.shape}"
+                    )
+                    logger.info(
+                        f"  label_indices: {record_data[0].label_indices.shape}"
+                    )
+                    logger.info(
+                        f"  image_indices: {record_data[0].image_indices.shape}"
+                    )
 
             if not response_data or not record_data:
                 logger.warning("No data stored in buffers")
                 return pd.DataFrame()
 
-            # Ensure matching lengths between responses and records
-            min_length = min(len(response_data), len(record_data))
-            if min_length == 0:
+            # Align data using different strategies
+            response_data, record_data = self._align_data(response_data, record_data)
+
+            if not response_data or not record_data:
+                logger.warning("No aligned data available")
                 return pd.DataFrame()
 
-            # Take matching portion from both buffers to ensure alignment
-            # Since both use the same strategy, index i corresponds to the same logical sample
-            response_data = response_data[:min_length]
-            record_data = record_data[:min_length]
+            logger.info(
+                f"Aligned data: {len(response_data)} responses, {len(record_data)} records "
+                f"(strategies: {self.responses.strategy_name}, {self.records.strategy_name})"
+            )
 
             # Check if the layer exists in responses
             if layer_name not in response_data[0]:
@@ -752,9 +1082,6 @@ class StorageBuffer:
                 pad_len = max_timesteps - tensor.shape[1]
                 if pad_len > 0:
                     # Pad at the start along axis 1 (time steps) with zeros
-                    # For shape [batch, timesteps, n_channels, dim_y, dim_x], pad for axis 1
-                    # torch.nn.functional.pad expects (dim_x, dim_y, n_channels, timesteps)
-                    # So pad = (0,0, 0,0, 0,0, pad_len,0)
                     pad = (0, 0, 0, 0, 0, 0, pad_len, 0)
                     tensor = torch.nn.functional.pad(
                         tensor, pad, mode="constant", value=0
@@ -847,7 +1174,7 @@ class StorageBuffer:
         self.responses.clear()
         self.records.clear()
 
-    def get_storage_size(self, unit="GB") -> None:
+    def get_storage_size(self, unit="GB") -> float:
         """Get the size of the storage."""
         return self.responses.get_storage_size(unit) + self.records.get_storage_size(
             unit
@@ -859,6 +1186,8 @@ class StorageBuffer:
             "responses_size": len(self.responses),
             "records_size": len(self.records),
             "total_items": len(self.responses) + len(self.records),
+            "responses_strategy": self.responses.strategy_name,
+            "records_strategy": self.records.strategy_name,
         }
 
 
@@ -866,16 +1195,16 @@ class StorageBufferMixin(LightningModule):
     """
     Mixin class for automatic StorageBuffer lifecycle management in PyTorch Lightning.
 
-    IMPORTANT: For get_dataframe() to work correctly, both response and record
-    buffers must use the same sampling strategy to ensure proper data alignment.
+    Now supports different buffer configurations with automatic alignment in get_dataframe().
+    You can specify different sizes and strategies for responses vs records.
     """
 
-    # Default storage configurations - both use same strategy for alignment
+    # Default storage configurations - can use different strategies
     training_storage_config: Dict[str, Any] = {
         "max_responses": 0,  # Disabled by default
         "max_records": 0,  # Disabled by default
-        "response_strategy": "fixed",  # Same strategy for alignment
-        "record_strategy": "fixed",  # Same strategy for alignment
+        "response_strategy": "fixed",
+        "record_strategy": "fixed",
         "cpu_offload": True,
         "thread_safe": True,
     }
@@ -883,37 +1212,49 @@ class StorageBufferMixin(LightningModule):
     validation_storage_config: Dict[str, Any] = {
         "max_responses": 1,  # Enabled by default
         "max_records": 1,  # Enabled by default
-        "response_strategy": "fixed",  # Same strategy for alignment
-        "record_strategy": "fixed",  # Same strategy for alignment
+        "response_strategy": "fixed",
+        "record_strategy": "fixed",
         "cpu_offload": True,
         "thread_safe": True,
     }
 
     testing_storage_config: Dict[str, Any] = {
-        "max_responses": 10,  # Enabled by default for analysis
-        "max_records": 10,  # Enabled by default for analysis
-        "response_strategy": "fixed",  # Same strategy for alignment
-        "record_strategy": "fixed",  # Same strategy for alignment
+        "max_responses": 3,  # Enabled by default for analysis
+        "max_records": 8,  # Much larger for detailed analysis
+        "response_strategy": "fixed",  # Keep recent responses
+        "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,
         "thread_safe": True,
     }
 
     def __init__(
         self,
-        store_train_responses: int = 0,
-        store_val_responses: int = 1,
-        store_test_responses: int = 10,
+        store_train_responses: Optional[int] = None,
+        store_val_responses: Optional[int] = None,
+        store_test_responses: Optional[int] = None,
+        store_train_records: Optional[int] = None,
+        store_val_records: Optional[int] = None,
+        store_test_records: Optional[int] = None,
         **kwargs,
     ):
-        """Initialize with empty storage buffer."""
+        """Initialize with flexible storage configuration."""
         super().__init__(**kwargs)
 
-        self.training_storage_config["max_responses"] = store_train_responses
-        self.training_storage_config["max_records"] = store_train_responses
-        self.validation_storage_config["max_responses"] = store_val_responses
-        self.validation_storage_config["max_records"] = store_val_responses
-        self.testing_storage_config["max_responses"] = store_test_responses
-        self.testing_storage_config["max_records"] = store_test_responses
+        # Update response configs only if provided
+        if store_train_responses is not None:
+            self.training_storage_config["max_responses"] = store_train_responses
+        if store_val_responses is not None:
+            self.validation_storage_config["max_responses"] = store_val_responses
+        if store_test_responses is not None:
+            self.testing_storage_config["max_responses"] = store_test_responses
+
+        # Update record configs only if provided
+        if store_train_records is not None:
+            self.training_storage_config["max_records"] = store_train_records
+        if store_val_records is not None:
+            self.validation_storage_config["max_records"] = store_val_records
+        if store_test_records is not None:
+            self.testing_storage_config["max_records"] = store_test_records
 
         # Always create a storage instance (with zero capacity initially)
         self.storage = StorageBuffer(
@@ -925,6 +1266,30 @@ class StorageBufferMixin(LightningModule):
 
     def get_dataframe(self, **kwargs) -> pd.DataFrame:
         return self.storage.get_dataframe(**kwargs)
+
+    def _check_memory_usage(self, stage: str):
+        """Monitor memory usage and warn about potential issues."""
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated() / 1024**2  # MB
+            cached = torch.cuda.memory_reserved() / 1024**2  # MB
+
+            if (
+                allocated
+                > 0.8 * torch.cuda.get_device_properties(0).total_memory / 1024**2
+            ):
+                logger.warning(
+                    f"High GPU memory usage in {stage}: {allocated:.0f}MB allocated, "
+                    f"{cached:.0f}MB cached"
+                )
+
+                # Emergency buffer reduction
+                if hasattr(self.storage, "clear_all"):
+                    logger.warning("Emergency: Clearing storage buffers")
+                    self.storage.clear_all()
+                    torch.cuda.empty_cache()
+
+    def on_test_batch_end(self, *args, **kwargs):
+        self._check_memory_usage("test")
 
     def on_train_epoch_start(self) -> None:
         """Initialize storage buffer at start of training epoch."""
@@ -1006,75 +1371,61 @@ class StorageBufferMixin(LightningModule):
 
 
 if __name__ == "__main__":
-    print("Testing refined DataBuffer implementation...")
+    print("Testing enhanced DataBuffer implementation...")
 
-    # Test zero-capacity buffer behavior
-    print("\n=== Testing Zero-Capacity Buffer ===")
-    zero_buffer = DataBuffer(max_size=0, strategy="fixed")
-    print(f"Zero buffer append result: {zero_buffer.append(torch.tensor([1]))}")
-    print(f"Zero buffer get_all: {zero_buffer.get_all()}")
+    # Test unlimited strategy
+    print("\n=== Testing Unlimited Strategy ===")
+    unlimited_buffer = DataBuffer(max_size=-1, strategy="unlimited")
+    for i in range(5):
+        result = unlimited_buffer.append(torch.tensor([i]))
+        print(f"Append {i}: {result}, size: {len(unlimited_buffer)}")
 
-    storage_zero = StorageBuffer(max_responses=0, max_records=0)
-    print(f"Zero storage DataFrame: {storage_zero.get_dataframe().shape}")
+    print(
+        f"Unlimited buffer contents: {[item.item() for item in unlimited_buffer.get_all()]}"
+    )
 
-    # Test StorageBufferMixin
-    print("\n=== Testing StorageBufferMixin ===")
+    # Test mixed strategies alignment
+    print("\n=== Testing Mixed Strategy Alignment ===")
 
     class TestModel(StorageBufferMixin):
-        """Test model with mixin."""
+        """Test model with mixed strategies."""
 
-        # Override storage configs
-        training_storage_config = {
-            "max_responses": 10,  # No training storage
-            "max_records": 10,
-            "response_strategy": "fixed",
-            "record_strategy": "fixed",
-        }
-
-        validation_storage_config = {
-            "max_responses": 100,  # Validation storage enabled
-            "max_records": 100,
-            "response_strategy": "cyclic",
-            "record_strategy": "cyclic",
+        testing_storage_config = {
+            "max_responses": 3,  # Small response buffer
+            "max_records": 10,  # Larger record buffer
+            "response_strategy": "cyclic",  # Keep recent responses
+            "record_strategy": "unlimited",  # Keep all records
         }
 
         def __init__(self):
             super().__init__()
 
-    # Test lifecycle
+    # Test lifecycle with mixed strategies
     model = TestModel()
-    print(
-        f"Initial storage: responses={model.storage.responses.max_size}, records={model.storage.records.max_size}"
-    )
+    print(f"Initial storage: {model.storage.get_memory_info()}")
 
-    # Start validation
-    model.on_validation_epoch_start()
-    print(
-        f"Validation storage: responses={model.storage.responses.max_size}, records={model.storage.records.max_size}"
-    )
+    # Start testing
+    model.on_test_start()
+    print(f"Test storage: {model.storage.get_memory_info()}")
 
-    # Store some data
-    for i in range(3):
-        responses = {"classifier": torch.randn(2, 5, 4)}  # (batch, timesteps, classes)
-        records_stored = model.storage.store_responses(responses)
+    # Store different amounts of data
+    for i in range(7):
+        responses = {"classifier": torch.randn(1, 5, 4)}  # (batch, timesteps, classes)
+        model.storage.store_responses(responses)
 
         records_stored = model.storage.store_records(
-            guess_indices=torch.randint(0, 4, (2, 5)),
-            label_indices=torch.randint(0, 4, (2, 5)),
-            image_indices=torch.arange(2).unsqueeze(1).expand(2, 5),
+            guess_indices=torch.randint(0, 4, (1, 5)),
+            label_indices=torch.randint(0, 4, (1, 5)),
         )
-        print(
-            f"  Batch {i}: stored={records_stored}, storage_size=({len(model.storage.responses)}, {len(model.storage.records)})"
-        )
+        print(f"  Batch {i}: stored, storage_size={model.storage.get_memory_info()}")
 
-    # Generate DataFrame
+    # Generate DataFrame with alignment
     df = model.storage.get_dataframe()
-    print(f"Generated DataFrame: {df.shape}")
+    print(f"Generated DataFrame with mixed strategies: {df.shape}")
 
-    # End validation
-    model.on_validation_epoch_end()
-    print(
-        f"After clearing: responses={model.storage.responses.max_size}, records={model.storage.records.max_size}"
-    )
+    if not df.empty:
+        print(
+            f"Sample indices range: {df['sample_index'].min()} to {df['sample_index'].max()}"
+        )
 
-    print("\nIntegrated implementation tests completed!")
+    print("\nEnhanced implementation tests completed!")

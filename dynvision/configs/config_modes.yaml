@@ -1,5 +1,5 @@
 # Local Settings
-use_local_mode: "auto"
+use_local_mode: 'auto'
 local:
   enable_progress_bar: True
   use_debug_mode: False
@@ -19,9 +19,9 @@ debug:
   enable_progress_bar: True
 
 # Large Dataset Settings
-use_large_dataset_mode: "auto"
+use_large_dataset_mode: False
 large_dataset:
-  batch_size: 32
+  # batch_size: 32
   use_ffcv: True
   order: "QUASI_RANDOM"
   persistent_workers: False
@@ -29,12 +29,12 @@ large_dataset:
   precision: "bf16-mixed"
   pin_memory: False
   os_cache: False
-  chunksize: 10000
+  chunksize: 5000
 
 # Distributed Settings
 use_distributed_mode: False
 distributed:
-  use_distributed: False  # For FFCV dataloaders
+  use_distributed: False  # For FFCV dataloaders - let lightning handle distribution
   strategy: "ddp"  # Use standard DDP for SLURM compatibility
   devices: 4  # Number of GPUs per node
   num_nodes: 1  # Number of compute nodes
@@ -45,19 +45,25 @@ distributed:
   num_sanity_val_steps: 0
   store_train_responses: 0  # n_batches
   store_val_responses: 0  # n_batches
-  batch_size: 64
-  use_ffcv: False
-  num_workers: 4
+  check_val_every_n_epoch: 100
+  batch_size: 256
+  use_ffcv: True
+  num_workers: 8
   persistent_workers: True
   pin_memory: False
-  order: "SEQUENTIAL"
-  os_cache: False
+  order: "QUASI_RANDOM"
+  os_cache: True
+  chunksize: 5000
   drop_last: True  # Ensure all batches are of the same size
   # Advanced DDP settings
   strategy_kwargs:
-    find_unused_parameters: True  # Set to True if your model has unused parameters
+    find_unused_parameters: False  # Set to True if your model has unused parameters
     gradient_as_bucket_view: True  # Use bucket views for gradients
     process_group_backend: "nccl"  # Use NCCL for GPU communication
     static_graph: False
+  # FSDP settings
+  # strategy_kwargs:
+  #   state_dict_type: "sharded"
+  #   sharding_strategy: "NO_SHARD"
 
   

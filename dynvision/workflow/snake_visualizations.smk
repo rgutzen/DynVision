@@ -362,13 +362,55 @@ rule plot_accuracy:
             # --memory_csv {input.memory_csv:q} \
         # {params.execution_cmd} \
 
+rule plot_training:
+    input:
+        accuracy_csv = project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_accuracy.csv',
+        memory_csv = project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_gpu_mem_alloc.csv',
+        epoch_csv = project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_epoch.csv',
+        energy_csv= project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_energyloss.csv',
+        cross_entropy_csv= project_paths.reports \
+            / 'wandb' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_crossentropyloss.csv',
+        script = SCRIPTS / 'visualization' / 'plot_training.py'
+    params:
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+        palette = lambda w: json.dumps(config.palette)
+    output:
+        project_paths.figures / 'training' / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}.png',
+    # group: "visualization"
+    shell:
+        """
+        python {input.script:q} \
+            --accuracy_csv {input.accuracy_csv:q} \
+            --memory_csv {input.memory_csv:q} \
+            --epoch_csv {input.epoch_csv:q} \
+            --energy_csv {input.energy_csv:q} \
+            --cross_entropy_csv {input.cross_entropy_csv:q} \
+            --palette {params.palette:q} \
+            --output {output:q} 
+        """
+
+
 rule plot_dynamics:
     input:
         data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
         script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        focus_layer = 'V2',
+        focus_layer = 'V1',
+        dt = config.dt,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -385,7 +427,8 @@ rule plot_dynamics:
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
             --category {wildcards.category} \
-            --focus_layer {params.focus_layer} 
+            --focus_layer {params.focus_layer} \
+            --dt {params.dt}
         """
 
 use rule plot_dynamics as plot_dynamics_local with:
@@ -416,4 +459,76 @@ rule plot_response:
             --output {output:q} \
             --parameter {params.parameter} \
             --category {wildcards.category}
+        """
+
+rule plot_response_tripytch:
+    input:
+        data1 = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=6+tsk=4{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        data2 = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=9+tff=0+trc=*+tsk=4{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        # data3 = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=9+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        accuracy = project_paths.reports / 'wandb' / 'DyRCNNx8:tsteps=20+rctype=full+dt=2+tff=0+t=*+skip=true_0026_imagenette_trained_accuracy.csv',
+        script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+        category = ' '.join(['tau', 'trc', 'tsk']),
+        dt = 2,
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data1:q} \
+            --data2 {input.data2:q} \
+            --accuracy1 {input.accuracy:q} \
+            --accuracy2 {input.accuracy:q} \
+            --accuracy3 {input.accuracy:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --category {params.category:q} \
+            --dt {params.dt}
+        """
+            # --data3 {input.data3:q} \
+
+rule plot_response_tripytch2:
+    input:
+        data1 = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        data2 = project_paths.figures / 'stability' / 'stability_{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        data3 = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
+        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_0027_{data_name}_{status}_accuracy.csv',
+        script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+        category = ' '.join(['rctarget', 'lossrt', 'feedback']),
+        dt = 2,
+        outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
+        palette = lambda w: json.dumps(config.palette)
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctarget=*+lossrt=*+feedback=*_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data1:q} \
+            --data2 {input.data2:q} \
+            --data3 {input.data3:q} \
+            --accuracy1 {input.accuracy1:q} \
+            --accuracy2 {input.accuracy2:q} \
+            --accuracy3 {input.accuracy3:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --category {params.category:q} \
+            --dt {params.dt}
         """

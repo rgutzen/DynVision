@@ -99,6 +99,9 @@ data_groups:
             - 317 # leafhopper
             - 318 # lacewing
             - 319 # dragonfly
+    imagenette:
+        one:
+            - 0 # tench
     snakenet:
         cool:
             - 1  # night_snake

@@ -10,6 +10,7 @@ import wandb
 
 from dynvision import losses
 from dynvision.utils import alias_kwargs
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,6 @@ class LightningBase(pl.LightningModule):
         # Store Lightning-specific attributes
         self.retain_graph = retain_graph
         self.criterion_params = criterion_params
-        self.loss_reaction_time = float(loss_reaction_time)
         self.non_label_index = non_label_index
 
         # Optimizer attributes
@@ -152,7 +152,9 @@ class LightningBase(pl.LightningModule):
         """
 
         batch_size = batch[0].size(0)
-        loss, accuracy = self.model_step(batch, batch_idx)
+
+        with torch.no_grad():
+            loss, accuracy = self.model_step(batch, batch_idx)
 
         metrics = {"val_loss": loss, "val_accuracy": accuracy}
         self.log_dict(
@@ -162,6 +164,9 @@ class LightningBase(pl.LightningModule):
             sync_dist=True,
             rank_zero_only=True,
         )
+
+        torch.cuda.empty_cache()
+        gc.collect()
 
         return loss, accuracy
 
@@ -201,6 +206,7 @@ class LightningBase(pl.LightningModule):
             self.ignore_initial_n_labels = self.n_residual_timesteps + int(
                 self.loss_reaction_time / self.dt
             )
+            print("ignore initial n labels: ", self.ignore_initial_n_labels)  # debug
         else:
             self.ignore_initial_n_labels = 0
 
@@ -252,6 +258,7 @@ class LightningBase(pl.LightningModule):
 
         # Apply loss reaction time
         if hasattr(self, "ignore_initial_n_labels") and self.ignore_initial_n_labels:
+            label_indices = label_indices.clone()
             label_indices[:, : self.ignore_initial_n_labels] = self.non_label_index
 
         # Flatten time dimension

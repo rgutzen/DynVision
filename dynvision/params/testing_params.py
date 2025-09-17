@@ -67,24 +67,6 @@ class TestingParams(BaseParams):
 
     @computed_field
     @property
-    def effective_batch_size(self) -> int:
-        """Calculate effective batch size for testing (optimized for memory)."""
-        base_size = self.data.batch_size
-
-        # Memory optimization based on model complexity
-        if hasattr(self.model, "input_dims") and len(self.model.input_dims) >= 3:
-            height, width = self.model.input_dims[-2:]
-            if height * width > 224 * 224:  # High resolution
-                base_size = min(base_size, 16)
-
-        # Further reduce for temporal models with many timesteps
-        if self.model.n_timesteps > 10:
-            base_size = min(base_size, 8)
-
-        return max(1, base_size)
-
-    @computed_field
-    @property
     def data_group(self) -> str:
         """Extract data group from data configuration."""
         return getattr(self.data, "data_group", "all")
@@ -130,7 +112,6 @@ class TestingParams(BaseParams):
             "use_ffcv": False,
             "pin_memory": True,
             "drop_last": False,
-            "persistent_workers": False,
             "prefetch_factor": None,
             "max_workers": min(4, config.get("num_workers", 0)),
         }
@@ -174,17 +155,6 @@ class TestingParams(BaseParams):
             logger.warning(
                 "store_responses=-1 (all responses) may cause memory issues with large datasets. "
                 "Consider using a specific number or store_responses=0 for no storage."
-            )
-
-        # Optimize batch size for memory safety
-        memory_safe_batch = self.effective_batch_size
-        if self.data.batch_size > memory_safe_batch * 2:
-            logger.warning(
-                f"Reducing batch size from {self.data.batch_size} to {memory_safe_batch} "
-                "for memory safety during testing"
-            )
-            self.data.update_field(
-                "batch_size", memory_safe_batch, verbose=True, validate=False
             )
 
     def update_model_parameters_from_data(

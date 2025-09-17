@@ -1,0 +1,12 @@
+palette:
+  full: "#B8860B"  # Dark goldenrod
+  self: "#2E8B57"  # Sea green
+  depthpointwise: "#1E3A8A"  # Dark blue
+  pointdepthwise: "#3B82F6"  # Bright blue
+  local: "#E91E63"  # Pink/red
+  localdepthwise: "#FF6347" # Tomato
+  accent: "#EC4899"  # Pink/magenta 
+  "V1": "#ff69b4ff"
+  "V2": "#dda0ddff"
+  "V4": "#da70d6ff"
+  "IT": "#ba55d3ff"

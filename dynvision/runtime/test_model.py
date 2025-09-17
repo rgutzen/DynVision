@@ -87,15 +87,6 @@ class TestingDataModule:
         dataloader_name = self.config.data.data_loader
         dataloader_config = self.config.get_dataloader_kwargs()
 
-        logger.info(
-            f"Creating DataLoader {dataloader_name} "
-            f"with batch_size={dataloader_config['batch_size']}, "
-            f"num_workers={dataloader_config['num_workers']}, "
-            f"shuffle={dataloader_config['shuffle']}, "
-            f"non_label_index{dataloader_config['non_label_index']}, "
-            f"non_input_value{dataloader_config['non_input_value']}, "
-        )
-
         self.dataloader = get_data_loader(
             dataset=self.dataset, dataloader=dataloader_name, **dataloader_config
         )
@@ -136,18 +127,20 @@ class TestingModelManager:
         model_class = getattr(models, self.config.model.model_name)
         model_kwargs = self.config.get_model_kwargs(model_class)
 
-        logger.info(f"Creating {model_class.__name__} with:")
-        logger.info(f"  - Input dims: {model_kwargs.get('input_dims')}")
-        logger.info(f"  - N classes: {model_kwargs.get('n_classes')}")
-        logger.info(f"  - N timesteps: {model_kwargs.get('n_timesteps')}")
-        logger.info(f"  - Store responses: {model_kwargs.get('store_responses')}")
-
         model = model_class(**model_kwargs).to(self.device)
+
+        # init dynamically created connections by running a forward pass with dummy data
+        if hasattr(model, "_initialize_connections"):
+            model._initialize_connections()
+
+        # Hack for debug!
+        print(model_kwargs)
+        print("MODEL:", model.state_dict().keys())
+        print("STATE:", state_dict.keys())
 
         # Load state dict with error handling
         try:
             model.load_state_dict(state_dict, strict=True)
-            logger.info("Model state loaded successfully")
         except Exception as e:
             logger.warning(f"Strict loading failed: {e}. Trying non-strict...")
             missing, unexpected = model.load_state_dict(state_dict, strict=False)
@@ -220,13 +213,7 @@ class TestingOrchestrator:
         logger.info("=" * 60)
         logger.info("TESTING CONFIGURATION")
         logger.info("=" * 60)
-        logger.info(f"Model: {self.config.model.model_name}")
-        logger.info(f"Dataset: {self.config.data.data_name}")
-        logger.info(f"Data group: {self.config.data_group}")
         logger.info(f"Data classes: {len(self.datamodule.dataset.classes)}")
-        logger.info(f"Model classes: {self.config.model.n_classes}")
-        logger.info(f"Batch size: {self.config.data.batch_size}")
-        logger.info(f"Store responses: {self.config.model.store_responses}")
         logger.info(f"Precision: {self.config.trainer.precision}")
         logger.info(
             f"Device: {torch.device('cuda' if torch.cuda.is_available() else 'cpu')}"
@@ -259,6 +246,8 @@ class TestingOrchestrator:
             logger.info(f"  - Input shape: {inputs.size()}")
             logger.info(f"  - Input dims: {actual_input_dims}")
             logger.info(f"  - Pixel stats: {inputs.mean():.3f} ± {inputs.std():.3f}")
+            label_str = " ".join(str(int(x)) for x in labels[0])
+            logger.info(f"  - Label Presentation: {label_str}")
 
             # Extract n_classes from state dict
             state_dict = torch.load(
@@ -304,7 +293,7 @@ class TestingOrchestrator:
         if unknown:
             logger.debug(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
 
-        wandb.init()  # hack to log histograms
+        wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms
         return pl.Trainer(**trainer_kwargs)
 
     def save_results(self, model: pl.LightningModule) -> None:
@@ -352,12 +341,15 @@ class TestingOrchestrator:
                 # Setup data (TestingParams already optimized all parameters)
                 self.datamodule.setup_dataset()
                 dataloader = self.datamodule.setup_dataloader()
+                self.config.data.log_configuration(dataloader=dataloader)
 
                 # Infer and update model parameters from data
                 self.infer_and_update_from_data()
 
                 # Load and configure model
                 model = self.model_manager.load_and_configure_model()
+                model_kwargs = self.config.model.get_model_kwargs()
+                self.config.model.log_configuration(model_kwargs)
 
                 # Setup trainer
                 trainer = self.setup_trainer()
