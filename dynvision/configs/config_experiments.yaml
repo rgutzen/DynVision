@@ -78,7 +78,7 @@ experiment_config:
       intro: 0
       stim: 6
       noisetype: uniform
-      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 
   saltpeppernoise:
     status: trained
@@ -89,7 +89,7 @@ experiment_config:
       intro: 0
       stim: 30
       noisetype: saltpepper
-      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 
   poissonnoise:
     status: trained
@@ -100,7 +100,7 @@ experiment_config:
       intro: 0
       stim: 30
       noisetype: poisson
-      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 
   gaussianblurnoise:
     status: trained
@@ -111,7 +111,7 @@ experiment_config:
       intro: 0
       stim: 30
       noisetype: gaussianblur
-      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 
   motionblurnoise:
     status: trained
@@ -122,4 +122,4 @@ experiment_config:
       intro: 0
       stim: 30
       noisetype: motionblur
-      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]

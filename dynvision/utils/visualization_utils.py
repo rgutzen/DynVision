@@ -42,19 +42,31 @@ def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
 logger = logging.getLogger(__name__)
 
 
-def layer_power(response: torch.Tensor) -> torch.Tensor:
-    """Calculate mean power of layer responses.
+def layer_response_avg(response: torch.Tensor) -> torch.Tensor:
+    """Calculate mean response of layer activations.
 
     Args:
         response: Layer response tensor
 
     Returns:
-        Mean absolute power tensor of shape [n_features, n_timesteps]
+        Mean absolute response tensor of shape [batch_size, n_timesteps]
     """
     return response.abs().mean(dim=list(range(2, response.dim())))
 
 
-def peak_time(response: torch.Tensor) -> torch.Tensor:
+def layer_response_std(response: torch.Tensor) -> torch.Tensor:
+    """Calculate standard deviation of layer activations.
+
+    Args:
+        response: Layer response tensor
+
+    Returns:
+        Standard deviation of absolute response tensor of shape [batch_size, n_timesteps]
+    """
+    return response.abs().std(dim=list(range(2, response.dim())))
+
+
+def peak_time(mean_response: torch.Tensor) -> torch.Tensor:
     """Calculate peak time for each feature.
 
     Args:
@@ -63,11 +75,10 @@ def peak_time(response: torch.Tensor) -> torch.Tensor:
     Returns:
         Tensor of peak times for each feature
     """
-    mean_power = layer_power(response)
-    return mean_power.argmax(dim=1)
+    return mean_response.argmax(dim=1)
 
 
-def peak_height(response: torch.Tensor) -> torch.Tensor:
+def peak_height(mean_response: torch.Tensor) -> torch.Tensor:
     """Calculate peak height for each feature.
 
     Args:
@@ -76,12 +87,11 @@ def peak_height(response: torch.Tensor) -> torch.Tensor:
     Returns:
         Tensor of peak heights for each feature
     """
-    mean_power = layer_power(response)
-    max_values, max_indices = mean_power.max(dim=1)
+    max_values, max_indices = mean_response.max(dim=1)
     return max_values
 
 
-def peak_ratio(response: torch.Tensor, min_delay: int = 3) -> torch.Tensor:
+def peak_ratio(mean_response: torch.Tensor, min_delay: int = 3) -> torch.Tensor:
     """Calculate ratio between first and second peaks.
 
     Args:
@@ -91,20 +101,19 @@ def peak_ratio(response: torch.Tensor, min_delay: int = 3) -> torch.Tensor:
     Returns:
         Tensor of peak ratios for each feature
     """
-    mean_power = layer_power(response)
-    peak1_index = mean_power.argmax(dim=1)
+    peak1_index = mean_response.argmax(dim=1)
     peak1_value = torch.tensor(
         [
-            deepcopy(mean_power[channel, i].item())
+            deepcopy(mean_response[channel, i].item())
             for channel, i in enumerate(peak1_index)
         ]
     )
 
     for channel, i in enumerate(peak1_index):
-        mean_power[channel, i - min_delay : i + min_delay] = float("-inf")
+        mean_response[channel, i - min_delay : i + min_delay] = float("-inf")
 
-    peak2_index = mean_power.argmax(dim=1)
-    peak2_value = [mean_power[channel, i] for channel, i in enumerate(peak2_index)]
+    peak2_index = mean_response.argmax(dim=1)
+    peak2_value = [mean_response[channel, i] for channel, i in enumerate(peak2_index)]
 
     ratio = torch.Tensor(
         [
@@ -115,6 +124,70 @@ def peak_ratio(response: torch.Tensor, min_delay: int = 3) -> torch.Tensor:
         ]
     )
     return ratio
+
+
+def spatial_variance(response: torch.Tensor) -> torch.Tensor:
+    """Calculate variance across spatial dimensions at each timepoint.
+
+    Args:
+        response: Layer response tensor [batch_size, n_timesteps, ...spatial_dims]
+
+    Returns:
+        Variance tensor of shape [batch_size, n_timesteps]
+    """
+    # Handle different tensor dimensionalities
+    if response.dim() < 3:
+        raise ValueError(
+            f"Response tensor must have at least 3 dimensions, got {response.dim()}"
+        )
+    elif response.dim() == 3:
+        # [batch, time, channels] - no spatial dimensions
+        return torch.zeros_like(response[:, :, 0])  # Return zeros for spatial variance
+    elif response.dim() == 4:
+        # [batch, time, channels, spatial] - 1D spatial
+        spatial_var = response.var(dim=3)  # [batch, time, channels]
+        return spatial_var.mean(dim=2)  # [batch, time]
+    elif response.dim() == 5:
+        # [batch, time, channels, dim_y, dim_x] - 2D spatial
+        spatial_var = response.var(dim=(3, 4))  # [batch, time, channels]
+        return spatial_var.mean(dim=2)  # [batch, time]
+    else:
+        # Higher dimensions - treat all beyond channels as spatial
+        spatial_dims = list(range(3, response.dim()))
+        spatial_var = response.var(dim=spatial_dims)  # [batch, time, channels]
+        return spatial_var.mean(dim=2)  # [batch, time]
+
+
+def feature_variance(response: torch.Tensor) -> torch.Tensor:
+    """Calculate variance across channel dimensions at each timepoint.
+
+    Args:
+        response: Layer response tensor [batch_size, n_timesteps, n_channels, ...spatial_dims]
+
+    Returns:
+        Feature variance tensor of shape [batch_size, n_timesteps]
+    """
+    # Handle different tensor dimensionalities
+    if response.dim() < 3:
+        raise ValueError(
+            f"Response tensor must have at least 3 dimensions, got {response.dim()}"
+        )
+    elif response.dim() == 3:
+        # [batch, time, channels] - no spatial dimensions
+        return response.var(dim=2)  # [batch, time]
+    elif response.dim() == 4:
+        # [batch, time, channels, spatial] - 1D spatial
+        feature_var = response.var(dim=2)  # [batch, time, spatial]
+        return feature_var.mean(dim=2)  # [batch, time]
+    elif response.dim() == 5:
+        # [batch, time, channels, dim_y, dim_x] - 2D spatial
+        feature_var = response.var(dim=2)  # [batch, time, dim_y, dim_x]
+        return feature_var.mean(dim=(2, 3))  # [batch, time]
+    else:
+        # Higher dimensions - treat all beyond channels as spatial
+        feature_var = response.var(dim=2)  # [batch, time, ...spatial_dims]
+        spatial_dims = list(range(2, feature_var.dim()))
+        return feature_var.mean(dim=spatial_dims)  # [batch, time]
 
 
 def calculate_accuracy(df: pd.DataFrame) -> float:
@@ -382,8 +455,15 @@ def load_responses(
         df = load_df(csv_file)
         df[data_arg_key] = arg_value
         df[category] = cat_value
-
         n_classes = len(df.class_index.unique())
+
+        # Remove 'class_index' and 'response' columns if present
+        for col in ["class_index", "response"]:
+            if col in df.columns:
+                df = df.drop(columns=col)
+
+        # Collapse redundant rows by grouping on all remaining columns and aggregating with 'first'
+        df = df.groupby(list(df.columns), as_index=False).first()
 
         responses = torch.load(pt_file, map_location=torch.device("cpu"))
 
@@ -403,15 +483,25 @@ def load_responses(
         layer_names = list(responses.keys())
         n_samples, n_timesteps, *_ = responses[layer_names[0]].shape
 
+        breakpoint()
+
         for layer in layer_names:
             try:
-                if "power" in measures:
-                    power_tensor = (
-                        layer_power(responses[layer])
+                if "response_avg" in measures:
+                    response_avg_tensor = (
+                        layer_response_avg(responses[layer])
                         .flatten()
                         .repeat_interleave(n_classes)
                     )
-                    df[f"{layer}_power"] = tensor_to_numpy(power_tensor)
+                    df[f"{layer}_response_avg"] = tensor_to_numpy(response_avg_tensor)
+
+                if "response_std" in measures:
+                    response_std_tensor = (
+                        layer_response_std(responses[layer])
+                        .flatten()
+                        .repeat_interleave(n_classes)
+                    )
+                    df[f"{layer}_response_std"] = tensor_to_numpy(response_std_tensor)
 
                 if "peak_time" in measures:
                     peak_time_tensor = peak_time(responses[layer]).repeat_interleave(

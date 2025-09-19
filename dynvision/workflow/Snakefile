@@ -12,7 +12,31 @@ rule all:
 SEED = "0026"
 
 # dataloader comparison
-
+rule test_performance:
+    input:
+        # lossrt
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "test_performance.png",
+            seed=SEED,
+            experiment=['response']),
+        # rctarget
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
+            seed=SEED,
+            experiment=['response', 'responseffonly']),
+        # recurrence type
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
+            seed=SEED,
+            experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
+        # time params
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=4+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
+            seed=SEED,
+            experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=*+tsk=4+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
+            seed=SEED,
+            experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=*+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
+            seed=SEED,
+            experiment=["response"]),
+        # feedback
 
 rule biostability:
     input:
@@ -52,7 +76,7 @@ rule recurrence:
         expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
         seed=SEED,
         experiment=['uniformnoise', 'poissonnoise', 'saltpeppernoise', 'gaussianblurnoise', 'motionblurnoise'])
-        # experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly'])
+        # experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']
 
 rule rctarget:
     input:

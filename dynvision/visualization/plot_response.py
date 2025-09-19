@@ -37,22 +37,49 @@ parser.add_argument(
 parser.add_argument(
     "--output", type=Path, required=True, help="Path to output plot file"
 )
-parser.add_argument("--parameter", type=str, required=True, help="Parameter to plot")
-parser.add_argument("--category", type=str, required=True, help="Category name")
+parser.add_argument(
+    "--parameter",
+    type=str,
+    required=True,
+    help="Column name containing experiment parameter values",
+)
+parser.add_argument("--experiment", type=str, help="Experiment name for title")
+parser.add_argument(
+    "--category",
+    type=str,
+    required=True,
+    help="Column name containing model categories",
+)
 parser.add_argument("--palette", type=str, help="JSON formatted dictionary of colors")
 parser.add_argument("--naming", type=str, help="JSON formatted naming dictionary")
 parser.add_argument("--ordering", type=str, help="JSON formatted ordering dictionary")
 
 
-def plot_response(df, parameter, category, config=None, output_path=None):
+def plot_response(
+    df, parameter, category, experiment=None, config=None, output_path=None
+):
     """Create response plot showing model responses across parameter values."""
 
     print(f"Plot data shape: {df.shape}")
     print(f"Available columns: {df.columns.tolist()}")
 
+    # Validate that the specified columns exist
+    if parameter not in df.columns:
+        raise ValueError(
+            f"Specified parameter column '{parameter}' not found in data. Available columns: {df.columns.tolist()}"
+        )
+
+    if category not in df.columns:
+        raise ValueError(
+            f"Specified category column '{category}' not found in data. Available columns: {df.columns.tolist()}"
+        )
+
+    print(f"Using parameter column: {parameter}")
+    print(f"Using category column: {category}")
+
     # Get layer names from columns
-    layer_cols = [col for col in df.columns if col.endswith("_power")]
-    layer_names = [col.replace("_power", "") for col in layer_cols]
+    layer_cols = [col for col in df.columns if col.endswith("_response_avg")]
+    layer_names = [col.replace("_response_avg", "") for col in layer_cols]
 
     # Order layers according to hierarchy
     ordered_layers = order_layers(layer_names, config)
@@ -93,7 +120,7 @@ def plot_response(df, parameter, category, config=None, output_path=None):
 
     # Plot for each layer and parameter combination
     for i, layer in enumerate(ordered_layers):
-        layer_col = f"{layer}_power"
+        layer_col = f"{layer}_response_avg"
 
         if layer_col not in df.columns:
             print(f"Warning: {layer_col} not found in data")
@@ -152,7 +179,7 @@ def plot_response(df, parameter, category, config=None, output_path=None):
             if j == 0:
                 layer_display_name = get_display_name(layer, config)
                 ax.set_ylabel(
-                    f"{layer_display_name}\nPower", fontsize=FONTSIZE_AXIS_LABELS
+                    f"{layer_display_name}\nResponse", fontsize=FONTSIZE_AXIS_LABELS
                 )
 
             if i == n_layers - 1:
@@ -210,6 +237,7 @@ if __name__ == "__main__":
             df,
             parameter=args.parameter,
             category=args.category,
+            experiment=args.experiment,
             config=config,
             output_path=args.output,
         )

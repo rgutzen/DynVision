@@ -531,9 +531,9 @@ class TrainingOrchestrator:
                 traceback.print_exc()
 
                 # Attempt to save checkpoint on failure
-                trainer.save_checkpoint(checkpoint_path)
+                trainer.save_checkpoint(checkpoint_path.with_suffix(".ckpt"))
                 logger.info(
-                    f"Checkpoint before training failure saved to {checkpoint_path}"
+                    f"Checkpoint before training failure saved to {checkpoint_path.with_suffix(".ckpt")}"
                 )
 
                 return 1

@@ -43,6 +43,13 @@ parser.add_argument("--palette", type=str, help="JSON formatted dictionary of co
 parser.add_argument("--dt", type=float, help="Time step duration in milliseconds")
 parser.add_argument("--naming", type=str, help="JSON formatted naming dictionary")
 parser.add_argument("--ordering", type=str, help="JSON formatted ordering dictionary")
+parser.add_argument(
+    "--parameter", type=str, help="Column name containing experiment parameter values"
+)
+parser.add_argument("--experiment", type=str, help="name of the testing scenario")
+parser.add_argument(
+    "--category", type=str, help="Column name containing model categories"
+)
 
 
 def translate_name(name, config):
@@ -57,7 +64,16 @@ def translate_name(name, config):
     return name
 
 
-def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=None):
+def plot_accuracy_and_confidence(
+    df,
+    topk=5,
+    config=None,
+    dt=None,
+    output_path=None,
+    experiment=None,
+    category=None,
+    parameter=None,
+):
     """Create a figure showing accuracy and confidence over time for each model category."""
 
     print(f"Plot data shape: {df.shape}")
@@ -105,26 +121,51 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
     topk_cols_all = [col for col in df.columns if col.startswith("accuracy_top")]
     expected_cols.extend(topk_cols_all)
 
-    category_cols = [col for col in df.columns if col not in expected_cols]
+    # Use CLI arguments to determine category and parameter columns
+    if category is not None:
+        if category not in df.columns:
+            raise ValueError(
+                f"Specified category column '{category}' not found in data. Available columns: {df.columns.tolist()}"
+            )
+        category_col = category
+        print(f"Using category column from CLI args: {category_col}")
+    else:
+        # Fallback to original logic if no category specified
+        category_cols = [col for col in df.columns if col not in expected_cols]
+        if len(category_cols) < 2:
+            raise ValueError(
+                f"Expected at least 2 category/parameter columns, found: {category_cols}"
+            )
+        category_col = category_cols[-2]  # Second to last column
+        print(f"Using category column from column order (fallback): {category_col}")
 
-    if len(category_cols) < 2:
-        raise ValueError(
-            f"Expected at least 2 category/parameter columns, found: {category_cols}"
-        )
+    if parameter is not None:
+        if parameter not in df.columns:
+            raise ValueError(
+                f"Specified parameter column '{parameter}' not found in data. Available columns: {df.columns.tolist()}"
+            )
+        parameter_col = parameter
+        print(f"Using parameter column from CLI args: {parameter_col}")
+    else:
+        # Fallback to original logic if no parameter specified
+        category_cols = [col for col in df.columns if col not in expected_cols]
+        if len(category_cols) < 2:
+            raise ValueError(
+                f"Expected at least 2 category/parameter columns, found: {category_cols}"
+            )
+        parameter_col = category_cols[-1]  # Last column
+        print(f"Using parameter column from column order (fallback): {parameter_col}")
 
-    category = category_cols[-2]  # Second to last column
-    parameter = category_cols[-1]  # Last column
-
-    print(f"Using category: {category}, parameter: {parameter}")
+    print(f"Final selection - category: {category_col}, parameter: {parameter_col}")
 
     # Get plotting settings from config
-    category_values = sorted(df[category].unique())
+    category_values = sorted(df[category_col].unique())
     model_order, colors = get_category_plotting_settings(
-        category, category_values, config
+        category_col, category_values, config
     )
 
     # Get unique parameter values
-    param_values = sorted(df[parameter].unique())
+    param_values = sorted(df[parameter_col].unique())
     n_params = len(param_values)
 
     # Convert time axis if dt is provided
@@ -176,11 +217,11 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
     all_plot_data = []
 
     for param_val in param_values:
-        param_data = df[df[parameter] == param_val]
+        param_data = df[df[parameter_col] == param_val]
 
         for cat_val in model_order:
-            if cat_val in param_data[category].values:
-                cat_data = param_data[param_data[category] == cat_val]
+            if cat_val in param_data[category_col].values:
+                cat_data = param_data[param_data[category_col] == cat_val]
 
                 # Add data for accuracy
                 for _, row in cat_data.iterrows():
@@ -227,7 +268,7 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
 
     # Plot for each parameter value
     for i, param_val in enumerate(param_values):
-        param_data = df[df[parameter] == param_val]
+        param_data = df[df[parameter_col] == param_val]
         param_plot_data = plot_df[plot_df["parameter_value"] == param_val]
         ax = axes[i]
 
@@ -275,7 +316,7 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
         if len(param_data) > 0:
             y_min, y_max = ax.get_ylim()
             label_indicator_df = calculate_label_indicator(
-                param_data, category, (y_min, y_max)
+                param_data, category_col, (y_min, y_max)
             )
 
             # Convert time for indicator if needed
@@ -294,14 +335,14 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
             )
 
         # Add parameter value as text box at the vertical center with naming translation
-        param_symbol = translate_name(parameter, config)  # Use direct translation
+        param_symbol = translate_name(parameter_col, config)  # Use direct translation
         param_display = translate_name(param_val, config)  # Use direct translation
 
         # Fallback for time conversion if not translated
         if (
             param_display == param_val
             and dt is not None
-            and parameter.lower()
+            and parameter_col.lower()
             in [
                 "duration",
                 "interval",
@@ -397,7 +438,7 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
     all_legend_elements = []
 
     # Get category display name using naming dict translation
-    category_display_name = translate_name(category, config)
+    category_display_name = translate_name(category_col, config)
 
     # Add category section with proper translation and visual centering using spaces
     all_legend_elements.append(
@@ -439,35 +480,61 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
     # Create enhanced title with parameter range and category
     title_parts = []
 
-    # Extract experiment name from data path
-    experiment_name = None
-    if output_path:
-        path_parts = str(output_path).split("/")
-        for part in path_parts:
-            if "_experiment" in part or any(
-                exp in part
-                for exp in [
-                    "duration",
-                    "contrast",
-                    "interval",
-                    "stability",
-                    "response",
-                    "noise",
-                    "uniformnoise",
-                ]
-            ):
-                experiment_name = part.split("_")[0]
-                break
+    # Derive experiment name from parameter column name or use experiment CLI arg as fallback
+    experiment_name_for_title = None
+    if experiment:
+        # If experiment name was specified via CLI, use it for the title
+        experiment_name_for_title = experiment
+    else:
+        # Try to derive experiment name from parameter column name
+        if parameter_col.lower() in ["duration", "interval", "stim", "stimulus"]:
+            experiment_name_for_title = "duration"
+        elif "contrast" in parameter_col.lower():
+            experiment_name_for_title = "contrast"
+        elif "noise" in parameter_col.lower():
+            experiment_name_for_title = "noise"
+        elif "stability" in parameter_col.lower():
+            experiment_name_for_title = "stability"
+        elif "response" in parameter_col.lower():
+            experiment_name_for_title = "response"
 
-    if experiment_name:
-        experiment_display = translate_name(f"{experiment_name}_experiment", config)
-        if experiment_display != f"{experiment_name}_experiment":
+    if experiment_name_for_title:
+        experiment_display = translate_name(
+            f"{experiment_name_for_title}_experiment", config
+        )
+        if experiment_display != f"{experiment_name_for_title}_experiment":
             title_parts.append(experiment_display)
         else:
-            title_parts.append(experiment_name.title())
+            title_parts.append(experiment_name_for_title.title())
+    else:
+        # Fallback: Extract experiment name from data path
+        if output_path:
+            path_parts = str(output_path).split("/")
+            for part in path_parts:
+                if "_experiment" in part or any(
+                    exp in part
+                    for exp in [
+                        "duration",
+                        "contrast",
+                        "interval",
+                        "stability",
+                        "response",
+                        "noise",
+                        "uniformnoise",
+                    ]
+                ):
+                    extracted_experiment_name = part.split("_")[0]
+                    experiment_display = translate_name(
+                        f"{extracted_experiment_name}_experiment", config
+                    )
+                    if experiment_display != f"{extracted_experiment_name}_experiment":
+                        title_parts.append(experiment_display)
+                    else:
+                        title_parts.append(extracted_experiment_name.title())
+                    break
 
     # Get parameter name using naming dict
-    param_name_display = translate_name(parameter, config)
+    param_name_display = translate_name(parameter_col, config)
 
     # Create parameter value range string
     if len(param_values) > 1:
@@ -482,7 +549,7 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
         if (
             param_min_display == param_min
             and dt is not None
-            and parameter.lower()
+            and parameter_col.lower()
             in [
                 "duration",
                 "interval",
@@ -503,7 +570,7 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
         if (
             param_range == param_val
             and dt is not None
-            and parameter.lower()
+            and parameter_col.lower()
             in [
                 "duration",
                 "interval",
@@ -515,7 +582,7 @@ def plot_accuracy_and_confidence(df, topk=5, config=None, dt=None, output_path=N
 
     # Format: <experiment> (<parameter_name> = [<parameter value range>] & <category name>)
     if title_parts:
-        title = f"{title_parts[0]} ({parameter} ({param_name_display}) = [{param_range}]) & {category_display_name}"
+        title = f"{title_parts[0]} ({parameter_col} ({param_name_display}) = [{param_range}]) & {category_display_name}"
     else:
         title = f"({param_name_display} = [{param_range}] & {category_display_name})"
 
@@ -549,7 +616,14 @@ if __name__ == "__main__":
     else:
         # Generate the accuracy and confidence plot
         fig = plot_accuracy_and_confidence(
-            df, topk=args.topk, config=config, dt=args.dt, output_path=args.output
+            df,
+            topk=args.topk,
+            config=config,
+            dt=args.dt,
+            output_path=args.output,
+            experiment=args.experiment,
+            category=args.category,
+            parameter=args.parameter,
         )
 
     # Save the plot

@@ -73,7 +73,13 @@ parser.add_argument("--accuracy2", type=Path, help="Path to second accuracy CSV 
 parser.add_argument("--accuracy3", type=Path, help="Path to third accuracy CSV file")
 
 parser.add_argument("--output", type=Path, required=True, help="Path to output file")
-parser.add_argument("--parameter", type=str, required=True, help="Parameter to plot")
+parser.add_argument(
+    "--parameter",
+    type=str,
+    required=True,
+    help="Column name containing experiment parameter values",
+)
+parser.add_argument("--experiment", type=str, help="Experiment name for title")
 parser.add_argument(
     "--category", type=str, required=True, help="Categories to plot (space-separated)"
 )
@@ -724,9 +730,20 @@ def plot_response_panel(
             None,
         )
 
-    power_columns = [col for col in df.columns if col.endswith("_power")]
-    if not power_columns:
-        print(f"Panel {column_index} - No power columns found in data")
+    if parameter not in df.columns:
+        print(
+            f"Panel {column_index} - Parameter '{parameter}' not found in data columns"
+        )
+        print(f"Available columns: {df.columns.tolist()}")
+        return (
+            create_empty_panel(column_index, fig, category, show_ylabel, config),
+            None,
+            None,
+        )
+
+    response_columns = [col for col in df.columns if col.endswith("_response_avg")]
+    if not response_columns:
+        print(f"Panel {column_index} - No response columns found in data")
         return (
             create_empty_panel(column_index, fig, category, show_ylabel, config),
             None,
@@ -743,7 +760,9 @@ def plot_response_panel(
 
     # Get layers and plotting settings
     all_layer_names = [
-        col.replace("_power", "") for col in df.columns if col.endswith("_power")
+        col.replace("_response_avg", "")
+        for col in df.columns
+        if col.endswith("_response_avg")
     ]
     layer_names = order_layers(all_layer_names, config)
 
@@ -838,13 +857,13 @@ def plot_response_panel(
         # Add reference line
         ax.axhline(0, color="gray", linestyle=":", alpha=0.7, linewidth=1)
 
-        # Plot layer power with proper time scaling
-        power_col = f"{layer_name}_power"
-        if power_col in df_with_time.columns:
+        # Plot layer response with proper time scaling
+        response_col = f"{layer_name}_response_avg"
+        if response_col in df_with_time.columns:
             sns.lineplot(
                 data=df_with_time,
                 x="time_ms",
-                y=power_col,
+                y=response_col,
                 ax=ax,
                 marker=".",
                 hue=category,
@@ -1009,7 +1028,7 @@ def create_response_triptych(
         if (
             df is not None
             and not df.empty
-            and len([col for col in df.columns if col.endswith("_power")]) > 0
+            and len([col for col in df.columns if col.endswith("_response_avg")]) > 0
             and panel_axes
             and len(panel_axes) > 1  # Real data panel
         ):
