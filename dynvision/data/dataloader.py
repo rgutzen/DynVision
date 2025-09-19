@@ -19,11 +19,12 @@ import torch
 import torch.jit
 from torch.utils.data import DataLoader
 
-from .operations import (
+from dynvision.data.operations import (
     _adjust_data_dimensions,
     _repeat_over_time,
     _adjust_label_dimensions,
 )
+from dynvision.data import noise
 from dynvision.utils import alias_kwargs, filter_kwargs
 
 logger = logging.getLogger(__name__)
@@ -75,10 +76,10 @@ class StandardDataLoader(DataLoader):
         memory_format: torch.memory_format = torch.contiguous_format,
         dtype: torch.dtype = torch.float16,
         device: Optional[str] = None,
-        use_channels_last: bool = False,  # Default to False
+        use_channels_last: bool = False,
         use_cuda_streams: bool = True,
         stream_priority: int = 0,
-        max_cache_size: int = 1000,
+        max_cache_size: int = 100,
         **kwargs,
     ):
         kwargs, _ = filter_kwargs(DataLoader, kwargs)
@@ -565,6 +566,8 @@ class StimulusNoiseDataLoader(StandardDataLoader):
         intro="intro_duration",
         noisetype="noise_type",
         noiselevel="noise_level",
+        noiseseed="noise_seed",
+        noisevoid="noise_void",
         voidid="non_label_index",
         voidinput="non_input_value",
     )
@@ -574,17 +577,25 @@ class StimulusNoiseDataLoader(StandardDataLoader):
         n_timesteps=15,
         stimulus_duration=10,
         intro_duration=2,
-        noise_type="pixel",  # "pixel", "gaussian", "saltpepper"
+        noise_type="uniform",
         noise_level=0.1,
+        noise_seed=None,
+        noise_void=False,
+        noise_cache_size=50,
         non_label_index=-1,
         non_input_value=0,
         **kwargs,
     ):
         super().__init__(*args, n_timesteps=n_timesteps, **kwargs)
+
+        # Validate and store parameters
         self.stimulus_duration = int(stimulus_duration)
         self.intro_duration = int(intro_duration)
         self.noise_type = str(noise_type).lower()
         self.noise_level = float(noise_level)
+        self.noise_seed = noise_seed
+        self.noise_void = bool(noise_void)  # Store the noise_void parameter
+        self.noise_cache_size = noise_cache_size
         self.non_label_index = int(non_label_index)
         self.non_input_value = float(non_input_value)
         self.outro_duration = (
@@ -598,73 +609,205 @@ class StimulusNoiseDataLoader(StandardDataLoader):
                 f"(n_timesteps={self.n_timesteps}, stimulus_duration={self.stimulus_duration}, intro_duration={self.intro_duration})"
             )
 
+        # Noise function mapping (optimized lookup)
+        self._noise_functions = {
+            "saltpepper": noise.salt_pepper_noise,
+            "poisson": noise.poisson_noise,
+            "uniform": noise.uniform_noise,
+            "gaussianblur": noise.gaussian_blur,
+            "motionblur": noise.motion_blur,
+        }
+
+        if self.noise_type not in self._noise_functions:
+            raise ValueError(
+                f"Unknown noise type: {self.noise_type}. Available: {list(self._noise_functions.keys())}"
+            )
+
+        self.noise_function = self._noise_functions[self.noise_type]
+
+        # Noise caching (only for deterministic noise)
+        self._should_cache_noise = self.noise_seed is not None
+        if self._should_cache_noise:
+            self._noise_state_cache = {}
+            self._noise_cache_order = OrderedDict()
+
+        # Sample counter for indexed seeding
+        self._sample_counter = 0
+
         # Pre-compile JIT functions
         self._fill_period_jit = _fill_tensor_period
         self._expand_jit = _expand_tensor_optimized
 
-    def _apply_noise(self, data: torch.Tensor) -> torch.Tensor:
-        """Apply noise to data tensor."""
-        if self.noise_type == "gaussian":
-            noise = torch.randn_like(data) * self.noise_level
-            return data + noise
-        elif self.noise_type == "pixel":
-            noise = torch.rand_like(data) * self.noise_level
-            return data + noise
-        # Add other noise types as needed
-        return data
+    def _get_noise_seed(self, sample_idx=None):
+        """Generate appropriate seed for current sample."""
+        if self.noise_seed is None:
+            return None
+        elif self.noise_seed == "indexed":
+            # Use sample index for reproducible per-sample noise
+            return hash((sample_idx or self._sample_counter, self.noise_type)) % (
+                2**31
+            )
+        else:
+            # Global seed for all samples
+            return self.noise_seed
+
+    def _get_cached_noise_state(self, data_shape, device, dtype, seed):
+        """Get or create cached noise state for any noise type."""
+        if not self._should_cache_noise or seed is None:
+            return None
+
+        cache_key = (
+            data_shape,
+            self.noise_type,
+            self.noise_level,
+            seed,
+            device,
+            dtype,
+        )
+
+        # Update access order
+        if cache_key in self._noise_cache_order:
+            self._noise_cache_order.move_to_end(cache_key)
+            return self._noise_state_cache[cache_key]
+
+        # Check if we need to evict old entries
+        if len(self._noise_state_cache) >= self.noise_cache_size:
+            oldest_key = next(iter(self._noise_cache_order))
+            del self._noise_state_cache[oldest_key]
+            del self._noise_cache_order[oldest_key]
+
+        # Generate new noise state by calling function without cached_noise_state
+        dummy_tensor = torch.zeros(data_shape, dtype=dtype, device=device)
+        _, noise_state = self.noise_function(dummy_tensor, self.noise_level, seed=seed)
+
+        # Cache the noise state
+        self._noise_state_cache[cache_key] = noise_state
+        self._noise_cache_order[cache_key] = True
+
+        return noise_state
+
+    def _apply_noise_optimized(
+        self, data: torch.Tensor, sample_idx=None
+    ) -> torch.Tensor:
+        """Apply noise with state caching optimization."""
+        seed = self._get_noise_seed(sample_idx)
+
+        # Try to get cached noise state first
+        if self._should_cache_noise and seed is not None:
+            cached_state = self._get_cached_noise_state(
+                data.shape, data.device, data.dtype, seed
+            )
+            if cached_state is not None:
+                # Apply noise using cached state
+                return self.noise_function(
+                    data, self.noise_level, seed=seed, cached_noise_state=cached_state
+                )
+
+        # Fallback to direct noise generation (returns both result and state)
+        result, _ = self.noise_function(data, self.noise_level, seed=seed)
+        return result
+
+    def _apply_noise_to_void_periods(
+        self, output_data: torch.Tensor, sample_idx=None
+    ) -> torch.Tensor:
+        """Apply noise to void periods (intro and outro) if noise_void is True."""
+        if not self.noise_void:
+            return output_data
+
+        # Apply noise to intro period
+        if self.intro_duration > 0:
+            intro_data = output_data[:, : self.intro_duration]
+            noisy_intro = self._apply_noise_optimized(intro_data, sample_idx)
+            output_data[:, : self.intro_duration] = noisy_intro
+
+        # Apply noise to outro period
+        if self.outro_duration > 0:
+            outro_start = self.intro_duration + self.stimulus_duration
+            outro_data = output_data[
+                :, outro_start : outro_start + self.outro_duration
+            ]
+            noisy_outro = self._apply_noise_optimized(outro_data, sample_idx)
+            output_data[:, outro_start : outro_start + self.outro_duration] = (
+                noisy_outro
+            )
+
+        return output_data
 
     def __iter__(self):
-        for sample in DataLoader.__iter__(self):
-            data, label_indices, *extra = sample
+        self._sample_counter = 0  # Reset counter
 
-            data = _adjust_data_dimensions(data)
-            data = self._apply_noise(data)  # Apply noise
-            data = self._optimize_tensor_layout(data)
-            label_indices = _adjust_label_dimensions(label_indices)
+        try:
+            for sample in DataLoader.__iter__(self):
+                data, label_indices, *extra = sample
 
-            # Get pre-allocated tensors
-            output_data, output_labels = self._get_cached_tensors(
-                data.shape, label_indices.shape, data.device, data.dtype
-            )
+                # Apply noise to stimulus data before layout optimization
+                data = self._apply_noise_optimized(data, self._sample_counter)
 
-            # Async tensor operations and pre-fill with void values
-            data, label_indices = self._async_tensor_operations(
-                data,
-                label_indices,
-                output_data,
-                output_labels,
-                self.non_input_value,
-                self.non_label_index,
-            )
+                # Apply performance optimizations
+                data = _adjust_data_dimensions(data, self._optimal_memory_format)
 
-            # Use JIT-compiled functions
-            time_idx = self.intro_duration  # Skip intro (pre-filled)
+                data = self._optimize_tensor_layout(data)
 
-            # Stimulus period
-            if self.stimulus_duration > 0:
-                expanded_data = self._expand_jit(data, 1, self.stimulus_duration)
-                expanded_labels = self._expand_jit(
-                    label_indices, 1, self.stimulus_duration
+                if isinstance(data, torch.Tensor):
+                    data = data.to(dtype=self.dtype)
+
+                label_indices = _adjust_label_dimensions(label_indices)
+
+                # Get pre-allocated tensors
+                output_data, output_labels = self._get_cached_tensors(
+                    data.shape, label_indices.shape, data.device, data.dtype
                 )
 
-                self._fill_period_jit(
+                # Async tensor operations and pre-fill with void values
+                data, label_indices = self._async_tensor_operations(
+                    data,
+                    label_indices,
                     output_data,
                     output_labels,
-                    expanded_data,
-                    expanded_labels,
-                    time_idx,
-                    self.stimulus_duration,
+                    self.non_input_value,
+                    self.non_label_index,
                 )
 
-            yield [output_data, output_labels, *extra]
+                # Use JIT-compiled functions for stimulus period
+                time_idx = self.intro_duration  # Skip intro (pre-filled)
+
+                if self.stimulus_duration > 0:
+                    expanded_data = self._expand_jit(data, 1, self.stimulus_duration)
+                    expanded_labels = self._expand_jit(
+                        label_indices, 1, self.stimulus_duration
+                    )
+
+                    self._fill_period_jit(
+                        output_data,
+                        output_labels,
+                        expanded_data,
+                        expanded_labels,
+                        time_idx,
+                        self.stimulus_duration,
+                    )
+
+                # Apply noise to void periods if enabled
+                if self.noise_void:
+                    output_data = self._apply_noise_to_void_periods(
+                        output_data, self._sample_counter
+                    )
+
+                self._sample_counter += 1
+                yield [output_data, output_labels, *extra]
+
+        except Exception as e:
+            logger.error(f"Error in stimulus noise loading: {str(e)}")
+            raise
 
 
+# Update DATALOADER_CLASSES to include StimulusNoiseDataLoader
 DATALOADER_CLASSES = {
     "StandardDataLoader": StandardDataLoader,
     "StimulusRepetitionDataLoader": StimulusRepetitionDataLoader,
     "StimulusDurationDataLoader": StimulusDurationDataLoader,
     "StimulusIntervalDataLoader": StimulusIntervalDataLoader,
     "StimulusContrastDataLoader": StimulusContrastDataLoader,
+    "StimulusNoiseDataLoader": StimulusNoiseDataLoader,  # Added missing entry
 }
 
 

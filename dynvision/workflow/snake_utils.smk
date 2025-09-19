@@ -50,16 +50,15 @@ wildcard_constraints:
     data_loader = r'[a-zA-Z]+',
     status = r'[a-z]+',
     seed = r'\d+',
-    condition = r'(withwave_|nowave_|\s?)',
     category = r'(?!folder)[a-z0-9]+',
     model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',
     data_args = r'(:[a-zTF,;:\+=\d\.]+|\s?)',
     args = r'([a-z,;:\+=\d\.]+|\s?)',
     args1 = r'([a-z,;:\+=\d\.]+[,;:\+]|\s?)',
     args2 = r'([a-z,;:\+=\d\.]+|\s?)',
-    parameter = r'(contrast|duration|interval)',
     experiment = r'[a-z]+',
-    layer_name = r'(layer1|layer2|V1|V2|V4|IT)'
+    layer_name = r'(layer1|layer2|V1|V2|V4|IT)',
+    model_identifier = r'([\w:+=,\*]+)'
 
 localrules: all, symlink_data_subsets, symlink_data_groups, experiment
 ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model

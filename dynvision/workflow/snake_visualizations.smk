@@ -12,13 +12,6 @@ This workflow handles all visualization-related tasks including:
 - Enhanced weight analysis
 - Temporal dynamics visualization
 - Interactive notebook generation
-
-Usage:
-    # Generate confusion matrix
-    snakemake plot_confusion_matrix model_name=DyRCNNx4
-
-    # Analyze classifier responses
-    snakemake plot_classifier_responses model_name=DyRCNNx4
 """
 
 logger = logging.getLogger('workflow.visualizations')
@@ -207,8 +200,7 @@ rule process_plotting_data:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
-    # group: "visualization"
+        layer_power = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
     shell:
         """
         {params.execution_cmd} \
@@ -218,6 +210,36 @@ rule process_plotting_data:
             --parameter {params.parameter} \
             --category {wildcards.category} \
             --measures {params.measures} 
+        """
+
+rule process_test_performance:
+    input:
+        test_outputs = expand(project_paths.reports
+            / '{{model_name}}' \
+            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_outputs.csv',
+            category_value = lambda w: config.experiment_config['categories'][w.category],
+            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
+            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+        ),
+        script = SCRIPTS / 'visualization' / 'process_test_performance.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        topk = [3, 5],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_performance.csv',
+    shell:
+        """
+        {params.execution_cmd} \
+            --test_outputs {input.test_outputs:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --category {wildcards.category} \
+            --topk {params.topk}
         """
 
 rule reduce_plotting_data_size:
@@ -254,7 +276,7 @@ checkpoint plot_adaption:
         Adaptation analysis plots
     """
     input:
-        data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
+        data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power_small.csv',
         script = SCRIPTS / 'visualization' / 'plot_{plot}.py'
     params:
         measures = ['power', 'peak_height', 'peak_time'],
@@ -319,48 +341,34 @@ rule plot_experiments_on_models:
         touch {output:q} 
         """
 
-rule plot_accuracy:
+rule plot_test_performance:
     input:
-        outputs = project_paths.figures / 'duration' \
-            / 'duration_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' \ 
-            / 'layer_power_small.csv',
-        training_csv = project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_train_accuracy.csv',
-        validation_csv = project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_val_accuracy.csv',
-        memory_csv = project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_gpu_mem_alloc.csv',
-        energy_csv= project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_energyloss.csv',
-        cross_entropy_csv= project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_crossentropyloss.csv',
-        script = SCRIPTS / 'visualization' / 'plot_accuracy.py'
+        data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_performance.csv',
+        script = SCRIPTS / 'visualization' / 'plot_test_performance.py'
     params:
+        topk = 1,
+        dt = float(config.dt),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / 'accuracy' / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}.png',
-    # group: "visualization"
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_performance.png',
     shell:
         """
-        python {input.script:q} \
-            --testing_csv {input.outputs:q} \
-            --training_csv {input.training_csv:q} \
-            --validation_csv {input.validation_csv:q} \
-            --energy_csv {input.energy_csv:q} \
-            --cross_entropy_csv {input.cross_entropy_csv:q} \
-            --output {output:q} 
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} \
+            --topk {params.topk} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
         """
-            # --memory_csv {input.memory_csv:q} \
-        # {params.execution_cmd} \
 
 rule plot_training:
     input:
@@ -392,7 +400,7 @@ rule plot_training:
     # group: "visualization"
     shell:
         """
-        python {input.script:q} \
+        {params.execution_cmd} \
             --accuracy_csv {input.accuracy_csv:q} \
             --memory_csv {input.memory_csv:q} \
             --epoch_csv {input.epoch_csv:q} \
@@ -451,7 +459,6 @@ rule plot_response:
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'response.png',
-    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -477,6 +484,9 @@ rule plot_response_tripytch:
         ),
         category = ' '.join(['tau', 'trc', 'tsk']),
         dt = 2,
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
     # group: "visualization"
@@ -491,7 +501,10 @@ rule plot_response_tripytch:
             --output {output:q} \
             --parameter {params.parameter} \
             --category {params.category:q} \
-            --dt {params.dt}
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
         """
             # --data3 {input.data3:q} \
 
@@ -514,7 +527,9 @@ rule plot_response_tripytch2:
         category = ' '.join(['rctarget', 'lossrt', 'feedback']),
         dt = 2,
         outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
-        palette = lambda w: json.dumps(config.palette)
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctarget=*+lossrt=*+feedback=*_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
     # group: "visualization"
@@ -530,5 +545,30 @@ rule plot_response_tripytch2:
             --output {output:q} \
             --parameter {params.parameter} \
             --category {params.category:q} \
-            --dt {params.dt}
+            --dt {params.dt} \
+            --outlier_threshold {params.outlier_threshold} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
+        """
+
+rule plot_experiment:
+    input:
+        data = project_paths.figures / '{experiment}' / '{experiment}_{model_identifier}' / 'layer_power_small.csv',
+        script = SCRIPTS / 'visualization' / 'plot_experiment.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_identifier}' / 'experiment.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
         """

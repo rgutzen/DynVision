@@ -6,15 +6,19 @@ This module provides visualization-related utilities:
 - Accuracy calculation
 - Response data loading
 - Plot saving
+- Common plotting functions
 """
 
+import json
 import logging
 import sys
 from copy import deepcopy
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any, Optional
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import seaborn as sns
 import numpy as np
 import pandas as pd
 import torch
@@ -125,6 +129,215 @@ def calculate_accuracy(df: pd.DataFrame) -> float:
     dfi = df[df.label_index >= 0]
     accuracy = (dfi.guess_index == dfi.label_index).mean()
     return accuracy
+
+
+def load_config_from_args(palette_str=None, naming_str=None, ordering_str=None):
+    """Load configuration from JSON strings passed via command line.
+
+    Args:
+        palette_str: JSON string for palette
+        naming_str: JSON string for naming
+        ordering_str: JSON string for ordering
+
+    Returns:
+        Dictionary with config sections
+    """
+    config = {}
+
+    if palette_str:
+        try:
+            config["palette"] = json.loads(palette_str)
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse palette JSON: {e}")
+            config["palette"] = {}
+    else:
+        config["palette"] = {}
+
+    if naming_str:
+        try:
+            config["naming"] = json.loads(naming_str)
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse naming JSON: {e}")
+            config["naming"] = {}
+    else:
+        config["naming"] = {}
+
+    if ordering_str:
+        try:
+            config["ordering"] = json.loads(ordering_str)
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse ordering JSON: {e}")
+            config["ordering"] = {}
+    else:
+        config["ordering"] = {}
+
+    return config
+
+
+def get_display_name(key: str, config: Dict) -> str:
+    """Get display name/symbol for a key from config.
+
+    Args:
+        key: The key to look up
+        config: Configuration dictionary
+
+    Returns:
+        Display name or symbol, fallback to key if not found
+    """
+    naming = config.get("naming", {})
+    return naming.get(key.lower(), key)
+
+
+def get_color(key: str, config: Dict) -> Optional[str]:
+    """Get color for a key from config.
+
+    Args:
+        key: The key to look up
+        config: Configuration dictionary
+
+    Returns:
+        Color string or None if not found
+    """
+    palette = config.get("palette", {})
+    return palette.get(key)
+
+
+def get_ordering(category: str, config: Dict) -> Optional[List[str]]:
+    """Get ordering for a category from config.
+
+    Args:
+        category: The category to look up
+        config: Configuration dictionary
+
+    Returns:
+        List of ordered values or None if not found
+    """
+    ordering = config.get("ordering", {})
+    return ordering.get(category)
+
+
+def order_layers(layer_names: List[str], config: Dict) -> List[str]:
+    """Order layers according to visual hierarchy.
+
+    Args:
+        layer_names: List of layer names
+        config: Configuration dictionary
+
+    Returns:
+        Ordered list of layer names (IT, V4, V2, V1)
+    """
+    # Get ordering from config or use default
+    hierarchy_order = get_ordering("layers", config) or ["IT", "V4", "V2", "V1"]
+
+    # Get naming mapping from config
+    naming = config.get("naming", {})
+
+    # Filter out classifier layers
+    filtered_layers = [
+        layer for layer in layer_names if "classifier" not in layer.lower()
+    ]
+
+    # Sort layers according to hierarchy
+    def get_sort_key(layer_name):
+        # Map layer name to display name
+        mapped_name = naming.get(layer_name, layer_name)
+        if mapped_name in hierarchy_order:
+            return hierarchy_order.index(mapped_name)
+        else:
+            return len(hierarchy_order)  # Put unknown layers at the end
+
+    ordered_layers = sorted(filtered_layers, key=get_sort_key)
+    return ordered_layers
+
+
+def calculate_label_indicator(
+    df: pd.DataFrame, category: str, y_range: tuple
+) -> pd.DataFrame:
+    """Calculate label indicator (step function) at each time step.
+
+    Args:
+        df: DataFrame containing classifier responses
+        category: Category column name
+        y_range: Tuple of (y_min, y_max) for the current subplot
+
+    Returns:
+        DataFrame with times_index and label_indicator (relative to subplot height)
+    """
+    # Get first model's data to determine label validity at each time step
+    first_model = df[category].iloc[0]
+    model_data = df[df[category] == first_model]
+
+    # Calculate step height as 25% of the y-axis range
+    y_min, y_max = y_range
+    step_height = (y_max - y_min) * 0.25
+
+    indicator_data = []
+    for time_step in sorted(model_data.times_index.unique()):
+        time_data = model_data[model_data.times_index == time_step]
+
+        # Check if any labels are valid (>= 0) at this time step
+        valid_labels = (time_data.label_index >= 0).any()
+        indicator_value = y_min + step_height if valid_labels else y_min
+
+        indicator_data.append(
+            {"times_index": time_step, "label_indicator": indicator_value}
+        )
+
+    return pd.DataFrame(indicator_data)
+
+
+def get_category_plotting_settings(
+    category: str, category_values: List, config: Dict
+) -> Tuple[List, Dict[str, str]]:
+    """Get plotting settings for different categories.
+
+    Args:
+        category: The category name
+        category_values: List of unique category values
+        config: Configuration dictionary
+
+    Returns:
+        Tuple of (order_list, colors_dict)
+    """
+    # Get ordering from config
+    model_order = get_ordering(category, config)
+
+    if model_order:
+        # Filter to only include values that exist in the data
+        model_order = [val for val in model_order if val in category_values]
+        # Add any missing values from data
+        for val in category_values:
+            if val not in model_order:
+                model_order.append(val)
+    else:
+        # Try to order by float values if no config ordering
+        try:
+            float_values = [(float(val), val) for val in category_values]
+            float_values.sort(key=lambda x: x[0])
+            model_order = [val for _, val in float_values]
+        except (ValueError, TypeError):
+            # Can't convert to float, use alphabetical order
+            model_order = sorted(category_values)
+
+    # Get colors from config
+    colors = {}
+    for val in model_order:
+        color = get_color(val, config)
+        if color:
+            colors[val] = color
+
+    # Fill in missing colors with defaults
+    if len(colors) < len(model_order):
+        if len(model_order) <= 10:
+            default_colors = plt.cm.tab10(np.arange(len(model_order)))
+        else:
+            default_colors = plt.cm.tab20(np.arange(len(model_order)) % 20)
+
+        for i, val in enumerate(model_order):
+            if val not in colors:
+                colors[val] = mcolors.rgb2hex(default_colors[i])
+
+    return model_order, colors
 
 
 def load_responses(

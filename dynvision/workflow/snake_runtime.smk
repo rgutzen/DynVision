@@ -43,8 +43,6 @@ rule init_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_init.pt'
-    benchmark:
-        project_paths.benchmarks / 'init_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
         """
         cp {params.config_path:q} {output.model_state:q}.config.yaml
@@ -123,8 +121,6 @@ rule train_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_trained.pt'
-    benchmark:
-        project_paths.benchmarks / 'train_model_{model_name}{model_args}_{seed}_{data_name}.txt'
     shell:
         """
         cp {params.config_path:q} {output.model_state:q}.config.yaml
@@ -205,8 +201,6 @@ rule test_model:
         results = project_paths.reports \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_outputs.csv'
-    benchmark:
-        project_paths.benchmarks / 'test_model_{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.txt'
     shell:
         """
         cp {params.config_path:q} {output.results:q}.config.yaml

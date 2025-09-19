@@ -1,375 +1,220 @@
 import argparse
-import re
+import json
 from pathlib import Path
-from tqdm import tqdm
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import seaborn as sns
 import numpy as np
 import pandas as pd
 
-from dynvision.utils import replace_param_in_string
-from dynvision.utils.visualization_utils import save_plot
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--data", type=Path, required=True, help="Path to pt files")
-parser.add_argument("--output", type=Path, required=True, help="Path to directory")
-parser.add_argument("--parameter", type=str, required=True, help="Parameter to plot")
-parser.add_argument("--category", type=str, required=True, help="Category to plot")
-parser.add_argument(
-    "--focus_layer", type=str, default="V4", help="Layer name to use as V4"
+from dynvision.utils.visualization_utils import (
+    save_plot,
+    load_config_from_args,
+    get_display_name,
+    get_color,
+    calculate_label_indicator,
+    get_category_plotting_settings,
+    order_layers,
 )
 
+# Global styling parameters
+FONTSIZE_PANEL_LABELS = 18
+FONTSIZE_AXIS_LABELS = 18
+FONTSIZE_TICK_LABELS = 16
+FONTSIZE_LEGEND = 18
+FONTSIZE_TITLE = 20
+LINEWIDTH_MAIN = 3
+LINEWIDTH_INDICATOR = 3
+ALPHA_LINES = 0.8
+ALPHA_INDICATOR = 0.6
+FIGURE_HEIGHT_PER_SUBPLOT = 3
+SUBPLOT_SPACING = 0.2
 
-def order_layers(layer_names):
-    """Order layers according to visual hierarchy: IT, V4, V2, V1 (top to bottom)"""
-    # Define the preferred order mapping
-    layer_order = {
-        "layer1": "V1",
-        "layer2": "V2",
-        "layer3": "V4",
-        "layer4": "V4",
-        "layer5": "IT",
-        "classifier": "classifier",  # Will be filtered out
-    }
-
-    # Filter out classifier and sort by hierarchy (IT at top, V1 at bottom)
-    hierarchy_order = ["IT", "V4", "V2", "V1"]
-
-    # Filter out classifier layers
-    filtered_layers = [
-        layer for layer in layer_names if "classifier" not in layer.lower()
-    ]
-
-    # Sort layers according to hierarchy
-    def get_sort_key(layer_name):
-        mapped_name = layer_order.get(layer_name, layer_name)
-        if mapped_name in hierarchy_order:
-            return hierarchy_order.index(mapped_name)
-        else:
-            return len(hierarchy_order)  # Put unknown layers at the end
-
-    ordered_layers = sorted(filtered_layers, key=get_sort_key)
-
-    return ordered_layers
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--data", type=Path, required=True, help="Path to layer power CSV file"
+)
+parser.add_argument(
+    "--output", type=Path, required=True, help="Path to output plot file"
+)
+parser.add_argument("--parameter", type=str, required=True, help="Parameter to plot")
+parser.add_argument("--category", type=str, required=True, help="Category name")
+parser.add_argument("--palette", type=str, help="JSON formatted dictionary of colors")
+parser.add_argument("--naming", type=str, help="JSON formatted naming dictionary")
+parser.add_argument("--ordering", type=str, help="JSON formatted ordering dictionary")
 
 
-def calculate_label_indicator(
-    df: pd.DataFrame, category: str, y_range: tuple
-) -> pd.DataFrame:
-    """
-    Calculate label indicator (step function) at each time step.
-
-    Args:
-        df: DataFrame containing classifier responses
-        category: Category column name
-        y_range: Tuple of (y_min, y_max) for the current subplot
-
-    Returns:
-        DataFrame with times_index and label_indicator (relative to subplot height)
-    """
-    # Get first model's data to determine label validity at each time step
-    first_model = df[category].iloc[0]
-    model_data = df[df[category] == first_model]
-
-    # Calculate step height as 10% of the y-axis range
-    y_min, y_max = y_range
-    step_height = (y_max - y_min) * 0.25
-
-    indicator_data = []
-    for time_step in sorted(model_data.times_index.unique()):
-        time_data = model_data[model_data.times_index == time_step]
-
-        # Check if any labels are valid (>= 0) at this time step
-        valid_labels = (time_data.label_index >= 0).any()
-        indicator_value = y_min + step_height if valid_labels else y_min
-
-        indicator_data.append(
-            {"times_index": time_step, "label_indicator": indicator_value}
-        )
-
-    return pd.DataFrame(indicator_data)
-
-
-def get_category_plotting_settings(category, category_values=None):
-    """
-    Generalize plotting settings for different categories.
-
-    Parameters:
-    -----------
-    category : str
-        The category name
-    category_values : list, optional
-        List of unique category values. Required if category != 'rctype'.
-
-    Returns:
-    --------
-    tuple: (order_list, colors_dict)
-        - order_list: List of category values in the desired order
-        - colors_dict: Dictionary mapping category values to hex colors
-    """
-
-    if category == "rctype":
-        # Use predefined rctype settings
-        rctype_model_order = ["full", "self", "depthpointwise", "pointdepthwise"]
-        rctype_colors = {
-            "full": "#DAA520",  # More golden
-            "self": "#228B22",  # Forest green
-            "depthpointwise": "#4682B4",  # Steel blue
-            "pointdepthwise": "#9932CC",  # Dark orchid
-        }
-        return rctype_model_order, rctype_colors
-
-    else:
-        # Create settings for other categories
-        if category_values is None:
-            raise ValueError(
-                "category_values must be provided for non-rctype categories"
-            )
-
-        unique_values = list(set(category_values))
-
-        # Try to order by float values
-        try:
-            # Attempt to convert to float and sort
-            float_values = [(float(val), val) for val in unique_values]
-            float_values.sort(key=lambda x: x[0])
-            ordered_values = [val for _, val in float_values]
-
-            # Use sequential palette for numeric data
-            colors = plt.cm.viridis_r(np.linspace(0, 1, len(ordered_values)))
-            colors_dict = {
-                val: mcolors.rgb2hex(color)
-                for val, color in zip(ordered_values, colors)
-            }
-
-        except (ValueError, TypeError):
-            # Can't convert to float, use alphabetical order
-            ordered_values = sorted(unique_values)
-
-            # Use categorical palette for non-numeric data
-            if len(ordered_values) <= 10:
-                colors = plt.cm.tab10(np.arange(len(ordered_values)))
-            else:
-                # Use larger palette for more categories
-                colors = plt.cm.tab20(np.arange(len(ordered_values)) % 20)
-
-            colors_dict = {
-                val: mcolors.rgb2hex(color)
-                for val, color in zip(ordered_values, colors)
-            }
-
-        return ordered_values, colors_dict
-
-
-def plot_unified_adaption(
-    df,
-    data_arg_key="contrast",
-    focus_layer="V4",
-    category="rctype",
-    output_path=None,
-    experiment="duration",
-):
-    """
-    Create unified figure with:
-    - Upper: Different layers for middle key_value (switched from lower)
-    - Middle: Peak height and peak time plots + legend (optional based on output path)
-    - Lower: V4 layer power across different key_values (switched from upper)
-    """
+def plot_response(df, parameter, category, config=None, output_path=None):
+    """Create response plot showing model responses across parameter values."""
 
     print(f"Plot data shape: {df.shape}")
     print(f"Available columns: {df.columns.tolist()}")
-    print(f"Unique {data_arg_key} values: {sorted(df[data_arg_key].unique())}")
 
-    # Check if we should skip middle section
-    skip_middle = output_path and "response" in str(output_path).lower()
-    print(f"Skip middle section: {skip_middle}")
+    # Get layer names from columns
+    layer_cols = [col for col in df.columns if col.endswith("_power")]
+    layer_names = [col.replace("_power", "") for col in layer_cols]
 
-    # Get unique values and layers (exclude classifier)
-    key_values = sorted(df[data_arg_key].unique())
-    all_layer_names = [
-        col.replace("_power", "") for col in df.columns if col.endswith("_power")
-    ]
-    layer_names = order_layers(all_layer_names)
+    # Order layers according to hierarchy
+    ordered_layers = order_layers(layer_names, config)
 
-    print(f"Key values: {key_values}")
-    print(f"Layer names: {layer_names}")
+    print(f"Using layers: {ordered_layers}")
 
-    # Define rctype plotting settings
+    # Get plotting settings from config
     category_values = sorted(df[category].unique())
-    model_order, colors = get_category_plotting_settings(category, category_values)
-
-    # Create figure
-    fig = plt.figure(figsize=(8, 7))
-
-    # Calculate subplot parameters for ridgeplot effect
-    n_upper = len(layer_names)  # Switched: now using layer_names
-
-    print(f"Upper section subset shape: {df.shape}")
-
-    upper_spacing = 1 / max(n_upper, 1) * 0.8
-    upper_plot_height = upper_spacing * 1.3
-
-    print(
-        f"Upper section: {n_upper} plots, spacing: {upper_spacing}, height: {upper_plot_height}"
+    model_order, colors = get_category_plotting_settings(
+        category, category_values, config
     )
 
-    # Store axes for y-axis sharing
-    upper_axes = []
+    # Get unique parameter values
+    param_values = sorted(df[parameter].unique())
+    n_params = len(param_values)
+    n_layers = len(ordered_layers)
 
-    for i, layer_name in enumerate(layer_names):
-        # Calculate position from top to bottom
-        top_pos = 1 - i * upper_spacing
-        bottom_pos = top_pos - upper_plot_height
+    # Set seaborn style
+    sns.set_style("whitegrid")
+    sns.set_context("talk")
 
-        print(
-            f"Upper plot {i}: layer={layer_name}, top={top_pos}, bottom={bottom_pos}"
+    # Create figure with subplots: layers x parameters
+    fig, axes = plt.subplots(
+        n_layers,
+        n_params,
+        figsize=(4 * n_params, FIGURE_HEIGHT_PER_SUBPLOT * n_layers),
+        sharex=True,
+        sharey="row",
+    )
+
+    # Ensure axes is always 2D
+    if n_layers == 1 and n_params == 1:
+        axes = [[axes]]
+    elif n_layers == 1:
+        axes = [axes]
+    elif n_params == 1:
+        axes = [[ax] for ax in axes]
+
+    # Plot for each layer and parameter combination
+    for i, layer in enumerate(ordered_layers):
+        layer_col = f"{layer}_power"
+
+        if layer_col not in df.columns:
+            print(f"Warning: {layer_col} not found in data")
+            continue
+
+        for j, param_val in enumerate(param_values):
+            ax = axes[i][j]
+            param_data = df[df[parameter] == param_val]
+
+            # Plot each category
+            for cat_val in model_order:
+                if cat_val in param_data[category].values:
+                    cat_data = param_data[param_data[category] == cat_val]
+
+                    # Group by time to get mean power
+                    time_data = (
+                        cat_data.groupby("times_index")[layer_col].mean().reset_index()
+                    )
+
+                    # Use seaborn lineplot
+                    sns.lineplot(
+                        data=time_data,
+                        x="times_index",
+                        y=layer_col,
+                        color=colors[cat_val],
+                        linewidth=LINEWIDTH_MAIN,
+                        alpha=ALPHA_LINES,
+                        ax=ax,
+                        label=cat_val if i == 0 and j == 0 else "",
+                    )
+
+            # Add label indicator
+            if len(param_data) > 0:
+                y_min, y_max = ax.get_ylim()
+                label_indicator_df = calculate_label_indicator(
+                    param_data, category, (y_min, y_max)
+                )
+
+                ax.plot(
+                    label_indicator_df.times_index,
+                    label_indicator_df.label_indicator,
+                    color="gray",
+                    linewidth=LINEWIDTH_INDICATOR,
+                    drawstyle="steps-mid",
+                    alpha=ALPHA_INDICATOR,
+                )
+
+            # Customize subplot
+            if i == 0:
+                param_display = param_val
+                param_symbol = get_display_name(parameter, config)
+                ax.set_title(
+                    f"{param_symbol}={param_display}", fontsize=FONTSIZE_TICK_LABELS
+                )
+
+            if j == 0:
+                layer_display_name = get_display_name(layer, config)
+                ax.set_ylabel(
+                    f"{layer_display_name}\nPower", fontsize=FONTSIZE_AXIS_LABELS
+                )
+
+            if i == n_layers - 1:
+                ax.set_xlabel("Time Step", fontsize=FONTSIZE_AXIS_LABELS)
+
+            ax.grid(True, alpha=0.3)
+
+            # Remove top and right spines
+            sns.despine(ax=ax)
+
+    # Add legend only to the first subplot
+    if n_layers > 0 and n_params > 0:
+        axes[0][0].legend(
+            title="Model Category",
+            bbox_to_anchor=(1.05, 1),
+            loc="upper left",
+            fontsize=FONTSIZE_LEGEND,
+            title_fontsize=FONTSIZE_LEGEND,
         )
 
-        ax = fig.add_axes([0.15, bottom_pos, 0.75, upper_plot_height])
-        ax.patch.set_alpha(0)  # Transparent background
-        upper_axes.append(ax)
-
-        # Add gray dotted y=0 line
-        ax.axhline(0, color="gray", linestyle=":", alpha=0.7, linewidth=1)
-
-        # Plot this layer's power
-        power_col = f"{layer_name}_power"
-
-        if power_col in df.columns and len(df) > 0:
-            print(f"  Plotting {power_col}")
-            sns.lineplot(
-                data=df,
-                x="times_index",
-                y=power_col,
-                ax=ax,
-                marker=".",
-                hue=category,
-                hue_order=model_order,
-                palette=colors,
-                legend=False,
-            )
-        else:
-            print(f"  Warning: No data for {power_col}")
-
-        # Add step function for label indicator to the bottom subplot
-        if i == len(layer_names) - 1:  # Bottom subplot
-            y_min, y_max = ax.get_ylim()
-            label_indicator_df = calculate_label_indicator(
-                df, category, (y_min, y_max)
-            )
-            ax.plot(
-                label_indicator_df.times_index,
-                label_indicator_df.label_indicator,
-                color="gray",
-                linewidth=3,
-                drawstyle="steps-mid",
-                alpha=0.8,
-            )
-
-        ax.set_yticklabels([])
-
-        # Formatting with label box positioned outside the plot area
-        layer_colors = {
-            "V1": "#ff69b4ff",
-            "V2": "#dda0ddff",
-            "V4": "#da70d6ff",
-            "IT": "#ba55d3ff",
-        }
-        pad = 0.5 if layer_name == "IT" else 0.4
-        ax.text(
-            1.02,  # Position outside the plot area
-            0.4,  # Position near bottom
-            layer_name.upper(),
-            horizontalalignment="left",  # Changed to left since it's outside
-            verticalalignment="bottom",
-            transform=ax.transAxes,
-            va="center",
-            bbox=dict(
-                boxstyle=f"circle,pad={pad}",
-                facecolor=layer_colors[layer_name.upper()],
-                edgecolor="#353535ff",
-                linewidth=2,
-                alpha=0.8,
-            ),
-        )
-
-        ax.set_ylabel("")
-        ax.set_xlabel("")
-
-        # Only show x-axis labels on bottom subplot
-        if i < len(layer_names) - 1:
-            ax.set_xticklabels([])
-        else:
-            ax.set_xlabel("Time Index")
-
-        sns.despine(ax=ax, left=True, bottom=True)
-
-    # Share y-axis for upper section
-    if upper_axes:
-        # Get all y-limits
-        all_y_limits = [ax.get_ylim() for ax in upper_axes]
-        global_y_min = min(lim[0] for lim in all_y_limits)
-        global_y_max = max(lim[1] for lim in all_y_limits)
-
-        # Set same y-limits for all upper axes
-        for ax in upper_axes:
-            ax.set_ylim(global_y_min, global_y_max)
-
-    # Legend as third component
-    legend_ax = fig.add_axes([0.15, bottom_pos, 0.74, 0.8])
-    legend_ax.set_xlim(0, 1)
-    legend_ax.set_ylim(0, 1)
-    # legend_ax.axis("off")
-    legend_ax.set_ylabel(
-        f"Avg Layer Power ($\\Delta_s = {key_values[0]}$)", labelpad=4
+    # Overall title
+    param_display_name = get_display_name(parameter, config)
+    fig.suptitle(
+        f"Layer Responses across {param_display_name}", fontsize=FONTSIZE_TITLE, y=0.98
     )
-    legend_ax.set_xticks([])
-    legend_ax.set_yticks([])
-    sns.despine(ax=legend_ax, left=True, bottom=True)
-    legend_ax.patch.set_alpha(0)  # Transparent background
 
-    # Create invisible plots just for the legend
-    for i, (model, color) in enumerate(colors.items()):
-        if model in model_order:
-            legend_ax.plot([], [], color=color, label=model, linewidth=3, marker=".")
+    # Adjust layout
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.95, right=0.85, hspace=SUBPLOT_SPACING, wspace=0.3)
 
-    legend = legend_ax.legend(
-        loc="lower right",
-        title=category,
-        frameon=True,
-        fontsize=16,
-        handlelength=2,
-        handletextpad=0.5,
-    )
-    frame = legend.get_frame()
-    frame.set_facecolor("white")
-    frame.set_edgecolor("white")
-    frame.set_alpha(1)
     return fig
 
 
 if __name__ == "__main__":
-    args, unknown = parser.parse_known_args()
+    args = parser.parse_args()
 
-    print(f"Loading processed data from: {args.data}")
+    print(f"Loading layer power data from: {args.data}")
     df = pd.read_csv(args.data)
 
-    # Set plotting style
-    sns.set_context("talk")
-
-    # Generate the unified figure
-    fig = plot_unified_adaption(
-        df,
-        data_arg_key=args.parameter,
-        focus_layer=args.focus_layer,
-        category=args.category,
-        output_path=args.output,  # Pass output path to check for 'response'
-        experiment=args.data.parent.stem,
+    # Load configuration from command line arguments
+    config = load_config_from_args(
+        palette_str=args.palette, naming_str=args.naming, ordering_str=args.ordering
     )
+
+    # Check if data is empty
+    if len(df) == 0:
+        print("Warning: No data found in the input file")
+        # Create an empty figure
+        fig = plt.figure(figsize=(8, 6))
+        plt.text(0.5, 0.5, "No data available", ha="center", va="center", fontsize=16)
+        plt.axis("off")
+    else:
+        # Generate the response plot
+        fig = plot_response(
+            df,
+            parameter=args.parameter,
+            category=args.category,
+            config=config,
+            output_path=args.output,
+        )
 
     # Save the plot
     save_plot(args.output)
 
-    print(f"Unified plot saved to: {args.output}")
+    print(f"Response plot saved to: {args.output}")

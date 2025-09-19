@@ -68,3 +68,58 @@ experiment_config:
       intro: 0
       stim: 6
       interval: [1, 2, 4, 8, 16]
+
+  uniformnoise:
+    status: trained
+    parameter: noiselevel
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 10
+      intro: 0
+      stim: 6
+      noisetype: uniform
+      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+
+  saltpeppernoise:
+    status: trained
+    parameter: noiselevel
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 50
+      intro: 0
+      stim: 30
+      noisetype: saltpepper
+      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+
+  poissonnoise:
+    status: trained
+    parameter: noiselevel
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 50
+      intro: 0
+      stim: 30
+      noisetype: poisson
+      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+
+  gaussianblurnoise:
+    status: trained
+    parameter: noiselevel
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 50
+      intro: 0
+      stim: 30
+      noisetype: gaussianblur
+      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]
+
+  motionblurnoise:
+    status: trained
+    parameter: noiselevel
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 50
+      intro: 0
+      stim: 30
+      noisetype: motionblur
+      noiselevel: [0.2, 0.4, 0.6, 0.8, 1.0]

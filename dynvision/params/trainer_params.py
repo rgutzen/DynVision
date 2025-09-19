@@ -120,7 +120,7 @@ class TrainerParams(BaseParams):
         default=2, description="Number of best checkpoints to save"
     )
     monitor_checkpoint: str = Field(
-        default="train_loss", description="Metric to monitor for checkpoint saving"
+        default="val_loss", description="Metric to monitor for checkpoint saving"
     )
     checkpoint_mode: str = Field(
         default="min", description="Checkpoint mode (min, max)"

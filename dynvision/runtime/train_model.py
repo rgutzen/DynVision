@@ -293,10 +293,7 @@ class ModelManager:
         model_class = getattr(models, self.config.model.model_name)
         model_kwargs = self.config.model.get_model_kwargs(model_class)
 
-        logger.info(f"Creating {model_class.__name__} with:")
-        logger.info(f"  - Input dims: {model_kwargs.get('input_dims')}")
-        logger.info(f"  - N classes: {model_kwargs.get('n_classes')}")
-        logger.info(f"  - N timesteps: {model_kwargs.get('n_timesteps')}")
+        self.config.model.log_configuration(model_kwargs)
 
         model = model_class(**model_kwargs).to(self.device)
 

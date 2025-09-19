@@ -1,4 +1,6 @@
+# Combined color palette for all visualization elements
 palette:
+  # Model categories
   full: "#B8860B"  # Dark goldenrod
   self: "#2E8B57"  # Sea green
   depthpointwise: "#1E3A8A"  # Dark blue
@@ -6,7 +8,59 @@ palette:
   local: "#E91E63"  # Pink/red
   localdepthwise: "#FF6347" # Tomato
   accent: "#EC4899"  # Pink/magenta 
-  "V1": "#ff69b4ff"
-  "V2": "#dda0ddff"
-  "V4": "#da70d6ff"
-  "IT": "#ba55d3ff"
+  # Layers
+  V1: "#ff69b4ff"
+  V2: "#dda0ddff"
+  V4: "#da70d6ff"
+  IT: "#ba55d3ff"
+  classifier: "#808080ff"
+
+# Combined naming dictionary for display labels and symbols
+naming:
+  # Parameters
+  duration: "$D$"
+  contrast: "$C$"
+  interval: "$I$"
+  noiselevel: "$\\sigma$"
+  noise: "$\\sigma$"
+  stim: "$D$"
+  stimulus: "$D$"
+  tau: "$\\tau$"
+  trc: "$\\Delta_{RC}$"
+  tsk: "$\\Delta_{SK}$"
+  rctarget: "Target"
+  rctype: "Recurrence"
+  lossrt: "$t_{loss}$"
+  feedback: "Feedback"
+  add: "Additive"
+  mul: "Multiplicative"
+  ffonly: "Feedforward Only"
+  # Layers
+  layer1: "V1"
+  layer2: "V2"
+  layer3: "V4"
+  layer4: "IT"
+  # Metrics
+  accuracy: "Accuracy"
+  confidence: "Confidence"
+  peak_height: "Peak Height"
+  peak_time: "Peak Time"
+  peak_ratio: "Peak Ratio"
+  power: "Power"
+  # Experiments
+  duration_experiment: "Duration"
+  contrast_experiment: "Contrast"
+  interval_experiment: "Interval"
+  stability_experiment: "Stability"
+  response_experiment: "Response"
+  responseffonly_experiment: "Feedforward Only"
+  uniformnoise_experiment: "Uniform Noise"
+  poissonnoise_experiment: "Poisson Noise"
+  saltpeppernoise_experiment: "Salt & Pepper"
+  gaussiablurnnoise_experiment: "Gaussian Blur"
+  motionblurnoise_experiment: "Motion Blur"
+
+# Ordering dictionaries for consistent display order
+ordering:
+  layers: ["IT", "V4", "V2", "V1"]
+  rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise"]

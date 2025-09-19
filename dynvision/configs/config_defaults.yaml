@@ -82,7 +82,7 @@ optimizer_kwargs:
   weight_decay: 0.0005
   fused: False
 optimizer_configs:
-  monitor: train_loss
+  monitor: val_loss
 
 # Learning rate parameter groups
 lr_parameter_groups:
