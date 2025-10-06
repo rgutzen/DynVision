@@ -798,9 +798,30 @@ class StorageBuffer:
             f"records={max_records}({record_strategy})"
         )
 
-    def store_responses(self, response_dict: Dict[str, torch.Tensor]) -> bool:
-        """Store neural network layer responses."""
-        return self.responses.append(response_dict)
+    def store_responses(
+        self, response_dict: Dict[str, torch.Tensor], precision: int = 16
+    ) -> bool:
+        """
+        Store neural network layer responses.
+
+        Args:
+            response_dict: Dictionary of layer name to response tensor
+            precision: Bit precision to store tensors (16 or 32)
+
+        Returns:
+            bool: True if data was stored, False otherwise
+        """
+        # Convert tensors to specified precision
+        processed_dict = {}
+        for key, tensor in response_dict.items():
+            if precision == 16 and tensor.dtype != torch.float16:
+                processed_dict[key] = tensor.to(dtype=torch.float16)
+            elif precision == 32 and tensor.dtype != torch.float32:
+                processed_dict[key] = tensor.to(dtype=torch.float32)
+            else:
+                processed_dict[key] = tensor
+
+        return self.responses.append(processed_dict)
 
     def store_records(
         self,
@@ -1129,12 +1150,12 @@ class StorageBuffer:
                 np.arange(n_classes),
                 indexing="ij",
             )
-            label_sets = np.array(["".join(row.astype(str)) for row in label_indices])
-            label_sets = (
-                label_sets[:, None, None]
-                .repeat(n_timesteps, axis=-2)
-                .repeat(n_classes, axis=-1)
-            )
+            # label_sets = np.array(["".join(row.astype(str)) for row in label_indices])
+            # label_sets = (
+            #     label_sets[:, None, None]
+            #     .repeat(n_timesteps, axis=-2)
+            #     .repeat(n_classes, axis=-1)
+            # )
             label_indices = label_indices[..., None].repeat(n_classes, axis=-1)
             guess_indices = guess_indices[..., None].repeat(n_classes, axis=-1)
             image_indices = image_indices[..., None].repeat(n_classes, axis=-1)
@@ -1148,7 +1169,7 @@ class StorageBuffer:
                     "label_index": label_indices.ravel(),
                     "guess_index": guess_indices.ravel(),
                     "image_index": image_indices.ravel(),
-                    "label_set": label_sets.ravel(),
+                    # "label_set": label_sets.ravel(),
                 }
             )
 
@@ -1210,8 +1231,8 @@ class StorageBufferMixin(LightningModule):
     }
 
     validation_storage_config: Dict[str, Any] = {
-        "max_responses": 1,  # Enabled by default
-        "max_records": 1,  # Enabled by default
+        "max_responses": 0,  # Enabled by default
+        "max_records": 0,  # Enabled by default
         "response_strategy": "fixed",
         "record_strategy": "fixed",
         "cpu_offload": True,
@@ -1219,8 +1240,8 @@ class StorageBufferMixin(LightningModule):
     }
 
     testing_storage_config: Dict[str, Any] = {
-        "max_responses": 3,  # Enabled by default for analysis
-        "max_records": 8,  # Much larger for detailed analysis
+        "max_responses": 5,  # Enabled by default for analysis
+        "max_records": 5,  # Much larger for detailed analysis
         "response_strategy": "fixed",  # Keep recent responses
         "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,
@@ -1235,6 +1256,7 @@ class StorageBufferMixin(LightningModule):
         store_train_records: Optional[int] = None,
         store_val_records: Optional[int] = None,
         store_test_records: Optional[int] = None,
+        early_test_stop: bool = True,
         **kwargs,
     ):
         """Initialize with flexible storage configuration."""
@@ -1256,6 +1278,9 @@ class StorageBufferMixin(LightningModule):
         if store_test_records is not None:
             self.testing_storage_config["max_records"] = store_test_records
 
+        # Set early stopping configuration
+        self.early_test_stop = early_test_stop
+
         # Always create a storage instance (with zero capacity initially)
         self.storage = StorageBuffer(
             max_responses=0,
@@ -1263,6 +1288,9 @@ class StorageBufferMixin(LightningModule):
             cpu_offload=True,
             thread_safe=True,
         )
+
+        # Flag to track when to stop testing early
+        self._stop_testing_early = False
 
     def get_dataframe(self, **kwargs) -> pd.DataFrame:
         return self.storage.get_dataframe(**kwargs)
@@ -1288,8 +1316,46 @@ class StorageBufferMixin(LightningModule):
                     self.storage.clear_all()
                     torch.cuda.empty_cache()
 
+    def _check_buffer_filled(self) -> bool:
+        """
+        Check if response buffer is filled and should stop early.
+
+        Returns:
+            bool: True if testing should be stopped early
+        """
+        # Only check if early stopping is enabled
+        if not self.early_test_stop:
+            return False
+
+        # Skip for unlimited or non-fixed strategies
+        if (
+            self.storage.responses.max_size <= 0
+            or self.storage.responses.strategy_name not in ["fixed"]
+        ):
+            return False
+
+        # Check if buffer is filled
+        is_filled = len(self.storage.responses) >= self.storage.responses.max_size
+
+        if is_filled and not self._stop_testing_early:
+            logger.info(
+                f"Response buffer filled ({len(self.storage.responses)}/{self.storage.responses.max_size}). "
+                f"Stopping testing early."
+            )
+            self._stop_testing_early = True
+
+        return is_filled
+
     def on_test_batch_end(self, *args, **kwargs):
         self._check_memory_usage("test")
+
+        # Check if we should stop testing early
+        if self._check_buffer_filled():
+            # Signal to PyTorch Lightning to stop the test loop
+            # This is done by raising a specific exception that PL handles
+            from pytorch_lightning.utilities.exceptions import _TunerExitException
+
+            raise _TunerExitException("Stopping test early: response buffer filled")
 
     def on_train_epoch_start(self) -> None:
         """Initialize storage buffer at start of training epoch."""
@@ -1356,6 +1422,9 @@ class StorageBufferMixin(LightningModule):
             super().on_test_start()
         except AttributeError:
             pass
+
+        # Reset early stop flag
+        self._stop_testing_early = False
 
         # Create storage with testing configuration
         self.storage.clear_all()

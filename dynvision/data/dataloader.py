@@ -210,6 +210,7 @@ class StandardDataLoader(DataLoader):
                 data, label_indices, *extra = sample
 
                 label_indices = _adjust_label_dimensions(label_indices)
+                data = _adjust_data_dimensions(data, self._optimal_memory_format)
 
                 if self.n_timesteps > 1:
                     data = _repeat_over_time(data, self.n_timesteps)

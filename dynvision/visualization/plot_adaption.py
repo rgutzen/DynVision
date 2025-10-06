@@ -159,10 +159,10 @@ def plot_adaptation_from_pt_files(
     file_data = []
     for pt_file in pt_files:
         try:
-            param_value = replace_param_in_string(pt_file.stem, parameter, 0.0)
+            param_value = replace_param_in_string(pt_file.name, parameter, 0.0)
             file_data.append((param_value, pt_file))
         except Exception as e:
-            print(f"Warning: Could not extract {parameter} from {pt_file.stem}: {e}")
+            print(f"Warning: Could not extract {parameter} from {pt_file.name}: {e}")
             continue
 
     # Sort by parameter value

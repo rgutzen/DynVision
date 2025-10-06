@@ -25,6 +25,7 @@ class TemporalBase(nn.Module):
         rctype="recurrence_type",
         rctarget="recurrence_target",
         solver="dynamics_solver",
+        idle="idle_timesteps",
     )
     def __init__(
         self,
@@ -33,15 +34,16 @@ class TemporalBase(nn.Module):
         n_timesteps: int = 1,
         n_classes: int = 1000,
         # Temporal dynamics
-        dt: float = 1.0,
-        tau: float = 4.0,
+        dt: float = 2.0,
+        tau: float = 5.0,
         t_feedforward: float = 0.0,
-        t_recurrence: float = 3.0,
+        t_recurrence: float = 6.0,
         t_feedback: Optional[float] = None,
         t_skip: Optional[float] = None,
         data_presentation_pattern: Union[List[int], str] = [1],
         non_label_index: int = -1,
         non_input_value: float = 0.0,
+        idle_timesteps: int = 0,
         # Architecture configuration
         classifier_name: str = "classifier",
         dynamics_solver: str = "euler",
@@ -69,6 +71,7 @@ class TemporalBase(nn.Module):
         self.data_presentation_pattern = data_presentation_pattern
         self.non_label_index = int(non_label_index)
         self.non_input_value = float(non_input_value)
+        self.idle_timesteps = int(idle_timesteps)
 
         # Process feedforward delay
         self.delay_feedforward = int(t_feedforward / dt)
@@ -306,6 +309,22 @@ class TemporalBase(nn.Module):
 
         # Collect outputs in a list to preserve gradients
         output_list = []
+
+        # Optionally run idle timesteps with null input for spontaneous activity to converge
+        if hasattr(self, "idle_timesteps") and self.idle_timesteps > 0:
+            null_input = torch.full(
+                (batch_size, dim_channels, dim_y, dim_x),
+                self.non_input_value,
+                device=x_0.device,
+                dtype=x_0.dtype,
+            )
+            for t in range(self.idle_timesteps):
+                x, _ = self._forward(
+                    null_input,
+                    t=t,
+                    feedforward_only=False,
+                    store_responses=False,
+                )
 
         # Forward the model over all timesteps
         for t in torch.arange(n_timesteps, device=x_0.device):

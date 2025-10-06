@@ -5,121 +5,156 @@ experiment_config:
     rctarget: ['output', 'input', 'middle']  # Target for recurrent connections
     pattern: ['01110', '11100', '1']
     dsteps: [20]
+    tsteps: [5, 10, 15, 20]
     dt: [2]
-    tau: [3, 9, 15]
+    tau: [3, 5, 9]
     tff: [0, 10]
     trc: [2, 6, 10]
     tsk: [0, 4, 8]
-    lossrt: [0, 5, 10, 15, 19]
+    lossrt: [0, 4, 8, 20, 38]
+    idle: [0, 5, 10, 15]
     feedback: ['add','false', 'mul']
+    skip: ['true', 'false']
+    dloader: ['ffcv', 'torch']
     
   response:
     status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: [30]
+      dsteps: 60
+      intro: 1
+      stim: 30
+      idle: [0, 20]
 
   responseffonly:
     status: trained
-    parameter: stim
+    parameter: idle
     data_loader: StimulusDuration
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: [30]
+      dsteps: 60
+      intro: 1
+      stim: 30
       ffonly: true
+      idle: [0, 20]
 
   stability:
     status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
+      dsteps: 80
+      stim: [40]
+      intro: 0
+      idle: [0, 20]
+
+  nullcondition:
+    status: trained
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
       dsteps: 200
-      stim: [100]
+      intro: 95
+      stim: [10]
+
+  idleresponse:
+    status: trained
+    parameter: idle
+    data_loader: StimulusDuration
+    data_args:
+      dsteps: 30
+      intro: 0
+      stim: [20]
+      idle: [0, 10, 20, 30]
 
   duration:
     status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: [1,2,4,6,10,20]
+      dsteps: 30
+      intro: 1
+      stim: [1, 3, 5, 10, 20]
+      idle: 20
 
   contrast:
     status: trained
     parameter: contrast
     data_loader: StimulusContrast
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: 30
-      contrast: [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]  
+      dsteps: 30
+      intro: 1
+      stim: 20
+      contrast: [0.1, 0.3, 0.5, 0.7, 0.9]
+      idle: 20
 
   interval:
     status: trained
     parameter: interval
     data_loader: StimulusInterval
     data_args:
-      dsteps: 50
-      intro: 0
+      dsteps: 40
+      intro: 1
       stim: 6
       interval: [1, 2, 4, 8, 16]
+      idle: 20
 
   uniformnoise:
     status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 10
-      intro: 0
-      stim: 6
+      dsteps: 30
+      intro: 1
+      stim: 20
       noisetype: uniform
       noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      idle: 20
 
   saltpeppernoise:
     status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: 30
+      dsteps: 30
+      intro: 1
+      stim: 20
       noisetype: saltpepper
       noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      idle: 20
 
   poissonnoise:
     status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: 30
+      dsteps: 30
+      intro: 1
+      stim: 20
       noisetype: poisson
       noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      idle: 20
 
   gaussianblurnoise:
     status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: 30
+      dsteps: 30
+      intro: 1
+      stim: 20
       noisetype: gaussianblur
       noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      idle: 20
 
   motionblurnoise:
     status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: 30
+      dsteps: 30
+      intro: 1
+      stim: 20
       noisetype: motionblur
       noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      idle: 20

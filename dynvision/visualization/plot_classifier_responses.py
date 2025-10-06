@@ -193,7 +193,7 @@ def main():
 
     # Load and process data
     df = load_df(args.input)
-    data_identifier = args.input.stem
+    data_identifier = args.input.name
 
     # Generate plots for each unique label sequence
     for label_set in df.label_set.unique():

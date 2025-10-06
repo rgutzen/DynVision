@@ -31,7 +31,7 @@ def path_to_index(path: Union[str, Path], non_index: int = -1) -> int:
     if not isinstance(path, str) or isinstance(path, Path):
         warnings.warn(f"Invalid path type: {path}")
         return non_index
-    name = Path(path).stem
+    name = Path(path).name
     index = int(name.split("_")[-1])
     return index
 
@@ -68,7 +68,7 @@ def extract_param_from_string(
     else:
         raise ValueError(f"Invalid value type: {value_type}")
     if match:
-        return value_type(match.group(1))
+        return value_type(str(match.group(1)))
     else:
         raise ValueError(f"No {key} value found in the string!")
 

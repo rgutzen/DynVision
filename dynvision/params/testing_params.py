@@ -108,12 +108,13 @@ class TestingParams(BaseParams):
         updates = {
             "train": False,
             "shuffle": False,
+            "sampler": "RoundRobinSampler",  # for representative input sampling
             "use_distributed": False,
             "use_ffcv": False,
             "pin_memory": True,
             "drop_last": False,
             "prefetch_factor": None,
-            "max_workers": min(4, config.get("num_workers", 0)),
+            "max_workers": min(4, config.get("data", {}).get("num_workers", 0)),
         }
         config = cls.update_kwargs(config, updates, verbose=True)
         return config

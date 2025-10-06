@@ -67,7 +67,8 @@ from .model_utils import (
 )
 
 from .visualization_utils import (
-    layer_power,
+    layer_response_avg,
+    layer_response_std,
     peak_time,
     peak_height,
     peak_ratio,
@@ -119,12 +120,11 @@ __all__ = [
     "handle_errors",
     "load_model_and_weights",
     # Visualization utilities
-    "layer_power",
+    "layer_response_avg",
+    "layer_response_std",
     "peak_time",
     "peak_height",
     "peak_ratio",
     "calculate_accuracy",
-    "load_responses",
-    "load_responses_in_batches",
     "save_plot",
 ]

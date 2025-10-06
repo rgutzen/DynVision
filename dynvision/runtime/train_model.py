@@ -10,9 +10,6 @@ Features:
 - Memory optimization for large datasets and distributed training
 - Advanced error handling with informative feedback
 - Configuration export for full reproducibility
-
-Example:
-    $ python train_model.py --config_path configs/train_config.yaml --model_name DyRCNNx4
 """
 
 import logging
@@ -21,9 +18,8 @@ import os
 import sys
 import multiprocessing
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytorch_lightning as pl
 import torch
@@ -35,9 +31,9 @@ from dynvision.data.dataloader import (
     _adjust_data_dimensions,
     _adjust_label_dimensions,
     get_train_val_loaders,
+    get_data_loader,
 )
 from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
-from dynvision.data.dataloader import get_train_val_loaders, get_data_loader
 from dynvision.data.datasets import get_dataset
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
@@ -49,33 +45,78 @@ from dynvision.visualization import callbacks as custom_callbacks
 
 # Import the Pydantic parameter classes
 from dynvision.params import TrainingParams, DynVisionConfigError
+from pytorch_lightning.loggers import Logger
 
 logger = logging.getLogger(__name__)
 
 
 class EarlyStoppingWithMin(pl.callbacks.EarlyStopping):
-    """Enhanced early stopping with minimum performance threshold."""
+    """Enhanced early stopping with a minimum performance threshold."""
 
     def __init__(
         self,
         monitor: str = "val_accuracy",
         patience: int = 5,
         min_val_accuracy: float = 0.7,
+        mode: str = "max",
+        verbose: bool = False,
+        strict: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(monitor=monitor, patience=patience, **kwargs)
+        """
+        Args:
+            monitor: Metric to monitor (e.g., "val_accuracy").
+            patience: Number of epochs to wait for improvement before stopping.
+            min_val_accuracy: Minimum threshold for the monitored metric.
+            mode: One of {"min", "max"}. In "min" mode, training will stop when the
+                monitored quantity stops decreasing; in "max" mode, it will stop when
+                the monitored quantity stops increasing.
+            verbose: If True, logs a message for each validation improvement.
+            strict: If True, will crash if the monitored metric is not available.
+        """
+        super().__init__(
+            monitor=monitor,
+            patience=patience,
+            mode=mode,
+            verbose=verbose,
+            strict=strict,
+            **kwargs,
+        )
         self.min_val_accuracy = min_val_accuracy
+        self.threshold_met = False  # Tracks if the threshold was met at least once
 
     def on_validation_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         """Check validation metrics and update early stopping state."""
+        # Get the current value of the monitored metric
         current_value = trainer.callback_metrics.get(self.monitor)
-        if current_value is not None and current_value >= self.min_val_accuracy:
+
+        if current_value is None:
+            if self.strict:
+                raise RuntimeError(
+                    f"EarlyStoppingWithMin requires {self.monitor} available in metrics. "
+                    "Make sure it is logged during validation."
+                )
+            return
+
+        # Check if the threshold has been met at least once
+        if current_value >= self.min_val_accuracy:
+            self.threshold_met = True
+
+        # Only apply early stopping logic if the threshold has been met
+        if self.threshold_met:
+            # Call the parent class's logic for early stopping
             super().on_validation_epoch_end(trainer, pl_module)
         else:
-            # Reset wait count if minimum performance not met
-            self.wait_count = 0
+            if self.verbose:
+                trainer.logger.log_metrics(
+                    {"early_stopping_threshold_not_met": current_value},
+                    step=trainer.global_step,
+                )
+                trainer.logger.log_text(
+                    f"Early stopping threshold of {self.min_val_accuracy} not met yet. Current value: {current_value}"
+                )
 
 
 class DataModule(pl.LightningDataModule):
@@ -243,15 +284,18 @@ class CallbackManager:
         checkpoint_path = (
             self.config.output_model_state.parent
             / "checkpoints"
-            / self.config.output_model_state.stem
+            / self.config.output_model_state.name
         )
+
+        # Ensure the directory exists
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Get checkpoint configuration
         checkpoint_kwargs = self.config.trainer.get_checkpoint_callback_kwargs()
         checkpoint_kwargs.update(
             {
                 "dirpath": checkpoint_path.parent,
-                "filename": checkpoint_path.name + "-{epoch:02d}-{train_loss:.2f}",
+                "filename": checkpoint_path.name + "-{epoch:02d}-{val_loss:.2f}",
             }
         )
 
@@ -286,7 +330,7 @@ class ModelManager:
         """Load and initialize model with current configuration."""
         # Load state dict
         state_dict = torch.load(
-            self.config.input_model_state, map_location=self.device, weights_only=True
+            self.config.input_model_state, map_location=self.device
         )
 
         # Create model with current configuration
@@ -379,7 +423,7 @@ class TrainingOrchestrator:
         logger.info("=" * 60)
 
     def _setup_trainer(
-        self, callbacks: List[pl.Callback], pl_logger: pl.loggers.Logger
+        self, callbacks: List[pl.Callback], pl_logger: Logger
     ) -> pl.Trainer:
         """Setup PyTorch Lightning trainer with full configuration."""
         # Get trainer kwargs from configuration
@@ -396,7 +440,7 @@ class TrainingOrchestrator:
         # Filter valid arguments for Trainer
         trainer_kwargs, unknown = filter_kwargs(pl.Trainer, trainer_kwargs)
         if unknown:
-            logger.info(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
+            logger.info(f"Trainer kwargs set: {trainer_kwargs}")
 
         return pl.Trainer(**trainer_kwargs)
 
@@ -411,7 +455,7 @@ class TrainingOrchestrator:
         preview_loader = self.datamodule.create_preview_loader()
 
         # Load a sample from the preview dataloader
-        inputs, label_indices, *paths = next(iter(preview_loader))
+        inputs, label_indices, *_ = next(iter(preview_loader))
         inputs = _adjust_data_dimensions(inputs)
         label_indices = _adjust_label_dimensions(label_indices)
 
@@ -464,7 +508,7 @@ class TrainingOrchestrator:
         return self.config.model.n_classes
 
     def _log_sample_images(
-        self, inputs: torch.Tensor, labels: torch.Tensor, pl_logger: pl.loggers.Logger
+        self, inputs: torch.Tensor, labels: torch.Tensor, pl_logger: Logger
     ) -> None:
         """Log sample images to the logger."""
         if not hasattr(pl_logger, "log_image"):
@@ -491,7 +535,7 @@ class TrainingOrchestrator:
                     save_dir=project_paths.large_logs,
                     config=self.config.get_full_config(flat=True),
                     tags=["train"],
-                    name=f"{self.config.output_model_state.stem}",
+                    name=f"{self.config.output_model_state.name}",
                 )
                 # Setup trainer components
                 callbacks, checkpoint_path = self.callback_manager.setup_callbacks()
@@ -525,18 +569,32 @@ class TrainingOrchestrator:
 
             except Exception as e:
                 logger.error(f"Training failed: {e}")
-                # if logger.isEnabledFor(logging.DEBUG):
-                import traceback
-
-                traceback.print_exc()
-
-                # Attempt to save checkpoint on failure
-                trainer.save_checkpoint(checkpoint_path.with_suffix(".ckpt"))
-                logger.info(
-                    f"Checkpoint before training failure saved to {checkpoint_path.with_suffix(".ckpt")}"
-                )
-
+                self._handle_training_failure(trainer, checkpoint_path)
                 return 1
+
+    def _handle_training_failure(
+        self, trainer: pl.Trainer, checkpoint_path: Path
+    ) -> None:
+        """Handle training failure by saving a checkpoint with detailed filename."""
+        import traceback
+
+        # Print the traceback for debugging
+        traceback.print_exc()
+
+        # Ensure the checkpoint directory exists
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Extract the current epoch and validation loss
+        current_epoch = trainer.current_epoch
+        val_loss = trainer.callback_metrics.get("val_loss", float("nan"))
+
+        # Format the checkpoint filename
+        checkpoint_filename = f"{checkpoint_path.name}-epoch={current_epoch:02d}-val_loss={val_loss:.2f}.ckpt"
+        checkpoint_file = checkpoint_path.parent / checkpoint_filename
+
+        # Save the checkpoint
+        trainer.save_checkpoint(checkpoint_file)
+        logger.info(f"Checkpoint before training failure saved to {checkpoint_file}")
 
     def _find_existing_checkpoint(self, checkpoint_path: Path) -> Optional[Path]:
         """Find existing checkpoint for resuming training."""

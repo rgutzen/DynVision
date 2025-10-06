@@ -130,27 +130,19 @@ def plot_response(
             ax = axes[i][j]
             param_data = df[df[parameter] == param_val]
 
-            # Plot each category
-            for cat_val in model_order:
-                if cat_val in param_data[category].values:
-                    cat_data = param_data[param_data[category] == cat_val]
-
-                    # Group by time to get mean power
-                    time_data = (
-                        cat_data.groupby("times_index")[layer_col].mean().reset_index()
-                    )
-
-                    # Use seaborn lineplot
-                    sns.lineplot(
-                        data=time_data,
-                        x="times_index",
-                        y=layer_col,
-                        color=colors[cat_val],
-                        linewidth=LINEWIDTH_MAIN,
-                        alpha=ALPHA_LINES,
-                        ax=ax,
-                        label=cat_val if i == 0 and j == 0 else "",
-                    )
+            # Use seaborn lineplot
+            sns.lineplot(
+                data=param_data,
+                x="times_index",
+                y=layer_col,
+                hue=category,
+                hue_order=model_order,
+                color=colors,
+                linewidth=LINEWIDTH_MAIN,
+                alpha=ALPHA_LINES,
+                ax=ax,
+                legend=True if i == 0 and j == 0 else False,
+            )
 
             # Add label indicator
             if len(param_data) > 0:

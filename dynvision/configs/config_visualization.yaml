@@ -1,3 +1,5 @@
+# config_visualization.yaml
+
 # Combined color palette for all visualization elements
 palette:
   # Model categories
@@ -28,10 +30,13 @@ naming:
   tau: "$\\tau$"
   trc: "$\\Delta_{RC}$"
   tsk: "$\\Delta_{SK}$"
-  rctarget: "Target"
+  rctarget: "Recurrence Target"
   rctype: "Recurrence"
   lossrt: "$t_{loss}$"
+  idle: "$t_{idle}$"
+  tsteps: "$T$"
   feedback: "Feedback"
+  skip: "Skip"
   add: "Additive"
   mul: "Multiplicative"
   ffonly: "Feedforward Only"
@@ -54,6 +59,7 @@ naming:
   stability_experiment: "Stability"
   response_experiment: "Response"
   responseffonly_experiment: "Feedforward Only"
+  nullcondition_experiment: "Null Condition"
   uniformnoise_experiment: "Uniform Noise"
   poissonnoise_experiment: "Poisson Noise"
   saltpeppernoise_experiment: "Salt & Pepper"

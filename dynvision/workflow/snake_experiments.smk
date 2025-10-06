@@ -1,8 +1,8 @@
 rule experiment:
     input:
         lambda w: expand(project_paths.reports \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_outputs.csv',
+            / '{data_loader}' \
+            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}' / 'test_outputs.csv',
             model_name = config.model_name,
             seed = config.seed,
             model_args = args_product(config.model_args),

@@ -81,11 +81,11 @@ class DyRCNN(BaseModel):
         self,
         # Core neural network parameters (passed to TemporalBase)
         dt: float = 2,  # ms
-        tau: float = 8,  # ms
-        t_feedforward: float = 10,  # ms
+        tau: float = 5,  # ms
+        t_feedforward: float = 0,  # ms
         t_recurrence: float = 6,  # ms
-        t_feedback: float = 14,
-        t_skip: float = 14,
+        t_feedback: float = 40,
+        t_skip: float = 0,
         recurrence_type: str = "full",
         recurrence_target: str = "output",  # Target for recurrent connections
         feedback_mode: str = "additive",
@@ -96,7 +96,7 @@ class DyRCNN(BaseModel):
         supralinearity: float = 1,
         input_adaption_weight: float = 0,
         use_retina: bool = False,
-        skip: bool = False,
+        skip: bool = True,
         feedback: bool = False,
         feedforward_only: bool = False,
         **kwargs: Any,

@@ -4,7 +4,7 @@ model_name:
   # - CorNetRT
   # - TwoLayerCNN
   # - FourLayerCNN
-  - DyRCNNx4
+  - DyRCNNx8
   # - CordsNet
   # - ResNet20
   # - ResNet18
@@ -12,15 +12,15 @@ model_name:
   # - ResNet44
 seed: "0000"
 model_args:
-  tsteps: 50
+  tsteps: 20
   rctype: 'full'
   dt: 2
-  tau: 9
-  tff: 10
+  tau: 5
+  tff: 0
   trc: 6
   rctype: ['self', 'full', 'pointdepthwise', 'depthpointwise', 'local', 'localdepthwise']
   skip: 'true'
-  feedback: 'true'
+  feedback: 'false'
 
 init_with_pretrained: False
 

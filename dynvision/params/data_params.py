@@ -181,6 +181,11 @@ class DataParams(BaseParams):
         description="Whether to shuffle the dataset",
     )
 
+    sampler: Any = Field(
+        default=str,
+        description="Name of Custom sampler for data loading",
+    )
+
     # === Custom Dataloader Arguments ===
     dataloader_kwargs: Dict[str, Any] = Field(
         default_factory=dict,

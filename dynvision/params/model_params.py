@@ -53,6 +53,10 @@ class ModelParams(BaseParams):
     dynamics_solver: Literal["euler", "rk4"] = Field(
         default="euler", description="Dynamical systems solver"
     )
+    idle_timesteps: int = Field(
+        default=0,
+        description="Number of idle timesteps for spontaneous activity to converge",
+    )
 
     # ===== RECURRENT ARCHITECTURE =====
     recurrence_type: Optional[
@@ -191,6 +195,7 @@ class ModelParams(BaseParams):
                 "classes": "n_classes",
                 "steps": "n_timesteps",
                 "tsteps": "n_timesteps",
+                "idle": "idle_timesteps",
             }
         )
         return aliases

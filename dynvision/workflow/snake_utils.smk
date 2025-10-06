@@ -48,9 +48,10 @@ wildcard_constraints:
     data_subset = r'[a-z]+',
     data_group = r'[a-z0-9]+',
     data_loader = r'[a-zA-Z]+',
-    status = r'[a-z]+',
+    status = r'[a-z\#]+',
     seed = r'\d+',
     category = r'(?!folder)[a-z0-9]+',
+    category_str = r'([a-z0-9]+=\*|\s?)',
     model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',
     data_args = r'(:[a-zTF,;:\+=\d\.]+|\s?)',
     args = r'([a-z,;:\+=\d\.]+|\s?)',
@@ -58,7 +59,7 @@ wildcard_constraints:
     args2 = r'([a-z,;:\+=\d\.]+|\s?)',
     experiment = r'[a-z]+',
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)',
-    model_identifier = r'([\w:+=,\*]+)'
+    model_identifier = r'([\w:+=,\*\#]+)'
 
 localrules: all, symlink_data_subsets, symlink_data_groups, experiment
 ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model
@@ -95,32 +96,6 @@ def process_configs(config: Any, wildcards: Any = None) -> Path:
         raise RuntimeError("ConfigHandler not initialized. Call initialize_config_handler() first.")
     
     return config_handler.process_configs(config, wildcards)
-
-# def run_mode_manager(configs_path=None):
-#     """Initialize and apply mode manager after CLI config overrides"""
-#     global mode_manager, config
-    
-#     working_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else config.copy()
-
-#     # Initialize mode manager with final config (including CLI overrides)
-#     mode_manager = ConfigModeManager(working_config, local=(not project_paths.iam_on_cluster()))
-#     mode_manager.apply_modes()
-#     mode_manager.log_modes()
-
-#     if configs_path:
-#         mode_manager.save_config(path=configs_path)
-#         mode_manager.log_config()
-    
-#     # Get the processed config
-#     processed_config = mode_manager.get_config(return_namespace=True)   
-#     if isinstance(processed_config, SimpleNamespace):
-#         config.__dict__.clear()
-#         config.__dict__.update(processed_config.__dict__)
-#     elif isinstance(processed_config, dict):
-#         config.__dict__.clear()
-#         config.__dict__.update(processed_config)
-#     else:
-#         raise TypeError("Processed config must be a SimpleNamespace or dict")
 
 # Set up logging
 def setup_logger():
@@ -395,7 +370,7 @@ rule checkpoint_to_statedict:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        temp(project_paths.models / '{model_name}' / '{model_identifier}.ckpt2pt'),
+        project_paths.models / '{model_name}' / '{model_identifier}#minval.pt'
     shell:
         """
         {params.execution_cmd} \

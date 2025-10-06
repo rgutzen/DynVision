@@ -23,15 +23,14 @@ transform_presets = dict(
         ffcv.transforms.RandomBrightness(0.2),
         ffcv.transforms.RandomContrast(0.2),
         ffcv.transforms.RandomSaturation(0.2),
+        ffcv.transforms.RandomTranslate(padding=22, fill=(0, 0, 0)),
     ],
     ffcv_test=[],
     train=[
         tv.transforms.RandomRotation(10),
         tv.transforms.RandomAffine(0, translate=(0.1, 0.1)),
         tv.transforms.RandomHorizontalFlip(),
-        tv.transforms.ColorJitter(
-            brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1
-        ),
+        tv.transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
     ],
     test=[],
     ffcv_train_mnist=[  # deprecated!

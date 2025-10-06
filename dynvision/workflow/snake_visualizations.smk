@@ -130,90 +130,6 @@ rule plot_weight_distributions:
             --format {wildcards.format} 
         """
 
-rule plot_experiment_outputs:
-    """Visualize experiment results.
-
-    This rule creates comprehensive visualizations of
-    experiment outputs and comparisons.
-
-    Input:
-        test_outputs: Experiment results
-        script: Visualization script
-    
-    Output:
-        Experiment visualization
-    """
-    input:
-        test_outputs = expand(project_paths.reports \
-            / '{{model_name}}' \
-            / '{{model_name}}:{{category}}={category_value}{args}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}test_outputs.csv',
-            category_value = lambda w: config.model_args[w.category],
-            args = lambda w: args_product(dict_poped(config.model_args, w.category), prefix=','),
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
-        ),
-        script = SCRIPTS / 'visualization' / 'plot_experiment_outputs.py'
-    params:
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
-        ),
-    output:
-        plot = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{category}=*_{seed}_{data_name}_{status}_{data_group}' / 'experiment_outputs_label{label_target}.{format}'
-    group: "visualization"
-    shell:
-        """
-        {params.execution_cmd} \
-            --test_outputs {input.test_outputs:q} \
-            --output {output.plot:q} \
-            --parameter {params.parameter} \
-            --category {wildcards.category} \
-            --format {wildcards.format} \
-            --style {params.style} 
-        """
-
-# rule process_plotting_data:
-#     input:
-#         responses = expand(project_paths.models \
-#             / '{{model_name}}' \
-#             / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_responses.pt',
-#             category_value = lambda w: config.experiment_config['categories'][w.category],
-#             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-#             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
-#         ),
-#         test_outputs = expand(project_paths.reports \
-#             / '{{model_name}}' \
-#             / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_outputs.csv',
-#             category_value = lambda w: config.experiment_config['categories'][w.category],
-#             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-#             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
-#         ),
-#         script = SCRIPTS / 'visualization' / 'process_plotting_data.py'
-#     params:
-#         measures = ['power', 'peak_height', 'peak_time'],
-#         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-#         execution_cmd = lambda w, input: build_execution_command(
-#             script_path=input.script,
-#             use_distributed=False,
-#             use_executor=get_param('use_executor', False)(w)
-#         ),
-#     output:
-#         layer_power = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
-#     shell:
-#         """
-#         {params.execution_cmd} \
-#             --responses {input.responses:q} \
-#             --test_outputs {input.test_outputs:q} \
-#             --output {output:q} \
-#             --parameter {params.parameter} \
-#             --category {wildcards.category} \
-#             --measures {params.measures} 
-
-#         rm {input.responses:q}  # Clean up large intermediate file
-#         """
-
 rule process_test_data:
     """Process test data by combining layer responses and test performance metrics.
     
@@ -229,31 +145,33 @@ rule process_test_data:
         Unified test data CSV with layer metrics and performance metrics
     """
     input:
-        responses = expand(project_paths.models \
-            / '{{model_name}}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_responses.pt',
+        responses = expand(project_paths.reports \
+            / '{data_loader}' \
+            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
             category_value = lambda w: config.experiment_config['categories'][w.category],
             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
         ),
         test_outputs = expand(project_paths.reports \
-            / '{{model_name}}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_outputs.csv',
+            / '{data_loader}' \
+            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
             category_value = lambda w: config.experiment_config['categories'][w.category],
             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
-        measures = ['response_avg', 'response_std', 'spatial_variance', 'feature_variance'],
+        measures = ['response_avg', 'response_std'], #, 'spatial_variance', 'feature_variance'],
         topk = [3, 5],
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         batch_size = 1,
+        remove_input_responses = True,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
             use_executor=get_param('use_executor', False)(w)
         ),
+    priority: 100,
     output:
         test_data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
     shell:
@@ -266,59 +184,28 @@ rule process_test_data:
             --category {wildcards.category} \
             --measures {params.measures} \
             --topk {params.topk} \
-            --batch_size {params.batch_size}
-
-        rm {input.responses:q}  # Clean up large intermediate files
+            --batch_size {params.batch_size} \
+            --remove_input_responses {params.remove_input_responses}
         """
 
-# rule process_test_performance:
-#     input:
-#         test_outputs = expand(project_paths.reports
-#             / '{{model_name}}' \
-#             / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_outputs.csv',
-#             category_value = lambda w: config.experiment_config['categories'][w.category],
-#             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-#             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
-#         ),
-#         script = SCRIPTS / 'visualization' / 'process_test_performance.py'
-#     params:
-#         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-#         topk = [3, 5],
-#         execution_cmd = lambda w, input: build_execution_command(
-#             script_path=input.script,
-#             use_distributed=False,
-#             use_executor=get_param('use_executor', False)(w)
-#         ),
-#     output:
-#         project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_performance.csv',
-#     shell:
-#         """
-#         {params.execution_cmd} \
-#             --test_outputs {input.test_outputs:q} \
-#             --output {output:q} \
-#             --parameter {params.parameter} \
-#             --category {wildcards.category} \
-#             --topk {params.topk}
-#         """
-
-# rule reduce_plotting_data_size:
-#     input:
-#         data = Path('{path}') / 'layer_power.csv',
-#         script = SCRIPTS / 'visualization' / 'reduce_plotting_data_size.py'
-#     params:
-#         execution_cmd = lambda w, input: build_execution_command(
-#             script_path=input.script,
-#             use_distributed=False,
-#             use_executor=get_param('use_executor', False)(w)
-#         ),
-#     output:
-#         Path('{path}') / 'layer_power_small.csv',
-#     shell:
-#         """
-#         {params.execution_cmd} \
-#             --data {input.data:q} \
-#             --output {output:q} 
-#         """
+rule process_wandb_data:
+    input:
+        data = Path('{path}.csv'),
+        script = SCRIPTS / 'visualization' / 'process_wandb_data.py'
+    params:
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        Path('{path}_summary.csv'),
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q}
+        """
 
 checkpoint plot_adaption:
     """Analyze and visualize model adaptation.
@@ -359,48 +246,6 @@ checkpoint plot_adaption:
             --measures {params.measures} 
         """
 
-# rule plot_experiments:
-#     """Collect and organize experiment visualizations.
-
-#     This rule aggregates visualizations from multiple
-#     experiments for comparison and analysis.
-#     """
-#     input:
-#         expand(project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'adaption.csv',
-#             experiment = config.experiment,
-#             model_name = config.model_name,
-#             category = list(config.model_args.keys())[0],
-#             args1 = "tsteps=20+",
-#             args2 = args_product(dict_poped(config.model_args, [list(config.model_args.keys())[0], "tsteps"]), prefix='+'),
-#             seed = config.seed,
-#             data_name = config.data_name,
-#             status = config.status,
-#             data_group = config.data_group,
-#         )
-#     group: "visualization"
-
-# rule plot_experiments_on_models:
-#     """Generate comparative visualizations across models.
-
-#     This rule creates visualizations that compare
-#     experiment results across different model architectures.
-#     """
-#     input:
-#         expand(project_paths.figures / '{experiment}' / '{experiment}_{model_name}{{model_args}}_{seed}_{data_name}_{status}_{data_group}' / 'adaption.csv',
-#             experiment = config.experiment,
-#             model_name = config.model_name,
-#             seed = config.seed,
-#             data_name = config.data_name,
-#             status = config.status,
-#             data_group = config.data_group,
-#         )
-#     output:
-#         temp(project_paths.figures / 'plot_experiments_on_models{model_args}.done')
-#     shell:
-#         """
-#         touch {output:q} 
-#         """
-
 rule plot_test_performance:
     input:
         data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
@@ -436,6 +281,7 @@ rule plot_test_performance:
 
 rule plot_training:
     input:
+        test_data = project_paths.reports / 'response' / 'response_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_all' / 'test_data.csv',
         accuracy_csv = project_paths.reports \
             / 'wandb' \
             / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_accuracy.csv',
@@ -458,19 +304,26 @@ rule plot_training:
             use_distributed=False,
             use_executor=get_param('use_executor', False)(w)
         ),
-        palette = lambda w: json.dumps(config.palette)
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        dt = config.dt, 
     output:
         project_paths.figures / 'training' / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}.png',
-    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
+            --test_data {input.test_data:q} \
             --accuracy_csv {input.accuracy_csv:q} \
             --memory_csv {input.memory_csv:q} \
             --epoch_csv {input.epoch_csv:q} \
             --energy_csv {input.energy_csv:q} \
             --cross_entropy_csv {input.cross_entropy_csv:q} \
             --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --category {wildcards.category} \
+            --dt {params.dt} \
             --output {output:q} 
         """
 
@@ -499,7 +352,7 @@ rule plot_dynamics:
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
             --category {wildcards.category} \
-            --focus_layer {params.focus_layer} \
+            --focus-layer {params.focus_layer} \
             --dt {params.dt}
         """
 
@@ -533,11 +386,49 @@ rule plot_response:
             --category {wildcards.category}
         """
 
+rule plot_responses:
+    input:
+        data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        script = SCRIPTS / 'visualization' / 'plot_responses.py'
+    params:
+        column = 'parameter',
+        subplot = 'layers',
+        hue = 'category',
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category_str.strip('=*'),
+        dt = config.dt,
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'responses.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} \
+            --column {params.column} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --parameter-key {params.parameter} \
+            --category-key {params.category} \
+            --experiment {wildcards.experiment} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
+        """
+
 rule plot_response_tripytch:
     input:
-        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=6+tsk=4{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=9+tff=0+trc=*+tsk=4{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        # data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=9+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=6+tsk=0{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=5+tff=0+trc=*+tsk=0{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=5+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
         accuracy = project_paths.reports / 'wandb' / 'DyRCNNx8:tsteps=20+rctype=full+dt=2+tff=0+t=*+skip=true_0026_imagenette_trained_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
@@ -560,6 +451,7 @@ rule plot_response_tripytch:
         {params.execution_cmd} \
             --data {input.data1:q} \
             --data2 {input.data2:q} \
+            --data3 {input.data3:q} \
             --accuracy1 {input.accuracy:q} \
             --accuracy2 {input.accuracy:q} \
             --accuracy3 {input.accuracy:q} \
@@ -572,16 +464,15 @@ rule plot_response_tripytch:
             --naming {params.naming:q} \
             --ordering {params.ordering:q}
         """
-            # --data3 {input.data3:q} \
 
 rule plot_response_tripytch2:
     input:
         data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data2 = project_paths.reports / 'stability' / 'stability_{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=50+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=*_0032_{data_name}_{status}_{data_group}' / 'test_data.csv',
         accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_0027_{data_name}_{status}_accuracy.csv',
+        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=50+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_0032_{data_name}_{status}_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
@@ -598,7 +489,6 @@ rule plot_response_tripytch2:
         ordering = lambda w: json.dumps(config.ordering),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctarget=*+lossrt=*+feedback=*_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
-    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -638,4 +528,31 @@ rule plot_experiment:
             --data {input.data:q} \
             --output {output:q} \
             --parameter {params.parameter}
+        """
+
+rule plot_unrolling:
+    input:
+        engineering_time_data = project_paths.models \
+            / '{model_name}' \
+            / '{model_name}:{args1}tff=0+trc=6+tsk=0+tfb=34{args2}+unrolled=false_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
+        biological_time_data = project_paths.models \
+            / '{model_name}' \
+            / '{model_name}:{args1}tff=10+trc=6+tsk=20+tfb=14{args2}+unrolled=true_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
+        script = SCRIPTS / 'visualization' / 'plot_unrolling.py'
+    params:
+        t_feedforward = 10 // 2,  # tff / dt
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.figures / 'unrolling' / 'unrolling_{model_name}:{args1}tff=*{args2}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --engineering_time_data {input.engineering_time_data:q} \
+            --biological_time_data {input.biological_time_data:q} \
+            --t_feedforward {params.t_feedforward} \
+            --output {output:q} 
         """

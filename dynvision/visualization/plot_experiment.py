@@ -372,7 +372,7 @@ if __name__ == "__main__":
         focus_layer=args.focus_layer,
         category=args.category,
         output_path=args.output,  # Pass output path to check for 'response'
-        experiment=args.data.parent.stem,
+        experiment=args.data.parent.name,
     )
 
     # Save the plot

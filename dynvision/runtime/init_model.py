@@ -140,6 +140,9 @@ def create_and_initialize_model(config: InitParams) -> torch.nn.Module:
     # Create model
     model = model_class(**model_kwargs)
 
+    if hasattr(model, "_initialize_connections"):
+        model._initialize_connections()
+
     # Handle pretrained initialization
     if config.init_with_pretrained:
         load_pretrained_weights(model, config)
@@ -161,8 +164,8 @@ def load_pretrained_weights(model: torch.nn.Module, config: InitParams) -> None:
     """
     # Extract model args from output filename
     model_args = ""
-    if ":" in config.output.stem:
-        model_args = config.output.stem.split("_")[0].split(":")[1]
+    if ":" in config.output.name:
+        model_args = config.output.name.split("_")[0].split(":")[1]
 
     # Find similar pretrained model
     pretrained_file = find_similar_trained_model(
@@ -204,6 +207,12 @@ def main() -> int:
 
     # Create and initialize model
     model = create_and_initialize_model(config)
+
+    # Calculate and log the number of trainable parameters in the model
+    num_trainable_params = sum(
+        p.numel() for p in model.parameters() if p.requires_grad
+    )
+    logger.info(f"Number of trainable parameters: {num_trainable_params}")
 
     # Validate model state
     if not len(model.state_dict()):

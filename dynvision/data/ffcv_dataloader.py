@@ -72,8 +72,8 @@ def _build_image_pipeline(
         pipeline.append(ToDevice(device))
 
     # Then extend time dimension after tensor is in correct format
-    # if n_timesteps > 1:
-    #     pipeline.append(ExtendDataTimeFFCV(n_timesteps))
+    if n_timesteps > 1:
+        pipeline.append(ExtendDataTimeFFCV(n_timesteps))
 
     return pipeline
 
@@ -91,8 +91,8 @@ def _build_label_pipeline(
     if device:
         pipeline.append(ToDevice(device))
 
-    # if n_timesteps > 1:
-    #     pipeline.append(ExtendLabelTimeFFCV(n_timesteps))
+    if n_timesteps > 1:
+        pipeline.append(ExtendLabelTimeFFCV(n_timesteps))
 
     return pipeline
 

@@ -197,7 +197,7 @@ def save_state_dict(
 if __name__ == "__main__":
     args, unknown = parser.parse_known_args()
 
-    model_identifier = args.output.stem
+    model_identifier = args.output.name.split("#", 1)[0]
     output_path = args.output.with_suffix(".pt")
 
     try:

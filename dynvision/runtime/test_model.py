@@ -10,9 +10,6 @@ Features:
 - Memory-conscious processing handled by configuration
 - Advanced error handling with detailed feedback
 - Results export in multiple formats (CSV, tensors)
-
-Example:
-    $ python test_model.py --config_path configs/test_config.yaml --model_name DyRCNNx4
 """
 
 import logging
@@ -35,6 +32,7 @@ from dynvision.data.dataloader import (
 )
 from dynvision.data.dataloader import get_data_loader
 from dynvision.data.datasets import get_dataset
+from dynvision.data import sampler
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
     filter_kwargs,
@@ -57,6 +55,7 @@ class TestingDataModule:
         self.config = config
         self.dataset = None
         self.dataloader = None
+        self.sampler = None
 
     def setup_dataset(self) -> Dataset:
         """Set up the test dataset with configuration from TestingParams."""
@@ -69,6 +68,10 @@ class TestingDataModule:
         dataset_kwargs = self.config.data.get_dataset_kwargs()
 
         self.dataset = get_dataset(self.config.dataset, **dataset_kwargs)
+
+        if self.config.data.sampler is not None:
+            sampler_class = getattr(sampler, self.config.data.sampler)
+            self.sampler = sampler_class(self.dataset, seed=42)
 
         total_samples = len(self.dataset)
         logger.info(f"Test dataset loaded with {total_samples} samples")
@@ -85,7 +88,9 @@ class TestingDataModule:
 
         # Get dataloader configuration (already optimized by TestingParams)
         dataloader_name = self.config.data.data_loader
-        dataloader_config = self.config.get_dataloader_kwargs()
+        dataloader_config = self.config.get_dataloader_kwargs() | {
+            "sampler": self.sampler
+        }
 
         self.dataloader = get_data_loader(
             dataset=self.dataset, dataloader=dataloader_name, **dataloader_config
@@ -98,7 +103,7 @@ class TestingDataModule:
         if self.dataloader is None:
             self.setup_dataloader()
 
-        inputs, labels, *paths = next(iter(self.dataloader))
+        inputs, labels, *_ = next(iter(self.dataloader))
         inputs = _adjust_data_dimensions(inputs)
         labels = _adjust_label_dimensions(labels)
 
@@ -285,7 +290,7 @@ class TestingOrchestrator:
                     else {}
                 ),
                 tags=["test"],
-                name=f"test_{self.config.input_model_state.stem}",
+                name=f"test_{self.config.input_model_state.name}",
             )
 
         # Filter valid arguments for Trainer
@@ -296,8 +301,14 @@ class TestingOrchestrator:
         wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms
         return pl.Trainer(**trainer_kwargs)
 
-    def save_results(self, model: pl.LightningModule) -> None:
-        """Save test results and model responses."""
+    def save_results(self, model: pl.LightningModule, precision: int = 16) -> None:
+        """
+        Save test results and model responses.
+
+        Args:
+            model: The model to extract results from
+            precision: Bit precision to save response tensors (16 or 32)
+        """
         logger.info(f"Saving results to {self.config.output_results}")
 
         # Save test results (CSV)
@@ -312,17 +323,29 @@ class TestingOrchestrator:
         # Save model responses (tensors)
         try:
             if hasattr(model, "storage"):
-                logger.info("Saving model responses...")
+                logger.info(
+                    f"Saving model responses with precision={precision} bits..."
+                )
                 total_size_mb = 0
                 response_data = model.storage.responses.get_all()
                 responses = {}
+
+                # Target dtype based on precision parameter
+                target_dtype = torch.float16 if precision == 16 else torch.float32
+
                 for layer in response_data[0].keys():
                     layer_responses = [item[layer] for item in response_data]
-                    responses[layer] = torch.cat(layer_responses, dim=0)
+                    tensor = torch.cat(layer_responses, dim=0)
+
+                    # Convert precision if needed
+                    if tensor.dtype != target_dtype:
+                        tensor = tensor.to(dtype=target_dtype)
+
+                    responses[layer] = tensor
                     size_mb = responses[layer].nbytes / (1024 * 1024)
                     total_size_mb += size_mb
                     logger.info(
-                        f"  Layer {layer}: {responses[layer].shape} -> {size_mb:.2f} MB"
+                        f"  Layer {layer}: {responses[layer].shape}, {responses[layer].dtype} -> {size_mb:.2f} MB"
                     )
 
                 torch.save(responses, self.config.output_responses)
@@ -363,9 +386,25 @@ class TestingOrchestrator:
                         f"GPU memory before testing: {torch.cuda.memory_allocated() / 1e6:.2f}MB"
                     )
 
-                # Run testing
+                # Run testing with early stopping exception handling
                 logger.info("Starting model testing...")
-                trainer.test(model, dataloader)
+                try:
+                    trainer.test(model, dataloader)
+                except pl.utilities.exceptions._TunerExitException as e:
+                    logger.info(f"Testing stopped early: {e}")
+                    logger.info(
+                        "This is expected behavior when using early_test_stop=True"
+                    )
+                    logger.info(
+                        f"Collected {len(model.storage.responses)} response samples"
+                    )
+                except Exception as e:
+                    # Handle other exceptions
+                    logger.error(f"Testing encountered an error: {e}")
+                    if self.config.verbose:
+                        import traceback
+
+                        traceback.print_exc()
 
                 # Log peak memory usage
                 if torch.cuda.is_available():
@@ -378,7 +417,7 @@ class TestingOrchestrator:
                             "store_responses for future runs."
                         )
 
-                # Save results
+                # Save results - will happen even if testing was stopped early
                 self.save_results(model)
 
                 logger.info("Testing completed successfully!")

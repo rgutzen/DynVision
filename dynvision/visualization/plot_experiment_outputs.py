@@ -32,9 +32,9 @@ def load_test_outputs(csv_files, data_arg_key="contrast"):
 
     for csv_file in csv_files:
         arg_value = extract_param_from_string(
-            csv_file.stem, key=data_arg_key, value_type=float
+            csv_file.name, key=data_arg_key, value_type=float
         )
-        rctype = extract_param_from_string(csv_file.stem, key="rctype", value_type=str)
+        rctype = extract_param_from_string(csv_file.name, key="rctype", value_type=str)
 
         df = load_df(csv_file)
         df[data_arg_key] = arg_value
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    data_identifier = args.output.parent.stem
+    data_identifier = args.output.parent.name
 
     label_targets = df.label_index.unique()
     label_targets = label_targets[label_targets != -1]

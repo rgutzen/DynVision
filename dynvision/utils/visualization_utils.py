@@ -324,7 +324,7 @@ def order_layers(layer_names: List[str], config: Dict) -> List[str]:
 
 
 def calculate_label_indicator(
-    df: pd.DataFrame, category: str, y_range: tuple
+    df: pd.DataFrame, category: str, y_range: tuple, step_height: float = 0.25
 ) -> pd.DataFrame:
     """Calculate label indicator (step function) at each time step.
 
@@ -339,10 +339,18 @@ def calculate_label_indicator(
     # Get first model's data to determine label validity at each time step
     first_model = df[category].iloc[0]
     model_data = df[df[category] == first_model]
+    y_min, y_max = y_range
 
     # Calculate step height as 25% of the y-axis range
-    y_min, y_max = y_range
-    step_height = (y_max - y_min) * 0.25
+    if step_height >= 0 and step_height < 1:
+        # step_height is a fraction of the y-axis range
+        step_height = (y_max - y_min) * step_height
+    elif step_height >= 1:
+        # step_height is an absolute value, ensure it does not exceed 25% of y-axis range
+        max_step = (y_max - y_min) * 0.25
+        step_height = min(step_height, max_step)
+    else:
+        raise ValueError("step_height must be positive")
 
     indicator_data = []
     for time_step in sorted(model_data.times_index.unique()):
@@ -436,19 +444,19 @@ def load_responses(
 
     for pt_file, csv_file in zip(pt_files, csv_files):
         arg_value = extract_param_from_string(
-            pt_file.stem, key=data_arg_key, value_type=float
+            pt_file.name, key=data_arg_key, value_type=float
         )
 
         cat_value = extract_param_from_string(
-            pt_file.stem, key=category, value_type=None
+            pt_file.name, key=category, value_type=None
         )
 
         if not arg_value == extract_param_from_string(
-            csv_file.stem, key=data_arg_key, value_type=float
+            csv_file.name, key=data_arg_key, value_type=float
         ):
             raise ValueError(f"{data_arg_key} values do not match!")
         if not cat_value == extract_param_from_string(
-            csv_file.stem, key=category, value_type=None
+            csv_file.name, key=category, value_type=None
         ):
             raise ValueError(f"{category} do not match!")
 
@@ -482,8 +490,6 @@ def load_responses(
 
         layer_names = list(responses.keys())
         n_samples, n_timesteps, *_ = responses[layer_names[0]].shape
-
-        breakpoint()
 
         for layer in layer_names:
             try:

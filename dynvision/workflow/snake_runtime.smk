@@ -56,7 +56,7 @@ rule init_model:
             --output {output.model_state:q} \
             {params.model_arguments}
         
-        rm {params.config_path:q}
+        if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
 
 rule train_model:
@@ -140,7 +140,7 @@ rule train_model:
             --normalize {params.normalize:q} \
             {params.model_arguments}
 
-        rm {params.config_path:q}
+        if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
 
 use rule train_model as train_model_distributed with:
@@ -188,6 +188,8 @@ rule test_model:
             config.data_statistics[w.data_name]['mean'],
             config.data_statistics[w.data_name]['std']
         )),
+        batch_size = 64,
+        num_workers = 2,
         enable_progress_bar = True,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -195,12 +197,12 @@ rule test_model:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        responses = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
+        responses = project_paths.reports \
+            / '{data_loader}' \
+            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}' / 'test_responses.pt',
         results = project_paths.reports \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_outputs.csv'
+            / '{data_loader}' \
+            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}' / 'test_outputs.csv'
     shell:
         """
         cp {params.config_path:q} {output.results:q}.config.yaml
@@ -219,10 +221,13 @@ rule test_model:
             --normalize {params.normalize:q} \
             --enable_progress_bar {params.enable_progress_bar} \
             {params.model_arguments} \
-            {params.data_arguments}
+            {params.data_arguments} \
+            --batch_size {params.batch_size} \
+            --num_workers {params.num_workers}
 
-        rm {params.config_path:q}
+        if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
+
 
 logger.info("Model workflow initialized")
 logger.info(f"Model directory: {project_paths.models}")

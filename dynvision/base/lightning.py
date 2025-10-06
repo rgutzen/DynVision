@@ -31,7 +31,7 @@ class LightningBase(pl.LightningModule):
         criterion_params: List[Tuple[str, Dict[str, Any]]] = [
             ("CrossEntropyLoss", {"weight": 1.0})
         ],
-        loss_reaction_time: float = 0.0,
+        loss_reaction_time: float = 4.0,  # ms
         non_label_index: int = -1,
         # Optimizer configuration
         optimizer: str = "Adam",

@@ -245,7 +245,7 @@ def plot_accuracy_and_confidence(
                             "metric": "Confidence",
                             "category": cat_val,
                             "parameter_value": param_val,
-                            "std": row["confidence_std"],
+                            "std": 0,  # row["confidence_std"],
                         }
                     )
 

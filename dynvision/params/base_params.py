@@ -608,7 +608,7 @@ class BaseParams(BaseModel):
             Script context ('init_model', 'train_model', 'test_model', or None)
         """
         if len(sys.argv) > 0:
-            script_name = Path(sys.argv[0]).stem.lower()
+            script_name = Path(sys.argv[0]).name.lower()
             if "init" in script_name:
                 return "init_model"
             elif "train" in script_name:

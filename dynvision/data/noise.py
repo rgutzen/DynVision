@@ -25,8 +25,11 @@ Usage in DataLoader:
 import torch
 import torch.nn.functional as F
 import numpy as np
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Callable
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "salt_pepper_noise",
@@ -77,7 +80,7 @@ def _get_gaussian_kernel(
 
     if cache_key not in _KERNEL_CACHE:
         # Ensure odd kernel size
-        if kernel_size % 2 == 0:
+        if (kernel_size % 2) == 0:
             kernel_size += 1
 
         # Create 1D Gaussian kernel
@@ -131,6 +134,44 @@ def _get_motion_kernel(
     return _KERNEL_CACHE[cache_key]
 
 
+def handle_5d_input(noise_func: Callable) -> Callable:
+    """
+    Decorator to handle 5D input tensors for noise functions.
+
+    Args:
+        noise_func: The noise function to apply to 4D tensors.
+
+    Returns:
+        A wrapped function that handles both 4D and 5D inputs.
+    """
+
+    def wrapper(images: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        if images.dim() == 5:
+            batch_size, time_steps, channels, height, width = images.shape
+            if time_steps > 1:
+                logger.warning(
+                    f"{noise_func.__name__} applied to input with time dimension > 1 (time_steps={time_steps}). "
+                    "Processing each time step independently."
+                )
+            # Process each time step independently
+            noisy_images = torch.stack(
+                [noise_func(images[:, t], *args, **kwargs) for t in range(time_steps)],
+                dim=1,
+            )
+            return noisy_images
+
+        if images.dim() != 4:
+            raise RuntimeError(
+                f"Expected 4D or 5D input, but got input of size: {images.shape}"
+            )
+
+        # Call the noise function for 4D tensors
+        return noise_func(images, *args, **kwargs)
+
+    return wrapper
+
+
+@handle_5d_input
 def salt_pepper_noise(
     images: torch.Tensor,
     noise_level: float = 0.1,
@@ -140,17 +181,6 @@ def salt_pepper_noise(
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
     """
     Apply salt and pepper noise to images with optional state caching.
-
-    Args:
-        images: Input tensor of shape (batch_size, channels, height, width)
-        noise_level: Noise intensity from 0.0 to 1.0 (automatically scaled)
-        seed: Random seed for reproducible results
-        salt_vs_pepper: Ratio of salt to pepper noise
-        cached_noise_state: Pre-computed noise masks for reuse
-
-    Returns:
-        If cached_noise_state is None: (noisy_images, noise_state) tuple
-        If cached_noise_state is provided: noisy_images tensor
     """
     if not 0.0 <= noise_level <= 1.0:
         raise ValueError("noise_level must be between 0.0 and 1.0")
@@ -205,6 +235,7 @@ def salt_pepper_noise(
         return noisy_images, noise_state
 
 
+@handle_5d_input
 def poisson_noise(
     images: torch.Tensor,
     noise_level: float = 0.1,
@@ -215,7 +246,7 @@ def poisson_noise(
     if not 0.0 <= noise_level <= 1.0:
         raise ValueError("noise_level must be between 0.0 and 1.0")
 
-    # Apply global scaling factor - REMOVE the min(1.0, ...) limitation
+    # Apply global scaling factor
     effective_noise_level = noise_level * NOISE_SCALING_FACTORS["poisson"]
 
     if effective_noise_level == 0.0:
@@ -234,12 +265,10 @@ def poisson_noise(
         images_shifted = images + 2.0  # Shift from ~[-2,3] to ~[0,5]
         images_positive = torch.clamp(images_shifted, min=0.1)  # Ensure positive
 
-        # Scale lambda parameter based on noise level - INCREASE base scale
-        base_lambda_scale = 20.0  # Increased from 10.0
+        # Scale lambda parameter based on noise level
+        base_lambda_scale = 20.0
         lambda_param = images_positive * effective_noise_level * base_lambda_scale
-
-        # Add minimum lambda - scale this too
-        lambda_param = lambda_param + effective_noise_level * 5.0  # Increased from 2.0
+        lambda_param = lambda_param + effective_noise_level * 5.0
 
         # Generate Poisson noise
         poisson_samples = torch.poisson(lambda_param)
@@ -247,9 +276,7 @@ def poisson_noise(
         # Convert to noise pattern
         expected_values = lambda_param
         noise_in_shifted_space = poisson_samples - expected_values
-
-        # Scale noise to appropriate magnitude - make this more aggressive
-        noise_std_scale = 1.0 * effective_noise_level  # Increased from 0.5
+        noise_std_scale = 1.0 * effective_noise_level
         noise_pattern = (
             noise_in_shifted_space * noise_std_scale / torch.sqrt(lambda_param + 1e-8)
         )
@@ -258,7 +285,7 @@ def poisson_noise(
         noise_state = {"noise_pattern": noise_pattern, "function_type": "poisson"}
 
     # Allow more distortion at high noise levels
-    noisy_images = torch.clamp(noisy_images, -6.0, 8.0)  # Expanded from [-4.0, 6.0]
+    noisy_images = torch.clamp(noisy_images, -6.0, 8.0)
 
     if cached_noise_state is not None:
         return noisy_images
@@ -266,6 +293,7 @@ def poisson_noise(
         return noisy_images, noise_state
 
 
+@handle_5d_input
 def uniform_noise(
     images: torch.Tensor,
     noise_level: float = 0.1,
@@ -276,7 +304,7 @@ def uniform_noise(
     if not 0.0 <= noise_level <= 1.0:
         raise ValueError("noise_level must be between 0.0 and 1.0")
 
-    # Apply global scaling factor - REMOVE ceiling limitation
+    # Apply global scaling factor
     effective_noise_level = noise_level * NOISE_SCALING_FACTORS["uniform"]
 
     if effective_noise_level == 0.0:
@@ -288,20 +316,13 @@ def uniform_noise(
     else:
         # Generate new noise pattern
         _set_seed(seed, images.device)
-
-        # Scale noise range based on effective noise level
-        # Base range [-0.5, 0.5] gets scaled by effective_noise_level
         base_noise = (
             torch.rand(images.shape, device=images.device, dtype=images.dtype) - 0.5
         )
-
-        # Scale noise magnitude - make it much more aggressive
-        noise_magnitude = effective_noise_level * 2.0  # Increased scaling
+        noise_magnitude = effective_noise_level * 2.0
         noise = base_noise * noise_magnitude
-
         noise_state = {"noise_pattern": noise, "function_type": "uniform"}
 
-    # Apply noise - no clamping to allow distortion
     noisy_images = images + noise
 
     if cached_noise_state is not None:
@@ -310,6 +331,7 @@ def uniform_noise(
         return noisy_images, noise_state
 
 
+@handle_5d_input
 def gaussian_blur(
     images: torch.Tensor,
     noise_level: float = 0.1,
@@ -368,17 +390,18 @@ def gaussian_blur(
         return blurred, noise_state
 
 
+@handle_5d_input
 def motion_blur(
     images: torch.Tensor,
     noise_level: float = 0.1,
     seed: Optional[int] = None,
     max_kernel_size: int = 35,  # Increased from 25
 ) -> torch.Tensor:
-    """Apply motion blur to images."""
+    """Apply motion blur to images, supporting a time dimension."""
     if not 0.0 <= noise_level <= 1.0:
         raise ValueError("noise_level must be between 0.0 and 1.0")
 
-    # Apply global scaling factor - REMOVE ceiling limitation
+    # Apply global scaling factor
     effective_noise_level = noise_level * NOISE_SCALING_FACTORS["motion"]
 
     if effective_noise_level == 0.0:
@@ -406,7 +429,6 @@ def motion_blur(
     # Apply grouped convolution
     padding = kernel_size // 2
     blurred = F.conv2d(images, kernel, padding=padding, groups=num_channels)
-
     return blurred
 
 

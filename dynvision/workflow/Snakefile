@@ -9,60 +9,68 @@ rule all:
         expand(project_paths.reports / 'experiment_{experiment}.done',
             experiment = config.experiment)
 
-SEED = "0026"
+SEED = "0040"
 
-# dataloader comparison
-rule test_performance:
+rule idle:
     input:
-        # lossrt
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "test_performance.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+idle=*_{seed}_imagenette_trained_all" / "test_data.csv",
             seed=SEED,
-            experiment=['response']),
-        # rctarget
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
-            seed=SEED,
-            experiment=['response', 'responseffonly']),
-        # recurrence type
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
-            seed=SEED,
-            experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
-        # time params
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=4+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
-            seed=SEED,
-            experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=*+tsk=4+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
-            seed=SEED,
-            experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=*+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
-            seed=SEED,
-            experiment=["response"]),
-        # feedback
-
-rule biostability:
-    input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt={lossrt}_{seed}_imagenette_trained_all" / "response.png",
-        seed="0030",
-        # rctarget=['input', 'middle', 'output'],
-        lossrt='10',
-        experiment=['response', 'stability'])
-
-rule lossrt:
-    input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "response.png",
-        seed=SEED,
-        experiment=['response'])
-
-rule imagenet:
-    input:
-        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=14+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenet_trained.pt",
-        seed="0030",
-        )
+            experiment=['response'])
 
 rule feedback:
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=50+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=*_{seed}_imagenette_trained_all" / "response.png",
-        seed="0030",
-        experiment=["response", 'responseffonly'])
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=30+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+tfb=30+feedback=*+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+            seed=SEED,
+            experiment=['response', 'responseffonly'])
+
+rule skip:
+    input:
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=*+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+            seed=SEED,
+            experiment=['response', 'responseffonly'])
+
+rule tsteps:
+    input:
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=*+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+            seed=SEED,
+            experiment=['response'])
+
+rule lossrt:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "responses.png",
+        seed=SEED,
+        experiment=['response', 'stability'])
+
+rule rctarget:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        seed=SEED,
+        experiment=['response', 'responseffonly'])
+
+rule rctype:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        seed=SEED,
+        experiment=['response', 'duration', 'contrast', 'interval', 'responseffonly', 'uniformnoise', 'poissonnoise', 'saltpeppernoise', 'gaussianblurnoise'])
+
+rule timeparams:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        seed=SEED,
+        experiment=['response']),
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=*+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        seed=SEED,
+        experiment=['response']),
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=6+tsk=*+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        seed=SEED,
+        experiment=['response'])
+
+
+rule imagenet:
+    input:
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=10+rctype=full+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenet_trained.pt",
+        seed=SEED,
+        )
 
 rule unrolling:
     input:
@@ -71,34 +79,17 @@ rule unrolling:
         expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=true_{seed}_imagenette_trained.pt",
         seed="0030")
 
-rule recurrence:
+rule dataloader:
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "test_performance.png",
-        seed=SEED,
-        experiment=['uniformnoise', 'poissonnoise', 'saltpeppernoise', 'gaussianblurnoise', 'motionblurnoise'])
-        # experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']
+        # project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=20+dataloader=*+dsteps=1_0031_imagenette_trained_all' / 'response.png',
+        # project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=1+dataloader=*+dsteps=20_0031_imagenette_trained_all' / 'response.png',
+        project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=20+dloader=*+dsteps=1_0031_imagenette_trained#minval_all' / 'response.png',
+        project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=1+dloader=*+dsteps=20_0031_imagenette_trained#minval_all' / 'response.png',
 
-rule rctarget:
-    input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_imagenette_trained_all" / "response.png",
-        seed=SEED,
-        experiment=['response', 'responseffonly'])
+# "/home/rg5022/rhythmic_visual_attention/reports/figures/response/response_DyRCNNx8:tsteps=1+dataloader=ffcv+dsteps=20_0031_imagenette_trained_all/response.png --allowed-rules test_model process_test_data plot_response --config n_timesteps=1 use_ffcv=True data_timesteps=20 batch_size=64 num_workers=2",
 
-rule timeparams:
-    input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=4+skip=true_{seed}_imagenette_trained_all" / "response.png",
-        seed=SEED,
-        experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=*+tsk=4+skip=true_{seed}_imagenette_trained_all" / "response.png",
-        seed=SEED,
-        experiment=['duration', 'contrast', 'interval', 'response', 'responseffonly']),
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=*+skip=true_{seed}_imagenette_trained_all" / "response.png",
-        seed=SEED,
-        experiment=["response"]),
+# "/home/rg5022/rhythmic_visual_attention/reports/figures/response/response_DyRCNNx8:tsteps=20+dataloader=torch+dsteps=1_0031_imagenette_trained_all/response.png --allowed-rules test_model process_test_data plot_response --config n_timesteps=20 use_ffcv=False data_timesteps=1 batch_size=64 num_workers=2",
 
-rule checkpoint:
-    input:
-        a = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=20+rctype=depthpointwise+dt=2+tau=9+tff=0+trc=6+skip=true_0026_imagenette_trained.ckpt2pt",
-        b = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=true_0026_imagenette_trained.ckpt2pt",
-        c = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=false_0026_imagenette_trained.ckpt2pt",
-        d = project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=true+fbmode=multiplicative_0026_imagenette_trained.ckpt2pt",
+# "/home/rg5022/rhythmic_visual_attention/reports/figures/response/response_DyRCNNx8:tsteps=1+dataloader=torch+dsteps=20_0031_imagenette_trained_all/response.png --allowed-rules test_model process_test_data plot_response --config n_timesteps=1 use_ffcv=False data_timesteps=20 batch_size=64 num_workers=2",
+
+# /scratch/rg5022/rhythmic_visual_attention/modelsDyRCNNx8/DyRCNNx8:tsteps=1+dataloader=torch+dsteps=20_0031_imagenette_trained#minval.pt"

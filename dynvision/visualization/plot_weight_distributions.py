@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    data_identifier = args.input.stem
+    data_identifier = args.input.name
 
     state_dict = torch.load(args.input)
 

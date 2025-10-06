@@ -372,17 +372,28 @@ class SelfConnection(RecurrenceBase):
         self._define_architecture()
 
     def _define_architecture(self) -> None:
-        """Define the architecture of the self connection using Conv2d."""
-        self.conv = nn.Conv2d(
-            in_channels=self.in_channels,
-            out_channels=self.in_channels,
-            kernel_size=1,
-            groups=self.in_channels,
-            bias=self.bias,
-        )
+
+        self.weight = nn.Parameter(torch.zeros(1))
+
+        if self.bias:
+            self.bias = nn.Parameter(torch.zeros(1))
+        else:
+            self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.conv(x)
+        out = x * self.weight
+
+        if self.bias is not None:
+            out = out + self.bias
+
+        return out
+
+    def _init_parameters(self):
+        """Initialize parameters."""
+        with torch.no_grad():
+            nn.init.uniform_(self.weight, -self.max_weight_init, self.max_weight_init)
+            if self.bias is not None:
+                nn.init.zeros_(self.bias)
 
 
 class InputAdaption(LightningModule):
