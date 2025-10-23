@@ -11,6 +11,7 @@ from dynvision.utils import alias_kwargs, str_to_bool
 from .storage import DataBuffer
 
 logger = logging.getLogger(__name__)
+# logging.getLogger("dynvision.base.temporal").setLevel(logging.DEBUG)
 
 
 class TemporalBase(nn.Module):
@@ -663,20 +664,28 @@ class TemporalBase(nn.Module):
         else:
             raise NotImplementedError("No method to download pretrained weights")
 
+        logger.debug(f"Original state_dict keys: {list(state_dict.keys())}")
+
         # translate keys in loaded state dict
         if hasattr(self, "translate_pretrained_layer_names"):
             translate_layer_names = self.translate_pretrained_layer_names()
-            external_keys = list(state_dict.keys())
-            new_state_dict = copy(state_dict)
-            for key in external_keys:
-                for old_key, new_key in translate_layer_names.items():
-                    if old_key in key:
-                        new_key = key.replace(old_key, new_key)
-                        new_state_dict[new_key] = state_dict[key]
-                        if old_key not in translate_layer_names.values():
-                            del new_state_dict[key]
-                        continue
+            logger.debug(f"Translation mapping: {translate_layer_names}")
+
+            new_state_dict = {}
+
+            for key in list(state_dict.keys()):
+                new_key = key
+                # Try to find a matching translation
+                for old_pattern, new_pattern in translate_layer_names.items():
+                    if old_pattern in key:
+                        new_key = key.replace(old_pattern, new_pattern)
+                        logger.debug(f"Translating: {key} -> {new_key}")
+                        break
+
+                new_state_dict[new_key] = state_dict[key]
+
             state_dict = new_state_dict
+            logger.debug(f"Translated state_dict keys: {list(state_dict.keys())}")
 
         pretrained_keys = list(state_dict.keys())
 

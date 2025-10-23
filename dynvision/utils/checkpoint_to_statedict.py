@@ -39,7 +39,10 @@ parser.add_argument(
 
 
 def get_best_checkpoint(
-    checkpoint_dir: Path, model_identifier: str, pattern: Optional[str] = None
+    checkpoint_dir: Path,
+    model_identifier: str,
+    pattern: Optional[str] = None,
+    raise_error=True,
 ) -> Path:
     """Find best checkpoint based on validation loss.
 
@@ -88,7 +91,7 @@ def get_best_checkpoint(
         else:
             logger.debug(f"No match for: {checkpoint_path.name}")
 
-    if best_checkpoint is None:
+    if best_checkpoint is None and raise_error:
         available_files = [f.name for f in ckpt_files]
         raise FileNotFoundError(
             f"No checkpoint files found for model identifier: {model_identifier}\n"

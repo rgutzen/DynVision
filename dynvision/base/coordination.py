@@ -38,7 +38,7 @@ class DtypeDeviceCoordinator:
         else:
             self._coordination_built = True
 
-        super().__init__(**kwargs)
+        super().__init__()
 
     def map_dtype(self, dtype: Optional[str]) -> torch.dtype:
         if dtype is None:
