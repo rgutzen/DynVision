@@ -64,8 +64,9 @@ class BaseModel(
     """
 
     def __init__(self, **kwargs):
-        # Initialize coordination as root node
-        DtypeDeviceCoordinatorMixin.__init__(self)
+        # Set root node status BEFORE calling super()
+        # calling DtypeDeviceCoordinatorMixin explicitly here?
+        # This is a BaseModel-specific attribute, not passed through MRO
         if os.environ.get("WORLD_SIZE", "1") == "1":
             self.is_root_node = True
         else:
@@ -74,6 +75,9 @@ class BaseModel(
             )
             self.is_root_node = False
 
+        # Call super().__init__() with kwargs - MRO handles the rest
+        # The MRO will call each parent class's __init__ in order:
+        # TemporalBase -> LightningBase -> StorageBufferMixin -> MonitoringMixin -> DtypeDeviceCoordinatorMixin
         super().__init__(**kwargs)
 
         # Automatically capture all hyperparameters after all initialization

@@ -7,7 +7,7 @@ from copy import copy
 import logging
 
 from dynvision.data.operations import _adjust_data_dimensions, _adjust_label_dimensions
-from dynvision.utils import alias_kwargs
+from dynvision.utils import alias_kwargs, str_to_bool
 from .storage import DataBuffer
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ class TemporalBase(nn.Module):
         rctarget="recurrence_target",
         solver="dynamics_solver",
         idle="idle_timesteps",
+        ffonly="feedforward_only",
     )
     def __init__(
         self,
@@ -44,6 +45,7 @@ class TemporalBase(nn.Module):
         non_label_index: int = -1,
         non_input_value: float = 0.0,
         idle_timesteps: int = 0,
+        feedforward_only: bool = False,
         # Architecture configuration
         classifier_name: str = "classifier",
         dynamics_solver: str = "euler",
@@ -72,6 +74,7 @@ class TemporalBase(nn.Module):
         self.non_label_index = int(non_label_index)
         self.non_input_value = float(non_input_value)
         self.idle_timesteps = int(idle_timesteps)
+        self.feedforward_only = str_to_bool(feedforward_only)
 
         # Process feedforward delay
         self.delay_feedforward = int(t_feedforward / dt)
@@ -188,9 +191,9 @@ class TemporalBase(nn.Module):
             # define default operations order within layer
             self.layer_operations = [
                 "layer",  # apply (recurrent) convolutional layer
-                "ext",  # add external input
-                "skip",  # add skip connection
-                "feedback",  # add feedback connection
+                "addext",  # add external input
+                "addskip",  # add skip connection
+                "addfeedback",  # add feedback connection
                 "tstep",  # apply dynamical systems ode solver step
                 "nonlin",  # apply nonlinearity
                 "supralin",  # apply supralinearity
@@ -217,6 +220,7 @@ class TemporalBase(nn.Module):
                     "addskip",
                     "addext",
                     "addfeedback",
+                    "tstep",
                 ]:
                     continue
 
@@ -227,7 +231,7 @@ class TemporalBase(nn.Module):
                         module_name = layer._get_name()
                     else:
                         module_name = "layer"
-                    x = layer(x)
+                    x = layer(x, feedforward_only=feedforward_only)
 
                 elif operation == "record" and store_responses:
                     responses[layer_name] = x
@@ -274,7 +278,6 @@ class TemporalBase(nn.Module):
     def forward(
         self,
         x_0: torch.Tensor,
-        feedforward_only: bool = False,
         *args: Any,
         **kwargs: Any,
     ) -> torch.Tensor:
@@ -284,7 +287,6 @@ class TemporalBase(nn.Module):
         Args:
             x_0 (torch.Tensor): Input tensor.
             store_responses (bool, optional): Whether to store responses. Defaults to False.
-            feedforward_only (bool, optional): Whether to perform only feedforward operations. Defaults to False.
 
         Returns:
             torch.Tensor: Model outputs.
@@ -333,7 +335,7 @@ class TemporalBase(nn.Module):
             x, responses_t = self._forward(
                 x,
                 t,
-                feedforward_only=feedforward_only,
+                feedforward_only=self.feedforward_only,
                 store_responses=store_responses,
             )
 

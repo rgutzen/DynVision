@@ -10,6 +10,10 @@ import wandb
 
 from dynvision import losses
 from dynvision.utils import alias_kwargs
+from dynvision.utils.performance_measures import (
+    calculate_accuracy,
+    calculate_confidence,
+)
 import gc
 
 logger = logging.getLogger(__name__)
@@ -48,10 +52,8 @@ class LightningBase(pl.LightningModule):
         log_every_n_steps: int = 50,
         **kwargs: Any,
     ) -> None:
-        super().__init__()
-        pl.LightningModule.__init__(self)
-
-        # Store Lightning-specific attributes
+        # Store Lightning-specific attributes BEFORE calling super()
+        # This ensures they're available if other classes need them
         self.retain_graph = retain_graph
         self.criterion_params = criterion_params
         self.non_label_index = non_label_index
@@ -73,39 +75,97 @@ class LightningBase(pl.LightningModule):
         self.log_level = log_level
         self.log_every_n_steps = int(log_every_n_steps)
 
+        # Call super().__init__() with kwargs to continue MRO chain
+        super().__init__(**kwargs)
+
     # Core training steps
     #####################
     def model_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, **kwargs
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        compute_confidence: bool = True,
+        **kwargs,
     ) -> Tuple[torch.Tensor, float, torch.Tensor]:
 
         if hasattr(self, "_process_batch"):
             batch = self._process_batch(batch, batch_idx)
 
-        inputs, label_indices, *paths = batch
+        # inputs: (batch_size, n_timesteps, n_channels, height, width)
+        inputs, label_index, *paths = batch
+        batch_size, n_timesteps = label_index.shape
+
+        # Create image indices for storage
+        image_index = torch.arange(batch_size, device=inputs.device) + (
+            batch_idx * batch_size
+        )
+        image_index = image_index.unsqueeze(1).expand(batch_size, n_timesteps)
+
+        # Extract first non-negative label index for each sample in the batch
+        first_label_index = label_index[
+            torch.arange(label_index.size(0), device=label_index.device),
+            torch.argmax((label_index >= 0).float(), dim=1),
+        ]
+        first_label_index = first_label_index.unsqueeze(1).expand(
+            batch_size, n_timesteps
+        )
 
         # forward
-        outputs = self.forward(inputs, **kwargs)
+        outputs = self.forward(
+            inputs, **kwargs
+        )  # shape: batch_size, n_timesteps, n_classes
 
         # calculate loss
         loss = self.compute_loss(
             outputs,
-            label_indices=label_indices,
+            label_index=label_index,
         )
-        # calculate accuracy
-        guess_indices = self.predictor(outputs)
-        accuracy = self.calc_accuracy(label_indices, guess_indices)
+        # calculate performance metrics
+        guess_index = self.predictor(outputs)
+        accuracy = self.calculate_accuracy(guess_index, label_index)
+
+        metrics = {
+            "loss": loss,
+            "accuracy": accuracy,
+        }
+
+        # Extract confidences at guess and first label positions
+        if compute_confidence:
+            guess_confidence, first_label_confidence = self.calculate_confidence(
+                outputs, [guess_index, first_label_index]
+            )
+            metrics.update(
+                {
+                    "guess_confidence": guess_confidence.mean(),
+                    "first_label_confidence": first_label_confidence.mean(),
+                }
+            )
+        else:
+            guess_confidence = None
+            first_label_confidence = None
 
         if hasattr(self, "storage"):
-            self.storage.store_records(
-                guess_indices, label_indices, label_indices
-            )  # todo: flexibly accept image_indices
+            # Store records with flexible extras - all additional fields go to extras dict
+            storage_kwargs = {
+                "guess_index": guess_index,
+                "label_index": label_index,
+                "image_index": image_index,
+                "first_label_index": first_label_index,
+            }
+            if compute_confidence:
+                storage_kwargs.update(
+                    {
+                        "guess_confidence": guess_confidence,
+                        "first_label_confidence": first_label_confidence,
+                    }
+                )
+            self.storage.store_records(**storage_kwargs)
 
         del outputs
-        return loss, accuracy
+        return metrics
 
     def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
-        return torch.argmax(outputs, dim=-1)
+        return torch.argmax(torch.softmax(outputs, dim=-1), dim=-1)
 
     # Lightning step methods
     ########################
@@ -123,17 +183,17 @@ class LightningBase(pl.LightningModule):
             torch.Tensor: Training loss.
         """
         batch_size = batch[0].size(0)
-        loss, accuracy = self.model_step(batch, batch_idx)
+        metrics = self.model_step(batch, batch_idx, compute_confidence=False)
 
-        metrics = {"train_loss": loss, "train_accuracy": accuracy}
+        train_metrics = {f"train_{k}": v for k, v in metrics.items()}
         self.log_dict(
-            metrics,
+            train_metrics,
             prog_bar=True,
             batch_size=batch_size,
             sync_dist=True,
             rank_zero_only=True,
         )
-        return loss
+        return metrics
 
     def validation_step(
         self,
@@ -154,11 +214,11 @@ class LightningBase(pl.LightningModule):
         batch_size = batch[0].size(0)
 
         with torch.no_grad():
-            loss, accuracy = self.model_step(batch, batch_idx)
+            metrics = self.model_step(batch, batch_idx)
 
-        metrics = {"val_loss": loss, "val_accuracy": accuracy}
+        val_metrics = {f"val_{k}": v for k, v in metrics.items()}
         self.log_dict(
-            metrics,
+            val_metrics,
             prog_bar=True,
             batch_size=batch_size,
             sync_dist=True,
@@ -167,8 +227,7 @@ class LightningBase(pl.LightningModule):
 
         torch.cuda.empty_cache()
         gc.collect()
-
-        return loss, accuracy
+        return metrics
 
     def test_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -184,18 +243,18 @@ class LightningBase(pl.LightningModule):
             Tuple[torch.Tensor, float]: Test loss and accuracy.
         """
         batch_size = batch[0].size(0)
-        loss, accuracy = self.model_step(batch, batch_idx)
+        metrics = self.model_step(batch, batch_idx)
 
-        metrics = {"test_loss": loss, "test_accuracy": accuracy}
+        test_metrics = {f"test_{k}": v for k, v in metrics.items()}
         self.log_dict(
-            metrics,
+            test_metrics,
             prog_bar=True,
             on_step=True,
             batch_size=batch_size,
             sync_dist=True,
             rank_zero_only=True,
         )
-        return loss, accuracy
+        return metrics
 
     # Loss and accuracy
     ###################
@@ -251,24 +310,24 @@ class LightningBase(pl.LightningModule):
     def compute_loss(
         self,
         outputs: torch.Tensor,
-        label_indices: torch.Tensor,
+        label_index: torch.Tensor,
     ) -> torch.Tensor:
 
         batch_size, *_, n_classes = outputs.shape
 
         # Apply loss reaction time
         if hasattr(self, "ignore_initial_n_labels") and self.ignore_initial_n_labels:
-            label_indices = label_indices.clone()
-            label_indices[:, : self.ignore_initial_n_labels] = self.non_label_index
+            label_index = label_index.clone()
+            label_index[:, : self.ignore_initial_n_labels] = self.non_label_index
 
         # Flatten time dimension
         outputs = outputs.view(-1, n_classes)
-        label_indices = label_indices.reshape(-1)
+        label_index = label_index.reshape(-1)
 
         # Quick validation
-        invalid_mask = (label_indices < 0) | (label_indices >= n_classes)
+        invalid_mask = (label_index < 0) | (label_index >= n_classes)
         if invalid_mask.all():
-            logger.warning(f"All labels invalid! \n {label_indices}")
+            logger.warning(f"All labels invalid! \n {label_index}")
             # return torch.tensor(0.0, device=outputs.device, requires_grad=True)
 
         # Calculate loss for each criterion
@@ -280,7 +339,7 @@ class LightningBase(pl.LightningModule):
             else:
                 weight = 1
 
-            loss_value = weight * criterion_fn(outputs, label_indices)
+            loss_value = weight * criterion_fn(outputs, label_index)
             loss_values[i] = loss_value
 
             self.log_dict(
@@ -298,24 +357,20 @@ class LightningBase(pl.LightningModule):
 
         return loss
 
-    def calc_accuracy(
+    def calculate_confidence(
         self,
-        label_indices: torch.Tensor,
-        guess_indices: torch.Tensor,
+        outputs: torch.Tensor,
+        indices: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Calculate confidence scores for the given outputs."""
+        return calculate_confidence(outputs, indices)
+
+    def calculate_accuracy(
+        self,
+        label_index: torch.Tensor,
+        guess_index: torch.Tensor,
     ) -> float:
-
-        # Create mask for valid labels (excluding non_label_index)
-        valid_mask = (label_indices >= 0) & (label_indices < self.n_classes)
-        if not valid_mask.all():
-            if valid_mask.any():
-                label_indices = label_indices[valid_mask]
-                guess_indices = guess_indices[valid_mask]
-            else:
-                logger.warning("All labels invalid, returning zero accuracy")
-                return 0.0
-
-        accuracy = (guess_indices == label_indices).float().mean().item()
-        return accuracy
+        return calculate_accuracy(label_index, guess_index)
 
     def backward(self, loss: torch.Tensor) -> None:
         if self.retain_graph:

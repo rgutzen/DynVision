@@ -234,6 +234,7 @@ class StimulusDurationDataLoader(StandardDataLoader):
 
     @alias_kwargs(
         tsteps="n_timesteps",
+        dsteps="n_timesteps",
         data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
@@ -243,9 +244,9 @@ class StimulusDurationDataLoader(StandardDataLoader):
     def __init__(
         self,
         *args,
-        n_timesteps: int = 20,
-        stimulus_duration: int = 5,
-        intro_duration: int = 0,
+        n_timesteps: int = 30,
+        stimulus_duration: int = 20,
+        intro_duration: int = 1,
         non_label_index: int = -1,
         non_input_value: float = 0,
         **kwargs,
@@ -347,6 +348,7 @@ class StimulusIntervalDataLoader(StandardDataLoader):
 
     @alias_kwargs(
         tsteps="n_timesteps",
+        dsteps="n_timesteps",
         data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
@@ -474,6 +476,7 @@ class StimulusIntervalDataLoader(StandardDataLoader):
 class StimulusContrastDataLoader(StandardDataLoader):
     @alias_kwargs(
         tsteps="n_timesteps",
+        dsteps="n_timesteps",
         data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
@@ -562,26 +565,29 @@ class StimulusContrastDataLoader(StandardDataLoader):
 class StimulusNoiseDataLoader(StandardDataLoader):
     @alias_kwargs(
         tsteps="n_timesteps",
+        dsteps="n_timesteps",
         data_timesteps="n_timesteps",
         stim="stimulus_duration",
         intro="intro_duration",
         noisetype="noise_type",
-        noiselevel="noise_level",
+        noiselevel="ssnr",
         noiseseed="noise_seed",
         noisevoid="noise_void",
+        tempmode="temporal_mode",
         voidid="non_label_index",
         voidinput="non_input_value",
     )
     def __init__(
         self,
         *args,
-        n_timesteps=15,
-        stimulus_duration=10,
-        intro_duration=2,
+        n_timesteps=20,
+        stimulus_duration=15,
+        intro_duration=1,
         noise_type="uniform",
-        noise_level=0.1,
+        ssnr=0.5,
         noise_seed=None,
-        noise_void=False,
+        noise_void=True,
+        temporal_mode="static",
         noise_cache_size=50,
         non_label_index=-1,
         non_input_value=0,
@@ -593,15 +599,24 @@ class StimulusNoiseDataLoader(StandardDataLoader):
         self.stimulus_duration = int(stimulus_duration)
         self.intro_duration = int(intro_duration)
         self.noise_type = str(noise_type).lower()
-        self.noise_level = float(noise_level)
+        self.ssnr = float(ssnr)
         self.noise_seed = noise_seed
-        self.noise_void = bool(noise_void)  # Store the noise_void parameter
+        self.noise_void = bool(noise_void)
+        self.temporal_mode = str(temporal_mode).lower()
         self.noise_cache_size = noise_cache_size
         self.non_label_index = int(non_label_index)
         self.non_input_value = float(non_input_value)
         self.outro_duration = (
             self.n_timesteps - self.stimulus_duration - self.intro_duration
         )
+
+        # Validate temporal_mode
+        valid_temporal_modes = ["static", "dynamic", "correlated"]
+        if self.temporal_mode not in valid_temporal_modes:
+            raise ValueError(
+                f"Invalid temporal_mode: {self.temporal_mode}. "
+                f"Available modes: {valid_temporal_modes}"
+            )
 
         if self.outro_duration < 0:
             raise ValueError(
@@ -615,8 +630,8 @@ class StimulusNoiseDataLoader(StandardDataLoader):
             "saltpepper": noise.salt_pepper_noise,
             "poisson": noise.poisson_noise,
             "uniform": noise.uniform_noise,
-            "gaussianblur": noise.gaussian_blur,
-            "motionblur": noise.motion_blur,
+            "gaussian": noise.gaussian_noise,
+            "phasescrambled": noise.phase_scrambled_noise,
         }
 
         if self.noise_type not in self._noise_functions:
@@ -625,6 +640,7 @@ class StimulusNoiseDataLoader(StandardDataLoader):
             )
 
         self.noise_function = self._noise_functions[self.noise_type]
+        self.noise_kwargs, _ = filter_kwargs(self.noise_function, kwargs)
 
         # Noise caching (only for deterministic noise)
         self._should_cache_noise = self.noise_seed is not None
@@ -660,7 +676,8 @@ class StimulusNoiseDataLoader(StandardDataLoader):
         cache_key = (
             data_shape,
             self.noise_type,
-            self.noise_level,
+            self.ssnr,
+            self.temporal_mode,  # Include temporal_mode in cache key
             seed,
             device,
             dtype,
@@ -679,7 +696,20 @@ class StimulusNoiseDataLoader(StandardDataLoader):
 
         # Generate new noise state by calling function without cached_noise_state
         dummy_tensor = torch.zeros(data_shape, dtype=dtype, device=device)
-        _, noise_state = self.noise_function(dummy_tensor, self.noise_level, seed=seed)
+        result = self.noise_function(
+            dummy_tensor,
+            self.ssnr,
+            seed=seed,
+            temporal_mode=self.temporal_mode,
+            **self.noise_kwargs,
+        )
+
+        # Handle case where function returns tuple (result, state) or just result
+        if isinstance(result, tuple):
+            _, noise_state = result
+        else:
+            # For functions that don't return state (like motion_blur), create empty state
+            noise_state = {"function_type": self.noise_type}
 
         # Cache the noise state
         self._noise_state_cache[cache_key] = noise_state
@@ -687,50 +717,174 @@ class StimulusNoiseDataLoader(StandardDataLoader):
 
         return noise_state
 
+    def _should_apply_noise(self) -> bool:
+        """Determine if noise should be applied based on parameters."""
+        # Use epsilon-based comparison for robust no-noise detection
+        EPSILON = 1e-4
+        return not (abs(self.ssnr - 1.0) < EPSILON)
+
     def _apply_noise_optimized(
         self, data: torch.Tensor, sample_idx=None
     ) -> torch.Tensor:
-        """Apply noise with state caching optimization."""
+        """Apply noise with robust result handling and early exit optimization."""
+        # Early exit for no-noise case
+        if not self._should_apply_noise():
+            return data
+
         seed = self._get_noise_seed(sample_idx)
 
         # Try to get cached noise state first
+        cached_state = None
         if self._should_cache_noise and seed is not None:
             cached_state = self._get_cached_noise_state(
                 data.shape, data.device, data.dtype, seed
             )
-            if cached_state is not None:
-                # Apply noise using cached state
-                return self.noise_function(
-                    data, self.noise_level, seed=seed, cached_noise_state=cached_state
-                )
 
-        # Fallback to direct noise generation (returns both result and state)
-        result, _ = self.noise_function(data, self.noise_level, seed=seed)
-        return result
+        # Apply noise with temporal_mode
+        if cached_state is not None:
+            # Apply noise using cached state
+            result = self.noise_function(
+                data,
+                ssnr=self.ssnr,
+                seed=seed,
+                cached_noise_state=cached_state,
+                temporal_mode=self.temporal_mode,
+                **self.noise_kwargs,
+            )
+        else:
+            # Direct noise generation
+            result = self.noise_function(
+                data,
+                ssnr=self.ssnr,
+                seed=seed,
+                temporal_mode=self.temporal_mode,
+                **self.noise_kwargs,
+            )
+
+        # Robust result handling
+        if isinstance(result, tuple):
+            noisy_data, noise_state = result
+            # Optionally store noise_state for debugging/analysis if needed
+            return noisy_data
+        elif isinstance(result, torch.Tensor):
+            return result
+        else:
+            raise TypeError(f"Unexpected noise function return type: {type(result)}")
+
+    def _get_cached_noise_state(self, data_shape, device, dtype, seed):
+        """Get or create cached noise state with improved cache key generation."""
+        if not self._should_cache_noise or seed is None:
+            return None
+
+        # Use rounded SSNR value to avoid floating-point precision issues in cache keys
+        ssnr_key = round(self.ssnr, 10)
+
+        cache_key = (
+            data_shape,
+            self.noise_type,
+            ssnr_key,  # Use rounded value
+            self.temporal_mode,
+            seed,
+            device,
+            dtype,
+            tuple(sorted(self.noise_kwargs.items())),  # Include all noise parameters
+        )
+
+        # Update access order
+        if cache_key in self._noise_cache_order:
+            self._noise_cache_order.move_to_end(cache_key)
+            return self._noise_state_cache[cache_key]
+
+        # Check if we need to evict old entries
+        if len(self._noise_state_cache) >= self.noise_cache_size:
+            oldest_key = next(iter(self._noise_cache_order))
+            del self._noise_state_cache[oldest_key]
+            del self._noise_cache_order[oldest_key]
+
+        # Generate new noise state by calling function without cached_noise_state
+        dummy_tensor = torch.zeros(data_shape, dtype=dtype, device=device)
+        result = self.noise_function(
+            dummy_tensor,
+            ssnr=self.ssnr,
+            seed=seed,
+            temporal_mode=self.temporal_mode,
+            **self.noise_kwargs,
+        )
+
+        # Handle case where function returns tuple (result, state) or just result
+        if isinstance(result, tuple):
+            _, noise_state = result
+        else:
+            # For functions that don't return state, create empty state
+            noise_state = {"function_type": self.noise_type}
+
+        # Cache the noise state
+        self._noise_state_cache[cache_key] = noise_state
+        self._noise_cache_order[cache_key] = True
+
+        return noise_state
 
     def _apply_noise_to_void_periods(
         self, output_data: torch.Tensor, sample_idx=None
     ) -> torch.Tensor:
-        """Apply noise to void periods (intro and outro) if noise_void is True."""
-        if not self.noise_void:
+        """Apply noise to void periods (intro and outro) respecting temporal_mode."""
+        if not self._should_apply_noise() or not self.noise_void:
             return output_data
 
-        # Apply noise to intro period
-        if self.intro_duration > 0:
-            intro_data = output_data[:, : self.intro_duration]
-            noisy_intro = self._apply_noise_optimized(intro_data, sample_idx)
-            output_data[:, : self.intro_duration] = noisy_intro
+        if self.temporal_mode == "static":
+            # For static mode, generate noise once and replicate across time
+            # This ensures consistent noise across all void timesteps
 
-        # Apply noise to outro period
-        if self.outro_duration > 0:
-            outro_start = self.intro_duration + self.stimulus_duration
-            outro_data = output_data[
-                :, outro_start : outro_start + self.outro_duration
-            ]
-            noisy_outro = self._apply_noise_optimized(outro_data, sample_idx)
-            output_data[:, outro_start : outro_start + self.outro_duration] = (
-                noisy_outro
-            )
+            # Apply noise to intro period (static)
+            if self.intro_duration > 0:
+                # Take a single frame slice for noise generation
+                intro_frame = output_data[
+                    :, 0:1
+                ]  # Shape: [batch, 1, channels, height, width]
+                noisy_intro_frame = self._apply_noise_optimized(
+                    intro_frame, sample_idx
+                )
+
+                # Replicate the noisy frame across all intro timesteps
+                output_data[:, : self.intro_duration] = noisy_intro_frame.expand(
+                    -1, self.intro_duration, -1, -1, -1
+                )
+
+            # Apply noise to outro period (static)
+            if self.outro_duration > 0:
+                outro_start = self.intro_duration + self.stimulus_duration
+                # Take a single frame slice for noise generation
+                outro_frame = output_data[
+                    :, outro_start : outro_start + 1
+                ]  # Shape: [batch, 1, channels, height, width]
+                noisy_outro_frame = self._apply_noise_optimized(
+                    outro_frame, sample_idx
+                )
+
+                # Replicate the noisy frame across all outro timesteps
+                output_data[:, outro_start : outro_start + self.outro_duration] = (
+                    noisy_outro_frame.expand(-1, self.outro_duration, -1, -1, -1)
+                )
+
+        else:  # dynamic or correlated mode
+            # Apply noise independently to each timestep
+
+            # Apply noise to intro period (dynamic)
+            if self.intro_duration > 0:
+                intro_data = output_data[:, : self.intro_duration]
+                noisy_intro = self._apply_noise_optimized(intro_data, sample_idx)
+                output_data[:, : self.intro_duration] = noisy_intro
+
+            # Apply noise to outro period (dynamic)
+            if self.outro_duration > 0:
+                outro_start = self.intro_duration + self.stimulus_duration
+                outro_data = output_data[
+                    :, outro_start : outro_start + self.outro_duration
+                ]
+                noisy_outro = self._apply_noise_optimized(outro_data, sample_idx)
+                output_data[:, outro_start : outro_start + self.outro_duration] = (
+                    noisy_outro
+                )
 
         return output_data
 
@@ -741,53 +895,117 @@ class StimulusNoiseDataLoader(StandardDataLoader):
             for sample in DataLoader.__iter__(self):
                 data, label_indices, *extra = sample
 
-                # Apply noise to stimulus data before layout optimization
-                data = self._apply_noise_optimized(data, self._sample_counter)
+                # Strategic noise application based on temporal_mode
+                if self.temporal_mode == "static" or not self._should_apply_noise():
+                    # Apply noise to 4D tensor before temporal expansion (more efficient)
+                    data = self._apply_noise_optimized(data, self._sample_counter)
 
-                # Apply performance optimizations
-                data = _adjust_data_dimensions(data, self._optimal_memory_format)
+                    # Apply performance optimizations
+                    data = _adjust_data_dimensions(data, self._optimal_memory_format)
+                    data = self._optimize_tensor_layout(data)
 
-                data = self._optimize_tensor_layout(data)
+                    if isinstance(data, torch.Tensor):
+                        data = data.to(dtype=self.dtype)
 
-                if isinstance(data, torch.Tensor):
-                    data = data.to(dtype=self.dtype)
+                    label_indices = _adjust_label_dimensions(label_indices)
 
-                label_indices = _adjust_label_dimensions(label_indices)
-
-                # Get pre-allocated tensors
-                output_data, output_labels = self._get_cached_tensors(
-                    data.shape, label_indices.shape, data.device, data.dtype
-                )
-
-                # Async tensor operations and pre-fill with void values
-                data, label_indices = self._async_tensor_operations(
-                    data,
-                    label_indices,
-                    output_data,
-                    output_labels,
-                    self.non_input_value,
-                    self.non_label_index,
-                )
-
-                # Use JIT-compiled functions for stimulus period
-                time_idx = self.intro_duration  # Skip intro (pre-filled)
-
-                if self.stimulus_duration > 0:
-                    expanded_data = self._expand_jit(data, 1, self.stimulus_duration)
-                    expanded_labels = self._expand_jit(
-                        label_indices, 1, self.stimulus_duration
+                    # Get pre-allocated tensors
+                    output_data, output_labels = self._get_cached_tensors(
+                        data.shape, label_indices.shape, data.device, data.dtype
                     )
 
-                    self._fill_period_jit(
+                    # Async tensor operations and pre-fill with void values
+                    data, label_indices = self._async_tensor_operations(
+                        data,
+                        label_indices,
                         output_data,
                         output_labels,
-                        expanded_data,
-                        expanded_labels,
-                        time_idx,
-                        self.stimulus_duration,
+                        self.non_input_value,
+                        self.non_label_index,
                     )
 
-                # Apply noise to void periods if enabled
+                    # Use JIT-compiled functions for stimulus period
+                    time_idx = self.intro_duration  # Skip intro (pre-filled)
+
+                    if self.stimulus_duration > 0:
+                        expanded_data = self._expand_jit(
+                            data, 1, self.stimulus_duration
+                        )
+                        expanded_labels = self._expand_jit(
+                            label_indices, 1, self.stimulus_duration
+                        )
+
+                        self._fill_period_jit(
+                            output_data,
+                            output_labels,
+                            expanded_data,
+                            expanded_labels,
+                            time_idx,
+                            self.stimulus_duration,
+                        )
+
+                else:  # dynamic or correlated mode
+                    # Apply performance optimizations first
+                    data = _adjust_data_dimensions(data, self._optimal_memory_format)
+                    data = self._optimize_tensor_layout(data)
+
+                    if isinstance(data, torch.Tensor):
+                        data = data.to(dtype=self.dtype)
+
+                    label_indices = _adjust_label_dimensions(label_indices)
+
+                    # Get pre-allocated tensors
+                    output_data, output_labels = self._get_cached_tensors(
+                        data.shape, label_indices.shape, data.device, data.dtype
+                    )
+
+                    # Async tensor operations and pre-fill with void values
+                    data, label_indices = self._async_tensor_operations(
+                        data,
+                        label_indices,
+                        output_data,
+                        output_labels,
+                        self.non_input_value,
+                        self.non_label_index,
+                    )
+
+                    # Expand to temporal dimensions first
+                    time_idx = self.intro_duration
+
+                    if self.stimulus_duration > 0:
+                        expanded_data = self._expand_jit(
+                            data, 1, self.stimulus_duration
+                        )
+                        expanded_labels = self._expand_jit(
+                            label_indices, 1, self.stimulus_duration
+                        )
+
+                        self._fill_period_jit(
+                            output_data,
+                            output_labels,
+                            expanded_data,
+                            expanded_labels,
+                            time_idx,
+                            self.stimulus_duration,
+                        )
+
+                    # Apply noise to the stimulus period after temporal expansion
+                    if self.stimulus_duration > 0:
+                        stimulus_data = output_data[
+                            :,
+                            self.intro_duration : self.intro_duration
+                            + self.stimulus_duration,
+                        ]
+                        noisy_stimulus = self._apply_noise_optimized(
+                            stimulus_data, self._sample_counter
+                        )
+                        output_data[
+                            :,
+                            self.intro_duration : self.intro_duration
+                            + self.stimulus_duration,
+                        ] = noisy_stimulus
+
+                # Apply noise to void periods (now respects temporal_mode)
                 if self.noise_void:
                     output_data = self._apply_noise_to_void_periods(
                         output_data, self._sample_counter

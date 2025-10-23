@@ -358,7 +358,7 @@ def pad_tensor_efficient(tensor: torch.Tensor, pad_len: int) -> torch.Tensor:
 def extract_metric_values_for_dataframe(
     metric_tensor: torch.Tensor,
     sample_to_presentation: Dict[int, int],
-    unique_presentations: List[int],
+    presented_classes: List[int],
     unique_times: List[int],
 ) -> np.ndarray:
     """
@@ -369,18 +369,18 @@ def extract_metric_values_for_dataframe(
 
     Args:
         metric_tensor: Computed metric tensor [samples, times, ...]
-        sample_to_presentation: Mapping from sample_index to presentation_label
-        unique_presentations: List of unique presentation labels
+        sample_to_presentation: Mapping from sample_index to first_label_index
+        presented_classes: List of unique presentation labels
         unique_times: List of unique time indices
 
     Returns:
         1D numpy array with extracted values in correct order
     """
-    n_rows = len(unique_presentations) * len(unique_times)
+    n_rows = len(presented_classes) * len(unique_times)
     values = np.empty(n_rows, dtype=np.float32)
 
     idx = 0
-    for pres_label in unique_presentations:
+    for pres_label in presented_classes:
         # Find first sample with this presentation label
         sample_idx = None
         for s, p in sample_to_presentation.items():
@@ -425,7 +425,7 @@ def process_large_layer_chunked(
     metric_func,
     metric_name: str,
     sample_to_presentation: Dict[int, int],
-    unique_presentations: List[int],
+    presented_classes: List[int],
     unique_times: List[int],
     memory_monitor: MemoryMonitor,
     chunk_size: int = 32,
@@ -441,7 +441,7 @@ def process_large_layer_chunked(
         metric_func: Function to compute metric
         metric_name: Name of metric for logging
         sample_to_presentation: Sample to presentation mapping
-        unique_presentations: List of unique presentations
+        presented_classes: List of unique presentations
         unique_times: List of unique times
         memory_monitor: Memory monitor instance
         chunk_size: Number of samples to process at once
@@ -483,7 +483,7 @@ def process_large_layer_chunked(
             chunk_values = extract_metric_values_for_dataframe(
                 chunk_metric,
                 chunk_sample_to_presentation,
-                unique_presentations,
+                presented_classes,
                 unique_times,
             )
 
@@ -550,7 +550,7 @@ def process_layer_responses_incremental(
     pt_file: Path,
     measures: List[str],
     sample_to_presentation: Dict[int, int],
-    unique_presentations: List[int],
+    presented_classes: List[int],
     unique_times: List[int],
     memory_monitor: MemoryMonitor,
     max_retries: int = 3,
@@ -675,7 +675,7 @@ def process_layer_responses_incremental(
                                 extract_metric_values_for_dataframe(
                                     metric_tensor,
                                     sample_to_presentation,
-                                    unique_presentations,
+                                    presented_classes,
                                     unique_times,
                                 )
                             )
@@ -695,7 +695,7 @@ def process_layer_responses_incremental(
                                 metric_func=metric_func,
                                 metric_name=metric_name,
                                 sample_to_presentation=sample_to_presentation,
-                                unique_presentations=unique_presentations,
+                                presented_classes=presented_classes,
                                 unique_times=unique_times,
                                 memory_monitor=memory_monitor,
                                 chunk_size=32,  # Conservative chunk size

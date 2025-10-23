@@ -46,7 +46,8 @@ distributed:
   store_train_responses: 0  # n_batches
   store_val_responses: 0  # n_batches
   check_val_every_n_epoch: 100
-  batch_size: 256
+  monitor_checkpoint: "train_loss"
+  batch_size: 512
   use_ffcv: True
   num_workers: 8
   persistent_workers: True

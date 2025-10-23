@@ -188,8 +188,7 @@ rule test_model:
             config.data_statistics[w.data_name]['mean'],
             config.data_statistics[w.data_name]['std']
         )),
-        batch_size = 64,
-        num_workers = 2,
+        batch_size = config.test_batch_size,
         enable_progress_bar = True,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -223,7 +222,6 @@ rule test_model:
             {params.model_arguments} \
             {params.data_arguments} \
             --batch_size {params.batch_size} \
-            --num_workers {params.num_workers}
 
         if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """

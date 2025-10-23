@@ -2,14 +2,14 @@
 Efficient image noise implementations for PyTorch DataLoader usage.
 
 This module provides optimized noise functions designed for use in PyTorch DataLoaders.
-Each function takes a noise_level parameter (0.0 to 1.0) and an optional seed for reproducibility.
+Each function takes a snr parameter (signal-to-noise ratio) for precise noise control.
 
 Functions:
 - salt_pepper_noise: Adds random salt (white) and pepper (black) pixels
 - poisson_noise: Adds Poisson noise (photon noise simulation)
 - uniform_noise: Adds uniformly distributed noise
-- gaussian_blur: Applies Gaussian blur filter
-- motion_blur: Applies directional motion blur
+- gaussian_noise: Adds zero-mean Gaussian noise with spatial correlation options
+- phase_scrambled_noise: Adds spatially correlated Fourier phase-scrambled noise
 
 Usage in DataLoader:
     from noise_module import salt_pepper_noise
@@ -18,7 +18,7 @@ Usage in DataLoader:
         def __getitem__(self, idx):
             image = self.images[idx]  # shape: (C, H, W)
             image = image.unsqueeze(0)  # shape: (1, C, H, W)
-            noisy_image = salt_pepper_noise(image, noise_level=0.3, seed=42)
+            noisy_image = salt_pepper_noise(image, snr=10.0, seed=42)  # 10:1 SNR
             return noisy_image.squeeze(0), self.labels[idx]
 """
 
@@ -28,6 +28,7 @@ import numpy as np
 from typing import Optional, Union, Tuple, Callable
 import warnings
 import logging
+from dynvision.utils import str_to_bool, alias_kwargs, filter_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +36,9 @@ __all__ = [
     "salt_pepper_noise",
     "poisson_noise",
     "uniform_noise",
-    "gaussian_blur",
-    "motion_blur",
+    "gaussian_noise",
+    "phase_scrambled_noise",
 ]
-
-# Global kernel cache for blur operations to avoid recomputation
-_KERNEL_CACHE = {}
-
-# Global scaling factors to normalize visual difficulty across noise types
-NOISE_SCALING_FACTORS = {
-    "salt_pepper": 0.3,
-    "poisson": 3.0,
-    "uniform": 3.5,
-    "gaussian": 1.0,
-    "motion": 1.3,
-}
 
 
 def _set_seed(seed: Optional[int], device: torch.device) -> None:
@@ -61,112 +50,143 @@ def _set_seed(seed: Optional[int], device: torch.device) -> None:
             torch.cuda.manual_seed(seed)
 
 
-def _get_gaussian_kernel(
-    kernel_size: int, sigma: float, device: torch.device, dtype: torch.dtype
-) -> torch.Tensor:
+def _calculate_signal_power(images: torch.Tensor) -> torch.Tensor:
+    """Calculate signal power (variance) of images."""
+    return torch.var(images)
+
+
+def _validate_noise_parameters(
+    snr: Optional[float] = None, ssnr: Optional[float] = None
+) -> float:
     """
-    Get or create cached Gaussian kernel for blur operations.
+    Validate and convert noise parameters to SNR with robust floating-point handling.
 
     Args:
-        kernel_size: Size of the kernel (must be odd)
-        sigma: Standard deviation of Gaussian
-        device: Device to create kernel on
-        dtype: Data type for kernel
+        snr: Signal-to-noise ratio (higher = less noise, inf = no noise)
+        ssnr: Signal-to-signal-plus-noise ratio (0 = mainly noise, 1 = no noise)
 
     Returns:
-        2D Gaussian kernel tensor
+        SNR value for internal use
+
+    Raises:
+        ValueError: If both or neither parameters are provided, or if values are invalid
     """
-    cache_key = (kernel_size, sigma, device, dtype)
+    EPSILON = 1e-10  # Tolerance for floating-point comparison
 
-    if cache_key not in _KERNEL_CACHE:
-        # Ensure odd kernel size
-        if (kernel_size % 2) == 0:
-            kernel_size += 1
+    if snr is not None and ssnr is not None:
+        raise ValueError(
+            "Cannot specify both 'snr' and 'ssnr' parameters. Choose one."
+        )
 
-        # Create 1D Gaussian kernel
-        x = torch.arange(kernel_size, dtype=dtype, device=device)
-        x = x - (kernel_size - 1) / 2
-        gaussian_1d = torch.exp(-(x**2) / (2 * sigma**2))
-        gaussian_1d = gaussian_1d / gaussian_1d.sum()
+    if snr is None and ssnr is None:
+        raise ValueError("Must specify either 'snr' or 'ssnr' parameter.")
 
-        # Create 2D kernel via outer product
-        kernel_2d = gaussian_1d.unsqueeze(0) * gaussian_1d.unsqueeze(1)
-        _KERNEL_CACHE[cache_key] = kernel_2d
+    if snr is not None:
+        if snr < 0:
+            raise ValueError("SNR must be non-negative")
+        return snr
 
-    return _KERNEL_CACHE[cache_key]
+    if ssnr is not None:
+        if not 0 <= ssnr <= 1:
+            raise ValueError("SSNR must be between 0 and 1 (inclusive)")
+
+        # Robust comparison for edge cases
+        if abs(ssnr - 1.0) < EPSILON:  # Robust no-noise detection
+            return float("inf")
+        elif abs(ssnr - 0.0) < EPSILON:  # Robust all-noise detection
+            return 0.0
+        else:
+            # Convert SSNR to SNR: SNR = SSNR / (1 - SSNR)
+            return ssnr / (1 - ssnr)
 
 
-def _get_motion_kernel(
-    kernel_size: int, angle: float, device: torch.device, dtype: torch.dtype
-) -> torch.Tensor:
-    """Get or create cached motion blur kernel."""
-    cache_key = (kernel_size, angle, device, dtype)
+def _is_no_noise_condition(internal_snr: float) -> bool:
+    """Robust check for no-noise condition."""
+    return torch.isinf(torch.tensor(internal_snr)) or internal_snr > 1000
 
-    if cache_key not in _KERNEL_CACHE:
-        # Convert angle to radians
-        angle_rad = np.deg2rad(angle)
 
-        # Create motion blur kernel
-        kernel = torch.zeros(kernel_size, kernel_size, dtype=dtype, device=device)
-        center = kernel_size // 2
-        cos_a, sin_a = np.cos(angle_rad), np.sin(angle_rad)
-
-        # Create line kernel with wider motion line
-        for i in range(kernel_size):
-            for j in range(kernel_size):
-                x, y = j - center, i - center
-                # Distance along motion direction
-                proj_dist = abs(x * cos_a + y * sin_a)
-                perp_dist = abs(-x * sin_a + y * cos_a)
-
-                # Create wider motion line - increased from kernel_size // 4
-                max_proj_dist = max(1, kernel_size // 3)  # Increased line length
-                if proj_dist <= max_proj_dist and perp_dist <= 1.0:  # Increased width
-                    kernel[i, j] = 1.0
-
-        # Normalize kernel
-        kernel_sum = kernel.sum()
-        if kernel_sum > 0:
-            kernel = kernel / kernel_sum
-
-        _KERNEL_CACHE[cache_key] = kernel
-
-    return _KERNEL_CACHE[cache_key]
+def _standardize_noise_return(
+    images: torch.Tensor,
+    noise_state: Optional[dict] = None,
+    cached_noise_state: Optional[dict] = None,
+) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
+    """Ensure consistent return types across all noise functions."""
+    if cached_noise_state is not None:
+        return images  # Always return tensor when using cache
+    else:
+        return images, (noise_state or {})  # Always return tuple when not cached
 
 
 def handle_5d_input(noise_func: Callable) -> Callable:
     """
-    Decorator to handle 5D input tensors for noise functions.
+    Decorator to handle 5D input tensors for noise functions with temporal mode support.
 
     Args:
         noise_func: The noise function to apply to 4D tensors.
 
     Returns:
-        A wrapped function that handles both 4D and 5D inputs.
+        A wrapped function that handles both 4D and 5D inputs with temporal modes.
     """
 
-    def wrapper(images: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        if images.dim() == 5:
-            batch_size, time_steps, channels, height, width = images.shape
-            if time_steps > 1:
-                logger.warning(
-                    f"{noise_func.__name__} applied to input with time dimension > 1 (time_steps={time_steps}). "
-                    "Processing each time step independently."
-                )
-            # Process each time step independently
-            noisy_images = torch.stack(
-                [noise_func(images[:, t], *args, **kwargs) for t in range(time_steps)],
-                dim=1,
-            )
-            return noisy_images
+    def wrapper(
+        images: torch.Tensor, *args, temporal_mode: str = "dynamic", **kwargs
+    ) -> torch.Tensor:
+        # Handle 4D tensors directly
+        if images.dim() == 4:
+            return noise_func(images, *args, **kwargs)
 
-        if images.dim() != 4:
+        if images.dim() != 5:
             raise RuntimeError(
                 f"Expected 4D or 5D input, but got input of size: {images.shape}"
             )
 
-        # Call the noise function for 4D tensors
-        return noise_func(images, *args, **kwargs)
+        batch_size, time_steps, channels, height, width = images.shape
+
+        if temporal_mode == "static":
+            # Apply noise to first timestep, then replicate across time
+            first_frame = images[:, 0]  # Shape: [batch, channels, height, width]
+            noisy_first_frame = noise_func(first_frame, *args, **kwargs)
+
+            # Handle case where noise function returns tuple (result, state)
+            if isinstance(noisy_first_frame, tuple):
+                noisy_first_frame = noisy_first_frame[0]
+
+            # Replicate across all timesteps
+            noisy_images = noisy_first_frame.unsqueeze(1).expand(
+                -1, time_steps, -1, -1, -1
+            )
+            return noisy_images
+
+        elif temporal_mode == "dynamic":
+            # Apply noise dynamicly to each timestep (current behavior)
+            if time_steps > 1:
+                logger.warning(
+                    f"{noise_func.__name__} applied with temporal_mode='dynamic' "
+                    f"(time_steps={time_steps}). Processing each time step dynamicly."
+                )
+
+            noisy_frames = []
+            for t in range(time_steps):
+                frame_result = noise_func(images[:, t], *args, **kwargs)
+                # Handle case where noise function returns tuple
+                if isinstance(frame_result, tuple):
+                    frame_result = frame_result[0]
+                noisy_frames.append(frame_result)
+
+            return torch.stack(noisy_frames, dim=1)
+
+        elif temporal_mode == "correlated":
+            # Placeholder for future correlated noise implementation
+            # TODO: Implement smooth temporal transitions with varying parameters
+            raise NotImplementedError(
+                "Correlated temporal mode is not yet implemented. "
+                "Use 'static' or 'dynamic' modes for now."
+            )
+        else:
+            raise ValueError(
+                f"Unknown temporal_mode: {temporal_mode}. "
+                "Available modes: 'static', 'dynamic', 'correlated'"
+            )
 
     return wrapper
 
@@ -174,24 +194,38 @@ def handle_5d_input(noise_func: Callable) -> Callable:
 @handle_5d_input
 def salt_pepper_noise(
     images: torch.Tensor,
-    noise_level: float = 0.1,
+    snr: Optional[float] = None,
+    ssnr: Optional[float] = 1.0,
     seed: Optional[int] = None,
     salt_vs_pepper: float = 0.5,
     cached_noise_state: Optional[dict] = None,
+    temporal_mode: str = "dynamic",
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
     """
-    Apply salt and pepper noise to images with optional state caching.
+    Apply salt and pepper noise to images with SNR or SSNR-based intensity control.
+
+    Args:
+        images: Input images tensor (B, C, H, W)
+        snr: Signal-to-noise ratio (higher = less noise, inf = no noise)
+        ssnr: Signal-to-signal-plus-noise ratio (0 = mainly noise, 1 = no noise)
+        seed: Random seed for reproducibility
+        salt_vs_pepper: Proportion of salt vs pepper (0.5 = equal)
+        cached_noise_state: Optional cached noise state for consistent application
+        temporal_mode: Temporal noise behavior - 'static', 'dynamic', or 'correlated'
+
+    Returns:
+        Noisy images tensor or tuple of (noisy_images, noise_state)
     """
-    if not 0.0 <= noise_level <= 1.0:
-        raise ValueError("noise_level must be between 0.0 and 1.0")
+    # Set default if neither specified
+    if snr is None and ssnr is None:
+        raise ValueError("no snr or ssnr value given!")
 
-    # Apply global scaling factor
-    effective_noise_level = min(
-        1.0, noise_level * NOISE_SCALING_FACTORS["salt_pepper"]
-    )
+    # Convert to internal SNR
+    internal_snr = _validate_noise_parameters(snr, ssnr)
 
-    if effective_noise_level == 0.0:
-        return images if cached_noise_state is not None else (images, {})
+    # Handle no-noise condition with robust detection
+    if _is_no_noise_condition(internal_snr):
+        return _standardize_noise_return(images, {}, cached_noise_state)
 
     noisy_images = images.clone()
 
@@ -200,11 +234,30 @@ def salt_pepper_noise(
         noise_mask = cached_noise_state["noise_mask"]
         salt_mask = cached_noise_state["salt_mask"]
     else:
-        # Generate new masks
+        # Calculate signal power
+        signal_power = _calculate_signal_power(images)
+
+        # For salt & pepper noise, we need to determine corruption probability
+        # that achieves target SNR. The noise power comes from pixel value differences.
+        img_min, img_max = images.min(), images.max()
+
+        # Calculate average squared difference for corrupted pixels
+        avg_salt_noise_power = (img_max - images).pow(2).mean()
+        avg_pepper_noise_power = (img_min - images).pow(2).mean()
+        avg_noise_power_per_pixel = (
+            salt_vs_pepper * avg_salt_noise_power
+            + (1 - salt_vs_pepper) * avg_pepper_noise_power
+        )
+
+        # Calculate corruption probability to achieve target SNR
+        target_noise_power = signal_power / internal_snr
+        corruption_prob = min(1.0, target_noise_power / avg_noise_power_per_pixel)
+
+        # Generate masks
         _set_seed(seed, images.device)
         noise_mask = (
             torch.rand(images.shape, device=images.device, dtype=images.dtype)
-            < effective_noise_level
+            < corruption_prob
         )
         salt_mask = (
             torch.rand(images.shape, device=images.device, dtype=images.dtype)
@@ -222,337 +275,621 @@ def salt_pepper_noise(
     salt_locations = noise_mask & salt_mask
     pepper_locations = noise_mask & (~salt_mask)
 
-    noisy_images[salt_locations] = (
-        images.max() + 2.0
-    )  # Use max + offset instead of 1.0
-    noisy_images[pepper_locations] = (
-        images.min() - 2.0
-    )  # Use min - offset instead of 0.0
+    noisy_images[salt_locations] = images.max()
+    noisy_images[pepper_locations] = images.min()
 
-    if cached_noise_state is not None:
-        return noisy_images
-    else:
-        return noisy_images, noise_state
+    return _standardize_noise_return(noisy_images, noise_state, cached_noise_state)
 
 
 @handle_5d_input
 def poisson_noise(
     images: torch.Tensor,
-    noise_level: float = 0.1,
+    snr: Optional[float] = None,
+    ssnr: Optional[float] = 1.0,
     seed: Optional[int] = None,
     cached_noise_state: Optional[dict] = None,
+    temporal_mode: str = "dynamic",
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
-    """Apply Poisson noise to normalized images (mean=0, std=1)."""
-    if not 0.0 <= noise_level <= 1.0:
-        raise ValueError("noise_level must be between 0.0 and 1.0")
+    """
+    Apply Poisson noise to images with SNR or SSNR-based intensity control.
 
-    # Apply global scaling factor
-    effective_noise_level = noise_level * NOISE_SCALING_FACTORS["poisson"]
+    Args:
+        images: Input images tensor (B, C, H, W)
+        snr: Signal-to-noise ratio (higher = less noise, inf = no noise)
+        ssnr: Signal-to-signal-plus-noise ratio (0 = mainly noise, 1 = no noise)
+        seed: Random seed for reproducibility
+        cached_noise_state: Optional cached noise state for consistent application
+        temporal_mode: Temporal noise behavior - 'static', 'dynamic', or 'correlated'
 
-    if effective_noise_level == 0.0:
-        empty_state = {"function_type": "poisson"}
-        return images if cached_noise_state is not None else (images, empty_state)
+    Returns:
+        Noisy images tensor or tuple of (noisy_images, noise_state)
+    """
+    # Set default if neither specified
+    if snr is None and ssnr is None:
+        raise ValueError("no snr or ssnr value given!")
+
+    # Convert to internal SNR
+    internal_snr = _validate_noise_parameters(snr, ssnr)
+
+    # Handle no-noise condition with robust detection
+    if _is_no_noise_condition(internal_snr):
+        return _standardize_noise_return(
+            images, {"function_type": "poisson"}, cached_noise_state
+        )
 
     if cached_noise_state is not None:
         # Use cached noise pattern
         noise_pattern = cached_noise_state["noise_pattern"]
         noisy_images = images + noise_pattern
     else:
-        # Generate new noise pattern
+        # Generate new noise pattern with SNR control
         _set_seed(seed, images.device)
 
-        # For normalized images, shift to [0, 4] range for Poisson calculation
-        images_shifted = images + 2.0  # Shift from ~[-2,3] to ~[0,5]
-        images_positive = torch.clamp(images_shifted, min=0.1)  # Ensure positive
+        # Calculate target noise power from SNR
+        signal_power = _calculate_signal_power(images)
+        target_noise_power = signal_power / internal_snr
 
-        # Scale lambda parameter based on noise level
-        base_lambda_scale = 20.0
-        lambda_param = images_positive * effective_noise_level * base_lambda_scale
-        lambda_param = lambda_param + effective_noise_level * 5.0
+        # For normalized images, shift to positive range for Poisson calculation
+        images_shifted = images + 3.0  # Shift to positive range
+        images_positive = torch.clamp(images_shifted, min=0.1)
+
+        # Use iterative approach to find correct scaling
+        # Start with a reasonable lambda scaling
+        lambda_scale = torch.sqrt(target_noise_power)
 
         # Generate Poisson noise
+        lambda_param = images_positive * lambda_scale + lambda_scale * 0.5
         poisson_samples = torch.poisson(lambda_param)
 
-        # Convert to noise pattern
-        expected_values = lambda_param
-        noise_in_shifted_space = poisson_samples - expected_values
-        noise_std_scale = 1.0 * effective_noise_level
-        noise_pattern = (
-            noise_in_shifted_space * noise_std_scale / torch.sqrt(lambda_param + 1e-8)
+        # Convert to additive noise pattern
+        noise_pattern = (poisson_samples - lambda_param) / torch.sqrt(
+            lambda_param + 1e-8
         )
+
+        # Scale to achieve target noise power
+        actual_noise_power = torch.var(noise_pattern)
+        if actual_noise_power > 1e-8:
+            noise_pattern = noise_pattern * torch.sqrt(
+                target_noise_power / actual_noise_power
+            )
 
         noisy_images = images + noise_pattern
         noise_state = {"noise_pattern": noise_pattern, "function_type": "poisson"}
 
-    # Allow more distortion at high noise levels
+    # Clamp to reasonable range
     noisy_images = torch.clamp(noisy_images, -6.0, 8.0)
 
-    if cached_noise_state is not None:
-        return noisy_images
-    else:
-        return noisy_images, noise_state
+    return _standardize_noise_return(noisy_images, noise_state, cached_noise_state)
 
 
 @handle_5d_input
 def uniform_noise(
     images: torch.Tensor,
-    noise_level: float = 0.1,
+    snr: Optional[float] = None,
+    ssnr: Optional[float] = 1.0,
     seed: Optional[int] = None,
     cached_noise_state: Optional[dict] = None,
+    temporal_mode: str = "dynamic",
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
-    """Apply uniform noise with optional state caching."""
-    if not 0.0 <= noise_level <= 1.0:
-        raise ValueError("noise_level must be between 0.0 and 1.0")
+    """
+    Apply uniform noise with SNR or SSNR-based intensity control.
 
-    # Apply global scaling factor
-    effective_noise_level = noise_level * NOISE_SCALING_FACTORS["uniform"]
+    Args:
+        images: Input images tensor (B, C, H, W)
+        snr: Signal-to-noise ratio (higher = less noise, inf = no noise)
+        ssnr: Signal-to-signal-plus-noise ratio (0 = mainly noise, 1 = no noise)
+        seed: Random seed for reproducibility
+        cached_noise_state: Optional cached noise state for consistent application
+        temporal_mode: Temporal noise behavior - 'static', 'dynamic', or 'correlated'
 
-    if effective_noise_level == 0.0:
-        return images if cached_noise_state is not None else (images, {})
+    Returns:
+        Noisy images tensor or tuple of (noisy_images, noise_state)
+    """
+    # Set default if neither specified
+    if snr is None and ssnr is None:
+        raise ValueError("no snr or ssnr value given!")
+
+    # Convert to internal SNR
+    internal_snr = _validate_noise_parameters(snr, ssnr)
+
+    # Handle no-noise condition with robust detection
+    if _is_no_noise_condition(internal_snr):
+        return _standardize_noise_return(
+            images, {"function_type": "uniform"}, cached_noise_state
+        )
 
     if cached_noise_state is not None:
         # Use cached noise pattern
         noise = cached_noise_state["noise_pattern"]
     else:
-        # Generate new noise pattern
+        # Calculate target noise power from SNR
+        signal_power = _calculate_signal_power(images)
+        target_noise_power = signal_power / internal_snr
+
+        # Generate uniform noise with target power
         _set_seed(seed, images.device)
         base_noise = (
             torch.rand(images.shape, device=images.device, dtype=images.dtype) - 0.5
         )
-        noise_magnitude = effective_noise_level * 2.0
-        noise = base_noise * noise_magnitude
+
+        # For uniform distribution, variance = (b-a)^2/12, where range is [a,b]
+        # For [-0.5, 0.5], variance = 1/12, so std = 1/sqrt(12)
+        uniform_std = 1.0 / torch.sqrt(torch.tensor(12.0))
+
+        # Scale noise to achieve target power
+        target_std = torch.sqrt(target_noise_power)
+        noise = base_noise * (target_std / uniform_std)
+
         noise_state = {"noise_pattern": noise, "function_type": "uniform"}
 
     noisy_images = images + noise
 
-    if cached_noise_state is not None:
-        return noisy_images
-    else:
-        return noisy_images, noise_state
+    return _standardize_noise_return(noisy_images, noise_state, cached_noise_state)
 
 
 @handle_5d_input
-def gaussian_blur(
+@alias_kwargs(spatialcorr="spatially_correlated")
+def gaussian_noise(
     images: torch.Tensor,
-    noise_level: float = 0.1,
+    snr: Optional[float] = None,
+    ssnr: Optional[float] = 1.0,
     seed: Optional[int] = None,
-    max_kernel_size: int = 35,  # Increased from 25
+    spatially_correlated: bool = False,
+    correlation_kernel_size: int = 7,
     cached_noise_state: Optional[dict] = None,
+    temporal_mode: str = "dynamic",
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
-    """Apply Gaussian blur with optional kernel caching."""
-    if not 0.0 <= noise_level <= 1.0:
-        raise ValueError("noise_level must be between 0.0 and 1.0")
+    """
+    Apply zero-mean Gaussian noise with SNR or SSNR-based intensity control.
 
-    # Apply global scaling factor - REMOVE ceiling limitation
-    effective_noise_level = noise_level * NOISE_SCALING_FACTORS["gaussian"]
+    Args:
+        images: Input images tensor (B, C, H, W)
+        snr: Signal-to-noise ratio (higher = less noise, inf = no noise)
+        ssnr: Signal-to-signal-plus-noise ratio (0 = mainly noise, 1 = no noise)
+        seed: Random seed for reproducibility
+        spatially_correlated: If True, applies spatial smoothing to create correlated noise
+        correlation_kernel_size: Size of Gaussian kernel for spatial correlation (odd number)
+        cached_noise_state: Optional cached noise state for consistent application
+        temporal_mode: Temporal noise behavior - 'static', 'dynamic', or 'correlated'
 
-    if effective_noise_level == 0.0:
-        return images if cached_noise_state is not None else (images, {})
+    Returns:
+        Noisy images tensor or tuple of (noisy_images, noise_state)
+    """
+    spatially_correlated = str_to_bool(spatially_correlated)
+    # Set default if neither specified
+    if snr is None and ssnr is None:
+        raise ValueError("no snr or ssnr value given!")
+
+    # Convert to internal SNR
+    internal_snr = _validate_noise_parameters(snr, ssnr)
+
+    # Handle no-noise condition with robust detection
+    if _is_no_noise_condition(internal_snr):
+        return _standardize_noise_return(
+            images, {"function_type": "gaussian"}, cached_noise_state
+        )
 
     if cached_noise_state is not None:
-        # Use cached kernel
-        kernel = cached_noise_state["kernel"]
-        padding = cached_noise_state["padding"]
+        # Use cached noise pattern
+        noise = cached_noise_state["noise_pattern"]
     else:
-        # Generate new kernel with more aggressive scaling
+        # Calculate target noise power from SNR
+        signal_power = _calculate_signal_power(images)
+        target_noise_power = signal_power / internal_snr
+        target_std = torch.sqrt(target_noise_power)
+
+        # Generate Gaussian noise with target standard deviation
+        _set_seed(seed, images.device)
+        noise = torch.randn(images.shape, device=images.device, dtype=images.dtype)
+
+        if spatially_correlated:
+            # Apply spatial correlation via Gaussian smoothing
+            if correlation_kernel_size % 2 == 0:
+                correlation_kernel_size += 1  # Ensure odd kernel size
+
+            # Create Gaussian kernel
+            sigma = correlation_kernel_size / 6.0  # Standard heuristic
+            kernel_1d = torch.exp(
+                -0.5
+                * (
+                    (
+                        torch.arange(
+                            correlation_kernel_size,
+                            dtype=torch.float32,
+                            device=images.device,
+                        )
+                        - correlation_kernel_size // 2
+                    )
+                    / sigma
+                )
+                ** 2
+            )
+            kernel_1d = kernel_1d / kernel_1d.sum()
+
+            # Create 2D kernel
+            kernel_2d = kernel_1d[:, None] * kernel_1d[None, :]
+            kernel_2d = kernel_2d / kernel_2d.sum()
+
+            # Apply correlation to each channel separately
+            padding = correlation_kernel_size // 2
+            noise_corr = F.conv2d(
+                noise.view(-1, 1, images.shape[2], images.shape[3]),
+                kernel_2d.unsqueeze(0).unsqueeze(0),
+                padding=padding,
+                groups=1,
+            )
+            noise = noise_corr.view(images.shape)
+
+            # Renormalize to maintain target power
+            actual_std = torch.std(noise)
+            if actual_std > 1e-8:
+                noise = noise * (target_std / actual_std)
+        else:
+            noise = noise * target_std
+
+        noise_state = {"noise_pattern": noise, "function_type": "gaussian"}
+
+    noisy_images = images + noise
+
+    return _standardize_noise_return(noisy_images, noise_state, cached_noise_state)
+
+
+@handle_5d_input
+def phase_scrambled_noise(
+    images: torch.Tensor,
+    snr: Optional[float] = None,
+    ssnr: Optional[float] = 1.0,
+    seed: Optional[int] = None,
+    use_image_spectrum: bool = False,
+    spectral_exponent: float = -1.0,
+    cached_noise_state: Optional[dict] = None,
+    temporal_mode: str = "dynamic",
+) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
+    """
+    Apply spatially correlated Fourier phase-scrambled noise.
+
+    Creates noise by taking the average amplitude spectrum of input images,
+    randomizing the phases, and performing inverse FFT. This preserves the
+    original power spectrum (1/F-like) while creating cloud-like spatially
+    correlated noise without coherent edges.
+
+    Args:
+        images: Input images tensor (B, C, H, W)
+        snr: Signal-to-noise ratio (higher = less noise, inf = no noise)
+        ssnr: Signal-to-signal-plus-noise ratio (0 = mainly noise, 1 = no noise)
+        seed: Random seed for reproducibility
+        use_image_spectrum: If True, use average amplitude from input images.
+                           If False, use synthetic 1/F spectrum with spectral_exponent
+        spectral_exponent: Power spectral exponent when use_image_spectrum=False
+                          (-1.0 for pink noise, 0.0 for white noise)
+        cached_noise_state: Optional cached noise state for consistent application
+        temporal_mode: Temporal noise behavior - 'static', 'dynamic', or 'correlated'
+
+    Returns:
+        Noisy images tensor or tuple of (noisy_images, noise_state)
+    """
+    # Set default if neither specified
+    if snr is None and ssnr is None:
+        raise ValueError("no snr or ssnr value given!")
+
+    # Convert to internal SNR
+    internal_snr = _validate_noise_parameters(snr, ssnr)
+
+    # Handle no-noise condition with robust detection
+    if _is_no_noise_condition(internal_snr):
+        return _standardize_noise_return(
+            images, {"function_type": "phase_scrambled"}, cached_noise_state
+        )
+
+    if cached_noise_state is not None:
+        # Use cached noise pattern
+        noise = cached_noise_state["noise_pattern"]
+    else:
+        # Calculate target noise power from SNR
+        signal_power = _calculate_signal_power(images)
+        target_noise_power = signal_power / internal_snr
+
         _set_seed(seed, images.device)
 
-        # More aggressive kernel size progression
-        kernel_size = int(3 + effective_noise_level * (max_kernel_size - 3))
-        if kernel_size % 2 == 0:
-            kernel_size += 1
+        batch_size, channels, height, width = images.shape
+        noise = torch.zeros_like(images)
 
-        # More aggressive sigma scaling
-        sigma = 0.3 + effective_noise_level * (
-            kernel_size / 2.0
-        )  # Increased from kernel_size/3.0
+        if use_image_spectrum:
+            # Calculate average amplitude spectrum from input images
+            # This follows the scientific method description
+            amplitude_spectra = []
 
-        # Get Gaussian kernel
-        kernel_2d = _get_gaussian_kernel(
-            kernel_size, sigma, images.device, images.dtype
-        )
-        num_channels = images.size(1)
-        kernel = kernel_2d.unsqueeze(0).unsqueeze(0).repeat(num_channels, 1, 1, 1)
-        padding = kernel_size // 2
+            for b in range(batch_size):
+                for c in range(channels):
+                    # Get FFT of original image
+                    image_fft = torch.fft.fft2(images[b, c])
+                    amplitude_spectra.append(torch.abs(image_fft))
+
+            # Average amplitude spectrum across all images and channels
+            avg_amplitude = torch.stack(amplitude_spectra).mean(dim=0)
+
+            # Generate phase-scrambled noise for each image/channel
+            for b in range(batch_size):
+                for c in range(channels):
+                    # Generate random phases uniformly distributed in [0, 2π)
+                    random_phases = (
+                        torch.rand(
+                            height, width, device=images.device, dtype=images.dtype
+                        )
+                        * 2
+                        * np.pi
+                    )
+
+                    # Create complex spectrum with average amplitude and random phases
+                    # Make sure to create new tensors to avoid memory sharing issues
+                    real_part = avg_amplitude * torch.cos(random_phases)
+                    imag_part = avg_amplitude * torch.sin(random_phases)
+                    scrambled_fft = torch.complex(real_part, imag_part)
+
+                    # Ensure Hermitian symmetry for real-valued output
+                    # This is important for getting real-valued noise after IFFT
+                    scrambled_fft = _ensure_hermitian_symmetry(scrambled_fft)
+
+                    # Convert back to spatial domain
+                    phase_scrambled_noise_img = torch.fft.ifft2(scrambled_fft).real
+
+                    noise[b, c] = phase_scrambled_noise_img
+        else:
+            # Fallback: Generate synthetic 1/F spectrum
+            for b in range(batch_size):
+                for c in range(channels):
+                    # Generate white noise in frequency domain
+                    real_noise = torch.randn(
+                        height, width, device=images.device, dtype=images.dtype
+                    )
+                    imag_noise = torch.randn(
+                        height, width, device=images.device, dtype=images.dtype
+                    )
+                    white_noise_fft = torch.complex(real_noise, imag_noise)
+
+                    # Create frequency grid
+                    freq_y = torch.fft.fftfreq(
+                        height, d=1.0, device=images.device
+                    ).unsqueeze(1)
+                    freq_x = torch.fft.fftfreq(
+                        width, d=1.0, device=images.device
+                    ).unsqueeze(0)
+
+                    # Compute radial frequency
+                    freq_radial = torch.sqrt(freq_x**2 + freq_y**2)
+                    freq_radial[0, 0] = 1e-8  # Avoid division by zero at DC
+
+                    # Apply spectral shaping: S(f) ∝ f^exponent (1/F spectrum)
+                    power_scaling = freq_radial ** (spectral_exponent / 2.0)
+
+                    # Scale the white noise by the power spectrum
+                    colored_noise_fft = white_noise_fft * power_scaling
+
+                    # Ensure Hermitian symmetry
+                    colored_noise_fft = _ensure_hermitian_symmetry(colored_noise_fft)
+
+                    # Convert back to spatial domain
+                    colored_noise_img = torch.fft.ifft2(colored_noise_fft).real
+
+                    noise[b, c] = colored_noise_img
+
+        # Normalize to target power
+        actual_noise_power = torch.var(noise)
+        if actual_noise_power > 1e-8:
+            scaling_factor = torch.sqrt(target_noise_power / actual_noise_power)
+            noise = noise * scaling_factor
 
         noise_state = {
-            "kernel": kernel,
-            "padding": padding,
-            "function_type": "gaussian_blur",
+            "noise_pattern": noise,
+            "function_type": "phase_scrambled",
+            "use_image_spectrum": use_image_spectrum,
         }
 
-    # Apply blur
-    blurred = F.conv2d(images, kernel, padding=padding, groups=images.size(1))
+    noisy_images = images + noise
 
-    if cached_noise_state is not None:
-        return blurred
-    else:
-        return blurred, noise_state
+    return _standardize_noise_return(noisy_images, noise_state, cached_noise_state)
 
 
-@handle_5d_input
-def motion_blur(
-    images: torch.Tensor,
-    noise_level: float = 0.1,
-    seed: Optional[int] = None,
-    max_kernel_size: int = 35,  # Increased from 25
-) -> torch.Tensor:
-    """Apply motion blur to images, supporting a time dimension."""
-    if not 0.0 <= noise_level <= 1.0:
-        raise ValueError("noise_level must be between 0.0 and 1.0")
+def _ensure_hermitian_symmetry(fft_tensor: torch.Tensor) -> torch.Tensor:
+    """
+    Ensure Hermitian symmetry for FFT tensor to guarantee real-valued IFFT output.
 
-    # Apply global scaling factor
-    effective_noise_level = noise_level * NOISE_SCALING_FACTORS["motion"]
+    For a real-valued signal, the FFT must satisfy: F(k) = F*(-k) where * denotes
+    complex conjugate. This function enforces this property.
 
-    if effective_noise_level == 0.0:
-        return images
+    Args:
+        fft_tensor: Complex tensor of shape (H, W)
 
-    _set_seed(seed, images.device)
+    Returns:
+        Hermitian-symmetric complex tensor
+    """
+    height, width = fft_tensor.shape
 
-    # More aggressive kernel size progression
-    kernel_size = int(
-        3 + effective_noise_level * (max_kernel_size - 3)
-    )  # Start from 3
-    if kernel_size % 2 == 0:
-        kernel_size += 1
+    # Create a proper copy to modify (detach from computation graph and clone)
+    symmetric_fft = fft_tensor.detach().clone()
 
-    # Random angle for motion direction
-    angle = torch.rand(1).item() * 360.0
+    # Handle DC component (should be real)
+    symmetric_fft[0, 0] = torch.complex(
+        torch.real(symmetric_fft[0, 0]), torch.tensor(0.0, device=fft_tensor.device)
+    )
 
-    # Get motion blur kernel
-    kernel_2d = _get_motion_kernel(kernel_size, angle, images.device, images.dtype)
+    # Handle Nyquist frequencies (should be real for even dimensions)
+    if height % 2 == 0:
+        symmetric_fft[height // 2, 0] = torch.complex(
+            torch.real(symmetric_fft[height // 2, 0]),
+            torch.tensor(0.0, device=fft_tensor.device),
+        )
+        if width % 2 == 0:
+            symmetric_fft[0, width // 2] = torch.complex(
+                torch.real(symmetric_fft[0, width // 2]),
+                torch.tensor(0.0, device=fft_tensor.device),
+            )
+            symmetric_fft[height // 2, width // 2] = torch.complex(
+                torch.real(symmetric_fft[height // 2, width // 2]),
+                torch.tensor(0.0, device=fft_tensor.device),
+            )
 
-    # Prepare kernel for convolution
-    num_channels = images.size(1)
-    kernel = kernel_2d.unsqueeze(0).unsqueeze(0).repeat(num_channels, 1, 1, 1)
+    if width % 2 == 0:
+        symmetric_fft[0, width // 2] = torch.complex(
+            torch.real(symmetric_fft[0, width // 2]),
+            torch.tensor(0.0, device=fft_tensor.device),
+        )
 
-    # Apply grouped convolution
-    padding = kernel_size // 2
-    blurred = F.conv2d(images, kernel, padding=padding, groups=num_channels)
-    return blurred
+    # Create a new tensor for the symmetric version to avoid in-place modifications
+    result_fft = symmetric_fft.clone()
+
+    # Enforce Hermitian symmetry: F(-k) = F*(k)
+    for i in range(1, height):
+        for j in range(1, width):
+            # Get the symmetric indices
+            sym_i = (height - i) % height
+            sym_j = (width - j) % width
+
+            # Only process upper triangle to avoid double processing
+            if i < height // 2 or (i == height // 2 and j <= width // 2):
+                # Set the symmetric element to be the complex conjugate
+                if sym_i != i or sym_j != j:  # Avoid self-assignment
+                    result_fft[sym_i, sym_j] = torch.conj(result_fft[i, j])
+
+    return result_fft
 
 
-def clear_kernel_cache():
-    """Clear the internal kernel cache to free memory."""
-    global _KERNEL_CACHE
-    _KERNEL_CACHE.clear()
-
-
+# Update the visualization to show the new phase-scrambled noise
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
+    from PIL import Image
+    import torchvision.transforms as tv
+    import os
 
-    def create_simple_noise_visualization():
-        """Create a simple visualization showing noise progression with global scaling applied."""
-        print("Creating noise visualization with global scaling...")
+    def create_ssnr_noise_visualization():
+        """Create visualization showing noise progression with SSNR control."""
+        print("Creating SSNR-based noise visualization...")
 
-        # Create a test image with clear patterns
-        test_image = torch.zeros(1, 3, 128, 128)
+        # Try to load the specific test image
+        test_image_path = "/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/data/interim/imagenette/test_all/n03394916/n03394916_24420.JPEG"
 
-        # Create a gradient background
-        for i in range(128):
-            test_image[0, :, i, :] = i / 127.0
+        if os.path.exists(test_image_path):
+            print(f"Loading test image from: {test_image_path}")
 
-        # Add geometric shapes for better noise visibility
-        test_image[0, :, 20:40, 20:40] = 1.0  # White square
-        test_image[0, :, 60:80, 60:100] = 0.5  # Gray rectangle
+            # Apply standard ImageNet preprocessing
+            transform = tv.Compose(
+                [
+                    tv.Resize(256),
+                    tv.CenterCrop(224),
+                    tv.ToTensor(),
+                ]
+            )
 
-        # Black circle
-        center_x, center_y = 100, 30
-        for i in range(128):
-            for j in range(128):
-                if (i - center_x) ** 2 + (j - center_y) ** 2 < 15**2:
-                    test_image[0, :, i, j] = 0.0
+            # Load and preprocess the image
+            pil_image = Image.open(test_image_path).convert("RGB")
+            test_image = transform(pil_image).unsqueeze(0)  # (1, 3, 224, 224)
 
-        # NORMALIZE THE TEST IMAGE: Convert from [0,1] to mean=0, std=1
-        test_image_flat = test_image.view(-1)
-        mean_val = test_image_flat.mean()
-        std_val = test_image_flat.std()
-        test_image = (test_image - mean_val) / (
-            std_val + 1e-8
-        )  # Add epsilon to avoid division by zero
+            # Normalize to mean=0, std=1
+            test_image_flat = test_image.reshape(-1)
+            mean_val = test_image_flat.mean()
+            std_val = test_image_flat.std()
+            test_image = (test_image - mean_val) / (std_val + 1e-8)
 
-        print(
-            f"Normalized test image - Mean: {test_image.mean().item():.4f}, Std: {test_image.std().item():.4f}"
-        )
+            print(
+                f"Loaded and normalized test image - Mean: {test_image.mean().item():.4f}, Std: {test_image.std().item():.4f}"
+            )
+        else:
+            print(
+                f"Test image not found at {test_image_path}, creating synthetic test image..."
+            )
+            # Create a test image with clear patterns (fallback)
+            test_image = torch.zeros(1, 3, 224, 224)
+
+            # Create a gradient background
+            for i in range(224):
+                test_image[0, :, i, :] = i / 223.0
+
+            # Add geometric shapes for better noise visibility
+            test_image[0, :, 40:80, 40:80] = 1.0  # White square
+            test_image[0, :, 120:160, 120:200] = 0.5  # Gray rectangle
+
+            # Black circle
+            center_x, center_y = 180, 60
+            for i in range(224):
+                for j in range(224):
+                    if (i - center_x) ** 2 + (j - center_y) ** 2 < 25**2:
+                        test_image[0, :, i, j] = 0.0
+
+            # Normalize the test image
+            test_image_flat = test_image.reshape(-1)
+            mean_val = test_image_flat.mean()
+            std_val = test_image_flat.std()
+            test_image = (test_image - mean_val) / (std_val + 1e-8)
+
         print(
             f"Value range: [{test_image.min().item():.2f}, {test_image.max().item():.2f}]"
         )
 
-        # Noise functions
+        # Noise functions (removed "Original")
         noise_functions = {
-            "Original": None,
             "Salt & Pepper": salt_pepper_noise,
             "Poisson": poisson_noise,
             "Uniform": uniform_noise,
-            "Gaussian Blur": gaussian_blur,
-            "Motion Blur": motion_blur,
+            "Gaussian": gaussian_noise,
+            "Gaussian (Corr.)": lambda x, **kwargs: gaussian_noise(
+                x, spatially_correlated=True, **kwargs
+            ),
+            "Phase Scrambled": lambda x, **kwargs: phase_scrambled_noise(
+                x, use_image_spectrum=True, **kwargs
+            ),
         }
 
-        noise_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        # SSNR values from no noise (1.0) to mainly noise (0.0)
+        ssnr_values = [1.0, 0.8, 0.6, 0.4, 0.2, 0.1]
 
         # Create figure
         fig, axes = plt.subplots(
-            len(noise_functions), len(noise_levels), figsize=(15, 12)
+            len(noise_functions), len(ssnr_values), figsize=(18, 10)
         )
         fig.suptitle(
-            "Noise Types with Global Scaling Applied\n"
-            f"Scaling: Salt&Pepper={NOISE_SCALING_FACTORS['salt_pepper']}, "
-            f"Poisson={NOISE_SCALING_FACTORS['poisson']}, "
-            f"Uniform={NOISE_SCALING_FACTORS['uniform']}, "
-            f"Gaussian={NOISE_SCALING_FACTORS['gaussian']}, "
-            f"Motion={NOISE_SCALING_FACTORS['motion']}",
-            fontsize=14,
-            fontweight="bold",
+            "Noise Types with SSNR-Based Control", fontsize=16, fontweight="bold"
         )
 
         # Column headers
-        for j, level in enumerate(noise_levels):
-            axes[0, j].set_title(f"Level: {level}", fontsize=11, fontweight="bold")
+        for j, ssnr in enumerate(ssnr_values):
+            ssnr_label = "No Noise" if ssnr == 1.0 else f"SSNR: {ssnr}"
+            axes[0, j].set_title(ssnr_label, fontsize=12, fontweight="bold")
 
         # Generate images
         for i, (noise_name, noise_func) in enumerate(noise_functions.items()):
             # Row label
-            axes[i, 0].set_ylabel(noise_name, fontsize=11, fontweight="bold")
+            axes[i, 0].set_ylabel(noise_name, fontsize=12, fontweight="bold")
 
-            for j, noise_level in enumerate(noise_levels):
-
-                if noise_name == "Original" or noise_level == 0.0:
+            for j, ssnr in enumerate(ssnr_values):
+                if ssnr == 1.0:
+                    # No noise case
                     result_image = test_image
                 else:
                     try:
-                        # Apply noise (scaling is now handled internally)
-                        if noise_func == motion_blur:
-                            result_image = noise_func(
-                                test_image, noise_level=noise_level, seed=42
-                            )
+                        result = noise_func(test_image, ssnr=ssnr, seed=42)
+                        if isinstance(result, tuple):
+                            result_image, _ = result
                         else:
-                            result = noise_func(
-                                test_image, noise_level=noise_level, seed=42
-                            )
-                            if isinstance(result, tuple):
-                                result_image, _ = result
-                            else:
-                                result_image = result
+                            result_image = result
                     except Exception as e:
-                        print(
-                            f"Error applying {noise_name} at level {noise_level}: {e}"
-                        )
+                        print(f"Error applying {noise_name} at SSNR {ssnr}: {e}")
                         result_image = test_image
 
-                # Plot - need to handle normalized images for display
-                img_np = result_image[0, 0].detach().cpu().numpy()
-
-                # Convert normalized image back to [0,1] for display
-                if noise_name == "Original" or img_np.min() < 0:
-                    # Normalize to [0,1] for visualization
+                # Plot RGB image
+                if result_image.shape[1] == 3:
+                    img_np = result_image[0].detach().cpu().numpy().transpose(1, 2, 0)
                     img_display = (img_np - img_np.min()) / (
                         img_np.max() - img_np.min() + 1e-8
                     )
+                    axes[i, j].imshow(img_display)
                 else:
-                    img_display = np.clip(img_np, 0, 1)
+                    img_np = result_image[0, 0].detach().cpu().numpy()
+                    img_display = (img_np - img_np.min()) / (
+                        img_np.max() - img_np.min() + 1e-8
+                    )
+                    axes[i, j].imshow(img_display, cmap="gray", vmin=0, vmax=1)
 
-                axes[i, j].imshow(img_display, cmap="gray", vmin=0, vmax=1)
                 axes[i, j].set_xticks([])
                 axes[i, j].set_yticks([])
 
@@ -560,8 +897,8 @@ if __name__ == "__main__":
                 min_val = result_image.min().item()
                 max_val = result_image.max().item()
                 axes[i, j].text(
-                    3,
-                    123,
+                    5,
+                    215,
                     f"[{min_val:.2f}, {max_val:.2f}]",
                     fontsize=7,
                     color="white",
@@ -569,23 +906,12 @@ if __name__ == "__main__":
                 )
 
         plt.tight_layout()
-        plt.subplots_adjust(top=0.88)
+        plt.subplots_adjust(top=0.94)
         plt.show()
 
-    def print_scaling_info():
-        """Print information about the scaling factors."""
-        print("Global Noise Scaling Factors:")
-        print("=" * 40)
-        for noise_type, factor in NOISE_SCALING_FACTORS.items():
-            print(f"{noise_type.replace('_', ' ').title():15}: {factor:4.1f}x")
-        print("=" * 40)
-        print("These factors are automatically applied within each noise function")
-        print("to normalize visual difficulty across different noise types.\n")
-
     # Run visualization
-    print_scaling_info()
-    create_simple_noise_visualization()
+    create_ssnr_noise_visualization()
 
     print(f"\n{'='*50}")
-    print("VISUALIZATION COMPLETED!")
+    print("SSNR-BASED NOISE VISUALIZATION COMPLETED!")
     print(f"{'='*50}")

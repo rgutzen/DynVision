@@ -91,38 +91,60 @@ def peak_height(mean_response: torch.Tensor) -> torch.Tensor:
     return max_values
 
 
-def peak_ratio(mean_response: torch.Tensor, min_delay: int = 3) -> torch.Tensor:
-    """Calculate ratio between first and second peaks.
+def peak_ratio(mean_response: torch.Tensor, min_delay: int = 5) -> torch.Tensor:
+    """Calculate ratio between first and second peaks based on temporal order.
 
     Args:
-        response: Layer response tensor
+        response: Layer response tensor of shape [batch_size, n_timesteps]
         min_delay: Minimum separation between peaks
 
     Returns:
-        Tensor of peak ratios for each feature
+        Tensor of peak ratios (later_peak / earlier_peak) for each feature
     """
-    peak1_index = mean_response.argmax(dim=1)
-    peak1_value = torch.tensor(
+    response_tensor = deepcopy(mean_response)
+
+    # Find highest peak
+    first_peak_index = mean_response.argmax(dim=1)
+    first_peak_value = torch.tensor(
         [
-            deepcopy(mean_response[channel, i].item())
-            for channel, i in enumerate(peak1_index)
+            response_tensor[channel, i].item()
+            for channel, i in enumerate(first_peak_index)
         ]
     )
 
-    for channel, i in enumerate(peak1_index):
-        mean_response[channel, i - min_delay : i + min_delay] = float("-inf")
+    # Suppress region around highest peak to second heighest peak
+    for channel, i in enumerate(first_peak_index):
+        start_idx = max(0, i - min_delay)
+        end_idx = min(response_tensor.shape[1], i + min_delay + 1)
+        response_tensor[channel, start_idx:end_idx] = float("-inf")
 
-    peak2_index = mean_response.argmax(dim=1)
-    peak2_value = [mean_response[channel, i] for channel, i in enumerate(peak2_index)]
-
-    ratio = torch.Tensor(
+    # Find second highest peak
+    second_peak_index = response_tensor.argmax(dim=1)
+    second_peak_value = torch.tensor(
         [
-            p1 / p2 if i1 < i2 else p2 / p1
-            for i1, p1, i2, p2 in zip(
-                peak1_index, peak1_value, peak2_index, peak2_value
-            )
+            response_tensor[channel, i].item()
+            for channel, i in enumerate(second_peak_index)
         ]
     )
+
+    # Calculate ratio based on temporal order: later_peak / earlier_peak
+    # If first_peak comes before second_peak: second_peak / first_peak
+    # If second_peak comes before first_peak: first_peak / second_peak
+    ratio = torch.zeros_like(first_peak_value)
+
+    for i in range(len(first_peak_index)):
+        first_idx = first_peak_index[i].item()
+        second_idx = second_peak_index[i].item()
+        first_val = first_peak_value[i].item()
+        second_val = second_peak_value[i].item()
+
+        if first_idx < second_idx:
+            # First peak comes earlier, ratio = later / earlier = second / first
+            ratio[i] = second_val / first_val if first_val > 0 else 0.0
+        else:
+            # Second peak comes earlier, ratio = later / earlier = first / second
+            ratio[i] = first_val / second_val if second_val > 0 else 0.0
+
     return ratio
 
 

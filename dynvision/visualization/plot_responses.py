@@ -79,21 +79,39 @@ FORMATTING = {
 }
 
 
-def _format_legend_label(key: str, value: str, config: Dict) -> str:
+def _format_legend_label(key: str, value: str, config: Dict, dt: float = 1.0) -> str:
     """Format legend label based on key type and config.
 
     Args:
         key: The parameter/category key
         value: The value to format
         config: Configuration dict with naming mappings
+        dt: Temporal resolution in ms per timestep (for converting timestep values)
 
     Returns:
         Formatted label string
     """
-    # Numerical parameters that should have "ms" unit
-    numerical_with_ms = ["tau", "trc", "tsk", "lossrt", "tsteps", "idle"]
+    # First check if there's a direct naming translation for this value
+    if config and "naming" in config:
+        # Check both the value directly and the standardized value
+        for check_val in [value, _standardize_category_value(value)]:
+            translated_name = get_display_name(check_val, config)
+            if translated_name and translated_name != check_val:
+                return translated_name
 
-    if key.lower() in numerical_with_ms:
+    # Timestep parameters that should be converted to ms
+    timestep_params = ["tsteps", "idle"]
+    # Numerical parameters that are already in ms
+    ms_params = ["tau", "trc", "tsk", "lossrt"]
+
+    if key.lower() in timestep_params:
+        try:
+            timestep_value = int(float(value))
+            ms_value = timestep_value * dt
+            return f"{ms_value:.0f} ms"
+        except (ValueError, TypeError):
+            return f"{value} ms"
+    elif key.lower() in ms_params:
         try:
             numeric_value = int(float(value))
             return f"{numeric_value} ms"
@@ -137,8 +155,19 @@ def _get_dimension_key(
         return parameter_key
     elif dimension == "layers":
         return "layers"  # Special handling
+    elif dimension == "experiment":
+        return "experiment"  # Special handling for experiment dimension
     else:
         raise ValueError(f"Unknown dimension: {dimension}")
+
+
+def _standardize_category_value(value: str) -> str:
+    """Standardize category value formatting consistently across all processing."""
+    value_str = str(value).strip()
+    # Handle boolean-like values consistently
+    if value_str.lower() in ["true", "false"]:
+        return value_str.lower()
+    return value_str
 
 
 def _extract_dimension_values(
@@ -170,8 +199,12 @@ def _extract_dimension_values(
             )
             return []
 
-        # Get unique values from dataframe column
-        values = [str(v) for v in sorted(df[dimension_key].unique())]
+        # Get unique values from dataframe column and standardize them
+        raw_values = df[dimension_key].unique()
+        values = [_standardize_category_value(v) for v in sorted(raw_values)]
+        # Remove duplicates while preserving order
+        seen = set()
+        values = [v for v in values if not (v in seen or seen.add(v))]
 
         if not values:
             logger.warning(f"No unique values found for dimension '{dimension_key}'")
@@ -180,8 +213,10 @@ def _extract_dimension_values(
         # Apply config ordering if available
         ordering = get_ordering(dimension_key, config)
         if ordering:
+            # Standardize ordering values too
+            standardized_ordering = [_standardize_category_value(v) for v in ordering]
             # Filter to only include values present in data
-            ordered = [v for v in ordering if v in values]
+            ordered = [v for v in standardized_ordering if v in values]
             # Add any missing values
             for v in values:
                 if v not in ordered:
@@ -220,7 +255,14 @@ def _filter_data_for_column(
 ) -> pd.DataFrame:
     """Filter dataframe for a specific column value."""
     if column_var and column_value:
-        return df[df[column_var].astype(type(column_value)) == column_value].copy()
+        # Standardize both the column values and the filter value for comparison
+        df_copy = df.copy()
+        if column_var in df_copy.columns:
+            df_copy[column_var] = df_copy[column_var].apply(
+                _standardize_category_value
+            )
+        standardized_column_value = _standardize_category_value(str(column_value))
+        return df_copy[df_copy[column_var] == standardized_column_value].copy()
     return df.copy()
 
 
@@ -258,9 +300,9 @@ def _plot_accuracy_panel(
     data_plot = data.copy()
     data_plot["time_ms"] = data_plot["times_index"] * dt
 
-    # Ensure hue column is string
+    # Ensure hue column is standardized to match hue_values
     if hue_key in data_plot.columns:
-        data_plot[hue_key] = data_plot[hue_key].astype(str)
+        data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
 
     # Check for required columns
     n_datapoints = len(data_plot)
@@ -292,6 +334,9 @@ def _plot_accuracy_panel(
             markersize=3,
             alpha=fmt["alpha_line"],
             linestyle="-",
+            errorbar="ci",
+            err_style="bars",
+            # err_kws={"alpha": 0.2, "edgecolor": "none"}
         )
     else:
         logger.warning("'accuracy' column not found, skipping accuracy plot")
@@ -315,6 +360,9 @@ def _plot_accuracy_panel(
             markersize=2,
             alpha=fmt["alpha_line"],
             linestyle=":",
+            errorbar="ci",
+            err_style="bars",
+            # err_kws={"alpha": 0.2, "edgecolor": "none"}
         )
     else:
         logger.warning("'confidence_avg' column not found, skipping confidence plot")
@@ -385,6 +433,36 @@ def _plot_accuracy_panel(
     sns.despine(ax=ax, left=True, bottom=True)
 
 
+def _add_layer_circle(x, y, layer_name, ax=None, config=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
+
+    pad = 0.5 if layer_name == "IT" else 0.4
+
+    colors = _get_colors_for_dimension(
+        values=[layer_name], dimension_key="layers", config=config
+    )
+    fmt = {**FORMATTING, **{k: v for k, v in kwargs.items() if k in FORMATTING}}
+
+    ax.text(
+        x,
+        y,
+        layer_name,
+        horizontalalignment="center",
+        verticalalignment="center",
+        transform=ax.transAxes,
+        bbox=dict(
+            boxstyle=f"circle,pad={pad}",
+            facecolor=colors.get(layer_name, "#808080ff"),
+            edgecolor="#353535ff",
+            linewidth=2,
+            alpha=0.8,
+        ),
+        fontsize=fmt["fontsize_label"],
+        fontweight="bold",
+    )
+
+
 def _plot_response_ridges(
     fig: plt.Figure,
     column_left: float,
@@ -400,6 +478,7 @@ def _plot_response_ridges(
     dt: float,
     show_ylabel: bool,
     config: Dict,
+    ridge_top: Optional[float] = None,
     **kwargs,
 ) -> List[plt.Axes]:
     """Plot ridge plots for responses.
@@ -427,6 +506,9 @@ def _plot_response_ridges(
     layout = {**LAYOUT, **{k: v for k, v in kwargs.items() if k in LAYOUT}}
     fmt = {**FORMATTING, **{k: v for k, v in kwargs.items() if k in FORMATTING}}
 
+    # Check if focus_layer is specified in kwargs (for Panel B case)
+    focus_layer = kwargs.get("focus_layer", None)
+
     n_subplots = len(subplot_values)
     if n_subplots == 0:
         logger.warning("No subplot values provided, cannot create ridge plots")
@@ -441,23 +523,26 @@ def _plot_response_ridges(
     data_plot = data.copy()
     data_plot["time_ms"] = data_plot["times_index"] * dt
 
-    # Ensure string types for categorical columns
+    # Ensure categorical columns are standardized to match dimension values
     if hue_key in data_plot.columns and hue_key != "layers":
-        data_plot[hue_key] = data_plot[hue_key].astype(str)
+        data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
     if subplot_key in data_plot.columns and subplot_key != "layers":
-        data_plot[subplot_key] = data_plot[subplot_key].astype(str)
+        data_plot[subplot_key] = data_plot[subplot_key].apply(
+            _standardize_category_value
+        )
 
     axes = []
 
     # Calculate ridge top position from other elements
-    ridge_top = (
-        layout["title_bot"]
-        - layout["title_pad"]
-        - layout["accuracy_height"]
-        - layout["accuracy_pad"]
-        - layout["legend_height"]
-        - layout["legend_pad"]
-    )
+    if ridge_top is None:
+        ridge_top = (
+            layout["title_bot"]
+            - layout["title_pad"]
+            - layout["accuracy_height"]
+            - layout["accuracy_pad"]
+            - layout["legend_height"]
+            - layout["legend_pad"]
+        )
 
     global_ymin, global_ymax = fmt["max_global_ymax"], fmt["min_global_ymin"]
     global_xmin, global_xmax = 0, 0
@@ -512,33 +597,55 @@ def _plot_response_ridges(
                 linewidth=fmt["linewidth_main"],
                 marker=".",
                 alpha=fmt["alpha_line"],
+                errorbar="se",
+                err_style="band",
+                err_kws={"alpha": 0.2, "edgecolor": "none"},
             )
 
-            # Add layer circle
-            layer_colors = fmt["layer_circle_colors"]
-            pad = 0.5 if subplot_value == "IT" else 0.4
-            ax.text(
-                0.95,
-                0.25,
-                subplot_value.upper(),
-                horizontalalignment="center",
-                verticalalignment="center",
-                transform=ax.transAxes,
-                bbox=dict(
-                    boxstyle=f"circle,pad={pad}",
-                    facecolor=layer_colors.get(subplot_value.upper(), "#808080ff"),
-                    edgecolor="#353535ff",
-                    linewidth=2,
-                    alpha=0.8,
-                ),
-                fontsize=fmt["fontsize_label"],
-                fontweight="bold",
+            _add_layer_circle(
+                x=0.95,
+                y=0.25,
+                layer_name=subplot_value.upper(),
+                ax=ax,
+                config=config,
+                **fmt,
             )
+
         else:
-            # Plot hue as layers
+            # Handle parameter subplots - two cases:
+            # 1. hue_var == "layers": plot different layers as different colored lines
+            # 2. focus_layer specified: plot single layer response colored by category
+
             plotted_any = False
-            for hue_val in hue_values:
-                if hue_var == "layers":
+
+            if focus_layer and hue_var == "category":
+                # Panel B case: plot focus layer response colored by category
+                response_col = f"{focus_layer}_response_avg"
+                if response_col in plot_data.columns:
+                    sns.lineplot(
+                        data=plot_data,
+                        x="time_ms",
+                        y=response_col,
+                        hue=hue_key,
+                        hue_order=hue_values,
+                        palette=colors,
+                        ax=ax,
+                        legend=False,
+                        linewidth=fmt["linewidth_main"],
+                        marker=".",
+                        alpha=fmt["alpha_line"],
+                        errorbar="se",
+                        err_style="band",
+                        err_kws={"alpha": 0.2, "edgecolor": "none"},
+                    )
+                    plotted_any = True
+                else:
+                    logger.warning(
+                        f"Focus layer response column '{response_col}' not found for parameter '{subplot_value}'"
+                    )
+            elif hue_var == "layers":
+                # Plot different layers as hues
+                for hue_val in hue_values:
                     response_col = f"{hue_val}_response_avg"
                     if response_col in plot_data.columns:
                         hue_data = plot_data.copy()
@@ -569,10 +676,10 @@ def _plot_response_ridges(
             label_text = f"{display_name}={subplot_value}"
             ax.text(
                 0.95,
-                0.75,
+                0.25,
                 label_text,
                 horizontalalignment="right",
-                verticalalignment="top",
+                verticalalignment="center",
                 transform=ax.transAxes,
                 fontsize=fmt["fontsize_label"],
                 bbox=dict(
@@ -619,6 +726,7 @@ def _plot_response_ridges(
                 "Avg Layer Response",
                 fontsize=fmt["fontsize_axis"],
                 fontweight="bold",
+                labelpad=6,
             )
         else:
             ax.set_ylabel("")
@@ -645,13 +753,13 @@ def _plot_response_ridges(
 
 def _add_horizontal_legend(
     fig: plt.Figure,
-    column_left: float,
-    column_width: float,
     hue_var: str,
     hue_key: str,
     hue_values: List[str],
     colors: Dict[str, str],
     config: Dict,
+    legend_bot: float = None,
+    dt: float = 2.0,
     **kwargs,
 ) -> None:
     """Add horizontal legend for hue dimension.
@@ -662,25 +770,27 @@ def _add_horizontal_legend(
         column_width: Width of column
         hue_var: Variable for color coding
         hue_key: Column name for hue variable
-        hue_values: Ordered list of hue values
+        hue_values: Ordered list of hue values (already ordered by config if available)
         colors: Color mapping for hue values
         config: Configuration dict with naming mappings
+        dt: Temporal resolution in ms per timestep
         **kwargs: Override FORMATTING and LAYOUT defaults
     """
     layout = {**LAYOUT, **{k: v for k, v in kwargs.items() if k in LAYOUT}}
     fmt = {**FORMATTING, **{k: v for k, v in kwargs.items() if k in FORMATTING}}
 
-    left = column_left + layout["legend_margin"]
-    width = column_width - 2 * layout["legend_margin"]
+    left = layout["left_margin"] + layout["legend_margin"]
+    width = layout["column_width"] - 2 * layout["legend_margin"]
 
     # Calculate legend position from other elements
-    legend_bot = (
-        layout["title_bot"]
-        - layout["title_pad"]
-        - layout["accuracy_height"]
-        - layout["accuracy_pad"]
-        - layout["legend_height"]
-    )
+    if legend_bot is None:
+        legend_bot = (
+            layout["title_bot"]
+            - layout["title_pad"]
+            - layout["accuracy_height"]
+            - layout["accuracy_pad"]
+            - layout["legend_height"]
+        )
 
     legend_ax = fig.add_axes([left, legend_bot, width, layout["legend_height"]])
     legend_ax.set_xlim(0, 1)
@@ -688,7 +798,7 @@ def _add_horizontal_legend(
     legend_ax.axis("off")
     legend_ax.patch.set_alpha(0)
 
-    # Create legend elements
+    # Create legend elements using the ordered hue_values
     legend_elements = []
     legend_labels = []
 
@@ -709,7 +819,7 @@ def _add_horizontal_legend(
             if hue_var == "layers":
                 label = val.upper()
             else:
-                label = _format_legend_label(hue_key, val, config)
+                label = _format_legend_label(hue_key, val, config, dt)
             legend_labels.append(label)
 
     if legend_elements:
@@ -980,6 +1090,7 @@ def plot_temporal_ridge_responses(
             hue_values=hue_values,
             colors=colors,
             config=config,
+            dt=dt,
             **kwargs,
         )
 

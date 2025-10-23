@@ -26,7 +26,7 @@ class DtypeDeviceCoordinator:
         "64-true": torch.float64,
     }
 
-    def __init__(self, target_dtype: Optional[torch.dtype] = None):
+    def __init__(self, target_dtype: Optional[torch.dtype] = None, **kwargs):
         self.is_root_node = False
         self.child_nodes: List["DtypeDeviceCoordinator"] = []
         self.parent_node: Optional["DtypeDeviceCoordinator"] = None
@@ -37,6 +37,8 @@ class DtypeDeviceCoordinator:
             self._coordination_built = False
         else:
             self._coordination_built = True
+
+        super().__init__(**kwargs)
 
     def map_dtype(self, dtype: Optional[str]) -> torch.dtype:
         if dtype is None:

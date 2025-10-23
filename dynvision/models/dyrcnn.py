@@ -98,7 +98,6 @@ class DyRCNN(BaseModel):
         use_retina: bool = False,
         skip: bool = True,
         feedback: bool = False,
-        feedforward_only: bool = False,
         **kwargs: Any,
     ) -> None:
 
@@ -112,7 +111,6 @@ class DyRCNN(BaseModel):
         self.feedback_mode = feedback_mode
         self.feedback = feedback
         self.skip = str_to_bool(skip)
-        self.feedforward_only = str_to_bool(feedforward_only)
         self._parse_feedback_mode(self.feedback)
 
         # Pass core neural network parameters to parent classes
@@ -387,6 +385,21 @@ class DyRCNNx8(DyRCNNx4):
     """
     Four-layer DyRCNN (with double conv per layer) implementing a biologically-inspired visual hierarchy.
     """
+
+    def reset(self) -> None:
+        """Reset model state."""
+        self.V1.reset()
+        self.tstep_V1.reset()
+        self.V2.reset()
+        self.tstep_V2.reset()
+        self.V4.reset()
+        self.tstep_V4.reset()
+        self.IT.reset()
+        self.tstep_IT.reset()
+        if hasattr(self, "input_adaption") and hasattr(self.input_adaption, "reset"):
+            self.input_adaption.reset()
+        if hasattr(self, "retina") and hasattr(self.retina, "reset"):
+            self.retina.reset()
 
     def _define_architecture(self) -> None:
         """Define the four-layer visual hierarchy."""

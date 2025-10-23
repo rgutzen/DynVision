@@ -351,8 +351,8 @@ class SelfConnection(RecurrenceBase):
 
     def __init__(
         self,
-        in_channels: int,
         max_weight_init: float = 0.2,
+        fixed_weight: Optional[float] = None,
         bias: bool = True,
         **kwargs,
     ) -> None:
@@ -368,22 +368,33 @@ class SelfConnection(RecurrenceBase):
 
         # Store initialization arguments as attributes
         self.bias = bias
-        self.in_channels = in_channels
+        self.fixed_weight = fixed_weight
         self._define_architecture()
 
     def _define_architecture(self) -> None:
 
-        self.weight = nn.Parameter(torch.zeros(1))
+        if self.fixed_weight is None:
+            self.weight = nn.Parameter(torch.zeros(1))
+        else:
+            self.weight = nn.Parameter(
+                torch.tensor([self.fixed_weight], device=self.get_target_device())
+            )
 
         if self.bias:
-            self.bias = nn.Parameter(torch.zeros(1))
-        else:
-            self.register_parameter("bias", None)
+            self.bias = nn.Parameter(
+                torch.zeros(1), requires_grad=self.fixed_weight is None
+            )
+            # self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.device != self.weight.device:
+            logger.error(
+                f"Input device {x.device} does not match weight device {self.weight.device}"
+            )
+            self.weight = self.weight.to(device=x.device)
         out = x * self.weight
 
-        if self.bias is not None:
+        if self.bias:
             out = out + self.bias
 
         return out
@@ -405,6 +416,7 @@ class InputAdaption(LightningModule):
         self,
         fixed_weight: Optional[float] = None,
         max_weight_init: float = 0.2,
+        bias: bool = False,
         **kwargs,
     ) -> None:
         """
@@ -419,7 +431,7 @@ class InputAdaption(LightningModule):
         self.recurrence = SelfConnection(
             fixed_weight=fixed_weight,
             max_weight_init=max_weight_init,
-            bias=False,
+            bias=bias,
             **kwargs,
         )
         self.reset()
@@ -742,10 +754,17 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         self,
         x: Optional[torch.Tensor] = None,
         h: Optional[torch.Tensor] = None,
+        feedforward_only: bool = False,
         **kwargs,
     ) -> Optional[torch.Tensor]:
 
-        if self.recurrence_target == "input":
+        if self.feedforward_only or self.recurrence is None:
+            x = self.forward_feedforward(x)
+            if self.mid_channels:
+                x = self.forward_feedforward2(x)
+            return x
+
+        elif self.recurrence_target == "input":
             # Adding recurrence to layer input
             x = self.forward_recurrence(x, h)
             # Feedforward combined activity

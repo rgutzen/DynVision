@@ -10,7 +10,7 @@ tau: 5  # ms
 t_recurrence: 6  # ms
 t_feedforward: 0  # ms
 t_skip: 0  # ms
-t_feedback: 40  # ms
+t_feedback: 34  # ms
 loss_reaction_time: 4  # ms 
 recurrence_type: 'full'
 recurrence_target: 'output'
@@ -53,6 +53,7 @@ devices: 1
 
 # DataLoader
 batch_size: 256
+test_batch_size: 64
 order: "QUASI_RANDOM"
 os_cache: True
 # chunksize: 5000

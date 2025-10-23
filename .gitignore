@@ -6,7 +6,7 @@ config_runtime.yaml
 
 # temporary files 
 temp_*
-*old
+*_old.py
 
 # data
 /data/

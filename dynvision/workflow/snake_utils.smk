@@ -62,7 +62,7 @@ wildcard_constraints:
     model_identifier = r'([\w:+=,\*\#]+)'
 
 localrules: all, symlink_data_subsets, symlink_data_groups, experiment
-ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model
+ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model > process_test_data > test_model
 
 def initialize_config_handler():
     """Initialize the global config handler after CLI config overrides."""

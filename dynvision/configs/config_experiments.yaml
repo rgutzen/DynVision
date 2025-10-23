@@ -11,11 +11,13 @@ experiment_config:
     tff: [0, 10]
     trc: [2, 6, 10]
     tsk: [0, 4, 8]
-    lossrt: [0, 4, 8, 20, 38]
+    # lossrt: [0, 4, 8, 20, 38]
+    lossrt: [0, 6, 12, 18]
     idle: [0, 5, 10, 15]
     feedback: ['add','false', 'mul']
     skip: ['true', 'false']
     dloader: ['ffcv', 'torch']
+    ffonly: ['true', 'false']
     
   response:
     status: trained
@@ -24,29 +26,39 @@ experiment_config:
     data_args:
       dsteps: 60
       intro: 1
-      stim: 30
-      idle: [0, 20]
+      stim: [30]
+      idle: [20]
 
   responseffonly:
     status: trained
-    parameter: idle
+    parameter: ffonly
     data_loader: StimulusDuration
     data_args:
-      dsteps: 60
-      intro: 1
-      stim: 30
-      ffonly: true
-      idle: [0, 20]
+      dsteps: 4
+      intro: 0
+      stim: 2
+      ffonly: ['true', 'false']
 
   stability:
     status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
-      dsteps: 80
-      stim: [40]
+      dsteps: 125
+      stim: [25, 100]
       intro: 0
-      idle: [0, 20]
+      idle: [20]
+
+  adaption:
+    status: trained
+    parameter: inadapt
+    data_loader: StimulusDuration
+    data_args:
+      dsteps: 40
+      intro: 1
+      stim: [20]
+      idle: [20]
+      inadapt: [0, 0.95, 0.9, 0.8, 0.7]
 
   nullcondition:
     status: trained
@@ -62,9 +74,9 @@ experiment_config:
     parameter: idle
     data_loader: StimulusDuration
     data_args:
-      dsteps: 30
+      dsteps: 50
       intro: 0
-      stim: [20]
+      stim: [25]
       idle: [0, 10, 20, 30]
 
   duration:
@@ -101,14 +113,36 @@ experiment_config:
 
   uniformnoise:
     status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: uniform
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      tempmode: 'dynamic'
+      idle: 20
+
+  uniformnoiseffonly:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: uniform
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      tempmode: 'dynamic'
+      idle: 20
+      ffonly: 'true'
+
+  uniformnoiseiid:
+    status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 30
-      intro: 1
-      stim: 20
+      dsteps: 20
       noisetype: uniform
-      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      tempmode: 'dynamic'
       idle: 20
 
   saltpeppernoise:
@@ -116,45 +150,139 @@ experiment_config:
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 30
-      intro: 1
-      stim: 20
+      dsteps: 20
       noisetype: saltpepper
-      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      tempmode: 'static'
+      idle: 20
+
+  saltpeppernoiseiid:
+    status: trained
+    parameter: noiselevel
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: saltpepper
+      noiselevel: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+      tempmode: 'dynamic'
       idle: 20
 
   poissonnoise:
     status: trained
-    parameter: noiselevel
+    parameter: ssnr
     data_loader: StimulusNoise
     data_args:
-      dsteps: 30
-      intro: 1
-      stim: 20
+      dsteps: 20
       noisetype: poisson
-      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      tempmode: 'dynamic'
       idle: 20
 
-  gaussianblurnoise:
+  poissonnoiseffonly:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: poisson
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      tempmode: 'dynamic'
+      idle: 20
+      ffonly: 'true'
+
+  poissonnoiseiid:
     status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
-      dsteps: 30
-      intro: 1
-      stim: 20
-      noisetype: gaussianblur
-      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      dsteps: 20
+      noisetype: poisson
+      noiselevel: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+      tempmode: 'dynamic'
       idle: 20
 
-  motionblurnoise:
+  poissonnoiseiidffonly:
     status: trained
-    parameter: noiselevel
+    parameter: ffonly
     data_loader: StimulusNoise
     data_args:
-      dsteps: 30
-      intro: 1
-      stim: 20
-      noisetype: motionblur
-      noiselevel: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      dsteps: 20
+      noisetype: poisson
+      noiselevel: [0.3]
+      tempmode: 'dynamic'
       idle: 20
+      ffonly: ['true', 'false']
+
+  gaussiannoise:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: gaussian
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      # tempmode: 'dynamic'
+      idle: 20
+
+  gaussiancorrnoise:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: gaussian
+      spatialcorr: 'true'
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      # tempmode: 'dynamic'
+      idle: 20
+
+  phasescramblednoise:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: phasescrambled
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      # tempmode: 'dynamic'
+      idle: 20
+
+  gaussiannoiseffonly:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: gaussian
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      # tempmode: 'dynamic'
+      idle: 20
+      ffonly: 'true'
+
+  gaussiancorrnoiseffonly:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: gaussian
+      spatialcorr: 'true'
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      # tempmode: 'dynamic'
+      idle: 20
+      ffonly: 'true'
+
+  phasescramblednoiseffonly:
+    status: trained
+    parameter: ssnr
+    data_loader: StimulusNoise
+    data_args:
+      dsteps: 20
+      noisetype: phasescrambled
+      ssnr: [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.0]
+      # tempmode: 'dynamic'
+      idle: 20
+      ffonly: 'true'
+
+  noise:
+    parameter: ssnr

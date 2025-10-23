@@ -24,6 +24,7 @@ naming:
   contrast: "$C$"
   interval: "$I$"
   noiselevel: "$\\sigma$"
+  ssnr: "SSNR"
   noise: "$\\sigma$"
   stim: "$D$"
   stimulus: "$D$"
@@ -40,6 +41,8 @@ naming:
   add: "Additive"
   mul: "Multiplicative"
   ffonly: "Feedforward Only"
+  true: "True"
+  false: "False"
   # Layers
   layer1: "V1"
   layer2: "V2"
@@ -70,3 +73,4 @@ naming:
 ordering:
   layers: ["IT", "V4", "V2", "V1"]
   rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise"]
+  feedback: ['false', 'add', 'mul']

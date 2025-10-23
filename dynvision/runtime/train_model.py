@@ -42,6 +42,7 @@ from dynvision.utils import (
     handle_errors,
 )
 from dynvision.visualization import callbacks as custom_callbacks
+from dynvision.utils.checkpoint_to_statedict import get_best_checkpoint
 
 # Import the Pydantic parameter classes
 from dynvision.params import TrainingParams, DynVisionConfigError
@@ -259,12 +260,12 @@ class CallbackManager:
         # Setup checkpointing
         checkpoint_path = self._setup_checkpointing(callbacks)
 
-        # Add early stopping if configured
-        early_stopping_kwargs = (
-            self.config.trainer.get_early_stopping_callback_kwargs()
-        )
-        if early_stopping_kwargs:
-            callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))
+        # # Add early stopping if configured
+        # early_stopping_kwargs = (
+        #     self.config.trainer.get_early_stopping_callback_kwargs()
+        # )
+        # if early_stopping_kwargs:
+        #     callbacks.append(EarlyStoppingWithMin(**early_stopping_kwargs))  # Todo: debug remove
 
         # Add learning rate monitor
         callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="epoch"))
@@ -292,10 +293,19 @@ class CallbackManager:
 
         # Get checkpoint configuration
         checkpoint_kwargs = self.config.trainer.get_checkpoint_callback_kwargs()
+
+        # Extract monitor metric from config for flexible filename formatting
+        monitor_metric = checkpoint_kwargs.get("monitor", "val_loss")
+
+        # Create flexible filename template based on monitored metric
+        filename_template = (
+            f"{checkpoint_path.name}-{{epoch:02d}}-{{{monitor_metric}:.2f}}"
+        )
+
         checkpoint_kwargs.update(
             {
                 "dirpath": checkpoint_path.parent,
-                "filename": checkpoint_path.name + "-{epoch:02d}-{val_loss:.2f}",
+                "filename": filename_template,
             }
         )
 
@@ -326,7 +336,7 @@ class ModelManager:
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def load_and_initialize_model(self) -> pl.LightningModule:
+    def load_and_initialize_model(self, load_state_dict=True) -> pl.LightningModule:
         """Load and initialize model with current configuration."""
         # Load state dict
         state_dict = torch.load(
@@ -342,16 +352,17 @@ class ModelManager:
         model = model_class(**model_kwargs).to(self.device)
 
         # Load state dict with error handling
-        try:
-            model.load_state_dict(state_dict, strict=True)
-            logger.info("Model state loaded successfully")
-        except Exception as e:
-            logger.warning(f"Strict loading failed: {e}. Trying non-strict...")
-            missing, unexpected = model.load_state_dict(state_dict, strict=False)
-            if missing:
-                logger.warning(f"Missing keys: {missing}")
-            if unexpected:
-                logger.warning(f"Unexpected keys: {unexpected}")
+        if not load_state_dict:
+            try:
+                model.load_state_dict(state_dict, strict=True)
+                logger.info("Model state loaded successfully")
+            except Exception as e:
+                logger.warning(f"Strict loading failed: {e}. Trying non-strict...")
+                missing, unexpected = model.load_state_dict(state_dict, strict=False)
+                if missing:
+                    logger.warning(f"Missing keys: {missing}")
+                if unexpected:
+                    logger.warning(f"Unexpected keys: {unexpected}")
 
         # Initialize model-specific settings
         if hasattr(model, "set_residual_timesteps"):
@@ -526,43 +537,91 @@ class TrainingOrchestrator:
             logger.warning(f"Failed to log sample images: {e}")
 
     def run_training(self) -> int:
-        """Run the complete training pipeline with comprehensive error handling."""
+        """Run the complete training pipeline with comprehensive error handling.
+
+        Loading Logic:
+        - If Lightning checkpoint exists: Resume from checkpoint (includes model, optimizer, epoch)
+        - If no checkpoint: Load from state dict (fresh training start)
+        """
         with self.training_context():
             try:
+                model_name = self.config.output_model_state.name.removesuffix(".pt")
+
                 # Initialize logger
                 pl_logger = pl.loggers.WandbLogger(
                     project=project_paths.project_name,
                     save_dir=project_paths.large_logs,
                     config=self.config.get_full_config(flat=True),
                     tags=["train"],
-                    name=f"{self.config.output_model_state.name}",
+                    name=model_name,
                 )
+
                 # Setup trainer components
                 callbacks, checkpoint_path = self.callback_manager.setup_callbacks()
                 trainer = self._setup_trainer(callbacks, pl_logger)
 
-                # Infer and update model parameters from preview data (before trainer setup)
+                # Infer and update model parameters from preview data
                 self.infer_and_update_from_data(pl_logger)
 
-                # Load and initialize model with updated configuration
-                model = self.model_manager.load_and_initialize_model()
+                # Check for existing Lightning checkpoint FIRST (before loading anything)
+                existing_checkpoint = get_best_checkpoint(
+                    checkpoint_path.parent, model_name, raise_error=False
+                )
 
-                # Check for existing checkpoint
-                existing_checkpoint = self._find_existing_checkpoint(checkpoint_path)
+                if existing_checkpoint:
+                    # Verify checkpoint accessibility across all ranks if distributed
+                    existing_checkpoint = self._verify_checkpoint_across_ranks(
+                        trainer, existing_checkpoint
+                    )
+
+                # ALWAYS load model from state dict - Lightning will override with checkpoint if needed
+                logger.info("Loading model from state dict...")
+                model = self.model_manager.load_and_initialize_model(
+                    load_state_dict=existing_checkpoint is None
+                )
+
+                # Determine checkpoint path for training
+                if existing_checkpoint:
+                    logger.info("=" * 60)
+                    logger.info(
+                        f"RESUMING from Lightning checkpoint: {existing_checkpoint}"
+                    )
+                    logger.info("Model weights will be overridden by checkpoint")
+                    logger.info("=" * 60)
+                    ckpt_path = existing_checkpoint
+                else:
+                    logger.info("=" * 60)
+                    logger.info("STARTING FRESH from state dict")
+                    logger.info(f"Loaded from: {self.config.input_model_state}")
+                    logger.info("=" * 60)
+                    ckpt_path = None
+
+                # Synchronize after model loading in distributed mode
+                if trainer.strategy and hasattr(trainer.strategy, "barrier"):
+                    logger.info("Synchronizing ranks after model initialization...")
+                    trainer.strategy.barrier()
+                    logger.info("All ranks synchronized")
 
                 # Hack to log histograms
                 wandb.init(settings=wandb.Settings(init_timeout=120))
 
-                # Train model using DataModule (handles distributed setup properly)
+                # Final synchronization before training
+                if trainer.strategy and hasattr(trainer.strategy, "barrier"):
+                    logger.info("Final synchronization before training start...")
+                    trainer.strategy.barrier()
+                    logger.info("All ranks ready to train")
+
+                # Train model using DataModule
                 logger.info("Starting training...")
                 trainer.fit(
-                    model,
+                    model,  # Always pass the model - Lightning handles checkpoint loading
                     datamodule=self.datamodule,
-                    ckpt_path=existing_checkpoint,
+                    ckpt_path=ckpt_path,
                 )
 
-                # Save trained model
-                self.model_manager.save_model(model)
+                # Save trained model (get final model from trainer)
+                final_model = trainer.model
+                self.model_manager.save_model(final_model)
 
                 logger.info("Training completed successfully!")
                 return 0
@@ -571,6 +630,127 @@ class TrainingOrchestrator:
                 logger.error(f"Training failed: {e}")
                 self._handle_training_failure(trainer, checkpoint_path)
                 return 1
+
+    def _verify_checkpoint_across_ranks(
+        self, trainer: pl.Trainer, checkpoint_path: Optional[str]
+    ) -> Optional[str]:
+        """Verify checkpoint exists and is accessible on all ranks.
+
+        Args:
+            trainer: PyTorch Lightning trainer
+            checkpoint_path: Path to checkpoint to verify
+
+        Returns:
+            Verified checkpoint path if valid on all ranks, None otherwise
+        """
+        if checkpoint_path is None:
+            return None
+
+        # Check if we're in distributed mode
+        is_distributed = (
+            trainer.world_size > 1
+            and hasattr(trainer, "strategy")
+            and trainer.strategy is not None
+        )
+
+        if not is_distributed:
+            # Single GPU/CPU: simple existence check
+            if os.path.exists(checkpoint_path):
+                logger.info(f"Checkpoint found: {checkpoint_path}")
+                return checkpoint_path
+            else:
+                logger.info(f"Checkpoint not found: {checkpoint_path}")
+                return None
+
+        # Distributed mode: Check if distributed is actually initialized
+        try:
+            import torch.distributed as dist
+
+            # CRITICAL FIX: Check if distributed is initialized AND available
+            if not dist.is_available() or not dist.is_initialized():
+                logger.info(
+                    "Distributed backend not yet initialized by Lightning. "
+                    "Using simple file existence check - Lightning will handle "
+                    "checkpoint verification during trainer.fit()."
+                )
+                # Just check local file existence - Lightning handles the rest
+                if os.path.exists(checkpoint_path):
+                    logger.info(f"Checkpoint found locally: {checkpoint_path}")
+                    return checkpoint_path
+                else:
+                    logger.info(f"Checkpoint not found locally: {checkpoint_path}")
+                    return None
+
+            # If we reach here, distributed is fully initialized
+            rank = trainer.global_rank
+            world_size = trainer.world_size
+
+            logger.info(
+                f"[Rank {rank}/{world_size}] Verifying checkpoint: {checkpoint_path}"
+            )
+
+            # Check if checkpoint exists on this rank
+            checkpoint_exists = os.path.exists(checkpoint_path)
+            logger.info(f"[Rank {rank}] Checkpoint exists: {checkpoint_exists}")
+
+            # Convert to tensor for collective operations
+            exists_tensor = torch.tensor(
+                [1 if checkpoint_exists else 0],
+                dtype=torch.long,
+                device=trainer.strategy.root_device,
+            )
+
+            # Gather existence status from all ranks
+            all_exists = [torch.zeros_like(exists_tensor) for _ in range(world_size)]
+            dist.all_gather(all_exists, exists_tensor)
+
+            # Check if ALL ranks can see the checkpoint
+            visibility = [t.item() for t in all_exists]
+            all_ranks_see_checkpoint = all(v == 1 for v in visibility)
+
+            logger.info(
+                f"[Rank {rank}] Checkpoint visibility across ranks: {visibility}"
+            )
+
+            if not all_ranks_see_checkpoint:
+                logger.warning(
+                    f"[Rank {rank}] Checkpoint not visible to all ranks. "
+                    f"Will start fresh from state dict instead."
+                )
+                # Barrier to ensure all ranks agree
+                dist.barrier()
+                return None
+
+            # Verify checkpoint is readable (lightweight check)
+            try:
+                ckpt = torch.load(
+                    checkpoint_path, map_location="cpu", weights_only=False
+                )
+                epoch = ckpt.get("epoch", "unknown")
+                logger.info(f"[Rank {rank}] Checkpoint is readable, epoch: {epoch}")
+                del ckpt  # Free memory
+            except Exception as e:
+                logger.error(f"[Rank {rank}] Failed to read checkpoint: {e}")
+                dist.barrier()
+                return None
+
+            # Final barrier before confirming checkpoint
+            logger.info(f"[Rank {rank}] Waiting at checkpoint verification barrier...")
+            dist.barrier()
+            logger.info(f"[Rank {rank}] Checkpoint verified successfully")
+
+            return checkpoint_path
+
+        except Exception as e:
+            logger.info(f"Distributed operations not available: {e}")
+            # Fallback to simple file existence check
+            logger.info("Using simple checkpoint existence check")
+            if os.path.exists(checkpoint_path):
+                logger.info(f"Checkpoint found (fallback): {checkpoint_path}")
+                return checkpoint_path
+            else:
+                logger.info(f"Checkpoint not found (fallback): {checkpoint_path}")
+                return None
 
     def _handle_training_failure(
         self, trainer: pl.Trainer, checkpoint_path: Path
@@ -584,33 +764,25 @@ class TrainingOrchestrator:
         # Ensure the checkpoint directory exists
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Get checkpoint configuration
+        checkpoint_kwargs = self.config.trainer.get_checkpoint_callback_kwargs()
+
+        # Extract monitor metric from config for flexible filename formatting
+        monitor_metric = checkpoint_kwargs.get("monitor", "val_loss")
+
         # Extract the current epoch and validation loss
         current_epoch = trainer.current_epoch
-        val_loss = trainer.callback_metrics.get("val_loss", float("nan"))
+        val_loss = trainer.callback_metrics.get(monitor_metric, float("nan"))
 
         # Format the checkpoint filename
-        checkpoint_filename = f"{checkpoint_path.name}-epoch={current_epoch:02d}-val_loss={val_loss:.2f}.ckpt"
+        checkpoint_filename = (
+            f"{checkpoint_path.stem}-{current_epoch:02d}-{val_loss:.2f}.ckpt"
+        )
         checkpoint_file = checkpoint_path.parent / checkpoint_filename
 
         # Save the checkpoint
         trainer.save_checkpoint(checkpoint_file)
         logger.info(f"Checkpoint before training failure saved to {checkpoint_file}")
-
-    def _find_existing_checkpoint(self, checkpoint_path: Path) -> Optional[Path]:
-        """Find existing checkpoint for resuming training."""
-        checkpoint_dir = checkpoint_path.parent
-        if not checkpoint_dir.exists():
-            return None
-
-        # Look for checkpoint files
-        checkpoint_files = list(checkpoint_dir.glob(f"{checkpoint_path.name}*.ckpt"))
-        if checkpoint_files:
-            # Return the most recent checkpoint
-            latest_checkpoint = max(checkpoint_files, key=lambda p: p.stat().st_mtime)
-            logger.info(f"Found existing checkpoint: {latest_checkpoint}")
-            return latest_checkpoint
-
-        return None
 
 
 @handle_errors(verbose=True)

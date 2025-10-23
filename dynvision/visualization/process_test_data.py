@@ -26,6 +26,10 @@ from dynvision.utils.visualization_utils import (
     extract_param_from_string,
 )
 from dynvision.utils.data_utils import load_df
+from dynvision.utils.performance_measures import (
+    calculate_topk_accuracy,
+    calculate_confidence,
+)
 
 # Import memory-efficient loading system
 from dynvision.utils.memory_efficient_loading import (
@@ -47,258 +51,142 @@ logger.setLevel(logging.INFO)
 
 def chunk_lists(lst1, lst2, chunk_size):
     """Split two lists into chunks of specified size."""
+    # Ensure both lists are the same length
     for i in range(0, len(lst1), chunk_size):
         yield lst1[i : i + chunk_size], lst2[i : i + chunk_size]
 
 
-def calculate_confidence_from_responses(group):
-    """Calculate confidence as softmax probability for the true label from response values."""
-    responses = torch.tensor(group["response"].values)
-    probabilities = F.softmax(responses, dim=0)
-    label_idx = int(group.iloc[0]["presentation_label"])
-
-    if label_idx >= 0 and label_idx < len(probabilities):
-        class_indices = group["class_index"].values
-        if label_idx in class_indices:
-            true_label_position = np.where(class_indices == label_idx)[0][0]
-            return probabilities[true_label_position].item()
-
-    return np.nan
-
-
-def calculate_topk_accuracy(group, k):
-    """Calculate top-k accuracy for a group of responses."""
-    responses = group["response"].values
-    class_indices = group["class_index"].values
-    label_idx = int(group.iloc[0]["presentation_label"])
-
-    if label_idx < 0:
-        return np.nan
-
-    top_k_indices = np.argsort(responses)[-k:]
-    top_k_classes = class_indices[top_k_indices]
-
-    return float(label_idx in top_k_classes)
-
-
-def get_presentation_label(label_series):
-    """Get the presentation label for a group (sample across time steps)."""
-    valid_labels = label_series[label_series >= 0]
-    if len(valid_labels) > 0:
-        return valid_labels.iloc[0]
-    else:
-        return -1
-
-
-def process_test_performance(df, topk_values):
-    """Calculate accuracy, confidence, and topk metrics from test outputs."""
-    logger.info("  Processing test performance metrics...")
-
-    # Sanity check: verify required columns exist
-    required_cols = [
-        "sample_index",
-        "times_index",
-        "label_index",
-        "guess_index",
-        "class_index",
-        "response",
-    ]
-
-    missing_cols = [col for col in required_cols if col not in df.columns]
-    if missing_cols:
-        raise ValueError(
-            f"Missing required columns in test output CSV: {missing_cols}. "
-            f"Available columns: {df.columns.tolist()}"
-        )
-
-    logger.info(
-        f"    Time steps range: {df['times_index'].min()} to {df['times_index'].max()}"
-    )
-    logger.info(f"    Unique samples: {df['sample_index'].nunique()}")
-    logger.info(f"    Unique data labels: {df['label_index'].unique()}")
-    logger.info(f"    Unique model classes: {df['class_index'].unique()}")
-
-    # Calculate confidence and top-k accuracy
-    logger.info(
-        f"    Calculating confidence and top-k accuracy for k={topk_values}..."
-    )
-
-    # Add presentation_label column
-    logger.info("    Adding presentation labels...")
-    df["presentation_label"] = df.groupby(["sample_index"])["label_index"].transform(
-        get_presentation_label
-    )
-    logger.info(f"    Unique presentation labels: {df['presentation_label'].unique()}")
-
-    metrics_data = []
-
-    for (sample_idx, times_index), group in tqdm(
-        df.groupby(["sample_index", "times_index"]),
-        desc="Computing performance metrics",
-    ):
-        confidence = calculate_confidence_from_responses(group)
-
-        # Calculate top-k accuracy for each k value
-        topk_accuracies = {}
-        for k in topk_values:
-            topk_accuracies[f"accuracy_top{k}"] = calculate_topk_accuracy(group, k)
-
-        # Add metrics to each row in the group
-        for idx in group.index:
-            row_data = {
-                "index": idx,
-                "confidence": confidence,
-                **topk_accuracies,
-            }
-            metrics_data.append(row_data)
-
-    # Create metrics dataframe and merge
-    metrics_df = pd.DataFrame(metrics_data).set_index("index")
-    df = df.merge(metrics_df, left_index=True, right_index=True)
-
-    # Remove label_set column if present
-    if "label_set" in df.columns:
-        df = df.drop(columns=["label_set"])
-        logger.info("    Dropped label_set column")
-
-    # Compress data by grouping
-    logger.info("    Compressing data...")
-    sample_time_df = df.groupby(["sample_index", "times_index"]).first().reset_index()
-    logger.info(
-        f"    Compressed from {len(df)} to {len(sample_time_df)} rows (one per sample-time)"
-    )
-
-    # Group by presentation_label and times_index
-    grouped = sample_time_df.groupby(["presentation_label", "times_index"])
-    compressed_stats = []
-
-    for (pres_label, times_index), group in grouped:
-        # Calculate accuracy
-        accuracy = (group["guess_index"] == pres_label).mean()
-
-        # Calculate top-k accuracy averages
-        topk_accuracy_avgs = {}
-        for k in topk_values:
-            topk_accuracy_avgs[f"accuracy_top{k}"] = group[f"accuracy_top{k}"].mean()
-
-        # Calculate confidence stats
-        conf_avg = group["confidence"].mean()
-        conf_std = group["confidence"].std()
-
-        # Get other columns
-        other_data = {}
-        exclude_cols = [
-            "sample_index",
-            "guess_index",
-            "confidence",
-            "class_index",
-            "response",
-        ] + [f"accuracy_top{k}" for k in topk_values]
-
-        for col in sample_time_df.columns:
-            if col not in exclude_cols:
-                other_data[col] = group[col].iloc[0]
-
-        # Combine all data
-        row_data = {
-            "presentation_label": pres_label,
-            "times_index": times_index,
-            "accuracy": accuracy,
-            **topk_accuracy_avgs,
-            "confidence_avg": conf_avg,
-            "confidence_std": conf_std,
-            **other_data,
-        }
-
-        compressed_stats.append(row_data)
-
-    compressed_df = pd.DataFrame(compressed_stats)
-    logger.info(f"    Compressed to {len(compressed_df)} rows")
-
-    return compressed_df
-
-
-def compute_sample_to_presentation_mapping(test_df: pd.DataFrame) -> Dict[int, int]:
-    """
-    Pre-compute mapping from sample_index to presentation_label.
-
-    This is computed once and reused for all layers to avoid repeated
-    expensive groupby operations.
-
-    Args:
-        test_df: Test output dataframe
-
-    Returns:
-        Dictionary mapping sample_index to presentation_label
-    """
-    logger.info("  Computing sample-to-presentation mapping...")
-
-    mapping = {}
-    for sample_idx in test_df["sample_index"].unique():
-        sample_data = test_df[test_df["sample_index"] == sample_idx]
-        label_series = sample_data["label_index"]
-        presentation_label = get_presentation_label(label_series)
-        mapping[sample_idx] = presentation_label
-
-    logger.info(f"    Mapped {len(mapping)} samples")
-    return mapping
-
-
-def create_layer_dataframe_from_extracted_values(
-    extracted_values: Dict[str, np.ndarray],
-    unique_presentations: List[int],
-    unique_times: List[int],
+def calculate_confidence_and_topk_from_classifier(
+    classifier_responses: torch.Tensor,
+    label_index: torch.Tensor,
+    sample_index: torch.Tensor = None,
+    times_index: torch.Tensor = None,
+    guess_index: torch.Tensor = None,
+    first_label_index: torch.Tensor = None,
+    topk_values: List[int] = [3, 5],
+    confidence_measures: List[str] = [
+        "guess_confidence",
+        "label_confidence",
+        "first_label_confidence",
+    ],
 ) -> pd.DataFrame:
     """
-    Create layer dataframe from pre-extracted numpy arrays.
+    Calculate all confidence measures and top-k accuracies from classifier responses.
 
-    MEMORY EFFICIENT: Works with small numpy arrays instead of large tensors.
+    Returns a DataFrame with (sample_index, times_index) as index and confidence/topk columns.
 
     Args:
-        extracted_values: Dictionary mapping metric names to 1D numpy arrays
-        unique_presentations: List of unique presentation labels
-        unique_times: List of unique time indices
+        classifier_responses: Tensor of shape (n_samples, n_timesteps, n_classes)
+        label_index: Ground truth labels (n_samples, n_timesteps)
+        guess_index: Model predictions (n_samples, n_timesteps)
+        first_label_index: First valid label per sample (n_samples,)
+        topk_values: List of k values for top-k accuracy
 
     Returns:
-        DataFrame with layer metrics
+        DataFrame with columns: sample_index, times_index, guess_confidence,
+        label_confidence, first_label_confidence, accuracy_topK (for each K)
     """
-    logger.info("  Creating layer dataframe from extracted values...")
+    n_samples, n_timesteps, n_classes = classifier_responses.shape
+    if sample_index is None:
+        sample_index = np.repeat(np.arange(n_samples), n_timesteps)
+    if times_index is None:
+        times_index = np.tile(np.arange(n_timesteps), n_samples)
 
-    n_rows = len(unique_presentations) * len(unique_times)
+    # Apply softmax once to get probabilities
+    probabilities = torch.softmax(classifier_responses, dim=-1)
 
-    # Pre-allocate base columns
-    data_arrays = {
-        "presentation_label": np.empty(n_rows, dtype=np.int32),
-        "times_index": np.empty(n_rows, dtype=np.int32),
+    # ===== CONFIDENCE CALCULATIONS =====
+    confidence_results = {}
+
+    if "guess_confidence" in confidence_measures and guess_index is not None:
+        confidence_results["guess_confidence"] = calculate_confidence(
+            classifier_responses, guess_index
+        ).numpy()
+
+    if "label_confidence" in confidence_measures:
+        confidence_results["label_confidence"] = calculate_confidence(
+            classifier_responses, label_index
+        ).numpy()
+
+    if (
+        "first_label_confidence" in confidence_measures
+        and first_label_index is not None
+    ):
+        confidence_results["first_label_confidence"] = calculate_confidence(
+            classifier_responses, first_label_index
+        ).numpy()
+
+    # ===== TOP-K ACCURACY =====
+    accuracy_label = label_index if first_label_index is None else first_label_index
+    topk_accuracy = calculate_topk_accuracy(
+        probabilities, accuracy_label, k=topk_values
+    )
+    topk_results = {
+        f"accuracy_top{k}": acc.numpy() for k, acc in zip(topk_values, topk_accuracy)
     }
 
-    # Fill presentation_label and times_index
-    idx = 0
-    for pres_label in unique_presentations:
-        for time_idx in unique_times:
-            data_arrays["presentation_label"][idx] = pres_label
-            data_arrays["times_index"][idx] = time_idx
-            idx += 1
+    # ===== BUILD DATAFRAME =====
+    # Create multi-index for sample and time
+    data = {
+        "sample_index": sample_index,
+        "times_index": times_index,
+    }
+    # Add confidence columns
+    for measure, conf_array in confidence_results.items():
+        data[measure] = conf_array.ravel()
+    # Add top-k accuracy columns
+    for k, acc_array in topk_results.items():
+        data[k] = acc_array.ravel()
 
-    # Add extracted metric columns (already in correct order)
-    for metric_name, values in extracted_values.items():
-        if len(values) != n_rows:
-            raise RuntimeError(
-                f"Metric '{metric_name}' has {len(values)} values, "
-                f"expected {n_rows}"
-            )
-        data_arrays[metric_name] = values
+    return pd.DataFrame(data)
 
-    # Create DataFrame
-    layer_df = pd.DataFrame(data_arrays)
+
+def process_test_performance(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process test performance CSV and add first_label_index.
+
+    Returns DataFrame at (sample_index, times_index) resolution with:
+    - All original CSV columns
+    - first_label_index: first valid label for each sample
+    - accuracy: boolean (guess == first_label)
+    """
+    logger.info("  Processing test performance metrics...")
+
+    # Verify required columns
+    required_cols = ["sample_index", "times_index", "label_index", "guess_index"]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing columns: {missing}. Available: {df.columns.tolist()}"
+        )
+
+    logger.info(f"    Input shape: {df.shape}")
     logger.info(
-        f"    Created layer dataframe with {len(layer_df)} rows, {len(data_arrays)} columns"
+        f"    Samples: {df['sample_index'].nunique()}, Times: {df['times_index'].nunique()}"
     )
 
-    return layer_df
+    # Ensure one row per (sample, time)
+    df = df.groupby(["sample_index", "times_index"]).first().reset_index()
+
+    # Add first_label_index for each sample
+    first_labels = (
+        df[df["label_index"] >= 0].groupby("sample_index")["label_index"].first()
+    )
+    df["first_label_index"] = (
+        df["sample_index"].map(first_labels).fillna(-1).astype(int)
+    )
+
+    # Calculate accuracy (1 if guess matches first label, 0 otherwise, NaN if no valid label)
+    df["accuracy"] = (df["guess_index"] == df["first_label_index"]).astype(float)
+    df.loc[df["first_label_index"] < 0, "accuracy"] = np.nan
+
+    logger.info(f"    Output shape: {df.shape}")
+    logger.info(f"    Unique first labels: {df['first_label_index'].unique()}")
+
+    return df
 
 
-def process_single_batch_optimized_v2(
+def process_single_batch_optimized(
     response_files: List[Path],
     test_output_files: List[Path],
     data_arg_key: str,
@@ -308,18 +196,36 @@ def process_single_batch_optimized_v2(
     memory_monitor: MemoryMonitor,
 ) -> pd.DataFrame:
     """
-    Process a single batch using INCREMENTAL extraction (Step 2 optimization).
+    Process a single batch of files.
 
-    This is the STEP 2 VERSION that extracts values immediately instead of
-    accumulating metric tensors, preventing memory accumulation.
+    Workflow:
+    1. Load and process test CSV (adds first_label_index, accuracy)
+    2. Load response PT file and calculate confidence/topk metrics from classifier
+    3. Calculate layer response metrics
+    4. Merge all metrics into single DataFrame at (sample_index, times_index) resolution
+
+    Returns:
+        DataFrame with all metrics at (sample_index, times_index, first_label_index) resolution
     """
     batch_dfs = []
+
+    # Separate layer measures from confidence measures
+    layer_measures = [
+        m
+        for m in measures
+        if m not in ["guess_confidence", "label_confidence", "first_label_confidence"]
+    ]
+    confidence_measures = [
+        m
+        for m in measures
+        if m in ["guess_confidence", "label_confidence", "first_label_confidence"]
+    ]
 
     for pt_file, csv_file in zip(response_files, test_output_files):
         logger.info(f"  Processing: {pt_file.name} + {csv_file.name}")
 
         try:
-            # Extract parameter and category values
+            # Extract metadata from filenames
             try:
                 arg_value = extract_param_from_string(
                     pt_file.name, key=data_arg_key, value_type=None
@@ -335,267 +241,175 @@ def process_single_batch_optimized_v2(
                     pt_file.parent.name, key=category, value_type=None
                 )
 
-            # Verify matching values in CSV
+            # Verify CSV has matching metadata
             try:
-                csv_arg_value = extract_param_from_string(
+                csv_arg = extract_param_from_string(
                     csv_file.name, key=data_arg_key, value_type=None
                 )
-                csv_cat_value = extract_param_from_string(
+                csv_cat = extract_param_from_string(
                     csv_file.name, key=category, value_type=None
                 )
             except ValueError:
-                csv_arg_value = extract_param_from_string(
+                csv_arg = extract_param_from_string(
                     csv_file.parent.name, key=data_arg_key, value_type=None
                 )
-                csv_cat_value = extract_param_from_string(
+                csv_cat = extract_param_from_string(
                     csv_file.parent.name, key=category, value_type=None
                 )
 
-            if not arg_value == csv_arg_value:
-                raise ValueError(
-                    f"{data_arg_key} values do not match between files: "
-                    f"PT={arg_value} vs CSV={csv_arg_value}"
-                )
-            if not cat_value == csv_cat_value:
-                raise ValueError(
-                    f"{category} values do not match between files: "
-                    f"PT={cat_value} vs CSV={csv_cat_value}"
-                )
+            if arg_value != csv_arg or cat_value != csv_cat:
+                raise ValueError(f"Metadata mismatch between PT and CSV files")
 
-            # Load test outputs
+            # ===== STEP 1: Load and process test CSV =====
+            test_df = load_df(csv_file)
+            result_df = process_test_performance(test_df)
+
+            # ===== STEP 2: Load responses and calculate classifier metrics =====
             try:
-                test_df = load_df(csv_file)
+                responses = torch.load(pt_file, map_location="cpu", weights_only=True)
+                has_responses = bool(responses) and len(responses) > 0
             except Exception as e:
-                raise RuntimeError(
-                    f"Failed to load test output CSV {csv_file}: {e}"
-                ) from e
+                logger.warning(f"Failed to load responses: {e}")
+                has_responses = False
 
-            # Process test performance metrics
-            try:
-                performance_df = process_test_performance(test_df, topk_values)
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to process test performance for {csv_file}: {e}"
-                ) from e
+            # Remove confidence measures that are already present in result_df
+            if confidence_measures:
+                existing_cols = set(result_df.columns)
+                confidence_measures = [
+                    m for m in confidence_measures if m not in existing_cols
+                ]
 
-            # STEP 2 OPTIMIZATION: Pre-compute sample-to-presentation mapping
-            try:
-                sample_to_presentation = compute_sample_to_presentation_mapping(
-                    test_df
-                )
-                unique_presentations = sorted(
-                    performance_df["presentation_label"].unique()
-                )
-                unique_times = sorted(performance_df["times_index"].unique())
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to compute mappings for {csv_file}: {e}"
-                ) from e
+            if not has_responses:
+                logger.warning(f"  Empty response file, skipping response metrics")
+            elif "classifier" in responses and (confidence_measures or topk_values):
+                logger.info(f"  Calculating classifier metrics...")
 
-            # STEP 2: Use incremental extraction (memory-optimized)
-            try:
-                extracted_values = process_layer_responses_incremental(
-                    pt_file=pt_file,
-                    measures=measures,
-                    sample_to_presentation=sample_to_presentation,
-                    unique_presentations=unique_presentations,
-                    unique_times=unique_times,
-                    memory_monitor=memory_monitor,
-                    max_retries=3,
-                )
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to process layer responses from {pt_file}: {e}"
-                ) from e
+                try:
+                    # Get dimensions
+                    n_samples = test_df["sample_index"].nunique()
+                    n_timesteps = test_df["times_index"].nunique()
 
-            # STEP 2: Create dataframe from extracted values (not tensors)
-            try:
-                layer_df = create_layer_dataframe_from_extracted_values(
-                    extracted_values, unique_presentations, unique_times
-                )
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to create layer dataframe for {pt_file}: {e}"
-                ) from e
+                    # Prepare tensors (reshape from flat to 2D)
+                    sorted_df = test_df.sort_values(["sample_index", "times_index"])
 
-            # Merge layer metrics with performance metrics
-            try:
-                merged_df = performance_df.merge(
-                    layer_df, on=["presentation_label", "times_index"], how="left"
-                )
-                # Add parameter and category information
-                merged_df[data_arg_key] = arg_value
-                merged_df[category] = cat_value
+                    guess_tensor = torch.tensor(
+                        sorted_df["guess_index"].values.reshape(
+                            n_samples, n_timesteps
+                        ),
+                        dtype=torch.int,
+                    )
+                    label_tensor = torch.tensor(
+                        sorted_df["label_index"].values.reshape(
+                            n_samples, n_timesteps
+                        ),
+                        dtype=torch.int,
+                    )
+                    first_label_tensor = torch.tensor(
+                        sorted_df["first_label_index"].values.reshape(
+                            n_samples, n_timesteps
+                        ),
+                        dtype=torch.int,
+                    )
 
-                batch_dfs.append(merged_df)
-                logger.info(f"    Created merged dataframe with {len(merged_df)} rows")
+                    # Calculate all classifier metrics
+                    classifier_df = calculate_confidence_and_topk_from_classifier(
+                        responses["classifier"],
+                        label_index=label_tensor,
+                        guess_index=guess_tensor,
+                        first_label_index=first_label_tensor,
+                        topk_values=topk_values,
+                        confidence_measures=confidence_measures,
+                    )
 
-                # Cleanup
-                del extracted_values, layer_df
-                memory_monitor.cleanup()
+                    # Merge classifier metrics with performance data
+                    result_df = result_df.merge(
+                        classifier_df, on=["sample_index", "times_index"], how="left"
+                    )
 
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to merge dataframes for {pt_file}: {e}"
-                ) from e
+                    logger.info(
+                        f"    Added {len(classifier_df.columns)-2} classifier metrics"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Failed to calculate classifier metrics: {e}")
+                    raise
+
+            # ===== STEP 3: Calculate layer response metrics =====
+            if has_responses and layer_measures:
+                logger.info(f"  Calculating layer metrics...")
+
+                try:
+                    # Build sample-to-presentation mapping
+                    sample_to_presentation = (
+                        test_df.groupby("sample_index")["label_index"]
+                        .apply(lambda x: x[x >= 0].iloc[0] if (x >= 0).any() else -1)
+                        .to_dict()
+                    )
+
+                    presented_classes = sorted(result_df["first_label_index"].unique())
+                    unique_times = sorted(result_df["times_index"].unique())
+
+                    # Use incremental layer processing
+                    layer_metrics = process_layer_responses_incremental(
+                        pt_file=pt_file,
+                        measures=layer_measures,
+                        sample_to_presentation=sample_to_presentation,
+                        presented_classes=presented_classes,
+                        unique_times=unique_times,
+                        memory_monitor=memory_monitor,
+                        max_retries=3,
+                    )
+
+                    # Convert layer metrics to DataFrame
+                    # layer_metrics is dict of metric_name -> 1D array in (presentation, time) order
+                    n_rows = len(presented_classes) * len(unique_times)
+                    layer_data = {
+                        "first_label_index": np.repeat(
+                            presented_classes, len(unique_times)
+                        ),
+                        "times_index": np.tile(unique_times, len(presented_classes)),
+                    }
+                    layer_data.update(layer_metrics)
+                    layer_df = pd.DataFrame(layer_data)
+
+                    # Merge layer metrics with result
+                    result_df = result_df.merge(
+                        layer_df, on=["first_label_index", "times_index"], how="left"
+                    )
+
+                    logger.info(f"    Added {len(layer_metrics)} layer metrics")
+
+                except Exception as e:
+                    logger.error(f"Failed to calculate layer metrics: {e}")
+                    raise
+
+            # ===== STEP 4: Add metadata columns =====
+            result_df[data_arg_key] = arg_value
+            result_df[category] = cat_value
+
+            batch_dfs.append(result_df)
+            logger.info(
+                f"    Final shape: {result_df.shape} with {len(result_df.columns)} columns"
+            )
+
+            # Cleanup
+            if has_responses:
+                del responses
+            memory_monitor.cleanup()
 
         except Exception as e:
-            logger.error(
-                f"ERROR processing file pair: {pt_file.name} + {csv_file.name}"
-            )
+            logger.error(f"ERROR: {pt_file.name} + {csv_file.name}")
             logger.error(f"  {type(e).__name__}: {str(e)}")
-            raise  # Re-raise to stop processing and prevent file deletion
+            raise
 
-    # Combine all files in this batch
-    if batch_dfs:
-        batch_combined = pd.concat(batch_dfs, ignore_index=True)
-        return batch_combined
-    else:
-        raise RuntimeError("No dataframes were successfully created in this batch")
+    # Combine all file results
+    if not batch_dfs:
+        raise RuntimeError("No dataframes created")
 
+    combined = pd.concat(batch_dfs, ignore_index=True)
+    logger.info(f"  Batch combined: {combined.shape}")
 
-def create_layer_dataframe_from_metrics(
-    layer_metrics: Dict[str, torch.Tensor],
-    test_df: pd.DataFrame,
-    performance_df: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Create layer dataframe from pre-computed metrics efficiently.
-
-    Uses pre-allocated numpy arrays for better performance.
-    """
-    logger.info("  Creating layer dataframe from metrics...")
-
-    unique_presentations = performance_df["presentation_label"].unique()
-    unique_times = performance_df["times_index"].unique()
-    n_rows = len(unique_presentations) * len(unique_times)
-
-    # Pre-allocate arrays
-    data_arrays = {
-        "presentation_label": np.empty(n_rows, dtype=np.int32),
-        "times_index": np.empty(n_rows, dtype=np.int32),
-    }
-
-    # Pre-allocate for each metric
-    for metric_name in layer_metrics.keys():
-        data_arrays[metric_name] = np.empty(n_rows, dtype=np.float32)
-
-    # Create sample to presentation mapping
-    sample_to_presentation = (
-        test_df.groupby("sample_index")["label_index"]
-        .apply(get_presentation_label)
-        .to_dict()
-    )
-
-    # Fill arrays directly
-    idx = 0
-    for pres_label in unique_presentations:
-        # Find sample indices for this presentation
-        sample_indices = [
-            s for s, p in sample_to_presentation.items() if p == pres_label
-        ]
-
-        if not sample_indices:
-            continue
-
-        sample_idx = sample_indices[0]
-
-        for times_idx in unique_times:
-            data_arrays["presentation_label"][idx] = pres_label
-            data_arrays["times_index"][idx] = times_idx
-
-            # Add layer metrics
-            for metric_name, metric_tensor in layer_metrics.items():
-                try:
-                    value = tensor_to_numpy(metric_tensor[sample_idx, times_idx])
-                    data_arrays[metric_name][idx] = value
-                except IndexError as e:
-                    raise RuntimeError(
-                        f"Index error accessing metric '{metric_name}' "
-                        f"at sample {sample_idx}, time {times_idx}: {e}"
-                    ) from e
-
-            idx += 1
-
-    # Create DataFrame from arrays
-    layer_df = pd.DataFrame(data_arrays)
-    logger.info(f"    Created layer dataframe with {len(layer_df)} rows")
-
-    return layer_df
-
-
-def validate_outputs(
-    df_optimized: pd.DataFrame, df_original: pd.DataFrame, tolerance: float = 1e-5
-) -> bool:
-    """
-    Validate that optimized output matches original output.
-
-    Args:
-        df_optimized: DataFrame from optimized implementation
-        df_original: DataFrame from original implementation
-        tolerance: Numerical tolerance for floating point comparison
-
-    Returns:
-        True if outputs match within tolerance
-    """
-    logger.info("Validating optimized output against original...")
-
-    # Check shape
-    if df_optimized.shape != df_original.shape:
-        logger.error(
-            f"Shape mismatch: optimized {df_optimized.shape} vs "
-            f"original {df_original.shape}"
-        )
-        return False
-
-    # Check columns
-    if set(df_optimized.columns) != set(df_original.columns):
-        missing_in_opt = set(df_original.columns) - set(df_optimized.columns)
-        missing_in_orig = set(df_optimized.columns) - set(df_original.columns)
-        logger.error(
-            f"Column mismatch:\n"
-            f"  Missing in optimized: {missing_in_opt}\n"
-            f"  Missing in original: {missing_in_orig}"
-        )
-        return False
-
-    # Sort both dataframes by key columns for comparison
-    key_cols = ["presentation_label", "times_index"]
-    df_opt_sorted = df_optimized.sort_values(key_cols).reset_index(drop=True)
-    df_orig_sorted = df_original.sort_values(key_cols).reset_index(drop=True)
-
-    # Compare numeric columns
-    numeric_cols = df_opt_sorted.select_dtypes(include=[np.number]).columns
-
-    all_match = True
-    for col in numeric_cols:
-        diff = np.abs(df_opt_sorted[col] - df_orig_sorted[col])
-        max_diff = diff.max()
-
-        if max_diff > tolerance:
-            logger.error(
-                f"Column '{col}' differs by max {max_diff:.2e} "
-                f"(tolerance: {tolerance:.2e})"
-            )
-            all_match = False
-        else:
-            logger.info(f"  ✓ Column '{col}' matches (max diff: {max_diff:.2e})")
-
-    # Compare non-numeric columns
-    non_numeric_cols = df_opt_sorted.select_dtypes(exclude=[np.number]).columns
-    for col in non_numeric_cols:
-        if not df_opt_sorted[col].equals(df_orig_sorted[col]):
-            logger.error(f"Column '{col}' differs")
-            all_match = False
-        else:
-            logger.info(f"  ✓ Column '{col}' matches")
-
-    if all_match:
-        logger.info("✅ Validation PASSED: Outputs match within tolerance")
-    else:
-        logger.error("❌ Validation FAILED: Outputs differ")
-
-    return all_match
+    return combined
 
 
 # Command line interface
@@ -636,8 +450,16 @@ parser.add_argument(
     nargs="+",
     type=str,
     default=["response_avg", "response_std"],
-    choices=["response_avg", "response_std", "spatial_variance", "feature_variance"],
-    help="Layer measures to compute (default: response_avg response_std)",
+    choices=[
+        "response_avg",
+        "response_std",
+        "spatial_variance",
+        "feature_variance",
+        "guess_confidence",
+        "label_confidence",
+        "first_label_confidence",
+    ],
+    help="Measures to compute (layer measures and/or confidence measures)",
 )
 parser.add_argument(
     "--topk",
@@ -689,6 +511,8 @@ if __name__ == "__main__":
     logger.info(f"Memory limit: {args.memory_limit_gb}GB")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Files to process: {len(args.responses)}")
+    logger.info("NOTE: New CSV format - classifier responses no longer in CSV")
+    logger.info("NOTE: Empty response files will be handled gracefully")
 
     processing_successful = False
     df = None
@@ -714,7 +538,7 @@ if __name__ == "__main__":
 
             try:
                 # STEP 2: Use incremental extraction
-                batch_df = process_single_batch_optimized_v2(
+                batch_df = process_single_batch_optimized(
                     response_batch,
                     output_batch,
                     data_arg_key=args.parameter,
@@ -844,9 +668,7 @@ if __name__ == "__main__":
         logger.info(f"Unique {args.category} values: {df[args.category].unique()}")
         logger.info(f"Unique {args.parameter} values: {df[args.parameter].unique()}")
         logger.info(f"Time steps: {sorted(df['times_index'].unique())}")
-        logger.info(
-            f"Presentation labels: {sorted(df['presentation_label'].unique())}"
-        )
+        logger.info(f"Presentation labels: {sorted(df['first_label_index'].unique())}")
 
         # Layer metrics summary
         layer_cols = [

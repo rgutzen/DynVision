@@ -314,20 +314,30 @@ class TestingOrchestrator:
         # Save test results (CSV)
         try:
             results_df = model.storage.get_dataframe()
-            results_df.to_csv(self.config.output_results, index=False)
-            logger.info(f"Test results saved to {self.config.output_results}")
-            logger.info(f"Results shape: {results_df.shape}")
+            if not results_df.empty:
+                results_df.to_csv(self.config.output_results, index=False)
+                logger.info(f"Test results saved to {self.config.output_results}")
+                logger.info(f"Results shape: {results_df.shape}")
+            else:
+                logger.warning("No test results to save (empty DataFrame)")
         except Exception as e:
             logger.error(f"Failed to save test results: {e}")
 
         # Save model responses (tensors)
         try:
-            if hasattr(model, "storage"):
+            if hasattr(model, "storage") and hasattr(model.storage, "responses"):
+                response_data = model.storage.responses.get_all()
+
+                # Check if we have any responses
+                if not response_data or len(response_data) == 0:
+                    logger.warning("No model responses recorded, saving empty dict")
+                    torch.save({}, self.config.output_responses)
+                    return
+
                 logger.info(
                     f"Saving model responses with precision={precision} bits..."
                 )
                 total_size_mb = 0
-                response_data = model.storage.responses.get_all()
                 responses = {}
 
                 # Target dtype based on precision parameter
@@ -352,10 +362,12 @@ class TestingOrchestrator:
                 logger.info(f"Model responses saved to {self.config.output_responses}")
                 logger.info(f"Total response size: {total_size_mb:.2f} MB")
             else:
+                logger.warning("No storage or responses available, saving empty dict")
                 torch.save({}, self.config.output_responses)
-                logger.warning("No model responses to save")
         except Exception as e:
             logger.error(f"Failed to save model responses: {e}")
+            # Save empty dict on error to ensure file exists
+            torch.save({}, self.config.output_responses)
 
     def run_testing(self) -> int:
         """Run the complete testing pipeline with comprehensive error handling."""

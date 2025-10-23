@@ -11,6 +11,20 @@ rule all:
 
 SEED = "0040"
 
+rule manuscript_figures:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040_imagenette_trained_all/dynamics_{focus_layer}.png",
+            experiment=['duration', 'contrast', 'interval'],
+            focus_layer=['V1', 'V2', 'V4', 'IT'],
+            categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*']
+            ),
+    
+rule temp:
+    input:
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+            seed=SEED,
+            experiment=['idleresponse'])
+
 rule idle:
     input:
         expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+idle=*_{seed}_imagenette_trained_all" / "test_data.csv",
@@ -37,31 +51,73 @@ rule tsteps:
 
 rule lossrt:
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "responses.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response', 'stability'])
 
+rule lossrt2:
+    input:
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=10+rctype=full+rctarget=output+dt=2+tau={tau}+tff=0+trc=6+tsk=0+skip=true+lossrt=*_{seed}_imagenette_trained_all" / "test_data.csv",
+        seed=SEED,
+        tau=[5, 9],
+        experiment=['idleresponse'],
+        )
+
+rule stability:
+    input:
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        seed=SEED,
+        experiment=['stability']),
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        seed=SEED,
+        experiment=['stability'])
+
 rule rctarget:
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
-        experiment=['response', 'responseffonly'])
+        experiment=['responseffonly', 'response']) 
 
-rule rctype:
+rule adaption:
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
-        experiment=['response', 'duration', 'contrast', 'interval', 'responseffonly', 'uniformnoise', 'poissonnoise', 'saltpeppernoise', 'gaussianblurnoise'])
+        experiment=['adaption']) #'response', 
+
+rule neural:
+    input:
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        seed=SEED,
+        experiment=['response', 'duration', 'contrast', 'interval', 'responseffonly']),
+        # expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        # seed=SEED,
+        # experiment=['response', 'duration', 'contrast', 'interval', 'responseffonly'])
+
+rule noise:
+    input:
+        # expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        # seed=SEED,
+        # experiment=['uniformnoise', 'poissonnoise', 'gaussianblurnoise']), #  'saltpeppernoise', 'motionblurnoise'
+        # expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        # seed=SEED,
+        # experiment=['uniformnoise', 'saltpeppernoise', 'poissonnoise', 'gaussianblurnoise', 
+        # 'uniformnoiseiid', 'saltpeppernoiseiid', 'poissonnoiseiid', 'gaussianblurnoiseiid', 
+        # 'noiseiidffonly']
+        # ) 
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        seed=SEED,
+        experiment=['uniformnoise', 'uniformnoiseffonly', 'poissonnoise', 'poissonnoiseffonly', 'gaussiannoise', 'gaussiannoiseffonly', 'gaussiancorrnoise', 'gaussiancorrnoiseffonly', 'phasescramblednoise', 'phasescramblednoiseffonly']
+        ) 
 
 rule timeparams:
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response']),
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=*+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=*+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response']),
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=6+tsk=*+lossrt=4_{seed}_imagenette_trained_all" / "responses.png",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=6+tsk=*+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response'])
 
@@ -74,10 +130,12 @@ rule imagenet:
 
 rule unrolling:
     input:
-        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=20+tfb=14+skip=true+feedback=true_{seed}_imagenette_trained.pt",
-        seed="0029"),
-        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=true_{seed}_imagenette_trained.pt",
-        seed="0030")
+        project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=30+rctype=full+rctarget=output+dt=2+tau=5+tff=10+trc=6+tsk=20+tfb=10+feedback=true+lossrt=4_0040_imagenette_trained.pt"
+
+        # expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=30+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=20+tfb=14+skip=true+feedback=true_{seed}_imagenette_trained.pt",
+        # seed="0040"),
+        # expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=40+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=true_{seed}_imagenette_trained.pt",
+        # seed="0030")
 
 rule dataloader:
     input:

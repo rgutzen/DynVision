@@ -1,8 +1,7 @@
 """
 Enhanced data buffer for DynVision PyTorch Lightning workflows.
 
-Provides efficient storage for neural network responses and records with
-flexible strategy alignment, unlimited storage option, and improved memory management.
+Provides efficient storage for neural network responses and records with unlimited storage option, and improved memory management.
 """
 
 import logging
@@ -717,52 +716,88 @@ class DataBuffer:
 @dataclass
 class Record:
     """
-    Combined storage for model records.
+    Flexible storage for model records with core and extensible fields.
 
-    Contains data that varies per batch sample and timestep:
-    - guess_indices: Model predictions (batch_size, n_timesteps)
-    - label_indices: Ground truth labels (batch_size, n_timesteps)
-    - image_indices: Unique identifiers for input images (batch_size, n_timesteps)
+    Core fields (always present):
+    - guess_index: Model predictions (batch_size, n_timesteps)
+    - label_index: Ground truth labels (batch_size, n_timesteps)
+    - image_index: Unique identifiers for input images (batch_size, n_timesteps)
 
-    Metadata like sample indices and times indices are generated when needed.
+    Extensible fields (optional, stored in extras dict):
+    - Any additional torch.Tensor data passed as kwargs
+    - Examples: first_label_index, guess_confidence, label_confidence, etc.
+
+    This design allows unlimited extensibility while maintaining type safety for core fields.
     """
 
-    guess_indices: torch.Tensor
-    label_indices: torch.Tensor
-    image_indices: torch.Tensor
+    guess_index: torch.Tensor
+    label_index: torch.Tensor
+    image_index: torch.Tensor
+    extras: Dict[str, torch.Tensor] = None
+
+    def __post_init__(self):
+        """Initialize extras dict if not provided."""
+        if self.extras is None:
+            self.extras = {}
 
     def to_cpu(self) -> "Record":
         """Move all tensors to CPU."""
+        extras_cpu = {
+            k: v.cpu().float() if isinstance(v, torch.Tensor) else v
+            for k, v in self.extras.items()
+        }
         return Record(
-            guess_indices=self.guess_indices.cpu(),
-            label_indices=self.label_indices.cpu(),
-            image_indices=self.image_indices.cpu(),
+            guess_index=self.guess_index.cpu(),
+            label_index=self.label_index.cpu(),
+            image_index=self.image_index.cpu(),
+            extras=extras_cpu,
         )
 
     def detach(self) -> "Record":
         """Detach all tensors from computation graph."""
+        extras_detached = {k: v.detach() for k, v in self.extras.items()}
         return Record(
-            guess_indices=self.guess_indices.detach(),
-            label_indices=self.label_indices.detach(),
-            image_indices=self.image_indices.detach(),
+            guess_index=self.guess_index.detach(),
+            label_index=self.label_index.detach(),
+            image_index=self.image_index.detach(),
+            extras=extras_detached,
         )
+
+    def keys(self) -> List[str]:
+        """Get all field names (core + extras)."""
+        return ["guess_index", "label_index", "image_index"] + list(self.extras.keys())
+
+    def get(self, key: str, default=None) -> Optional[torch.Tensor]:
+        """Get a field value by key (works for both core and extra fields)."""
+        if key == "guess_index":
+            return self.guess_index
+        elif key == "label_index":
+            return self.label_index
+        elif key == "image_index":
+            return self.image_index
+        else:
+            return self.extras.get(key, default)
+
+    def __getitem__(self, key: str) -> torch.Tensor:
+        """Dictionary-style access to fields."""
+        result = self.get(key)
+        if result is None:
+            raise KeyError(f"Field '{key}' not found in Record")
+        return result
 
 
 class StorageBuffer:
     """
-    High-level buffer management for DynVision with flexible strategy alignment.
+    High-level buffer management for DynVision.
 
-    Combines response and record storage with efficient operations.
-    Supports different buffer sizes and strategies with intelligent alignment.
+    Combines response and record storage with efficient operations..
 
     Usage:
-        # Different sizes and strategies are now supported
         self.storage = StorageBuffer(
             max_responses=100, response_strategy="cyclic",
             max_records=1000, record_strategy="unlimited"
         )
 
-        # Alignment happens automatically in get_dataframe()
         df = self.storage.get_dataframe()
     """
 
@@ -825,32 +860,52 @@ class StorageBuffer:
 
     def store_records(
         self,
-        guess_indices: torch.Tensor,
-        label_indices: torch.Tensor,
-        image_indices: Optional[torch.Tensor] = None,
+        guess_index: torch.Tensor,
+        label_index: torch.Tensor,
+        image_index: Optional[torch.Tensor] = None,
+        **extra_tensors: torch.Tensor,
     ) -> bool:
         """
-        Store model records.
+        Store model records with flexible extensibility.
 
         Args:
-            guess_indices: Model predictions (batch_size, n_timesteps)
-            label_indices: Ground truth labels (batch_size, n_timesteps)
-            image_indices: Unique image identifiers (batch_size, n_timesteps)
+            guess_index: Model predictions (batch_size, n_timesteps)
+            label_index: Ground truth labels (batch_size, n_timesteps)
+            image_index: Unique image identifiers (batch_size, n_timesteps)
+            **extra_tensors: Any additional tensor fields to store
+                Examples: first_label_index, guess_confidence, label_confidence, etc.
+
+        Returns:
+            bool: True if data was stored, False otherwise
+
+        Example:
+            storage.store_records(
+                guess_index=guesses,
+                label_index=labels,
+                image_index=images,
+                first_label_index=first_labels,  # Extra field
+                guess_confidence=conf_guesses,     # Extra field
+                label_confidence=conf_labels,      # Extra field
+            )
         """
         if not self.records.should_store():
             self.records._total_seen += 1
             return False
 
-        if image_indices is None:
-            batch_size, n_timesteps = label_indices.shape
-            image_indices = (
-                torch.arange(batch_size).unsqueeze(1).expand(-1, n_timesteps)
+        if image_index is None:
+            batch_size, n_timesteps = label_index.shape
+            image_index = (
+                torch.arange(batch_size, device=label_index.device)
+                .unsqueeze(1)
+                .expand(-1, n_timesteps)
             )
 
+        # Create record with core fields and extras
         record = Record(
-            guess_indices=guess_indices,
-            label_indices=label_indices,
-            image_indices=image_indices,
+            guess_index=guess_index,
+            label_index=label_index,
+            image_index=image_index,
+            extras=extra_tensors,  # Dict of additional tensors
         )
 
         # Apply preprocessing
@@ -861,333 +916,156 @@ class StorageBuffer:
 
         return self.records.append(record)
 
-    def _align_data(
-        self, response_data: List[Any], record_data: List[Any]
-    ) -> Tuple[List[Any], List[Any]]:
+    def get_dataframe(self) -> pd.DataFrame:
         """
-        Align response and record data when using different strategies.
+        Generate DataFrame from stored records with.
 
-        This function handles the complex alignment between different sampling strategies,
-        taking into account their temporal characteristics and indexing behavior.
+        Processes all record fields (core + extras) and creates a flattened DataFrame
+        with sample_index and times_index for each observation.
 
-        Strategy temporal characteristics:
-        - Fixed: Chronological samples [0, N), stops when full
-        - Unlimited: All chronological samples [0, M)
-        - Cyclic: Most recent N samples, maintains temporal order in get_all()
-        - Reservoir: Random samples, no temporal meaning
-
-        Args:
-            response_data: List of response dictionaries from get_all()
-            record_data: List of record objects from get_all()
+        Response data is not included in the DataFrame - responses are stored separately
+        in their dict format and can be accessed directly via self.responses.
 
         Returns:
-            Tuple of (aligned_responses, aligned_records)
-        """
-        if not response_data or not record_data:
-            return [], []
-
-        resp_strategy = self.responses.strategy_name
-        rec_strategy = self.records.strategy_name
-        min_length = min(len(response_data), len(record_data))
-
-        # Same strategy: straightforward alignment
-        if resp_strategy == rec_strategy:
-            if resp_strategy in ["cyclic"]:
-                # Both cyclic: both contain most recent samples in chronological order
-                # Take the overlap of most recent samples
-                return response_data[-min_length:], record_data[-min_length:]
-            else:
-                # Both fixed/unlimited: both contain chronological samples from start
-                # Take the overlap from the beginning
-                return response_data[:min_length], record_data[:min_length]
-
-        # Mixed strategies: need careful alignment
-        return self._align_mixed_strategies(
-            response_data, record_data, resp_strategy, rec_strategy, min_length
-        )
-
-    def _align_mixed_strategies(
-        self,
-        response_data: List[Any],
-        record_data: List[Any],
-        resp_strategy: str,
-        rec_strategy: str,
-        min_length: int,
-    ) -> Tuple[List[Any], List[Any]]:
-        """
-        Handle alignment between different strategy combinations.
-
-        Key insight: We need to understand what samples each buffer actually contains
-        relative to the total sequence of samples processed.
-
-        Assumptions for simultaneous buffer filling:
-        - Fixed buffer contains samples [0, N) if total_seen >= N, else [0, total_seen)
-        - Cyclic buffer contains samples [max(0, total_seen-N), total_seen)
-        - Unlimited buffer contains samples [0, total_seen)
-        """
-
-        # Get buffer metadata for smarter alignment
-        resp_total_seen = getattr(self.responses, "_total_seen", len(response_data))
-        rec_total_seen = getattr(self.records, "_total_seen", len(record_data))
-        resp_max_size = (
-            self.responses.max_size if self.responses.max_size > 0 else float("inf")
-        )
-        rec_max_size = (
-            self.records.max_size if self.records.max_size > 0 else float("inf")
-        )
-
-        logger.debug(
-            f"Aligning {resp_strategy}(seen={resp_total_seen}, max={resp_max_size}) "
-            f"with {rec_strategy}(seen={rec_total_seen}, max={rec_max_size})"
-        )
-
-        # Strategy combination handling
-        if resp_strategy == "fixed" and rec_strategy == "unlimited":
-            # Fixed: [0, min(resp_max_size, resp_total_seen))
-            # Unlimited: [0, rec_total_seen)
-            # Overlap: [0, min(len(response_data), len(record_data)))
-            return response_data[:min_length], record_data[:min_length]
-
-        elif resp_strategy == "unlimited" and rec_strategy == "fixed":
-            # Symmetric case
-            return response_data[:min_length], record_data[:min_length]
-
-        elif resp_strategy == "fixed" and rec_strategy == "cyclic":
-            # Fixed: [0, min(resp_max_size, resp_total_seen))
-            # Cyclic: [max(0, rec_total_seen - rec_max_size), rec_total_seen)
-
-            # Check if there's temporal overlap
-            fixed_end = min(resp_max_size, resp_total_seen)
-            cyclic_start = max(0, rec_total_seen - rec_max_size)
-
-            if fixed_end <= cyclic_start:
-                # No temporal overlap - warn user
-                logger.warning(
-                    f"No temporal overlap between fixed buffer [0, {fixed_end}) "
-                    f"and cyclic buffer [{cyclic_start}, {rec_total_seen}). "
-                    f"Taking most recent data from each buffer for analysis."
-                )
-                # Take last samples from fixed, recent samples from cyclic
-                return response_data[-min_length:], record_data[-min_length:]
-            else:
-                # There is overlap - try to align overlapping period
-                # This is complex without sample timestamps, so fall back to recent data
-                logger.info(
-                    f"Partial temporal overlap detected. Taking recent data from each buffer."
-                )
-                return response_data[-min_length:], record_data[-min_length:]
-
-        elif resp_strategy == "cyclic" and rec_strategy == "fixed":
-            # Symmetric case of above
-            fixed_end = min(rec_max_size, rec_total_seen)
-            cyclic_start = max(0, resp_total_seen - resp_max_size)
-
-            if fixed_end <= cyclic_start:
-                logger.warning(
-                    f"No temporal overlap between cyclic buffer [{cyclic_start}, {resp_total_seen}) "
-                    f"and fixed buffer [0, {fixed_end}). "
-                    f"Taking most recent data from each buffer for analysis."
-                )
-                return response_data[-min_length:], record_data[-min_length:]
-            else:
-                logger.info(
-                    f"Partial temporal overlap detected. Taking recent data from each buffer."
-                )
-                return response_data[-min_length:], record_data[-min_length:]
-
-        elif resp_strategy == "cyclic" and rec_strategy == "unlimited":
-            # Cyclic: most recent samples
-            # Unlimited: all samples, so take the most recent to match cyclic
-            return response_data[-min_length:], record_data[-min_length:]
-
-        elif resp_strategy == "unlimited" and rec_strategy == "cyclic":
-            # Symmetric case
-            return response_data[-min_length:], record_data[-min_length:]
-
-        elif resp_strategy == "unlimited" and rec_strategy == "unlimited":
-            # Both unlimited: should contain the same samples if filled simultaneously
-            # Take from beginning to get the full overlap (most data)
-            # Or take from end if we prefer most recent data
-            if min_length == len(response_data) == len(record_data):
-                # Same length - they should be identical sequences
-                return response_data, record_data
-            else:
-                # Different lengths - take overlapping portion from the beginning
-                return response_data[:min_length], record_data[:min_length]
-
-        else:
-            # Handle reservoir or unknown strategies
-            logger.warning(
-                f"Alignment between '{resp_strategy}' and '{rec_strategy}' may not be meaningful. "
-                f"Taking first {min_length} samples from each buffer."
-            )
-            return response_data[:min_length], record_data[:min_length]
-
-    def get_dataframe(self, layer_name: str = "classifier") -> pd.DataFrame:
-        """
-        Generate classifier DataFrame efficiently with automatic strategy alignment.
-
-        Now supports different buffer sizes and strategies by intelligently aligning the data.
-        The alignment logic prioritizes data recency and logical sample correspondence.
+            pd.DataFrame: Flattened records with columns:
+                - sample_index: Sample identifier
+                - times_index: Timestep within sample
+                - guess_index: Model prediction
+                - label_index: Ground truth label
+                - image_index: Image identifier
+                - [extra fields]: Any additional fields stored (e.g., guess_confidence, first_label_index)
         """
 
         try:
-            # Quick check for zero-capacity buffers
-            if self.responses.max_size == 0 or self.records.max_size == 0:
+            # Quick check for zero-capacity buffer
+            if self.records.max_size == 0:
+                logger.warning("Records buffer has zero capacity")
                 return pd.DataFrame()
 
-            # Get raw data from buffers
-            response_data = self.responses.get_all()
+            # Get record data
             record_data = self.records.get_all()
 
-            # Log format and shapes for debugging
-            logger.info(
-                f"Response data format: {type(response_data)}, length: {len(response_data)}"
-            )
-            if response_data:
-                logger.info(f"First response item type: {type(response_data[0])}")
-                if isinstance(response_data[0], dict):
-                    for key, value in response_data[0].items():
-                        if isinstance(value, torch.Tensor):
-                            logger.info(f"  {key}: {value.shape}")
-                        else:
-                            logger.info(f"  {key}: {type(value)}")
+            if not record_data:
+                logger.warning("No record data available")
+                return pd.DataFrame()
 
             logger.info(
-                f"Record data format: {type(record_data)}, length: {len(record_data)}"
+                f"Processing {len(record_data)} records with strategy: {self.records.strategy_name}"
             )
+
+            # Log record structure (including extras)
             if record_data:
                 logger.info(f"First record item type: {type(record_data[0])}")
-                if hasattr(record_data[0], "guess_indices"):
-                    logger.info(
-                        f"  guess_indices: {record_data[0].guess_indices.shape}"
-                    )
-                    logger.info(
-                        f"  label_indices: {record_data[0].label_indices.shape}"
-                    )
-                    logger.info(
-                        f"  image_indices: {record_data[0].image_indices.shape}"
-                    )
+                if hasattr(record_data[0], "guess_index"):
+                    logger.info(f"  guess_index: {record_data[0].guess_index.shape}")
+                    logger.info(f"  label_index: {record_data[0].label_index.shape}")
+                    logger.info(f"  image_index: {record_data[0].image_index.shape}")
+                    # Log all extra fields
+                    if record_data[0].extras:
+                        logger.info(f"  extras: {list(record_data[0].extras.keys())}")
+                        for key, value in record_data[0].extras.items():
+                            if isinstance(value, torch.Tensor):
+                                logger.info(f"    {key}: {value.shape}")
 
-            if not response_data or not record_data:
-                logger.warning("No data stored in buffers")
-                return pd.DataFrame()
-
-            # Align data using different strategies
-            response_data, record_data = self._align_data(response_data, record_data)
-
-            if not response_data or not record_data:
-                logger.warning("No aligned data available")
-                return pd.DataFrame()
-
-            logger.info(
-                f"Aligned data: {len(response_data)} responses, {len(record_data)} records "
-                f"(strategies: {self.responses.strategy_name}, {self.records.strategy_name})"
-            )
-
-            # Check if the layer exists in responses
-            if layer_name not in response_data[0]:
-                available_layers = (
-                    list(response_data[0].keys()) if response_data else []
-                )
-                logger.warning(
-                    f"Layer '{layer_name}' not found. Available: {available_layers}"
-                )
-                return pd.DataFrame()
-
-            # Extract response tensors and pad them to the same time step length
-            max_timesteps = max(item[layer_name].shape[1] for item in response_data)
-            response_tensors = []
-            for item in response_data:
-                tensor = item[layer_name]
-                pad_len = max_timesteps - tensor.shape[1]
-                if pad_len > 0:
-                    # Pad at the start along axis 1 (time steps) with zeros
-                    pad = (0, 0, 0, 0, 0, 0, pad_len, 0)
-                    tensor = torch.nn.functional.pad(
-                        tensor, pad, mode="constant", value=0
-                    )
-                response_tensors.append(tensor)
-
-            layer_responses = torch.cat(response_tensors, dim=0)
-
-            # Extract and concatenate records
-            guess_tensors = [record.guess_indices for record in record_data]
+            # Extract and concatenate core record fields
+            guess_tensors = [record.guess_index for record in record_data]
             guess_data = torch.cat(guess_tensors, dim=0)
 
-            label_tensors = [record.label_indices for record in record_data]
+            label_tensors = [record.label_index for record in record_data]
             label_data = torch.cat(label_tensors, dim=0)
 
-            image_tensors = [record.image_indices for record in record_data]
+            image_tensors = [record.image_index for record in record_data]
             image_data = torch.cat(image_tensors, dim=0)
 
-            # Ensure all data has the same length (number of samples)
-            valid_data_length = min(
-                len(layer_responses),
-                len(guess_data),
-                len(label_data),
-                len(image_data),
-            )
+            # Collect all unique extra field names across all records
+            all_extra_keys = set()
+            for record in record_data:
+                all_extra_keys.update(record.extras.keys())
 
-            layer_responses = layer_responses[:valid_data_length]
+            # Extract and concatenate extra fields
+            extra_data = {}
+            for key in all_extra_keys:
+                tensors = []
+                for record in record_data:
+                    if key in record.extras and record.extras[key] is not None:
+                        tensors.append(record.extras[key])
+                    else:
+                        # Create dummy tensor with same shape as core indices
+                        batch_size, n_timesteps = record.guess_index.shape
+                        dummy = torch.zeros(
+                            batch_size, n_timesteps, device=record.guess_index.device
+                        )
+                        tensors.append(dummy)
+
+                if tensors:
+                    extra_data[key] = torch.cat(tensors, dim=0)
+
+            # Ensure all data has the same length
+            data_lengths = [len(guess_data), len(label_data), len(image_data)]
+            data_lengths.extend(len(v) for v in extra_data.values())
+
+            valid_data_length = min(data_lengths)
+
             guess_data = guess_data[:valid_data_length]
             label_data = label_data[:valid_data_length]
             image_data = image_data[:valid_data_length]
+            for key in extra_data:
+                extra_data[key] = extra_data[key][:valid_data_length]
 
             # Convert to CPU and numpy
-            response = layer_responses.cpu().float().numpy()
-            label_indices = label_data.cpu().numpy()
-            guess_indices = guess_data.cpu().numpy()
-            image_indices = image_data.cpu().numpy()
+            label_index = label_data.cpu().numpy()
+            guess_index = guess_data.cpu().numpy()
+            image_index = image_data.cpu().numpy()
+            extra_numpy = {
+                k: v.cpu().float().numpy() if isinstance(v, torch.Tensor) else v
+                for k, v in extra_data.items()
+            }
 
             # Get dimensions
-            n_samples, n_timesteps, n_classes = response.shape
+            n_samples, n_timesteps = label_index.shape
 
             # Create indices for DataFrame structure
-            sample_indices, times_indices, class_indices = np.meshgrid(
+            sample_index, times_index = np.meshgrid(
                 np.arange(n_samples),
                 np.arange(n_timesteps),
-                np.arange(n_classes),
                 indexing="ij",
             )
-            # label_sets = np.array(["".join(row.astype(str)) for row in label_indices])
-            # label_sets = (
-            #     label_sets[:, None, None]
-            #     .repeat(n_timesteps, axis=-2)
-            #     .repeat(n_classes, axis=-1)
-            # )
-            label_indices = label_indices[..., None].repeat(n_classes, axis=-1)
-            guess_indices = guess_indices[..., None].repeat(n_classes, axis=-1)
-            image_indices = image_indices[..., None].repeat(n_classes, axis=-1)
 
-            df = pd.DataFrame(
-                {
-                    "sample_index": sample_indices.ravel(),
-                    "times_index": times_indices.ravel(),
-                    "class_index": class_indices.ravel(),
-                    "response": response.ravel(),
-                    "label_index": label_indices.ravel(),
-                    "guess_index": guess_indices.ravel(),
-                    "image_index": image_indices.ravel(),
-                    # "label_set": label_sets.ravel(),
-                }
-            )
+            # Build DataFrame data dict with core fields
+            df_data = {
+                "sample_index": sample_index.ravel(),
+                "times_index": times_index.ravel(),
+                "label_index": label_index.ravel(),
+                "guess_index": guess_index.ravel(),
+                "image_index": image_index.ravel(),
+            }
+
+            # Add extra fields to DataFrame
+            for key, data in extra_numpy.items():
+                df_data[key] = data.ravel()
+
+            df = pd.DataFrame(df_data)
+
+            logger.info(f"Created DataFrame with shape: {df.shape}")
+            logger.info(f"Columns: {list(df.columns)}")
 
             # Clean up memory
             del (
-                response,
-                label_indices,
-                guess_indices,
-                image_indices,
-                sample_indices,
-                times_indices,
-                class_indices,
+                label_index,
+                guess_index,
+                image_index,
+                sample_index,
+                times_index,
+                extra_numpy,
             )
 
             return df
 
         except Exception as e:
-            logger.error(f"Error generating classifier DataFrame: {e}")
+            logger.error(f"Error generating DataFrame: {e}")
+            import traceback
+
+            traceback.print_exc()
             return pd.DataFrame()
 
     def clear_all(self) -> None:
@@ -1215,9 +1093,6 @@ class StorageBuffer:
 class StorageBufferMixin(LightningModule):
     """
     Mixin class for automatic StorageBuffer lifecycle management in PyTorch Lightning.
-
-    Now supports different buffer configurations with automatic alignment in get_dataframe().
-    You can specify different sizes and strategies for responses vs records.
     """
 
     # Default storage configurations - can use different strategies
@@ -1241,7 +1116,7 @@ class StorageBufferMixin(LightningModule):
 
     testing_storage_config: Dict[str, Any] = {
         "max_responses": 5,  # Enabled by default for analysis
-        "max_records": 5,  # Much larger for detailed analysis
+        "max_records": 30,  # Much larger for detailed analysis
         "response_strategy": "fixed",  # Keep recent responses
         "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,
@@ -1260,8 +1135,6 @@ class StorageBufferMixin(LightningModule):
         **kwargs,
     ):
         """Initialize with flexible storage configuration."""
-        super().__init__(**kwargs)
-
         # Update response configs only if provided
         if store_train_responses is not None:
             self.training_storage_config["max_responses"] = store_train_responses
@@ -1291,6 +1164,7 @@ class StorageBufferMixin(LightningModule):
 
         # Flag to track when to stop testing early
         self._stop_testing_early = False
+        super().__init__(**kwargs)
 
     def get_dataframe(self, **kwargs) -> pd.DataFrame:
         return self.storage.get_dataframe(**kwargs)
@@ -1328,18 +1202,22 @@ class StorageBufferMixin(LightningModule):
             return False
 
         # Skip for unlimited or non-fixed strategies
-        if (
-            self.storage.responses.max_size <= 0
-            or self.storage.responses.strategy_name not in ["fixed"]
-        ):
+        if max(
+            self.storage.responses.max_size, self.storage.records.max_size
+        ) <= 0 or self.storage.responses.strategy_name not in ["fixed"]:
             return False
 
         # Check if buffer is filled
-        is_filled = len(self.storage.responses) >= self.storage.responses.max_size
+        is_filled = (
+            len(self.storage.responses) >= self.storage.responses.max_size
+            and len(self.storage.records) >= self.storage.records.max_size
+        )
 
         if is_filled and not self._stop_testing_early:
             logger.info(
-                f"Response buffer filled ({len(self.storage.responses)}/{self.storage.responses.max_size}). "
+                f"Buffer filled. "
+                f"Responses: ({len(self.storage.responses)}/{self.storage.responses.max_size}). "
+                f"Records: ({len(self.storage.records)}/{self.storage.records.max_size}). "
                 f"Stopping testing early."
             )
             self._stop_testing_early = True
@@ -1483,8 +1361,8 @@ if __name__ == "__main__":
         model.storage.store_responses(responses)
 
         records_stored = model.storage.store_records(
-            guess_indices=torch.randint(0, 4, (1, 5)),
-            label_indices=torch.randint(0, 4, (1, 5)),
+            guess_index=torch.randint(0, 4, (1, 5)),
+            label_index=torch.randint(0, 4, (1, 5)),
         )
         print(f"  Batch {i}: stored, storage_size={model.storage.get_memory_info()}")
 

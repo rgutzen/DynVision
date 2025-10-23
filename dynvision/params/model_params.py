@@ -38,6 +38,10 @@ class ModelParams(BaseParams):
         default=[1],
         description="Pattern for data presentation across timesteps (1 = present, 0 = absent)",
     )
+    input_adaption_weight: Optional[float] = Field(
+        default=0.0,
+        description="weight to multiply the input for each consecutive timestep",
+    )
 
     # ===== BIOLOGICAL PARAMETERS =====
     dt: float = Field(default=1.0, description="Integration time step (ms)", gt=0.0)
@@ -57,7 +61,9 @@ class ModelParams(BaseParams):
         default=0,
         description="Number of idle timesteps for spontaneous activity to converge",
     )
-
+    feedforward_only: bool = Field(
+        default=False, description="Use only feedforward connections"
+    )
     # ===== RECURRENT ARCHITECTURE =====
     recurrence_type: Optional[
         Literal[
@@ -87,10 +93,10 @@ class ModelParams(BaseParams):
         default=1, description="Supralinearity exponent", gt=0.0
     )
 
-    # ===== RESPONSE STORAGE =====
+    # ===== RESPONSE STORAGE (DEPRECATED - use storage configuration below) =====
     store_responses: int = Field(
         default=0,
-        description="Number of responses to store during evaluation (0 = disabled)",
+        description="DEPRECATED: Use store_test_responses instead. Number of responses to store during evaluation (0 = disabled)",
         ge=-1,
         le=1000,
     )
@@ -99,6 +105,42 @@ class ModelParams(BaseParams):
     )
     classifier_name: str = Field(
         default="classifier", description="Name of the classifier layer"
+    )
+
+    # ===== STORAGE BUFFER CONFIGURATION =====
+    store_train_responses: Optional[int] = Field(
+        default=None,
+        description="Number of responses to store during training (None = use default, 0 = disabled, -1 = unlimited)",
+        ge=-1,
+    )
+    store_val_responses: Optional[int] = Field(
+        default=None,
+        description="Number of responses to store during validation (None = use default, 0 = disabled, -1 = unlimited)",
+        ge=-1,
+    )
+    store_test_responses: Optional[int] = Field(
+        default=None,
+        description="Number of responses to store during testing (None = use default, 0 = disabled, -1 = unlimited)",
+        ge=-1,
+    )
+    store_train_records: Optional[int] = Field(
+        default=None,
+        description="Number of records to store during training (None = use default, 0 = disabled, -1 = unlimited)",
+        ge=-1,
+    )
+    store_val_records: Optional[int] = Field(
+        default=None,
+        description="Number of records to store during validation (None = use default, 0 = disabled, -1 = unlimited)",
+        ge=-1,
+    )
+    store_test_records: Optional[int] = Field(
+        default=None,
+        description="Number of records to store during testing (None = use default, 0 = disabled, -1 = unlimited)",
+        ge=-1,
+    )
+    early_test_stop: bool = Field(
+        default=True,
+        description="Stop testing early when buffer is filled (only for fixed strategy)",
     )
 
     # ===== LOSS CONFIGURATION =====
@@ -196,6 +238,16 @@ class ModelParams(BaseParams):
                 "steps": "n_timesteps",
                 "tsteps": "n_timesteps",
                 "idle": "idle_timesteps",
+                "ffonly": "feedforward_only",
+                "inadapt": "input_adaption_weight",
+                # Storage aliases
+                "store_train_resp": "store_train_responses",
+                "store_val_resp": "store_val_responses",
+                "store_test_resp": "store_test_responses",
+                "store_train_rec": "store_train_records",
+                "store_val_rec": "store_val_records",
+                "store_test_rec": "store_test_records",
+                "early_stop": "early_test_stop",
             }
         )
         return aliases
@@ -414,6 +466,58 @@ class ModelParams(BaseParams):
                 f"n_classes ({self.n_classes}) should be >= 2 for meaningful classification"
             )
 
+        # Handle deprecated store_responses parameter
+        if self.store_responses != 0 and self.store_test_responses is None:
+            logging.warning(
+                f"'store_responses' is deprecated. Setting 'store_test_responses={self.store_responses}' instead. "
+                "Please use store_test_responses, store_val_responses, store_train_responses explicitly."
+            )
+            object.__setattr__(self, "store_test_responses", self.store_responses)
+
+        # Validate storage configuration consistency
+        storage_params = [
+            self.store_train_responses,
+            self.store_val_responses,
+            self.store_test_responses,
+            self.store_train_records,
+            self.store_val_records,
+            self.store_test_records,
+        ]
+
+        # Check for negative values (unlimited) and warn
+        for param_name in [
+            "store_train_responses",
+            "store_val_responses",
+            "store_test_responses",
+            "store_train_records",
+            "store_val_records",
+            "store_test_records",
+        ]:
+            param_value = getattr(self, param_name)
+            if param_value is not None and param_value < 0 and param_value != -1:
+                raise DynVisionValidationError(
+                    f"{param_name} must be None, 0 (disabled), positive integer, or -1 (unlimited). Got: {param_value}"
+                )
+
+        # Info about storage configuration
+        if any(p is not None and p != 0 for p in storage_params):
+            storage_info = []
+            if self.store_train_responses not in [None, 0]:
+                storage_info.append(f"train_responses={self.store_train_responses}")
+            if self.store_val_responses not in [None, 0]:
+                storage_info.append(f"val_responses={self.store_val_responses}")
+            if self.store_test_responses not in [None, 0]:
+                storage_info.append(f"test_responses={self.store_test_responses}")
+            if self.store_train_records not in [None, 0]:
+                storage_info.append(f"train_records={self.store_train_records}")
+            if self.store_val_records not in [None, 0]:
+                storage_info.append(f"val_records={self.store_val_records}")
+            if self.store_test_records not in [None, 0]:
+                storage_info.append(f"test_records={self.store_test_records}")
+
+            if storage_info:
+                logging.info(f"Storage configuration: {', '.join(storage_info)}")
+
         return self
 
     # ===== COMPUTED PROPERTIES (DERIVED PARAMETERS) =====
@@ -502,6 +606,15 @@ class ModelParams(BaseParams):
             "store_responses": self.store_responses,
             "store_responses_on_cpu": self.store_responses_on_cpu,
             "classifier_name": self.classifier_name,
+            # Storage buffer configuration
+            "store_train_responses": self.store_train_responses,
+            "store_val_responses": self.store_val_responses,
+            "store_test_responses": self.store_test_responses,
+            "store_train_records": self.store_train_records,
+            "store_val_records": self.store_val_records,
+            "store_test_records": self.store_test_records,
+            "early_test_stop": self.early_test_stop,
+            # Loss and training configuration
             "loss_reaction_time": self.loss_reaction_time,
             "criterion_params": self.criterion_params,
             "learning_rate": self.learning_rate,
@@ -618,13 +731,34 @@ class ModelParams(BaseParams):
         # Storage & Monitoring
         logging.info(f"  💾 Storage & Monitoring:")
         logging.info(
-            f"     • Store responses: {model_kwargs.get('store_responses', 'unset')}"
+            f"     • Store responses (deprecated): {model_kwargs.get('store_responses', 'unset')}"
         )
         logging.info(
             f"     • Store on CPU: {model_kwargs.get('store_responses_on_cpu', 'unset')}"
         )
         logging.info(
             f"     • Classifier name: {model_kwargs.get('classifier_name', 'unset')}"
+        )
+        logging.info(
+            f"     • Train responses: {model_kwargs.get('store_train_responses', 'default')}"
+        )
+        logging.info(
+            f"     • Val responses: {model_kwargs.get('store_val_responses', 'default')}"
+        )
+        logging.info(
+            f"     • Test responses: {model_kwargs.get('store_test_responses', 'default')}"
+        )
+        logging.info(
+            f"     • Train records: {model_kwargs.get('store_train_records', 'default')}"
+        )
+        logging.info(
+            f"     • Val records: {model_kwargs.get('store_val_records', 'default')}"
+        )
+        logging.info(
+            f"     • Test records: {model_kwargs.get('store_test_records', 'default')}"
+        )
+        logging.info(
+            f"     • Early test stop: {model_kwargs.get('early_test_stop', 'unset')}"
         )
 
         # Define standard parameters to exclude from custom section

@@ -4,14 +4,14 @@
 executor: slurm
 
 # CHANGE WITH CARE
-restart-times: "0"
+restart-times: "1"
 max-jobs-per-second: "30"
 max-status-checks-per-second: "2"
 local-cores: 2
 latency-wait: "90"
 use-conda: "False"
 use-singularity: "False"
-jobs: "150"
+jobs: "200"
 printshellcmds: "True"
 keep-going: "True"
 rerun-incomplete: "True"
@@ -20,7 +20,7 @@ nolock: "True"
 # CHANGE AS NEEDED
 slurm-logdir: "/home/rg5022/rhythmic_visual_attention/logs/slurm"
 slurm-keep-successful-logs: true
-slurm-delete-logfiles-older-than: 5 # specify the number of days
+slurm-delete-logfiles-older-than: 3 # specify the number of days
 
 default-resources:
   runtime: 30  # .5 hour
@@ -42,12 +42,12 @@ set-resources:
     cpu: 16
 
   test_model:
-    mem: 80G # use 80GB of memory
+    mem: 120G # use 80GB of memory
     # disk: 200G  # 100 GB
-    runtime: 60 # run for 2 hours
+    runtime: 45 # run for 2 hours
     gpu: 1 # use one GPU
     cpus_per_task: 16 # use 16 cores
-    # constraint: "a100|h100"
+    # constraint: "a100" #|h100"
     slurm_extra: "'--gres=gpu:1'"
 
   train_model:
@@ -92,7 +92,7 @@ set-resources:
 
   process_test_data:
     mem: 120G # use 64GB of memory
-    runtime: 60 # run for 1 hour
+    runtime: 120 * attempt # run for 2 hours
     cpus_per_task: 16
     
   checkpoint_to_statedict:

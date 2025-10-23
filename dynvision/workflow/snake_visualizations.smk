@@ -161,7 +161,7 @@ rule process_test_data:
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
-        measures = ['response_avg', 'response_std'], #, 'spatial_variance', 'feature_variance'],
+        measures = ['response_avg', 'response_std', 'label_confidence'], #, 'spatial_variance', 'feature_variance', 'guess_confidence', 'first_label_confidence'],
         topk = [3, 5],
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         batch_size = 1,
@@ -246,37 +246,49 @@ checkpoint plot_adaption:
             --measures {params.measures} 
         """
 
-rule plot_test_performance:
+rule plot_performance:
     input:
-        data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        script = SCRIPTS / 'visualization' / 'plot_test_performance.py'
+        data = expand(project_paths.reports / '{experiment}' / '{experiment}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment),
+        dataffonly = expand(project_paths.reports / '{experiment}ffonly' / '{experiment}ffonly_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment),
+        script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
-        topk = 1,
-        dt = float(config.dt),
+        row = 'experiment',
+        subplot = 'parameter',
+        hue = 'category',
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category_str.strip('=*'),
+        experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
+        dt = config.dt,
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        subplot_filter = [], #[0.1, 0.5, 1.0], #lambda w: config.experiment_config[w.experiment].get('subplot_filter', []),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_performance.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'performance.png',
     shell:
         """
         {params.execution_cmd} \
             --data {input.data:q} \
+            --data-ffonly {input.dataffonly:q} \
             --output {output:q} \
-            --topk {params.topk} \
+            --row {params.row} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --parameter-key {params.parameter} \
+            --category-key {params.category} \
+            --experiment {params.experiment} \
             --dt {params.dt} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q} \
-            --experiment {wildcards.experiment} \
-            --parameter {params.parameter} \
-            --category {wildcards.category}
+            --subplot-filter {params.subplot_filter}
         """
 
 rule plot_training:
@@ -334,15 +346,18 @@ rule plot_dynamics:
         script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        focus_layer = 'V1',
-        dt = config.dt,
+        # focus_layer = 'IT',
+        dt = float(config.dt),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'dynamics.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'dynamics_{focus_layer}.png',
     # group: "visualization"
     shell:
         """
@@ -352,8 +367,11 @@ rule plot_dynamics:
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
             --category {wildcards.category} \
-            --focus-layer {params.focus_layer} \
-            --dt {params.dt}
+            --focus-layer {wildcards.focus_layer} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
         """
 
 use rule plot_dynamics as plot_dynamics_local with:
@@ -424,12 +442,14 @@ rule plot_responses:
             --ordering {params.ordering:q}
         """
 
-rule plot_response_tripytch:
+rule plot_timeparams_tripytch:
     input:
         data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=6+tsk=0{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
         data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=5+tff=0+trc=*+tsk=0{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
         data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=5+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        accuracy = project_paths.reports / 'wandb' / 'DyRCNNx8:tsteps=20+rctype=full+dt=2+tff=0+t=*+skip=true_0026_imagenette_trained_accuracy.csv',
+        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=*+tff=0+trc=6+tsk=0{args2}_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=5+tff=0+trc=*+tsk=0{args2}_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=5+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
@@ -452,9 +472,9 @@ rule plot_response_tripytch:
             --data {input.data1:q} \
             --data2 {input.data2:q} \
             --data3 {input.data3:q} \
-            --accuracy1 {input.accuracy:q} \
-            --accuracy2 {input.accuracy:q} \
-            --accuracy3 {input.accuracy:q} \
+            --accuracy1 {input.accuracy1:q} \
+            --accuracy2 {input.accuracy2:q} \
+            --accuracy3 {input.accuracy3:q} \
             --output {output:q} \
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
@@ -465,14 +485,14 @@ rule plot_response_tripytch:
             --ordering {params.ordering:q}
         """
 
-rule plot_response_tripytch2:
+rule plot_timestep_tripytch:
     input:
-        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=50+rctype=full+dt=2+tau=9+tff=0+trc=6+tsk=0+tfb=34+skip=true+feedback=*_0032_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=*+dt=2+tau=9+tff=0+trc=6+skip=true_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=10+rctype=full+dt=2+tau=9+tff=0+trc=6+skip=true+lossrt=*_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=50+rctype=full+dt=2+tau=9+tff=10+trc=6+tsk=16+tfb=16+skip=true+feedback=*_0032_{data_name}_{status}_accuracy.csv',
+        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=*{args1}lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20{args1}skip=true+lossrt=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20{args1}lossrt=4+idle=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=*{args1}lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20{args1}skip=true+lossrt=*_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20{args1}lossrt=4+idle=*_{seed}_{data_name}_{status}_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
@@ -481,14 +501,14 @@ rule plot_response_tripytch2:
             use_distributed=False,
             use_executor=get_param('use_executor', False)(w)
         ),
-        category = ' '.join(['rctarget', 'lossrt', 'feedback']),
+        category = ' '.join(['tsteps', 'lossrt', 'idle']),
         dt = 2,
-        outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctarget=*+lossrt=*+feedback=*_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:tsteps=*{args1}lossrt=*+idle=*_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -503,11 +523,54 @@ rule plot_response_tripytch2:
             --experiment {wildcards.experiment} \
             --category {params.category:q} \
             --dt {params.dt} \
-            --outlier_threshold {params.outlier_threshold} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q}
         """
+
+rule plot_connection_tripytch:
+    input:
+        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=*{args2}lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=output{args2}skip=*+lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=30+rctype=full+rctarget=output{args2}tfb=30+feedback=*+lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=*{args2}lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=output{args2}skip=*+lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
+        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=30+rctype=full+rctarget=output{args2}tfb=30+feedback=*+lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
+        script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+        category = ' '.join(['rctarget', 'skip', 'feedback']),
+        dt = config.dt,
+        outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data1:q} \
+            --data2 {input.data2:q} \
+            --data3 {input.data3:q} \
+            --accuracy1 {input.accuracy1:q} \
+            --accuracy2 {input.accuracy2:q} \
+            --accuracy3 {input.accuracy3:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --experiment {wildcards.experiment} \
+            --category {params.category:q} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
+        """
+            # --outlier_threshold {params.outlier_threshold} \
 
 rule plot_experiment:
     input:
