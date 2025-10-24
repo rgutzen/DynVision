@@ -117,7 +117,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 **Issue**: Documentation uses different wildcard formats in examples
 - **Location**:
   - `docs/user-guide/workflows.md` shows one format
-  - `CLAUDE.md` shows expanded format with data_loader and data_args
+  - Claude Code Guide shows expanded format with data_loader and data_args
 - **Problem**: Not clear which wildcards are optional vs required
 - **Impact**: Users may specify incomplete paths
 - **Fix Required**: Standardize wildcard documentation with clear required/optional markers
@@ -303,4 +303,4 @@ When updating code:
 - Update relevant documentation when changing APIs
 - Add docstrings following existing style
 - Consider backward compatibility for documented features
-- Update CLAUDE.md if architecture changes significantly
+- Update [Claude Code Guide](../guides/claude-guide.md) if architecture changes significantly

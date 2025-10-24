@@ -91,6 +91,9 @@ snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rcty
 - [API Reference](docs/reference/index.md): Technical documentation
 - [Concepts](docs/explanation/concepts.md): Explanation of core concepts
 - [Contributing](docs/contributing.md): How to contribute to the project
+- [Developer Guide](docs/development/index.md): Resources for contributors and AI assistants
+
+> **For Claude Code Users**: The comprehensive developer guide (formerly `CLAUDE.md` in project root) is now at [`docs/development/guides/claude-guide.md`](docs/development/guides/claude-guide.md).
 
 <!-- ## Citation
 

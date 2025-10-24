@@ -360,6 +360,7 @@ def extract_metric_values_for_dataframe(
     sample_to_presentation: Dict[int, int],
     presented_classes: List[int],
     unique_times: List[int],
+    resolution: str = "class",
 ) -> np.ndarray:
     """
     Extract only the needed values from a metric tensor for dataframe construction.
@@ -372,52 +373,95 @@ def extract_metric_values_for_dataframe(
         sample_to_presentation: Mapping from sample_index to first_label_index
         presented_classes: List of unique presentation labels
         unique_times: List of unique time indices
+        resolution: 'sample' for all samples, 'class' for one per presentation (default: 'class')
 
     Returns:
         1D numpy array with extracted values in correct order
     """
-    n_rows = len(presented_classes) * len(unique_times)
-    values = np.empty(n_rows, dtype=np.float32)
+    if resolution == "sample":
+        # Extract ALL samples at (sample_index, times_index) resolution
+        n_samples = metric_tensor.shape[0]
+        n_times = len(unique_times)
+        n_rows = n_samples * n_times
+        values = np.empty(n_rows, dtype=np.float32)
 
-    idx = 0
-    for pres_label in presented_classes:
-        # Find first sample with this presentation label
-        sample_idx = None
-        for s, p in sample_to_presentation.items():
-            if p == pres_label:
-                sample_idx = s
-                break
+        idx = 0
+        for sample_idx in range(n_samples):
+            for time_idx in unique_times:
+                try:
+                    # Extract single value
+                    if len(metric_tensor.shape) == 2:
+                        # Shape: [samples, times]
+                        val = metric_tensor[sample_idx, time_idx].item()
+                    else:
+                        # Should not happen after reduction, but handle gracefully
+                        logger.warning(
+                            f"Unexpected metric tensor shape: {metric_tensor.shape}"
+                        )
+                        val = metric_tensor[sample_idx, time_idx].flatten()[0].item()
 
-        if sample_idx is None:
-            # Fill with NaN if no sample found
-            for _ in unique_times:
-                values[idx] = np.nan
-                idx += 1
-            continue
-
-        for time_idx in unique_times:
-            try:
-                # Extract single value
-                if len(metric_tensor.shape) == 2:
-                    # Shape: [samples, times]
-                    val = metric_tensor[sample_idx, time_idx].item()
-                else:
-                    # Should not happen after reduction, but handle gracefully
+                    values[idx] = val
+                except (IndexError, RuntimeError) as e:
                     logger.warning(
-                        f"Unexpected metric tensor shape: {metric_tensor.shape}"
+                        f"Error extracting value at sample {sample_idx}, time {time_idx}: {e}"
                     )
-                    val = metric_tensor[sample_idx, time_idx].flatten()[0].item()
+                    values[idx] = np.nan
 
-                values[idx] = val
-            except (IndexError, RuntimeError) as e:
-                logger.warning(
-                    f"Error extracting value at sample {sample_idx}, time {time_idx}: {e}"
-                )
-                values[idx] = np.nan
+                idx += 1
 
-            idx += 1
+        return values
 
-    return values
+    else:  # resolution == "class"
+        # Extract ONE sample per presentation at (first_label_index, times_index) resolution
+        n_rows = len(presented_classes) * len(unique_times)
+        values = np.empty(n_rows, dtype=np.float32)
+
+        idx = 0
+        for pres_label in presented_classes:
+            # Find first sample with this presentation label
+            sample_idx = None
+            for s, p in sample_to_presentation.items():
+                if p == pres_label:
+                    sample_idx = s
+                    break
+
+            if sample_idx is None:
+                # Fill with NaN if no sample found
+                for _ in unique_times:
+                    values[idx] = np.nan
+                    idx += 1
+                continue
+
+            for time_idx in unique_times:
+                try:
+                    # Check bounds before extraction
+                    if sample_idx >= metric_tensor.shape[0]:
+                        # Sample not available in PT file (mismatched sample sizes)
+                        values[idx] = np.nan
+                        idx += 1
+                        continue
+
+                    # Extract single value
+                    if len(metric_tensor.shape) == 2:
+                        # Shape: [samples, times]
+                        val = metric_tensor[sample_idx, time_idx].item()
+                    else:
+                        # Should not happen after reduction, but handle gracefully
+                        logger.warning(
+                            f"Unexpected metric tensor shape: {metric_tensor.shape}"
+                        )
+                        val = metric_tensor[sample_idx, time_idx].flatten()[0].item()
+
+                    values[idx] = val
+                except (IndexError, RuntimeError) as e:
+                    logger.warning(
+                        f"Error extracting value at sample {sample_idx}, time {time_idx}: {e}"
+                    )
+                    values[idx] = np.nan
+
+                idx += 1
+
+        return values
 
 
 def process_large_layer_chunked(
@@ -429,6 +473,7 @@ def process_large_layer_chunked(
     unique_times: List[int],
     memory_monitor: MemoryMonitor,
     chunk_size: int = 32,
+    resolution: str = "class",
 ) -> np.ndarray:
     """
     Process very large layers in chunks to avoid OOM.
@@ -485,6 +530,7 @@ def process_large_layer_chunked(
                 chunk_sample_to_presentation,
                 presented_classes,
                 unique_times,
+                resolution=resolution,
             )
 
             all_values.append(chunk_values)
@@ -554,6 +600,7 @@ def process_layer_responses_incremental(
     unique_times: List[int],
     memory_monitor: MemoryMonitor,
     max_retries: int = 3,
+    resolution: str = "class",
 ) -> Dict[str, np.ndarray]:
     """
     STEP 3: Enhanced memory management with aggressive cleanup and detailed logging.
@@ -677,6 +724,7 @@ def process_layer_responses_incremental(
                                     sample_to_presentation,
                                     presented_classes,
                                     unique_times,
+                                    resolution=resolution,
                                 )
                             )
                             memory_monitor.log_memory(f"extracted {metric_name}")
@@ -699,6 +747,7 @@ def process_layer_responses_incremental(
                                 unique_times=unique_times,
                                 memory_monitor=memory_monitor,
                                 chunk_size=32,  # Conservative chunk size
+                                resolution=resolution,
                             )
                         )
 

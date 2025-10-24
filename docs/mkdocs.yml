@@ -105,6 +105,20 @@ nav:
     - Temporal Dynamics: explanation/temporal-dynamics.md
     - Design Philosophy: explanation/design-philosophy.md
     - Comparison with Other Frameworks: explanation/comparison.md
+  - Developer Guide:
+    - development/index.md
+    - Planning:
+      - Documentation TODOs: development/planning/todo-docs.md
+      - Development Roadmap: development/planning/todo-roadmap.md
+    - Guides:
+      - Claude Code Guide: development/guides/claude-guide.md
+      - Documentation Style: development/guides/documentation-style.md
+    - Architecture:
+      - Software Patterns: development/architecture/software-patterns.md
+    - Dependencies:
+      - Snakemake: development/dependencies/snakemake.md
+      - PyTorch Lightning: development/dependencies/pytorch-lightning.md
+      - FFCV: development/dependencies/ffcv.md
   - Contributing: contributing.md
   - API Reference: api/
 

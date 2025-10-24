@@ -166,6 +166,7 @@ rule process_test_data:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         batch_size = 1,
         remove_input_responses = True,
+        sample_resolution = 'sample',  # 'sample' or 'class'
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -185,6 +186,7 @@ rule process_test_data:
             --measures {params.measures} \
             --topk {params.topk} \
             --batch_size {params.batch_size} \
+            --sample_resolution {params.sample_resolution} \
             --remove_input_responses {params.remove_input_responses}
         """
 

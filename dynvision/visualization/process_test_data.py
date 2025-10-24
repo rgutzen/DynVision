@@ -141,6 +141,59 @@ def calculate_confidence_and_topk_from_classifier(
     return pd.DataFrame(data)
 
 
+def compress_to_presentation_level(
+    df: pd.DataFrame,
+    id_cols: List[str] = ["first_label_index", "times_index"],
+    drop_cols: List[str] = ["sample_index", "image_index"],
+) -> pd.DataFrame:
+    """
+    Compress dataframe from sample-level to presentation-level resolution.
+
+    For each (first_label_index, times_index) group:
+    - If all values identical: keep single value
+    - If values vary: create <col>_avg and <col>_std
+
+    Args:
+        df: Input dataframe at sample-level
+        id_cols: Grouping columns (default: first_label_index, times_index)
+        drop_cols: Columns to discard
+
+    Returns:
+        Compressed dataframe at presentation-level
+    """
+    logger.info(f"    Compressing from {len(df)} rows to presentation-level...")
+
+    aggregated = {}
+
+    for col in df.columns:
+        if col in id_cols:
+            continue
+        if col in drop_cols:
+            continue
+
+        grouped = df.groupby(id_cols)[col]
+
+        # Check if all non-NaN values are identical within each group
+        # For each group, check if nunique (excluding NaN) is <= 1
+        nunique_per_group = grouped.nunique()
+        all_identical = (nunique_per_group <= 1).all()
+
+        if all_identical:
+            # Keep single value
+            aggregated[col] = grouped.first()
+            logger.debug(f"      {col}: identical values, keeping single column")
+        else:
+            # Compute mean and std
+            aggregated[f"{col}_avg"] = grouped.mean()
+            aggregated[f"{col}_std"] = grouped.std()
+            logger.debug(f"      {col}: varying values, creating _avg and _std columns")
+
+    result = pd.DataFrame(aggregated).reset_index()
+    logger.info(f"    Compressed to {len(result)} rows with {len(result.columns)} columns")
+
+    return result
+
+
 def process_test_performance(df: pd.DataFrame) -> pd.DataFrame:
     """
     Process test performance CSV and add first_label_index.
@@ -194,6 +247,7 @@ def process_single_batch_optimized(
     category: str,
     topk_values: List[int],
     memory_monitor: MemoryMonitor,
+    resolution: str = "sample",
 ) -> pd.DataFrame:
     """
     Process a single batch of files.
@@ -262,7 +316,7 @@ def process_single_batch_optimized(
 
             # ===== STEP 1: Load and process test CSV =====
             test_df = load_df(csv_file)
-            result_df = process_test_performance(test_df)
+            test_df_with_first_label = process_test_performance(test_df)
 
             # ===== STEP 2: Load responses and calculate classifier metrics =====
             try:
@@ -272,12 +326,8 @@ def process_single_batch_optimized(
                 logger.warning(f"Failed to load responses: {e}")
                 has_responses = False
 
-            # Remove confidence measures that are already present in result_df
-            if confidence_measures:
-                existing_cols = set(result_df.columns)
-                confidence_measures = [
-                    m for m in confidence_measures if m not in existing_cols
-                ]
+            # Work at sample level first, then compress
+            sample_level_df = test_df_with_first_label.copy()
 
             if not has_responses:
                 logger.warning(f"  Empty response file, skipping response metrics")
@@ -286,70 +336,122 @@ def process_single_batch_optimized(
 
                 try:
                     # Get dimensions
-                    n_samples = test_df["sample_index"].nunique()
-                    n_timesteps = test_df["times_index"].nunique()
+                    n_samples_csv = test_df_with_first_label["sample_index"].nunique()
+                    n_timesteps = test_df_with_first_label["times_index"].nunique()
+                    n_samples_pt = responses["classifier"].shape[0]
 
-                    # Prepare tensors (reshape from flat to 2D)
-                    sorted_df = test_df.sort_values(["sample_index", "times_index"])
+                    # Validate sample sizes
+                    if n_samples_pt > n_samples_csv:
+                        raise ValueError(
+                            f"PT file has MORE samples ({n_samples_pt}) than CSV ({n_samples_csv}). "
+                            f"This should not happen!"
+                        )
 
-                    guess_tensor = torch.tensor(
-                        sorted_df["guess_index"].values.reshape(
-                            n_samples, n_timesteps
-                        ),
-                        dtype=torch.int,
-                    )
-                    label_tensor = torch.tensor(
-                        sorted_df["label_index"].values.reshape(
-                            n_samples, n_timesteps
-                        ),
-                        dtype=torch.int,
-                    )
-                    first_label_tensor = torch.tensor(
-                        sorted_df["first_label_index"].values.reshape(
-                            n_samples, n_timesteps
-                        ),
-                        dtype=torch.int,
-                    )
+                    # Log warning if mismatch
+                    if n_samples_pt < n_samples_csv:
+                        logger.warning(
+                            f"⚠️  SAMPLE SIZE MISMATCH detected!"
+                        )
+                        logger.warning(
+                            f"    CSV file: {n_samples_csv} samples"
+                        )
+                        logger.warning(
+                            f"    PT file:  {n_samples_pt} samples"
+                        )
+                        logger.warning(
+                            f"    Confidence metrics will be NaN for {n_samples_csv - n_samples_pt} samples "
+                            f"(sample_index >= {n_samples_pt})."
+                        )
+                        logger.warning(
+                            f"    Top-k accuracies will be calculated from available samples only."
+                        )
 
-                    # Calculate all classifier metrics
-                    classifier_df = calculate_confidence_and_topk_from_classifier(
-                        responses["classifier"],
-                        label_index=label_tensor,
-                        guess_index=guess_tensor,
-                        first_label_index=first_label_tensor,
-                        topk_values=topk_values,
-                        confidence_measures=confidence_measures,
-                    )
+                    # Filter confidence measures that are already in CSV
+                    confidence_measures_needed = [
+                        m for m in confidence_measures
+                        if m not in test_df_with_first_label.columns
+                    ]
 
-                    # Merge classifier metrics with performance data
-                    result_df = result_df.merge(
-                        classifier_df, on=["sample_index", "times_index"], how="left"
-                    )
+                    # Prepare tensors for available samples only
+                    if n_samples_pt > 0:
+                        sorted_df = test_df_with_first_label.sort_values(["sample_index", "times_index"])
+                        sorted_df_available = sorted_df[sorted_df["sample_index"] < n_samples_pt]
 
-                    logger.info(
-                        f"    Added {len(classifier_df.columns)-2} classifier metrics"
-                    )
+                        if len(sorted_df_available) > 0:
+                            guess_tensor = torch.tensor(
+                                sorted_df_available["guess_index"].values.reshape(
+                                    n_samples_pt, n_timesteps
+                                ),
+                                dtype=torch.int,
+                            )
+                            label_tensor = torch.tensor(
+                                sorted_df_available["label_index"].values.reshape(
+                                    n_samples_pt, n_timesteps
+                                ),
+                                dtype=torch.int,
+                            )
+                            first_label_tensor = torch.tensor(
+                                sorted_df_available["first_label_index"].values.reshape(
+                                    n_samples_pt, n_timesteps
+                                ),
+                                dtype=torch.int,
+                            )
+
+                            # Calculate classifier metrics at sample level
+                            classifier_df = calculate_confidence_and_topk_from_classifier(
+                                responses["classifier"],
+                                label_index=label_tensor,
+                                guess_index=guess_tensor,
+                                first_label_index=first_label_tensor,
+                                topk_values=topk_values,
+                                confidence_measures=confidence_measures_needed,
+                            )
+
+                            # Merge back to full sample_level_df (creates NaN for missing samples)
+                            sample_level_df = sample_level_df.merge(
+                                classifier_df, on=["sample_index", "times_index"], how="left"
+                            )
+
+                            logger.info(
+                                f"    Added {len(classifier_df.columns)-2} classifier metrics"
+                            )
+                        else:
+                            logger.warning(f"    No valid samples to process for classifier metrics")
+                    else:
+                        logger.warning(f"    PT file has no samples, skipping classifier metrics")
 
                 except Exception as e:
                     logger.error(f"Failed to calculate classifier metrics: {e}")
                     raise
 
-            # ===== STEP 3: Calculate layer response metrics =====
+            # ===== STEP 3: Conditionally compress based on resolution =====
+            if resolution == "class":
+                logger.info(f"  Compressing sample-level data to presentation-level...")
+                result_df = compress_to_presentation_level(
+                    sample_level_df,
+                    id_cols=["first_label_index", "times_index"],
+                    drop_cols=["sample_index", "image_index"],
+                )
+            else:  # resolution == "sample"
+                logger.info(f"  Keeping data at sample-level (no compression)...")
+                result_df = sample_level_df.copy()
+
+            # ===== STEP 4: Calculate layer response metrics =====
             if has_responses and layer_measures:
-                logger.info(f"  Calculating layer metrics...")
+                logger.info(f"  Calculating layer metrics at '{resolution}' resolution...")
 
                 try:
                     # Build sample-to-presentation mapping
                     sample_to_presentation = (
-                        test_df.groupby("sample_index")["label_index"]
-                        .apply(lambda x: x[x >= 0].iloc[0] if (x >= 0).any() else -1)
+                        test_df_with_first_label.groupby("sample_index")["first_label_index"]
+                        .first()
                         .to_dict()
                     )
 
                     presented_classes = sorted(result_df["first_label_index"].unique())
                     unique_times = sorted(result_df["times_index"].unique())
 
-                    # Use incremental layer processing
+                    # Use incremental layer processing with resolution parameter
                     layer_metrics = process_layer_responses_incremental(
                         pt_file=pt_file,
                         measures=layer_measures,
@@ -358,24 +460,43 @@ def process_single_batch_optimized(
                         unique_times=unique_times,
                         memory_monitor=memory_monitor,
                         max_retries=3,
+                        resolution=resolution,
                     )
 
-                    # Convert layer metrics to DataFrame
-                    # layer_metrics is dict of metric_name -> 1D array in (presentation, time) order
-                    n_rows = len(presented_classes) * len(unique_times)
-                    layer_data = {
-                        "first_label_index": np.repeat(
-                            presented_classes, len(unique_times)
-                        ),
-                        "times_index": np.tile(unique_times, len(presented_classes)),
-                    }
-                    layer_data.update(layer_metrics)
-                    layer_df = pd.DataFrame(layer_data)
+                    # Convert layer metrics to DataFrame based on resolution
+                    if resolution == "class":
+                        # Class resolution: (first_label_index, times_index)
+                        n_rows = len(presented_classes) * len(unique_times)
+                        layer_data = {
+                            "first_label_index": np.repeat(
+                                presented_classes, len(unique_times)
+                            ),
+                            "times_index": np.tile(unique_times, len(presented_classes)),
+                        }
+                        layer_data.update(layer_metrics)
+                        layer_df = pd.DataFrame(layer_data)
 
-                    # Merge layer metrics with result
-                    result_df = result_df.merge(
-                        layer_df, on=["first_label_index", "times_index"], how="left"
-                    )
+                        # Merge on (first_label_index, times_index)
+                        result_df = result_df.merge(
+                            layer_df, on=["first_label_index", "times_index"], how="left"
+                        )
+                    else:  # resolution == "sample"
+                        # Sample resolution: (sample_index, times_index)
+                        n_samples = result_df["sample_index"].nunique()
+                        n_times = len(unique_times)
+                        layer_data = {
+                            "sample_index": np.repeat(
+                                np.arange(n_samples), n_times
+                            ),
+                            "times_index": np.tile(unique_times, n_samples),
+                        }
+                        layer_data.update(layer_metrics)
+                        layer_df = pd.DataFrame(layer_data)
+
+                        # Merge on (sample_index, times_index)
+                        result_df = result_df.merge(
+                            layer_df, on=["sample_index", "times_index"], how="left"
+                        )
 
                     logger.info(f"    Added {len(layer_metrics)} layer metrics")
 
@@ -383,7 +504,7 @@ def process_single_batch_optimized(
                     logger.error(f"Failed to calculate layer metrics: {e}")
                     raise
 
-            # ===== STEP 4: Add metadata columns =====
+            # ===== STEP 5: Add metadata columns =====
             result_df[data_arg_key] = arg_value
             result_df[category] = cat_value
 
@@ -491,6 +612,14 @@ parser.add_argument(
     action="store_true",
     help="Run validation against original implementation (requires both implementations)",
 )
+parser.add_argument(
+    "--sample_resolution",
+    type=str,
+    default="sample",
+    choices=["sample", "class"],
+    help="Resolution for output data: 'sample' for (sample_index, times_index), "
+    "'class' for (first_label_index, times_index) with aggregation",
+)
 
 
 if __name__ == "__main__":
@@ -506,11 +635,16 @@ if __name__ == "__main__":
     logger.info("=" * 80)
     logger.info("MEMORY-OPTIMIZED TEST DATA PROCESSING")
     logger.info("=" * 80)
+    logger.info(f"Resolution: {args.sample_resolution}")
     logger.info(f"Measures: {args.measures}")
     logger.info(f"Top-k values: {args.topk}")
     logger.info(f"Memory limit: {args.memory_limit_gb}GB")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Files to process: {len(args.responses)}")
+    if args.sample_resolution == "sample":
+        logger.info("NOTE: Output at sample-level (no compression)")
+    else:
+        logger.info("NOTE: Output at class-level (with compression and aggregation)")
     logger.info("NOTE: New CSV format - classifier responses no longer in CSV")
     logger.info("NOTE: Empty response files will be handled gracefully")
 
@@ -546,6 +680,7 @@ if __name__ == "__main__":
                     category=args.category,
                     topk_values=args.topk,
                     memory_monitor=memory_monitor,
+                    resolution=args.sample_resolution,
                 )
 
                 if not batch_df.empty:
@@ -664,10 +799,15 @@ if __name__ == "__main__":
         logger.info("\n" + "=" * 80)
         logger.info("DATASET SUMMARY")
         logger.info("=" * 80)
+        logger.info(f"Resolution: {args.sample_resolution}")
         logger.info(f"Shape: {df.shape}")
         logger.info(f"Unique {args.category} values: {df[args.category].unique()}")
         logger.info(f"Unique {args.parameter} values: {df[args.parameter].unique()}")
         logger.info(f"Time steps: {sorted(df['times_index'].unique())}")
+
+        if args.sample_resolution == "sample" and "sample_index" in df.columns:
+            logger.info(f"Samples: {df['sample_index'].nunique()}")
+
         logger.info(f"Presentation labels: {sorted(df['first_label_index'].unique())}")
 
         # Layer metrics summary

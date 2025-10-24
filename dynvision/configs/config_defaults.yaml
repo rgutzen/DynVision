@@ -2,7 +2,6 @@
 classifier_name: classifier
 
 # Model
-retain_graph: False  # retain the computational graph for repeated backprop paths
 status: trained
 n_timesteps: 20
 dt: 2  # ms
@@ -21,9 +20,10 @@ feedback: False
 init_with_pretrained: False
 store_train_responses: 0 # n_batches
 store_val_responses: 0  # n_batches
-store_test_responses: 2  # n_batches
+store_test_responses: 5  # n_batches
 store_responses_on_cpu: True
 target_dtype: "float16"
+retain_graph: False  # retain the computational graph for repeated backprop paths
 
 # Data
 data_name: mnist

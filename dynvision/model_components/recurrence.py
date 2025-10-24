@@ -482,7 +482,8 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         tau: float = 1,  # ms
         recurrence_target: str = "output",
         recurrence_type: str = "self",
-        recurrence_bias: bool = True,
+        recurrence_kernel_size: Optional[int] = None,  # defaults to kernel_size
+        recurrence_bias: Optional[bool] = None,  # defaults to bias
         t_recurrence: float = 0,  # ms
         integration_strategy: Union[Callable, str] = "additive",
         history_length: Optional[int] = None,  # ms
@@ -503,24 +504,44 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         self.stride = stride
         self.parametrization = parametrization
         self.mid_modules = mid_modules
-        self.recurrence_bias = recurrence_bias
 
+        # Handle list/tuple arguments for two-stage convolution
         if mid_channels is not None:
-            if not isinstance(stride, (list, tuple)):
-                self.stride = (stride, stride)
-            if not isinstance(kernel_size, (list, tuple)):
-                self.kernel_size = (kernel_size, kernel_size)
-            if not isinstance(padding, (list, tuple)):
-                if padding is None:
-                    self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
-                else:
-                    self.padding = (padding, padding)
-            if not isinstance(bias, (list, tuple)):
-                self.bias = (bias, bias)
-            if not isinstance(parametrization, (list, tuple)):
-                self.parametrization = (parametrization, parametrization)
-        elif padding is None:
-            self.padding = kernel_size // 2
+            # Convert single values to tuples for two-stage convolution
+            self.stride = (
+                stride if isinstance(stride, (list, tuple)) else (stride, stride)
+            )
+            self.kernel_size = (
+                kernel_size
+                if isinstance(kernel_size, (list, tuple))
+                else (kernel_size, kernel_size)
+            )
+
+            if isinstance(padding, (list, tuple)):
+                self.padding = padding
+            elif padding is None:
+                self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
+            else:
+                self.padding = (padding, padding)
+
+            self.bias = bias if isinstance(bias, (list, tuple)) else (bias, bias)
+            self.parametrization = (
+                parametrization
+                if isinstance(parametrization, (list, tuple))
+                else (parametrization, parametrization)
+            )
+        else:
+            self.padding = kernel_size // 2 if padding is None else padding
+
+        # Store recurrence convolution parameters
+        self.recurrence_kernel_size = recurrence_kernel_size or (
+            self.kernel_size[0] if mid_channels else kernel_size
+        )
+        self.recurrence_bias = (
+            recurrence_bias
+            if recurrence_bias is not None
+            else (self.bias[0] if mid_channels else bias)
+        )
 
         # Store spatial dimensions
         self.dim_y = dim_y
@@ -695,9 +716,8 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             self.upsample = nn.Upsample(size=(out_dim_y, out_dim_x))
 
         recurrence_params = dict(
-            kernel_size=self.kernel_size,
+            kernel_size=self.recurrence_kernel_size,
             bias=self.recurrence_bias,
-            parametrization=self.parametrization,
             max_weight_init=self.max_weight_init,
             fixed_weight=self.fixed_self_weight,
             in_channels=self.out_channels,
