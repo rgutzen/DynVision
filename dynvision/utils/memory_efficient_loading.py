@@ -361,6 +361,7 @@ def extract_metric_values_for_dataframe(
     presented_classes: List[int],
     unique_times: List[int],
     resolution: str = "class",
+    n_samples_expected: Optional[int] = None,
 ) -> np.ndarray:
     """
     Extract only the needed values from a metric tensor for dataframe construction.
@@ -374,13 +375,15 @@ def extract_metric_values_for_dataframe(
         presented_classes: List of unique presentation labels
         unique_times: List of unique time indices
         resolution: 'sample' for all samples, 'class' for one per presentation (default: 'class')
+        n_samples_expected: Expected number of samples (for sample mode with PT/CSV mismatch)
 
     Returns:
         1D numpy array with extracted values in correct order
     """
     if resolution == "sample":
         # Extract ALL samples at (sample_index, times_index) resolution
-        n_samples = metric_tensor.shape[0]
+        n_samples_pt = metric_tensor.shape[0]  # Samples actually in PT file
+        n_samples = n_samples_expected if n_samples_expected is not None else n_samples_pt
         n_times = len(unique_times)
         n_rows = n_samples * n_times
         values = np.empty(n_rows, dtype=np.float32)
@@ -388,6 +391,13 @@ def extract_metric_values_for_dataframe(
         idx = 0
         for sample_idx in range(n_samples):
             for time_idx in unique_times:
+                # Check if sample is available in PT file
+                if sample_idx >= n_samples_pt:
+                    # Sample not in PT file (CSV/PT mismatch) - fill with NaN
+                    values[idx] = np.nan
+                    idx += 1
+                    continue
+
                 try:
                     # Extract single value
                     if len(metric_tensor.shape) == 2:
@@ -474,6 +484,7 @@ def process_large_layer_chunked(
     memory_monitor: MemoryMonitor,
     chunk_size: int = 32,
     resolution: str = "class",
+    n_samples_expected: Optional[int] = None,
 ) -> np.ndarray:
     """
     Process very large layers in chunks to avoid OOM.
@@ -531,6 +542,7 @@ def process_large_layer_chunked(
                 presented_classes,
                 unique_times,
                 resolution=resolution,
+                n_samples_expected=n_samples_expected,
             )
 
             all_values.append(chunk_values)
@@ -601,6 +613,7 @@ def process_layer_responses_incremental(
     memory_monitor: MemoryMonitor,
     max_retries: int = 3,
     resolution: str = "class",
+    n_samples_expected: Optional[int] = None,
 ) -> Dict[str, np.ndarray]:
     """
     STEP 3: Enhanced memory management with aggressive cleanup and detailed logging.
@@ -725,6 +738,7 @@ def process_layer_responses_incremental(
                                     presented_classes,
                                     unique_times,
                                     resolution=resolution,
+                                    n_samples_expected=n_samples_expected,
                                 )
                             )
                             memory_monitor.log_memory(f"extracted {metric_name}")
@@ -748,6 +762,7 @@ def process_layer_responses_incremental(
                                 memory_monitor=memory_monitor,
                                 chunk_size=32,  # Conservative chunk size
                                 resolution=resolution,
+                                n_samples_expected=n_samples_expected,
                             )
                         )
 

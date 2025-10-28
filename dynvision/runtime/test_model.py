@@ -279,26 +279,26 @@ class TestingOrchestrator:
         # Get trainer configuration (already optimized by TestingParams)
         trainer_kwargs = self.config.get_trainer_kwargs()
 
-        # Optional: Setup logger if needed
-        if hasattr(self.config, "logger") and getattr(self.config, "logger", None):
-            trainer_kwargs["logger"] = pl.loggers.WandbLogger(
-                project=project_paths.project_name,
-                save_dir=project_paths.large_logs,
-                config=(
-                    self.config.get_full_config(flat=True)
-                    if hasattr(self.config, "get_full_config")
-                    else {}
-                ),
-                tags=["test"],
-                name=f"test_{self.config.input_model_state.name}",
-            )
+        # # Optional: Setup logger if needed
+        # if hasattr(self.config, "logger") and getattr(self.config, "logger", None):
+        #     trainer_kwargs["logger"] = pl.loggers.WandbLogger(
+        #         project=project_paths.project_name,
+        #         save_dir=project_paths.large_logs,
+        #         config=(
+        #             self.config.get_full_config(flat=True)
+        #             if hasattr(self.config, "get_full_config")
+        #             else {}
+        #         ),
+        #         tags=["test"],
+        #         name=f"test_{self.config.input_model_state.name}",
+        #     )
 
         # Filter valid arguments for Trainer
         trainer_kwargs, unknown = filter_kwargs(pl.Trainer, trainer_kwargs)
         if unknown:
             logger.debug(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
 
-        wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms
+        # wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms
         return pl.Trainer(**trainer_kwargs)
 
     def save_results(self, model: pl.LightningModule, precision: int = 16) -> None:

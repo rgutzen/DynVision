@@ -170,7 +170,7 @@ class ConnectionBase(LightningModule):
                 )
             except Exception as e:
                 logger.error(
-                    f"Failed to get hidden state: {str(e)} \n Source must have get_hidden_state function!"
+                    f"Failed to get state from source: {str(e)}"
                 )
                 return x
 

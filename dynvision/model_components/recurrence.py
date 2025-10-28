@@ -27,6 +27,7 @@ __all__ = [
     "SelfConnection",
     "InputAdaption",
     "RecurrentConnectedConv2d",
+    "RConv2d",  # alias
 ]
 
 
@@ -807,8 +808,14 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
     ):
         if x is None:
             return None
-        else:
-            x = self.conv(x)
+
+        x = self.conv(x)
+
+        if self.mid_modules is not None:
+            x = self.mid_modules(x)
+        if self.mid_channels is not None:
+            x = self.nonlin(x)
+
         return x
 
     def forward_feedforward2(
@@ -818,9 +825,6 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         if x is None:
             return None
         elif self.mid_channels is not None:
-            if self.mid_modules is not None:
-                x = self.mid_modules(x)
-            x = self.nonlin(x)
             x = self.conv2(x)
         return x
 
@@ -866,6 +870,10 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             raise ValueError(f"Invalid recurrence target: {self.recurrence_target}")
 
         return x
+
+
+# Create alias for shorter name
+RConv2d = RecurrentConnectedConv2d
 
 
 if __name__ == "__main__":

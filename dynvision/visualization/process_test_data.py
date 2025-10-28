@@ -451,6 +451,12 @@ def process_single_batch_optimized(
                     presented_classes = sorted(result_df["first_label_index"].unique())
                     unique_times = sorted(result_df["times_index"].unique())
 
+                    # Calculate expected sample count for sample resolution mode
+                    n_samples_expected = None
+                    if resolution == "sample":
+                        n_samples_expected = len(sample_to_presentation)
+                        logger.info(f"    Expected samples for layer metrics: {n_samples_expected}")
+
                     # Use incremental layer processing with resolution parameter
                     layer_metrics = process_layer_responses_incremental(
                         pt_file=pt_file,
@@ -461,6 +467,7 @@ def process_single_batch_optimized(
                         memory_monitor=memory_monitor,
                         max_retries=3,
                         resolution=resolution,
+                        n_samples_expected=n_samples_expected,
                     )
 
                     # Convert layer metrics to DataFrame based on resolution

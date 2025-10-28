@@ -4,7 +4,7 @@ include: "snake_runtime.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 
-SEED = "1000"
+SEED = ["1000", "1001", "1003"]
 
 rule all:
     input:
@@ -120,9 +120,9 @@ rule dataloader:
 
 rule cornet:
     input:
-        expand(project_paths.reports / "{experiment}" / "{experiment}_CorNetRT_0000_{seed}_imagenet_trained_imagenette" / "test_data.csv",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_CorNetRT:dt=*_{seed}_imagenet_init_imagenette" / "test_data.csv",
         seed=SEED,
-        experiment=['response']
+        experiment=['idleresponse'], #, 'duration', 'contrast', 'interval']
         )
         
 

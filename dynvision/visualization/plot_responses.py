@@ -78,6 +78,13 @@ FORMATTING = {
     "max_global_ymax": 4,
 }
 
+# Errorbar configuration for lineplot
+ERRORBAR_CONFIG = {
+    "errorbar": "ci",  # ("ci", 99.999),  # Default: no errorbars
+    "err_style": "band",
+    "err_kws": {"alpha": 0.2, "edgecolor": "none"},
+}
+
 
 def _format_legend_label(key: str, value: str, config: Dict, dt: float = 1.0) -> str:
     """Format legend label based on key type and config.
@@ -276,6 +283,7 @@ def _plot_accuracy_panel(
     dt: float,
     show_ylabel: bool,
     show_legend: bool,
+    confidence_col: str,
     **kwargs,
 ) -> None:
     """Plot accuracy and confidence over time.
@@ -309,7 +317,7 @@ def _plot_accuracy_panel(
     logger.info(f"Plotting accuracy panel with {n_datapoints} datapoints")
 
     has_accuracy = "accuracy" in data_plot.columns
-    has_confidence = "confidence_avg" in data_plot.columns
+    has_confidence = confidence_col in data_plot.columns
 
     if not has_accuracy and not has_confidence:
         logger.warning("Neither 'accuracy' nor 'confidence_avg' columns found in data")
@@ -334,9 +342,7 @@ def _plot_accuracy_panel(
             markersize=3,
             alpha=fmt["alpha_line"],
             linestyle="-",
-            errorbar="ci",
-            err_style="bars",
-            # err_kws={"alpha": 0.2, "edgecolor": "none"}
+            **ERRORBAR_CONFIG,
         )
     else:
         logger.warning("'accuracy' column not found, skipping accuracy plot")
@@ -349,7 +355,7 @@ def _plot_accuracy_panel(
         sns.lineplot(
             data=data_plot,
             x="time_ms",
-            y="confidence_avg",
+            y=confidence_col,
             hue=hue_key if hue_var != "layers" else None,
             hue_order=hue_values if hue_var != "layers" else None,
             palette=colors if hue_var != "layers" else None,
@@ -360,9 +366,7 @@ def _plot_accuracy_panel(
             markersize=2,
             alpha=fmt["alpha_line"],
             linestyle=":",
-            errorbar="ci",
-            err_style="bars",
-            # err_kws={"alpha": 0.2, "edgecolor": "none"}
+            **ERRORBAR_CONFIG,
         )
     else:
         logger.warning("'confidence_avg' column not found, skipping confidence plot")
@@ -597,9 +601,7 @@ def _plot_response_ridges(
                 linewidth=fmt["linewidth_main"],
                 marker=".",
                 alpha=fmt["alpha_line"],
-                errorbar="se",
-                err_style="band",
-                err_kws={"alpha": 0.2, "edgecolor": "none"},
+                **ERRORBAR_CONFIG,
             )
 
             _add_layer_circle(
@@ -634,9 +636,7 @@ def _plot_response_ridges(
                         linewidth=fmt["linewidth_main"],
                         marker=".",
                         alpha=fmt["alpha_line"],
-                        errorbar="se",
-                        err_style="band",
-                        err_kws={"alpha": 0.2, "edgecolor": "none"},
+                        **ERRORBAR_CONFIG,
                     )
                     plotted_any = True
                 else:
@@ -856,6 +856,7 @@ def plot_temporal_ridge_responses(
     category_key: Optional[str] = None,
     parameter_key: Optional[str] = None,
     experiment: Optional[str] = None,
+    confidence_measure: Optional[str] = "first_label_confidence",
     dt: float = 2.0,
     config: Optional[Dict] = None,
     **kwargs,
@@ -1055,6 +1056,7 @@ def plot_temporal_ridge_responses(
             dt=dt,
             show_ylabel=(col_idx == 0),
             show_legend=(col_idx == 0),
+            confidence_col=confidence_measure,
             **kwargs,
         )
 
@@ -1157,12 +1159,18 @@ def main():
         "--column",
         type=str,
         default=None,
-        choices=["parameter"],
+        choices=["layers", "category", "parameter"],
         help="Variable for columns (optional)",
     )
     parser.add_argument("--category-key", type=str, help="Category column name")
     parser.add_argument("--parameter-key", type=str, help="Parameter column name")
     parser.add_argument("--experiment", type=str, help="Experiment name")
+    parser.add_argument(
+        "--confidenc-measure",
+        type=str,
+        default="first_label_confidence",
+        help="Confidence measure column name",
+    )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
@@ -1204,6 +1212,7 @@ def main():
         category_key=args.category_key,
         parameter_key=args.parameter_key,
         experiment=args.experiment,
+        confidence_measure=args.confidenc_measure,
         dt=args.dt,
         config=config,
     )

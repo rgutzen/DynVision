@@ -42,7 +42,7 @@ set-resources:
     cpu: 16
 
   test_model:
-    mem: (80 * attempt)G # use 80GB of memory
+    mem: 80G * attempt # use 80GB of memory
     # disk: 200G  # 100 GB
     runtime: 45 * attempt # run for 2 hours
     gpu: 1 # use one GPU
@@ -51,7 +51,7 @@ set-resources:
     slurm_extra: "'--gres=gpu:1'"
 
   train_model:
-    mem: (80 + 40 * attempt)G # use 80GB of memory
+    mem: 80G * attempt # use 80GB of memory
     runtime: 300 # run for 5 hours
     # mem_mb_per_cpu: 8000  # 80GB total process memory
     ntasks: 1 # use one GPU

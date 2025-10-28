@@ -13,7 +13,7 @@ experiment_config:
     tsk: [0, 4, 8]
     # lossrt: [0, 4, 8, 20, 38]
     lossrt: [0, 6, 12, 18]
-    idle: [0, 5, 10, 15]
+    idle: [0, 1, 5, 10, 15]
     feedback: ['add','false', 'mul']
     skip: ['true', 'false']
     dloader: ['ffcv', 'torch']
@@ -77,7 +77,7 @@ experiment_config:
       dsteps: 50
       intro: 0
       stim: [25]
-      idle: [0, 10, 20, 30]
+      idle: [0, 1, 5, 10, 15]
 
   duration:
     status: trained

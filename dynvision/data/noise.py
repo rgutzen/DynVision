@@ -330,28 +330,44 @@ def poisson_noise(
         target_noise_power = signal_power / internal_snr
 
         # For normalized images, shift to positive range for Poisson calculation
-        images_shifted = images + 3.0  # Shift to positive range
+        # Use a larger shift to ensure all values are safely positive
+        shift_amount = torch.abs(images.min()).item() + 0.1
+        images_shifted = images + shift_amount
         images_positive = torch.clamp(images_shifted, min=0.1)
 
         # Use iterative approach to find correct scaling
-        # Start with a reasonable lambda scaling
-        lambda_scale = torch.sqrt(target_noise_power)
+        # Start with a reasonable lambda scaling based on target noise power
+        lambda_scale = torch.sqrt(target_noise_power).clamp(min=0.01)
 
-        # Generate Poisson noise
-        lambda_param = images_positive * lambda_scale + lambda_scale * 0.5
-        poisson_samples = torch.poisson(lambda_param)
+        # Generate Poisson noise with robust parameter checking
+        lambda_param = images_positive * lambda_scale + 0.1
 
-        # Convert to additive noise pattern
-        noise_pattern = (poisson_samples - lambda_param) / torch.sqrt(
-            lambda_param + 1e-8
-        )
+        # Ensure lambda_param is positive and finite
+        lambda_param = torch.clamp(lambda_param, min=0.1, max=1e6)
 
-        # Scale to achieve target noise power
-        actual_noise_power = torch.var(noise_pattern)
-        if actual_noise_power > 1e-8:
-            noise_pattern = noise_pattern * torch.sqrt(
-                target_noise_power / actual_noise_power
+        # Verify parameters before Poisson sampling
+        if torch.any(torch.isnan(lambda_param)) or torch.any(
+            torch.isinf(lambda_param)
+        ):
+            logger.warning(
+                "Invalid lambda parameters detected, using fallback Gaussian noise"
             )
+            # Fallback to Gaussian noise if Poisson parameters are invalid
+            noise_pattern = torch.randn_like(images) * torch.sqrt(target_noise_power)
+        else:
+            poisson_samples = torch.poisson(lambda_param)
+
+            # Convert to additive noise pattern
+            noise_pattern = (poisson_samples - lambda_param) / torch.sqrt(
+                lambda_param + 1e-8
+            )
+
+            # Scale to achieve target noise power
+            actual_noise_power = torch.var(noise_pattern)
+            if actual_noise_power > 1e-8:
+                noise_pattern = noise_pattern * torch.sqrt(
+                    target_noise_power / actual_noise_power
+                )
 
         noisy_images = images + noise_pattern
         noise_state = {"noise_pattern": noise_pattern, "function_type": "poisson"}

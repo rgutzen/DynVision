@@ -376,47 +376,18 @@ rule plot_dynamics:
             --ordering {params.ordering:q}
         """
 
-use rule plot_dynamics as plot_dynamics_local with:
-    input:
-        data = project_paths.reports / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
-    output:
-        project_paths.figures / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'dynamics.png',
-
-rule plot_response:
-    input:
-        data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        script = SCRIPTS / 'visualization' / 'plot_response.py'
-    params:
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
-        ),
-    output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'response.png',
-    shell:
-        """
-        {params.execution_cmd} \
-            --data {input.data:q} \
-            --output {output:q} \
-            --parameter {params.parameter} \
-            --experiment {wildcards.experiment} \
-            --category {wildcards.category}
-        """
 
 rule plot_responses:
     input:
         data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
         script = SCRIPTS / 'visualization' / 'plot_responses.py'
     params:
-        column = 'parameter',
-        subplot = 'layers',
-        hue = 'category',
+        column = getattr(config, 'column', 'parameter'),
+        subplot = getattr(config, 'subplot', 'layers'),
+        hue = getattr(config, 'hue', 'category'),
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
-        dt = config.dt,
+        dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),

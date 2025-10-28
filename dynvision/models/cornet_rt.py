@@ -17,7 +17,7 @@ import torch.nn as nn
 from dynvision.base import BaseModel
 from dynvision.model_components import (
     InputAdaption,
-    RecurrentConnectedConv2d,
+    RConv2d,
 )
 
 __all__ = ["CorNetRT"]
@@ -114,7 +114,7 @@ class CorNetRT(BaseModel):
             "delay",  # set and get delayed activations for next layer
         ]
         # V1
-        self.V1 = RecurrentConnectedConv2d(
+        self.V1 = RConv2d(
             in_channels=3,
             mid_channels=64,
             out_channels=64,
@@ -130,7 +130,7 @@ class CorNetRT(BaseModel):
         self.norm_V1 = nn.GroupNorm(32, 64)
 
         # V2
-        self.V2 = RecurrentConnectedConv2d(
+        self.V2 = RConv2d(
             in_channels=64,
             mid_channels=128,
             out_channels=128,
@@ -146,7 +146,7 @@ class CorNetRT(BaseModel):
         self.norm_V2 = nn.GroupNorm(32, 128)
 
         # V4
-        self.V4 = RecurrentConnectedConv2d(
+        self.V4 = RConv2d(
             in_channels=128,
             mid_channels=256,
             out_channels=256,
@@ -162,7 +162,7 @@ class CorNetRT(BaseModel):
         self.norm_V4 = nn.GroupNorm(32, 256)
 
         # IT
-        self.IT = RecurrentConnectedConv2d(
+        self.IT = RConv2d(
             in_channels=256,
             mid_channels=512,
             out_channels=512,
@@ -176,6 +176,9 @@ class CorNetRT(BaseModel):
             dim_x=self.V4.dim_x // self.V4.stride[0] // self.V4.stride[1],
         )
         self.norm_IT = nn.GroupNorm(32, 512)
+
+        # Shared nonlinearity for all layers
+        self.nonlin = nn.ReLU(inplace=True)
 
         # Classifier
         self.classifier = nn.Sequential(

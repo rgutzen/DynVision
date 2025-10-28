@@ -145,7 +145,7 @@ def get_imagenet_classes(tiny: bool = False) -> tuple[list, dict]:
             imagenet_classes = [v[0] for k, v in class_dict.items()]
         return imagenet_classes
     except FileNotFoundError:
-        raise ValueError(f"Class index file not found: {index_file}")
+        raise ValueError(f"Class index file not found: {project_paths.references / str(index_file + '.json')}")
 
 def get_category(data_name: str, data_group: str) -> List[str]:
     """Get category information for a dataset.

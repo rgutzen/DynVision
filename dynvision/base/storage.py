@@ -1116,7 +1116,7 @@ class StorageBufferMixin(LightningModule):
 
     testing_storage_config: Dict[str, Any] = {
         "max_responses": 5,  # Enabled by default for analysis
-        "max_records": 20,  # Much larger for detailed analysis
+        "max_records": 40,  # Much larger for detailed analysis
         "response_strategy": "fixed",  # Keep recent responses
         "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,
