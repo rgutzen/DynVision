@@ -88,6 +88,9 @@ class ConnectionBase(LightningModule):
             self.setup_transform = True
 
     def _setup_conv(self, x: torch.Tensor, h: torch.Tensor) -> Union[nn.Module, bool]:
+        # Always setup integration signal first
+        self.integrate_signal = setup_integration_strategy(self.integration_strategy)
+
         if x is None or h is None:
             self.conv = False
             return False
@@ -127,7 +130,6 @@ class ConnectionBase(LightningModule):
             self.conv = apply_parametrization(self.conv, self.parametrization)
 
         self._init_parameters(in_channels, out_channels)
-        self.integrate_signal = setup_integration_strategy(self.integration_strategy)
         self.setup_transform = False
 
     def _setup_upsample(

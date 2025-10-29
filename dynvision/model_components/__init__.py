@@ -7,3 +7,4 @@ from .layer_connections import *
 from .supralinearity import *
 from .topographic_recurrence import *
 from .integration_strategy import *
+from .bias import *

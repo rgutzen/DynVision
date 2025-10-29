@@ -279,7 +279,13 @@ class DataParams(BaseParams):
     @field_validator("normalize", mode="before")
     @classmethod
     def parse_normalize(cls, v):
-        """Parse JSON string or return existing tuple."""
+        """Parse JSON string or return existing tuple.
+
+        Accepts:
+        - None or "null" (JSON): No normalization
+        - JSON string with 2-element list: [[mean], [std]]
+        - Tuple/list with 2 elements: (mean, std)
+        """
         if v is None:
             return None
 
@@ -287,10 +293,14 @@ class DataParams(BaseParams):
         if isinstance(v, str):
             try:
                 parsed = json.loads(v)
+                # Handle JSON null explicitly
+                if parsed is None:
+                    return None
+                # Handle list format
                 if isinstance(parsed, list) and len(parsed) == 2:
                     return tuple(parsed)
                 else:
-                    raise ValueError("JSON must be list of two sublists")
+                    raise ValueError("JSON must be null or a list of two sublists")
             except json.JSONDecodeError:
                 raise ValueError(f"Invalid JSON format for normalize: {v}")
 

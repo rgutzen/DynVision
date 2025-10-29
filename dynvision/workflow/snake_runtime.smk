@@ -184,10 +184,13 @@ rule test_model:
         config_path = lambda w: process_configs(config, wildcards=w),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
-        normalize = lambda w: json.dumps((
-            config.data_statistics[w.data_name]['mean'],
-            config.data_statistics[w.data_name]['std']
-        )),
+        normalize = lambda w: (
+            # Allow override via --config normalize=null for models like CorNet
+            config.normalize if hasattr(config, 'normalize') else json.dumps((
+                config.data_statistics[w.data_name]['mean'],
+                config.data_statistics[w.data_name]['std']
+            ))
+        ),
         batch_size = config.test_batch_size,
         enable_progress_bar = True,
         execution_cmd = lambda w, input: build_execution_command(

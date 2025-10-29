@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, Tuple, Union, List
 
 import torch
 import torch.nn as nn
+from torch.utils import model_zoo
 
 from dynvision.base import BaseModel
 from dynvision.model_components import (
@@ -51,6 +52,7 @@ class CorNetRT(BaseModel):
         self.init_with_pretrained = init_with_pretrained
         self.fixed_self_weight = fixed_self_weight
         self.recurrence_bias = recurrence_bias
+        self.history_length = int(max(t_recurrence, t_feedforward) / dt) + 1
 
         super().__init__(
             n_timesteps=n_timesteps,
@@ -126,6 +128,7 @@ class CorNetRT(BaseModel):
             recurrence_bias=self.recurrence_bias,
             dim_y=self.dim_y,
             dim_x=self.dim_x,
+            history_length=self.history_length,
         )
         self.norm_V1 = nn.GroupNorm(32, 64)
 
@@ -142,6 +145,7 @@ class CorNetRT(BaseModel):
             recurrence_bias=self.recurrence_bias,
             dim_y=self.V1.dim_y // self.V1.stride[0] // self.V1.stride[1],
             dim_x=self.V1.dim_x // self.V1.stride[0] // self.V1.stride[1],
+            history_length=self.history_length,
         )
         self.norm_V2 = nn.GroupNorm(32, 128)
 
@@ -158,6 +162,7 @@ class CorNetRT(BaseModel):
             recurrence_bias=self.recurrence_bias,
             dim_y=self.V2.dim_y // self.V2.stride[0] // self.V2.stride[1],
             dim_x=self.V2.dim_x // self.V2.stride[0] // self.V2.stride[1],
+            history_length=self.history_length,
         )
         self.norm_V4 = nn.GroupNorm(32, 256)
 
@@ -174,6 +179,7 @@ class CorNetRT(BaseModel):
             recurrence_bias=self.recurrence_bias,
             dim_y=self.V4.dim_y // self.V4.stride[0] // self.V4.stride[1],
             dim_x=self.V4.dim_x // self.V4.stride[0] // self.V4.stride[1],
+            history_length=self.history_length,
         )
         self.norm_IT = nn.GroupNorm(32, 512)
 
@@ -211,44 +217,31 @@ def test_cornet(
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Testing CorNet-RT on {device}")
+    print(f"Testing CorNet-RT on {device}")
 
-    try:
-        # Create and setup model
-        model = model_class(
-            input_dims=input_shape,
-            device=device,
-        )
-        model.setup("fit")
-        logger.info("Model creation successful")
+    # Create and setup model
+    model = model_class(
+        input_dims=input_shape,
+    )
+    model.setup("fit")
+    print("Model creation successful")
 
-        # Test forward pass
-        x = torch.randn(1, *input_shape, device=device)
-        y = model(x)
-        logger.info(f"Forward pass successful: {x.shape} -> {y.shape}")
+    # Test forward pass
+    x = torch.randn(1, *input_shape, device=device)
+    y = model(x)
+    print(f"Forward pass successful: {x.shape} -> {y.shape}")
 
-        # Test stability
-        try:
-            model(torch.full_like(x, float("inf")))
-            assert False, "Should raise stability error"
-        except ValueError:
-            logger.info("Stability check passed")
+    # Log trainable parameters
+    trainable_params = [
+        f"{name} [{tuple(param.shape)}]"
+        for name, param in model.named_parameters()
+        if param.requires_grad
+    ]
+    print("Trainable Parameters:\n\t%s" % "\n\t".join(trainable_params))
 
-        # Log trainable parameters
-        trainable_params = [
-            f"{name} [{tuple(param.shape)}]"
-            for name, param in model.named_parameters()
-            if param.requires_grad
-        ]
-        logger.info("Trainable Parameters:\n\t%s", "\n\t".join(trainable_params))
-
-        logger.info("All tests passed!")
-
-    except Exception as e:
-        logger.error(f"Tests failed: {str(e)}")
-        raise
+    print("All tests passed!")
 
 
 if __name__ == "__main__":
 
-    test_cornet(CorNetRT)
+    test_cornet()

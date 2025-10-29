@@ -36,6 +36,19 @@ data_statistics:
         mean: [0.485, 0.456, 0.406]
         std: [0.229, 0.224, 0.225]
 
+# Model-specific data preprocessing requirements
+# Models listed here override default normalization behavior
+model_requirements:
+    CorNetRT:
+        normalize: null  # No normalization - expects raw pixel values
+        note: "CorNet models trained without normalization"
+    CorNetZ:
+        normalize: null
+        note: "CorNet models trained without normalization"
+    CorNetS:
+        normalize: null
+        note: "CorNet models trained without normalization"
+
 data_groups:
     mnist:
         '01':

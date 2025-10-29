@@ -1,456 +1,434 @@
-import requests
+"""
+CordsNet: Contextual Recurrent Deep Structured Network
+
+This module implements CordsNet, a hierarchical recurrent neural network
+with complex skip connections and spatial biases.
+
+Reference:
+- Wang et al. (2020) "CordsNet: Contextual Recurrent Deep Structured Network"
+"""
+
+import logging
 import torch
 import torch.nn as nn
+from typing import Optional, Tuple, Any
 
 from dynvision.base import BaseModel
-
 from dynvision.model_components import (
-    EulerStep,
-    RecurrentConnectedConv2d,
+    RecurrentConnectedConv2d as RConv2d,
+    SpatialBias,
     Skip,
 )
 from dynvision.project_paths import project_paths
-from dynvision.utils import alias_kwargs, str_to_bool
+from dynvision.utils import alias_kwargs
 
 __all__ = ["CordsNet"]
+
+logger = logging.getLogger(__name__)
 
 
 class CordsNet(BaseModel):
     """
     CordsNet: Contextual Recurrent Deep Structured Network
 
-    Reimplementation of CordsNet using the DynVision framework.
+    Reimplementation of CordsNet using DynVision's layer_operations pattern.
+    Uses standard TemporalBase._forward() with proper delay coordination.
+
+    Architecture:
+        - 8 recurrent layers with complex skip connections
+        - Channels: [64, 64, 64, 128, 128, 256, 256, 512, 512]
+        - Strides: [1, 1, 2, 1, 2, 1, 2, 1]
+        - Skip pattern: Each layer receives from previous + 2-layers-back
+        - Spatial bias per layer (per-unit)
 
     Dynamics:
-        The original CordsNet uses the update rule:
-            r_new = (1 - alpha) * r_old + alpha * relu(recurrent(r) + feedforward(input))
+        Original update rule:
+            r_new = (1 - alpha) * r_old + alpha * relu(recurrent(r) + feedforward(input) + bias)
 
-        This is equivalent to Euler integration with dt/tau = alpha:
-            r_new = r_old + (dt/tau) * (f(r, input) - r_old)
-                  = r_old * (1 - dt/tau) + (dt/tau) * f(r, input)
-
-        To match a specific alpha value from the original, set dt and tau such that:
+        Equivalent to Euler integration with dt/tau = alpha:
             alpha = dt / tau
 
-        Examples:
-            - alpha=0.1: dt=1, tau=10 (default)
-            - alpha=0.2: dt=2, tau=10 or dt=1, tau=5
-            - alpha=0.05: dt=1, tau=20
+        Default: dt=1, tau=10 → alpha=0.1
 
     Args:
-        n_classes (int): Number of output classes
-        input_dims (tuple): Input dimensions (t, c, y, x)
-        dt (float): Integration time step in ms
-        tau (float): Time constant in ms (controls alpha = dt/tau)
-        t_feedforward (float): Feedforward delay in ms
-        t_recurrence (float): Recurrence delay in ms
-        recurrence_type (str): Type of recurrent connection
-        dynamics_solver (str): ODE solver type
-        bias (bool): Whether to use bias in convolutions
-        idle_timesteps (int): Number of timesteps to run without input for spontaneous activity
+        n_timesteps: Number of timesteps to process (default: 100)
+        input_dims: Input dimensions (t, c, y, x)
+        n_classes: Number of output classes
+        dt: Integration time step (controls temporal resolution)
+        tau: Time constant (controls integration rate, alpha = dt/tau)
+        t_feedforward: Delay for feedforward connections between layers
+        t_recurrence: Delay for recurrent connections within each layer
+        t_skip: Delay for skip connections
+        idle_timesteps: Timesteps of spontaneous activity before input (default: 100)
+        recurrence_type: Type of recurrent connection (default: "full" for 3x3 conv)
     """
 
     @alias_kwargs(
         tff="t_feedforward",
         trc="t_recurrence",
+        tsk="t_skip",
         rctype="recurrence_type",
-        solver="dynamics_solver",
     )
     def __init__(
         self,
-        n_classes=1000,
-        input_dims=(20, 3, 224, 224),  # (t, c, y, x)
-        dt=1,  # ms
-        tau=10,  # ms (alpha = dt/tau = 0.1 by default)
-        t_feedforward=1,  # ms
-        t_recurrence=1,  # ms
-        recurrence_type="full",
-        dynamics_solver="euler",
-        bias=True,
-        idle_timesteps=100,  # Run 100 timesteps without input for spontaneous activity
-        **kwargs,
+        n_timesteps: int = 100,
+        input_dims: Tuple[int, int, int, int] = (100, 3, 224, 224),
+        n_classes: int = 1000,
+        dt: float = 1.0,
+        tau: float = 10.0,  # alpha = dt/tau = 0.1 by default
+        t_feedforward: float = 1.0,
+        t_recurrence: float = 1.0,
+        t_skip: float = 1.0,
+        recurrence_type: str = "full",  # 3x3 conv for recurrence
+        idle_timesteps: int = 100,
+        init_with_pretrained: bool = False,
+        **kwargs: Any,
     ) -> None:
+        """
+        Initialize CordsNet model.
+
+        Note: The original CordsNet uses alpha=0.1, which corresponds to dt=1, tau=10.
+        """
+        self.init_with_pretrained = init_with_pretrained
 
         super().__init__(
-            n_classes=n_classes,
+            n_timesteps=n_timesteps,
             input_dims=input_dims,
-            t_recurrence=float(t_recurrence),
-            t_feedforward=float(t_feedforward),
-            t_feedback=0.0,  # Not used in CordsNet
-            t_skip=0.0,  # Not used in CordsNet
-            tau=float(tau),
+            n_classes=n_classes,
             dt=float(dt),
-            bias=str_to_bool(bias),
+            tau=float(tau),
+            t_feedforward=float(t_feedforward),
+            t_recurrence=float(t_recurrence),
+            t_skip=float(t_skip),
+            t_feedback=0.0,  # Not used in CordsNet
             recurrence_type=recurrence_type,
-            dynamics_solver=dynamics_solver,
             idle_timesteps=int(idle_timesteps),
             **kwargs,
         )
-        self.delay_ff = int(t_feedforward / dt)
-        self.delay_rc = int(t_recurrence / dt)
-        self._define_architecture()
-        self._init_parameters()
 
-    def setup(self, stage):
-        super().setup(stage)
+    def _init_parameters(self) -> None:
+        """Initialize model parameters, optionally loading pretrained weights."""
+        if self.init_with_pretrained:
+            self.load_pretrained_state_dict(check_mismatch_layer=["out_fc"])
+            # Make only the classifier trainable
+            self.trainable_parameter_names = [
+                p for p in list(self.state_dict().keys()) if "out_fc" in p
+            ]
+        else:
+            self.trainable_parameter_names = list(self.state_dict().keys())
 
-    def _init_parameters(self):
-        # Load pretrained weights
-        self.load_pretrained_state_dict(check_mismatch_layer=["classifier.2"])
+    def download_pretrained_state_dict(self) -> dict:
+        """
+        Download pretrained CordsNet weights.
 
-        # make only the classifier trainable
-        self.trainable_parameter_names = [
-            p for p in list(self.state_dict().keys()) if "classifier.2" in p
-        ]
-
-    def download_pretrained_state_dict(self, version=0):
-        url = "https://github.com/wmws2/cordsnet/blob/main/cordsnetr8.pth"
-        save_path = project_paths.models / "CordsNet" / "CordsNet_pretrained.pt"
+        Note: GitHub blob URLs don't work for direct download. Need to use raw.githubusercontent.com
+        or use the actual release/download link.
+        """
+        # TODO: Fix URL to actual pretrained weights location
+        url = "https://raw.githubusercontent.com/wmws2/cordsnet/main/cordsnetr8.pth"
+        save_path = project_paths.models / "CordsNet" / "cordsnet_pretrained.pth"
 
         if not save_path.exists():
             save_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Downloading pretrained CordsNet from {url}")
+
+            import requests
             response = requests.get(url, stream=True)
             if response.status_code == 200:
                 with open(save_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                print(f"Downloaded pretrained model to {save_path}")
+                logger.info(f"Downloaded pretrained model to {save_path}")
             else:
-                raise Exception(f"Failed to download file from {url}")
+                raise RuntimeError(
+                    f"Failed to download pretrained weights from {url} "
+                    f"(status code: {response.status_code})"
+                )
         else:
-            print(f"Pretrained model already exists at {save_path}")
+            logger.info(f"Using cached pretrained model from {save_path}")
 
         state_dict = torch.load(save_path, map_location=self.device)
-
-        # Original pretrained model has spatial biases [channels, height, width]
-        # Keep them as is (don't average to [channels])
-
         return state_dict
 
-    def translate_pretrained_layer_names(self):
+    def translate_pretrained_layer_names(self) -> dict:
         """
-        Map original CordsNet pretrained weight names to new structure.
+        Map original CordsNet pretrained weight names to DynVision structure.
 
         Original structure:
-        - area_conv[i]: recurrent connection for layer i
-        - area_area[i]: feedforward connection for layer i
-        - conv_bias[i]: spatial bias for layer i
-        - inp_conv: initial convolution
-        - inp_skip: skip to layer 2
-        - skip_area[0,1,2]: skip connections to layers 4, 6, 8
+        - inp_conv: initial 7x7 convolution on input
+        - inp_avgpool: average pooling after initial conv
+        - inp_skip: learned skip connection from input to layer2
+        - area_conv[i]: recurrent connection for layer i (3x3 conv)
+        - area_area[i]: feedforward connection for layer i (3x3 conv with stride)
+        - conv_bias[i]: spatial bias for layer i [channels, height, width]
+        - skip_area[0,1,2]: learned skip connections (1x1 conv with stride=2)
+        - out_fc: final linear classifier
+
+        DynVision structure:
+        - layer0: RConv2d for input processing
+        - layer{1-8}: RConv2d modules
+          - layer.conv: feedforward (area_area)
+          - layer.recurrence.conv: recurrent (area_conv)
+        - addbias_layer{1-8}.bias: spatial biases (conv_bias)
+        - addskip_layer{N}: Skip modules with learned convs
+        - classifier: final classifier
         """
         translate_layer_names = {
-            "inp_conv": "layer_inp",
-            "inp_skip": "skip_layer2",
-            "skip_area.0": "skip_layer4",
-            "skip_area.1": "skip_layer6",
-            "skip_area.2": "skip_layer8",
+            "inp_conv": "layer0.conv",
+            "inp_avgpool": "pool_layer0",
             "out_fc": "classifier.2",
         }
 
-        # Map area_conv (recurrent) and area_area (feedforward) to layer structure
+        # Map layers 1-8
         for i in range(8):
             layer_name = f"layer{i+1}"
-            # Recurrent connection
+            # area_conv → recurrence conv
             translate_layer_names[f"area_conv.{i}"] = f"{layer_name}.recurrence.conv"
-            # Feedforward connection
+            # area_area → feedforward conv
             translate_layer_names[f"area_area.{i}"] = f"{layer_name}.conv"
-            # Spatial bias
-            translate_layer_names[f"conv_bias.{i}"] = f"bias_{layer_name}"
+            # conv_bias → spatial bias
+            translate_layer_names[f"conv_bias.{i}"] = f"addbias_{layer_name}.bias"
+
+        # Map skip connections
+        translate_layer_names["inp_skip"] = "addskip_layer2.conv"
+        translate_layer_names["skip_area.0"] = "addskip_layer4.conv"
+        translate_layer_names["skip_area.1"] = "addskip_layer6.conv"
+        translate_layer_names["skip_area.2"] = "addskip_layer8.conv"
 
         return translate_layer_names
 
-    def reset(self):
+    def reset(self) -> None:
+        """Reset all layer hidden states."""
         for layer_name in self.layer_names:
-            getattr(self, layer_name).reset()
-            getattr(self, f"tstep_{layer_name}").reset()
+            layer = getattr(self, layer_name)
+            if hasattr(layer, "reset"):
+                layer.reset()
 
-    def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def _define_architecture(self) -> None:
         """
-        Override forward to handle the custom CordsNet temporal processing.
+        Define CordsNet architecture using DynVision's layer_operations pattern.
 
-        The BaseModel's forward expects to call _forward once per timestep,
-        but CordsNet processes all timesteps in a batch with layers in reverse order.
+        Architecture:
+        - layer0: Input processing (7x7 conv + pool, no recurrence)
+        - layer1-8: Recurrent layers with 3x3 feedforward + 3x3 recurrence
+        - Skip connections between non-consecutive layers
+        - Spatial biases per layer
+
+        Layer structure:
+        - layer0: 3→64 (conv stride 2, pool stride 2 → 56x56)
+        - layer1: 64→64 (stride 1, size 56x56)
+        - layer2: 64→64 (stride 1, size 56x56) + skip from layer0
+        - layer3: 64→128 (stride 2, size 28x28) + skip from layer1
+        - layer4: 128→128 (stride 1, size 28x28) + skip from layer2
+        - layer5: 128→256 (stride 2, size 14x14) + skip from layer3
+        - layer6: 256→256 (stride 1, size 14x14) + skip from layer4
+        - layer7: 256→512 (stride 2, size 7x7) + skip from layer5
+        - layer8: 512→512 (stride 1, size 7x7) + skip from layer6
         """
-        # Adjust input dimensions if needed
-        if x.ndim == 4:  # (batch, channels, height, width)
-            # Add timestep dimension
-            x = x.unsqueeze(1)  # (batch, 1, channels, height, width)
 
-        # Extract first frame (CordsNet processes single images for all timesteps)
-        if x.size(1) > 1:
-            # Use first frame
-            x = x[:, 0]  # (batch, channels, height, width)
-        else:
-            x = x.squeeze(1)  # (batch, channels, height, width)
-
-        # Reset states
-        self.reset()
-
-        # Call custom _forward that handles all timesteps internally
-        output, responses = self._forward(x)
-
-        return output
-
-    def _get_layer_input(self, layer_idx: int, r: list, inp: torch.Tensor):
-        """
-        Get input for a specific layer based on the skip connection pattern.
-
-        Pattern from original CordsNet:
-        - layer1 (idx 0): input from inp
-        - layer2 (idx 1): relu(r[0]) + skip(inp)
-        - layer3 (idx 2): relu(r[1]) + relu(r[0])
-        - layer4 (idx 3): relu(r[2]) + skip(relu(r[1]))
-        - layer5 (idx 4): relu(r[3]) + relu(r[2])
-        - layer6 (idx 5): relu(r[4]) + skip(relu(r[3]))
-        - layer7 (idx 6): relu(r[5]) + relu(r[4])
-        - layer8 (idx 7): relu(r[6]) + skip(relu(r[5]))
-        """
-        nonlin = nn.ReLU(inplace=False)
-
-        if layer_idx == 0:  # layer1
-            return inp
-        elif layer_idx == 1:  # layer2
-            return nonlin(r[0]) + self.skip_layer2(inp)
-        elif layer_idx == 2:  # layer3
-            return nonlin(r[1]) + nonlin(r[0])
-        elif layer_idx == 3:  # layer4
-            return nonlin(r[2]) + self.skip_layer4(nonlin(r[1]))
-        elif layer_idx == 4:  # layer5
-            return nonlin(r[3]) + nonlin(r[2])
-        elif layer_idx == 5:  # layer6
-            return nonlin(r[4]) + self.skip_layer6(nonlin(r[3]))
-        elif layer_idx == 6:  # layer7
-            return nonlin(r[5]) + nonlin(r[4])
-        elif layer_idx == 7:  # layer8
-            return nonlin(r[6]) + self.skip_layer8(nonlin(r[5]))
-        else:
-            raise ValueError(f"Invalid layer index: {layer_idx}")
-
-    def _forward(
-        self,
-        x: torch.Tensor = None,
-        t: int = None,
-        feedforward_only: bool = False,
-        store_responses: bool = True,
-    ):
-        """
-        Custom forward pass matching original CordsNet dynamics.
-
-        The original CordsNet:
-        1. Runs idle_timesteps without input for spontaneous activity
-        2. Runs n_timesteps with input
-        3. Processes layers in reverse order (layer8→layer1) per timestep
-        4. Uses update rule: r = (1-alpha)*r + alpha*relu(recurrent(r) + feedforward(input) + bias)
-        5. Outputs: avgpool(relu(layer8) + relu(layer7))
-        """
-        if x is None:
-            return None, {}
-
-        batch_size = x.size(0)
-        responses = {}
-
-        # Process input through initial layers
-        inp = self.pool_layer_inp(self.layer_inp(x))
-
-        # Initialize layer states
-        channels = [64, 64, 64, 128, 128, 256, 256, 512, 512]
-        sizes = [56, 56, 28, 28, 14, 14, 7, 7]
-        r = []
-        for i in range(8):
-            r.append(torch.zeros(batch_size, channels[i+1], sizes[i], sizes[i], device=x.device, dtype=x.dtype))
-
-        # Run idle timesteps for spontaneous activity (without input)
-        with torch.no_grad():
-            for t in range(self.idle_timesteps):
-                for layer_idx in range(7, -1, -1):  # Process in reverse order (7→0)
-                    layer_name = f"layer{layer_idx + 1}"
-                    layer = getattr(self, layer_name)
-                    nonlin = getattr(self, f"nonlin_{layer_name}")
-                    bias = getattr(self, f"bias_{layer_name}")
-                    tstep = getattr(self, f"tstep_{layer_name}")
-
-                    # Get input for this layer (using zero input for idle)
-                    layer_input = self._get_layer_input(layer_idx, r, inp * 0)
-
-                    # Apply layer (feedforward + recurrence)
-                    x_layer = layer(layer_input)
-
-                    # Apply bias and nonlinearity
-                    x_layer = nonlin(x_layer + bias)
-
-                    # Temporal integration
-                    r[layer_idx] = tstep(r[layer_idx], x_layer)
-
-        # Run regular timesteps with input
-        for t in range(self.n_timesteps):
-            for layer_idx in range(7, -1, -1):  # Process in reverse order (7→0)
-                layer_name = f"layer{layer_idx + 1}"
-                layer = getattr(self, layer_name)
-                nonlin = getattr(self, f"nonlin_{layer_name}")
-                bias = getattr(self, f"bias_{layer_name}")
-                tstep = getattr(self, f"tstep_{layer_name}")
-
-                # Get input for this layer
-                layer_input = self._get_layer_input(layer_idx, r, inp)
-
-                # Apply layer (feedforward + recurrence)
-                x_layer = layer(layer_input)
-
-                # Apply bias and nonlinearity
-                x_layer = nonlin(x_layer + bias)
-
-                # Temporal integration
-                r[layer_idx] = tstep(r[layer_idx], x_layer)
-
-        # Store responses if requested
-        if store_responses:
-            for i, layer_name in enumerate(self.layer_names):
-                responses[layer_name] = r[i]
-
-        # Compute output: avgpool(relu(layer8) + relu(layer7))
-        summed_output = torch.relu(r[7]) + torch.relu(r[6])
-        output = self.classifier(summed_output)
-
-        if store_responses:
-            responses[self.classifier_name] = output
-
-        return output, responses
-
-    def _define_architecture(self):
-        # Faithful 8-layer structure matching original CordsNet
-        # layer1: 64→64 (stride 1, size 56x56)
-        # layer2: 64→64 (stride 1, size 56x56)
-        # layer3: 64→128 (stride 2, size 28x28)
-        # layer4: 128→128 (stride 1, size 28x28)
-        # layer5: 128→256 (stride 2, size 14x14)
-        # layer6: 256→256 (stride 1, size 14x14)
-        # layer7: 256→512 (stride 2, size 7x7)
-        # layer8: 512→512 (stride 1, size 7x7)
-
-        self.layer_names = ["layer1", "layer2", "layer3", "layer4", "layer5", "layer6", "layer7", "layer8"]
-        self.layer_operations = [
-            "addskip",  # apply skip connection
-            "layer",  # apply (recurrent) convolutional layer
-            "nonlin",  # apply nonlinearity (ReLU before temporal integration)
-            "addbias",  # apply spatial (per-unit) bias
-            "tstep",  # apply dynamical systems ode solver step
-            "record",  # record activations in responses dict
-            "delay",  # set and get delayed activations for next layer
+        # Include input processing as layer0
+        self.layer_names = [
+            "layer0", "layer1", "layer2", "layer3", "layer4",
+            "layer5", "layer6", "layer7", "layer8"
         ]
 
-        # Channel configuration (matching original)
+        # Define operation sequence (matches DyRCNN pattern)
+        self.layer_operations = [
+            "layer",      # RConv2d (feedforward + recurrence)
+            "pool",       # Pooling (layer0 only)
+            "addskip",    # Skip connection (if defined)
+            "addbias",    # Spatial bias (layers 1-8 only)
+            "nonlin",     # Shared ReLU
+            "delay",      # Store and retrieve delayed activation
+            "record",     # Record response
+        ]
+
+        # Shared nonlinearity
+        self.nonlin = nn.ReLU(inplace=False)
+
+        # Configuration arrays
         channels = [64, 64, 64, 128, 128, 256, 256, 512, 512]
         sizes = [56, 56, 28, 28, 14, 14, 7, 7]
         strides = [1, 1, 2, 1, 2, 1, 2, 1]
 
-        # Input layer
-        self.layer_inp = nn.utils.parametrizations.weight_norm(
-            nn.Conv2d(
-                in_channels=self.n_channels,
-                out_channels=64,
-                kernel_size=7,
-                stride=2,
-                padding=3,
-                bias=False,
-            )
+        # Layer 0: Input processing (no recurrence, no bias)
+        self.layer0 = RConv2d(
+            in_channels=self.n_channels,
+            out_channels=64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False,
+            recurrence_type="none",  # No recurrence for input layer
+            history_length=max(self.t_feedforward, self.t_skip),
+            parametrization=nn.utils.parametrizations.weight_norm,
         )
-        self.pool_layer_inp = nn.AvgPool2d(
+        self.pool_layer0 = nn.AvgPool2d(
             kernel_size=3, stride=2, padding=1, ceil_mode=False
         )
 
-        # Common layer parameters
-        common_layer_params = dict(
-            bias=False,  # Bias disabled - using spatial bias instead
-            recurrence_type=self.recurrence_type,
-            dt=self.dt,
-            tau=self.tau,
-            history_length=self.t_feedforward,
-            t_recurrence=self.t_recurrence,
-            parametrization=nn.utils.parametrizations.weight_norm,
-            device=self.device,
-        )
+        # Common parameters for recurrent layers
+        common_params = {
+            "bias": False,  # Using spatial bias modules instead
+            "recurrence_type": self.recurrence_type,  # "full" = 3x3 conv
+            "recurrence_kernel_size": 3,  # 3x3 recurrent convolution
+            "recurrence_target": "output",  # Recurrence on layer output
+            "recurrence_bias": False,  # No bias in recurrent conv
+            "t_recurrence": self.t_recurrence,
+            "history_length": max(self.t_feedforward, self.t_skip, self.t_recurrence),
+            "parametrization": nn.utils.parametrizations.weight_norm,
+        }
 
-        # Create 8 recurrent layers
+        # Layers 1-8: Recurrent layers with spatial biases
         for i in range(8):
             layer_name = f"layer{i+1}"
 
-            # Create recurrent convolutional layer
-            layer = RecurrentConnectedConv2d(
+            # RConv2d layer: feedforward (area_area) + recurrence (area_conv)
+            layer = RConv2d(
                 in_channels=channels[i],
                 out_channels=channels[i+1],
-                kernel_size=3,
-                stride=strides[i],
-                **common_layer_params,
+                kernel_size=3,  # Feedforward kernel
+                stride=strides[i],  # Feedforward stride
+                padding=1,
+                **common_params,
             )
             setattr(self, layer_name, layer)
 
-            # Create nonlinearity
-            setattr(self, f"nonlin_{layer_name}", nn.ReLU(inplace=False))
+            # Spatial bias module (per-unit bias)
+            bias = SpatialBias(
+                channels=channels[i+1],
+                height=sizes[i],
+                width=sizes[i],
+                init_value=0.0,
+            )
+            setattr(self, f"addbias_{layer_name}", bias)
 
-            # Create temporal integration step
-            setattr(self, f"tstep_{layer_name}", EulerStep(dt=self.dt, tau=self.tau))
+        # Skip connections (matching original pattern)
+        self._define_skip_connections()
 
-            # Create spatial bias parameter
-            bias = nn.Parameter(torch.zeros(channels[i+1], sizes[i], sizes[i]))
-            setattr(self, f"bias_{layer_name}", bias)
-
-        # Skip connections (matching original structure)
-        # inp_skip: from input (64 channels) to layer2 (added to layer2 input)
-        self.skip_layer2 = nn.utils.parametrizations.weight_norm(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        )
-
-        # skip_area[0]: from layer2 (64ch) to layer4 (128ch), stride=2
-        self.skip_layer4 = nn.utils.parametrizations.weight_norm(
-            nn.Conv2d(64, 128, kernel_size=1, stride=2, padding=0, bias=False)
-        )
-
-        # skip_area[1]: from layer4 (128ch) to layer6 (256ch), stride=2
-        self.skip_layer6 = nn.utils.parametrizations.weight_norm(
-            nn.Conv2d(128, 256, kernel_size=1, stride=2, padding=0, bias=False)
-        )
-
-        # skip_area[2]: from layer6 (256ch) to layer8 (512ch), stride=2
-        self.skip_layer8 = nn.utils.parametrizations.weight_norm(
-            nn.Conv2d(256, 512, kernel_size=1, stride=2, padding=0, bias=False)
-        )
-
-        # Classifier
+        # Output classifier
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
             nn.utils.parametrizations.weight_norm(
-                nn.Linear(512, self.n_classes, bias=True),
+                nn.Linear(512, self.n_classes, bias=True)
             ),
         )
-        return None
+
+    def _define_skip_connections(self) -> None:
+        """
+        Define skip connections matching original CordsNet pattern.
+
+        Skip pattern:
+        - layer2: from layer0 with learned 3x3 conv
+        - layer3: from layer1 (direct, same channels)
+        - layer4: from layer2 with learned 1x1 conv + stride
+        - layer5: from layer3 (direct, different channels but auto-adapt)
+        - layer6: from layer4 with learned 1x1 conv + stride
+        - layer7: from layer5 (direct, different channels but auto-adapt)
+        - layer8: from layer6 with learned 1x1 conv + stride
+        """
+        delay_skip = int(self.t_skip / self.dt)
+
+        # layer2: learned skip from layer0 (3x3 conv, same channels)
+        self.addskip_layer2 = Skip(
+            source=self.layer0,
+            in_channels=64,
+            out_channels=64,
+            delay_index=delay_skip,
+            bias=False,
+            parametrization=nn.utils.parametrizations.weight_norm,
+            auto_adapt=False,
+        )
+        # Override with 3x3 conv instead of default 1x1
+        self.addskip_layer2.conv = nn.utils.parametrizations.weight_norm(
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        )
+
+        # layer3: direct skip from layer1 (same channels)
+        self.addskip_layer3 = Skip(
+            source=self.layer1,
+            delay_index=delay_skip,
+            auto_adapt=True,
+        )
+
+        # layer4: learned skip from layer2 (1x1 conv with stride=2)
+        self.addskip_layer4 = Skip(
+            source=self.layer2,
+            in_channels=64,
+            out_channels=128,
+            scale_factor=2,  # Downsample by 2
+            delay_index=delay_skip,
+            bias=False,
+            parametrization=nn.utils.parametrizations.weight_norm,
+            auto_adapt=False,
+        )
+
+        # layer5: direct skip from layer3 (auto-adapt for channel mismatch)
+        self.addskip_layer5 = Skip(
+            source=self.layer3,
+            delay_index=delay_skip,
+            auto_adapt=True,
+        )
+
+        # layer6: learned skip from layer4 (1x1 conv with stride=2)
+        self.addskip_layer6 = Skip(
+            source=self.layer4,
+            in_channels=128,
+            out_channels=256,
+            scale_factor=2,
+            delay_index=delay_skip,
+            bias=False,
+            parametrization=nn.utils.parametrizations.weight_norm,
+            auto_adapt=False,
+        )
+
+        # layer7: direct skip from layer5 (auto-adapt for channel mismatch)
+        self.addskip_layer7 = Skip(
+            source=self.layer5,
+            delay_index=delay_skip,
+            auto_adapt=True,
+        )
+
+        # layer8: learned skip from layer6 (1x1 conv with stride=2)
+        self.addskip_layer8 = Skip(
+            source=self.layer6,
+            in_channels=256,
+            out_channels=512,
+            scale_factor=2,
+            delay_index=delay_skip,
+            bias=False,
+            parametrization=nn.utils.parametrizations.weight_norm,
+            auto_adapt=False,
+        )
 
 
 if __name__ == "__main__":
-    input_shape = (20, 3, 224, 224)
+    # Test model creation
+    input_shape = (100, 3, 224, 224)
 
     model = CordsNet(
         input_dims=input_shape,
-        n_classes=10,
-        store_responses=True,
-        tff=1,
-        trc=1,
-        tau=10,
+        n_classes=1000,
+        n_timesteps=100,
         dt=1,
+        tau=10,
+        t_feedforward=1,
+        t_recurrence=1,
+        t_skip=1,
+        recurrence_type="full",
+        idle_timesteps=100,
     )
     model.setup("fit")
 
-    # print(torchsummary.summary(model, input_size=input_shape[1:]))
-    # print(model.state_dict().keys())
+    print(f"Model created successfully!")
+    print(f"Layer names: {model.layer_names}")
+    print(f"Layer operations: {model.layer_operations}")
 
-    random_input = torch.randn(1, *input_shape)
+    # Test forward pass
+    x = torch.randn(1, *input_shape)
+    y = model(x)
 
-    t = 0
-    output = model.forward(random_input)
-
-    outputs = model(random_input).squeeze()  # remove batch dimension
-
-    print(f"Random Input ({random_input.shape})")
-    print(f"Residual Timesteps: {model.n_residual_timesteps}")
-    print(f"Model Output: {outputs.shape}")
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {y.shape}")
+    print(f"Residual timesteps: {model.n_residual_timesteps}")

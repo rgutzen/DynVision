@@ -63,7 +63,7 @@ class TemporalBase(nn.Module):
         self.t_feedforward = float(t_feedforward)
         self.t_recurrence = float(t_recurrence)
         self.t_feedback = float(t_feedforward if t_feedback is None else t_feedback)
-        self.t_skip = float(t_feedback if t_skip is None else t_skip)
+        self.t_skip = float(self.t_feedback if t_skip is None else t_skip)
         self.history_length = max(
             self.t_feedforward, self.t_recurrence, self.t_feedback, self.t_skip
         )
@@ -449,7 +449,6 @@ class TemporalBase(nn.Module):
         while is_empty_output(x):
             t += 1
             x, _ = self._forward(random_input, t=t, feedforward_only=True)
-
             if t > max_timesteps:
                 raise ValueError(
                     f"Unable to determine residual timesteps (> {max_timesteps})!"
