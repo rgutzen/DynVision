@@ -161,7 +161,7 @@ rule process_test_data:
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
-        measures = ['response_avg', 'response_std', 'label_confidence'], #, 'spatial_variance', 'feature_variance', 'guess_confidence', 'first_label_confidence'],
+        measures = ['response_avg', 'response_std', 'label_confidence', 'guess_confidence', 'first_label_confidence'], # 'spatial_variance', 'feature_variance',
         topk = [3, 5],
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         batch_size = 1,
@@ -262,6 +262,7 @@ rule plot_performance:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
         experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
         dt = config.dt,
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
@@ -286,6 +287,7 @@ rule plot_performance:
             --parameter-key {params.parameter} \
             --category-key {params.category} \
             --experiment {params.experiment} \
+            --confidence-measure {params.confidence_measure} \
             --dt {params.dt} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
@@ -388,6 +390,7 @@ rule plot_responses:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
         dt = getattr(config, 'dt', 2),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -409,6 +412,7 @@ rule plot_responses:
             --parameter-key {params.parameter} \
             --category-key {params.category} \
             --experiment {wildcards.experiment} \
+            --confidence-measure {params.confidence_measure} \
             --dt {params.dt} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \

@@ -41,13 +41,16 @@ data_statistics:
 model_requirements:
     CorNetRT:
         normalize: null  # No normalization - expects raw pixel values
-        note: "CorNet models trained without normalization"
+        pixel_range: "0-255"  # Expects [0, 255] range, not [0, 1]
+        note: "CorNet models trained without normalization on [0, 255] pixel values"
     CorNetZ:
         normalize: null
-        note: "CorNet models trained without normalization"
+        pixel_range: "0-255"
+        note: "CorNet models trained without normalization on [0, 255] pixel values"
     CorNetS:
         normalize: null
-        note: "CorNet models trained without normalization"
+        pixel_range: "0-255"
+        note: "CorNet models trained without normalization on [0, 255] pixel values"
 
 data_groups:
     mnist:

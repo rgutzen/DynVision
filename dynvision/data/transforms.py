@@ -112,15 +112,12 @@ def get_data_transform(
         transform = transform.lower()
         if transform in transform_presets:
             transforms_to_apply.extend(transform_presets[transform])
-        elif "ffcv_train" in transform:
-            transforms_to_apply.extend(transform_presets["ffcv_train"])
-        elif "train" in transform:
-            transforms_to_apply.extend(transform_presets["train"])
-        elif "ffcv_test" in transform:
-            transforms_to_apply.extend(transform_presets["ffcv_test"])
-        elif "test" in transform:
-            transforms_to_apply.extend(transform_presets["test"])
         else:
+            for name in transform_presets.keys():
+                if name in transform:
+                    transforms_to_apply.extend(transform_presets[name])
+                    break
+        if transforms_to_apply == []:
             raise ValueError(f"No transform with name {transform} found in presets!")
     else:
         try:

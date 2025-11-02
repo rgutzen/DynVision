@@ -270,6 +270,28 @@ layer = RConv2d(
 2. Count operations before/after that point
 3. Match to DynVision's structure
 
+**Debugging recurrence_target issues:**
+
+If outputs don't match despite correct weights, trace EXACTLY where state is added:
+
+```python
+# Original code - count operations before/after recurrence
+# Example from CorNet-RT:
+inp = self.conv_input(inp)      # [1] First conv
+inp = self.norm_input(inp)      # [2] First norm
+inp = self.nonlin_input(inp)    # [3] First activation
+skip = inp + state              # [← RECURRENCE ADDED HERE]
+x = self.conv1(skip)            # [4] Second conv
+x = self.norm1(x)               # [5] Second norm
+x = self.nonlin1(x)             # [6] Second activation
+
+# Count: 3 operations before recurrence, 3 after
+# This is two-stage conv with recurrence in the middle
+# → recurrence_target="middle"
+```
+
+**Common mistake**: Assuming recurrence_target based on intuition rather than counting operations in the original code.
+
 ### 2.4 Map Normalization and Activation
 
 DynVision separates operations into `layer_operations`:
@@ -330,6 +352,158 @@ def forward(self, inp, state=None):
 - `get_hidden_state(delay)`: Retrieve state from `delay` timesteps ago
 - `set_hidden_state(x)`: Store current state for future retrieval
 - `reset()`: Clear all hidden states (call this at start of forward pass)
+
+### 2.6 Temporal Parameter Propagation
+
+**Critical**: Understanding which temporal parameters to pass to RConv2d and which are handled elsewhere.
+
+DynVision separates temporal dynamics into two distinct concerns:
+
+1. **Within-layer dynamics** (handled by RConv2d): Recurrence delay
+2. **Between-layer dynamics** (handled by delay operation in `layer_operations`): Feedforward delay
+
+**Parameter Scope**:
+
+```python
+# Model-level temporal parameters (in __init__)
+self.dt = 2.0                # Integration time step (ms)
+self.t_feedforward = 2.0     # Delay BETWEEN layers (ms)
+self.t_recurrence = 2.0      # Delay WITHIN layer (ms)
+self.history_length = int(max(t_recurrence, t_feedforward) / dt) + 1
+
+# Pass to RConv2d:
+self.V1 = RConv2d(
+    # ... other params ...
+    dt=self.dt,                     # ✓ PASS: Needed for delay calculation
+    t_recurrence=self.t_recurrence, # ✓ PASS: Sets delay_recurrence internally
+    # t_feedforward=self.t_feedforward  # ✗ DO NOT PASS: Handled by delay operation!
+    history_length=self.history_length,  # ✓ PASS: Must account for BOTH delays
+)
+```
+
+**Why t_feedforward is NOT passed to RConv2d**:
+
+Feedforward delays are handled by the `"delay"` operation in `layer_operations`, not by RConv2d:
+
+```python
+# In temporal.py _forward() method:
+for operation in self.layer_operations:
+    if operation == "delay":
+        # 1. Store current layer output
+        layer.set_hidden_state(x)
+
+        # 2. Retrieve delayed output for next layer
+        x = layer.get_hidden_state(delay=self.delay_feedforward)
+        # This is where t_feedforward is used!
+```
+
+The delay operation sits BETWEEN layers and manages the feedforward delay. RConv2d only needs to know about its own recurrent delay.
+
+**Why history_length must account for BOTH delays**:
+
+Even though RConv2d doesn't use `t_feedforward` internally, its hidden state buffer must be large enough to store states for retrieval at both delay points:
+
+```python
+# Example with dt=2, t_feedforward=2, t_recurrence=2:
+delay_feedforward = int(2.0 / 2.0) = 1  # Used by delay operation
+delay_recurrence = int(2.0 / 2.0) = 1   # Used by RConv2d internally
+
+# Both delays might need to retrieve from the same history:
+history_length = int(max(2.0, 2.0) / 2.0) + 1 = 2
+# Buffer needs 2 timesteps to support both delay=1 retrievals
+```
+
+**Separation of Concerns**:
+
+```python
+# RConv2d handles:
+# - Recurrent connections (state from this layer's past)
+# - Internal parameter: delay_recurrence = int(t_recurrence / dt)
+# - Gets hidden state: h = self.get_hidden_state(self.delay_recurrence)
+# - Applies recurrence: x = x + self.recurrence(h)
+
+# Delay operation (in temporal.py) handles:
+# - Feedforward delays (output to next layer)
+# - Model-level parameter: delay_feedforward = int(t_feedforward / dt)
+# - Sets state: layer.set_hidden_state(x)
+# - Gets delayed state: x = layer.get_hidden_state(delay_feedforward)
+```
+
+**Common Mistake**: Parameter Scope Confusion
+
+**Symptom**: Initially passing all temporal parameters to RConv2d, or not passing any.
+
+**Wrong Approach**:
+```python
+# Passing everything (incorrect)
+self.V1 = RConv2d(
+    dt=self.dt,
+    t_feedforward=self.t_feedforward,  # ✗ RConv2d doesn't handle this!
+    t_recurrence=self.t_recurrence,
+)
+
+# Passing nothing (incorrect)
+self.V1 = RConv2d(
+    # ✗ Missing dt and t_recurrence - delay_recurrence won't be calculated!
+)
+```
+
+**Correct Approach**:
+```python
+# Calculate shared history_length once
+self.history_length = int(max(self.t_recurrence, self.t_feedforward) / self.dt) + 1
+
+# Pass only what RConv2d needs
+self.V1 = RConv2d(
+    in_channels=3,
+    out_channels=64,
+    dt=self.dt,                     # For internal delay calculation
+    t_recurrence=self.t_recurrence, # Sets delay_recurrence
+    history_length=self.history_length,  # Large enough for both delays
+    dim_y=self.dim_y,
+    dim_x=self.dim_x,
+)
+```
+
+**Debugging temporal parameter issues**:
+
+If recurrence doesn't work as expected, check:
+
+```python
+# Add debug method to your model
+def debug_temporal_params(self):
+    print(f"Model level:")
+    print(f"  dt: {self.dt}")
+    print(f"  t_feedforward: {self.t_feedforward}")
+    print(f"  t_recurrence: {self.t_recurrence}")
+    print(f"  delay_feedforward: {self.delay_feedforward}")
+    print(f"  history_length: {self.history_length}")
+    print()
+
+    for layer_name in self.layer_names:
+        layer = getattr(self, layer_name)
+        print(f"{layer_name}:")
+        print(f"  dt: {layer.dt}")
+        print(f"  t_recurrence: {layer.t_recurrence}")
+        print(f"  delay_recurrence: {layer.delay_recurrence}")
+        print(f"  history_length: {layer.history_length}")
+
+# Expected output for CorNet-RT defaults (dt=2, t_ff=2, t_rec=2):
+# Model level:
+#   dt: 2.0
+#   t_feedforward: 2.0
+#   t_recurrence: 2.0
+#   delay_feedforward: 1
+#   history_length: 2
+#
+# V1:
+#   dt: 2.0
+#   t_recurrence: 2.0
+#   delay_recurrence: 1  # ← Should be 1, not 0!
+#   history_length: 2
+```
+
+**Key Insight**: The separation between within-layer (RConv2d) and between-layer (delay operation) temporal dynamics allows each component to focus on one responsibility, following the single responsibility principle.
 
 ---
 
@@ -533,6 +707,142 @@ def translate_pretrained_layer_names(self):
 
 **Method to verify**: Add print statements or use `torch.set_printoptions` and compare intermediate outputs with the original model on the same input.
 
+### 3.6 Hidden State Initialization
+
+**Critical for exact replication**: Some original models return specific values (e.g., scalar 0) for uninitialized hidden states, while DynVision returns `None` by default.
+
+**Understanding the difference**:
+
+```python
+# DynVision default behavior (ForwardRecurrenceBase.get_hidden_state):
+def get_hidden_state(self, delay=None):
+    if delay is None:
+        delay = 0
+    if delay >= len(self._hidden_states):
+        return None  # ← Uninitialized state returns None
+    return self._hidden_states[delay]
+
+# Some original models (e.g., CorNet-RT):
+def forward(self, inp=None, state=None):
+    if state is None:
+        state = 0  # ← Uninitialized state returns scalar 0
+    x = inp + state  # Works with scalar 0 (additive identity)
+    return x, x
+```
+
+**Why this matters**:
+
+For models loading pretrained weights, this difference can cause subtle divergence:
+
+1. **Scalar 0**: Acts as additive identity, cleanly integrates without special handling
+2. **None**: Requires explicit checks in integration logic
+
+If the original uses scalar 0 (or similar sentinel values), you must override DynVision's default behavior.
+
+**Solution: Override reset() to patch state initialization**
+
+For CorNet-RT, we needed to patch both `get_hidden_state()` and the recurrence's `forward()`:
+
+```python
+def reset(self):
+    """Reset hidden states and patch to return 0 instead of None.
+
+    Original CorNet-RT initializes state=0, not None. We patch both
+    get_hidden_state and recurrence.forward to handle scalar 0.
+    """
+    for layer in [self.V1, self.V2, self.V4, self.IT]:
+        # Standard reset
+        layer.reset()
+
+        # Patch 1: get_hidden_state returns 0 instead of None
+        if hasattr(layer, 'get_hidden_state'):
+            if not hasattr(layer, '_original_get_hidden_state'):
+                layer._original_get_hidden_state = layer.get_hidden_state
+
+            def get_with_zero(_layer=layer):
+                def get_hidden_state(delay=None):
+                    h = _layer._original_get_hidden_state(delay)
+                    return 0 if h is None else h
+                return get_hidden_state
+
+            layer.get_hidden_state = get_with_zero()
+
+        # Patch 2: SelfConnection handles scalar 0 (passes through)
+        if hasattr(layer, 'recurrence') and layer.recurrence is not None:
+            recurrence = layer.recurrence
+
+            if not hasattr(recurrence, '_original_forward'):
+                recurrence._original_forward = recurrence.forward
+
+            def forward_with_zero(_rec=recurrence):
+                def forward(x):
+                    # Handle scalar 0 (uninitialized state)
+                    if isinstance(x, (int, float)) and x == 0:
+                        return x  # Return 0 as-is (additive identity)
+                    return _rec._original_forward(x)
+                return forward
+
+            recurrence.forward = forward_with_zero()
+```
+
+**When to use this approach**:
+
+Check the original model's state initialization:
+
+```python
+# Look for patterns like:
+if state is None:
+    state = 0           # → Need to patch to return 0
+    # OR
+    state = torch.zeros(...)  # → DynVision handles this fine
+    # OR
+    state = some_initial_value  # → May need custom initialization
+```
+
+**Alternative: Sentinel class approach** (for more complex cases):
+
+```python
+class ZeroStateSentinel:
+    """Sentinel representing zero state for uninitialized hidden states.
+
+    This allows returning 'zero' without knowing the batch size.
+    Operations check isinstance and treat it as additive identity.
+    """
+    pass
+
+# In integration operations:
+def integrate_signal(self, x, h):
+    if isinstance(h, ZeroStateSentinel) or (isinstance(h, (int, float)) and h == 0):
+        return x  # h = 0, so x + 0 = x
+    return x + h  # Normal integration
+```
+
+**Debugging state initialization issues**:
+
+If outputs diverge at the first timestep despite matching weights:
+
+```python
+# Add debug logging to check state retrieval
+def reset(self):
+    for layer in [self.V1, self.V2, self.V4, self.IT]:
+        layer.reset()
+
+        # Temporarily add logging
+        original_get = layer.get_hidden_state
+        def logged_get(delay=None, _layer=layer):
+            h = original_get(delay)
+            print(f"{_layer.__class__.__name__} get_hidden_state({delay}): {type(h)} = {h}")
+            return h
+        layer.get_hidden_state = logged_get
+
+# Run model and check what states are retrieved:
+# Original model: state = 0 (scalar)
+# DynVision default: state = None
+# → Need to patch!
+```
+
+**Key Insight**: When reimplementing models with pretrained weights, state initialization semantics matter. A scalar 0 vs None difference can propagate through the forward pass and cause divergence, especially in the first few timesteps before real states are stored.
+
 ---
 
 ## Phase 4: Validation - Ensure Correctness
@@ -661,6 +971,268 @@ def test_configurations():
         assert torch.isfinite(y).all()
         print(f"  ✓ Passed")
 ```
+
+### 4.6 Incremental Debugging Methodology
+
+When outputs don't match despite all checks passing, use a structured debugging approach to isolate the issue.
+
+**The Debugging Hierarchy** (Apply in order):
+
+#### Level 1: Verify Weight Loading
+
+Before testing outputs, ensure weights are actually loaded correctly:
+
+```python
+def compare_weights(original, reimpl):
+    """Compare all pretrained parameters between models."""
+    orig_state = original.state_dict()
+    reimpl_state = reimpl.state_dict()
+
+    # Get only matching layers (exclude classifier if different n_classes)
+    common_keys = set(orig_state.keys()) & set(reimpl_state.keys())
+
+    mismatches = []
+    for key in sorted(common_keys):
+        orig_param = orig_state[key]
+        reimpl_param = reimpl_state[key]
+
+        if orig_param.shape != reimpl_param.shape:
+            mismatches.append(f"{key}: shape mismatch {orig_param.shape} vs {reimpl_param.shape}")
+            continue
+
+        diff = (orig_param - reimpl_param).abs().max().item()
+        if diff > 1e-6:
+            mismatches.append(f"{key}: max diff = {diff:.2e}")
+
+    if mismatches:
+        print("Weight mismatches found:")
+        for m in mismatches:
+            print(f"  ✗ {m}")
+        return False
+    else:
+        print(f"✓ All {len(common_keys)} pretrained parameters match exactly")
+        return True
+```
+
+**Key checks**:
+- All expected parameters present?
+- Shapes match?
+- Values identical (within floating point precision)?
+- Translation mapping correct? (Check `translate_pretrained_layer_names()`)
+
+#### Level 2: Compare Layer Activations
+
+If weights match but outputs differ, compare intermediate activations:
+
+```python
+def compare_layer_activations(original, reimpl, input_tensor):
+    """Compare layer-by-layer activations with careful hook placement."""
+
+    # Store activations
+    orig_acts = {}
+    reimpl_acts = {}
+
+    # Register hooks (IMPORTANT: hooks capture pre-norm/nonlin states!)
+    def make_hook(name, storage):
+        def hook(module, input, output):
+            storage[name] = output.detach().cpu()
+        return hook
+
+    # For original model
+    original.V1.register_forward_hook(make_hook('V1', orig_acts))
+    original.V2.register_forward_hook(make_hook('V2', orig_acts))
+
+    # For DynVision (hook on RConv2d, which is pre-norm!)
+    reimpl.V1.register_forward_hook(make_hook('V1', reimpl_acts))
+    reimpl.V2.register_forward_hook(make_hook('V2', reimpl_acts))
+
+    # Forward pass
+    with torch.no_grad():
+        _ = original(input_tensor)
+        _ = reimpl(input_tensor)
+
+    # Compare (must apply same post-processing to both!)
+    for layer_name in ['V1', 'V2']:
+        orig_act = orig_acts[layer_name]
+        reimpl_act = reimpl_acts[layer_name]
+
+        # CRITICAL: If hooks capture before norm/nonlin, apply them manually
+        # Example for CorNet-RT:
+        norm_layer = getattr(original, f'norm_{layer_name}', None)
+        nonlin = getattr(original, 'nonlin', None)
+        if norm_layer and nonlin:
+            orig_act = nonlin(norm_layer(orig_act))
+            reimpl_norm = getattr(reimpl, f'norm_{layer_name}')
+            reimpl_act = reimpl.nonlin(reimpl_norm(reimpl_act))
+
+        diff = (orig_act - reimpl_act).abs()
+        print(f"{layer_name}: max_diff={diff.max():.6f}, mean_diff={diff.mean():.6f}")
+```
+
+**Hook placement pitfall**: Hooks capture outputs at the point where they're registered. If you register a hook on `model.V1` (the RConv2d), it captures the output BEFORE external norm/nonlin operations. You must apply those transformations manually for fair comparison.
+
+#### Level 3: Timestep-by-Timestep Comparison
+
+For recurrent models, debug one timestep at a time:
+
+```python
+def debug_timestep_by_timestep(original, reimpl, img):
+    """Manually step through original model to compare with reimpl."""
+
+    print("="*80)
+    print("ORIGINAL MODEL - Timestep-by-timestep")
+    print("="*80)
+
+    # Initialize original model's manual time loop
+    outputs_orig = {"inp": img}
+    states_orig = {}
+    blocks = ["inp", "V1", "V2", "V4", "IT"]
+
+    # t=0 (initialization)
+    print("\nTimestep 0:")
+    for block in blocks[1:]:
+        layer = getattr(original, block)
+        this_inp = outputs_orig["inp"] if block == "V1" else None
+        new_output, new_state = layer(this_inp, batch_size=img.shape[0])
+        outputs_orig[block] = new_output
+        states_orig[block] = new_state
+        print(f"  {block} output: mean={new_output.mean():.6f}, std={new_output.std():.6f}")
+
+    # t=1 to t=N
+    for t in range(1, 5):
+        print(f"\nTimestep {t}:")
+        new_outputs = {"inp": img}
+        for block in blocks[1:]:
+            prev_block = blocks[blocks.index(block) - 1]
+            prev_output = outputs_orig[prev_block]
+            prev_state = states_orig[block]
+
+            layer = getattr(original, block)
+            new_output, new_state = layer(prev_output, prev_state)
+            new_outputs[block] = new_output
+            states_orig[block] = new_state
+
+            print(f"  {block} output: mean={new_output.mean():.6f}, std={new_output.std():.6f}")
+
+        outputs_orig = new_outputs
+
+    # Compare with DynVision model's final output
+    print("\n" + "="*80)
+    print("DYNVISION MODEL")
+    print("="*80)
+    img_temporal = img.unsqueeze(1).repeat(1, 5, 1, 1, 1)
+    with torch.no_grad():
+        out_reimpl = reimpl(img_temporal)
+
+    print(f"Output (last timestep): mean={out_reimpl[:, -1].mean():.6f}")
+    print(f"Difference from original: {(outputs_orig['IT'] - out_reimpl[:, -1, ...]).abs().max():.6f}")
+```
+
+**What to look for**:
+- Which timestep does divergence start?
+- Which layer does divergence start?
+- Is hidden state being set/retrieved correctly?
+- Are temporal parameters (delay_recurrence, delay_feedforward) correct?
+
+#### Level 4: Check Temporal Parameter Propagation
+
+Use the debug method from Section 2.6:
+
+```python
+# Call debug method (from Section 2.6)
+reimpl.debug_temporal_params()
+
+# Expected vs Actual:
+# - delay_recurrence should match original's recurrent delay
+# - delay_feedforward should match original's feedforward delay
+# - history_length should be sufficient for both
+```
+
+#### Level 5: Check State Initialization
+
+Use the debug approach from Section 3.6:
+
+```python
+# Add logging to reset() to see what states are retrieved
+# Check if original uses scalar 0 vs None
+# Patch if necessary
+```
+
+**The Complete Test Suite**:
+
+Combine all checks into a comprehensive test:
+
+```python
+def test_complete_equivalence():
+    """Complete test suite for model equivalence."""
+
+    # Setup
+    original = load_pretrained_original()
+    reimpl = load_pretrained_reimplemented()
+
+    # Identical input
+    torch.manual_seed(42)
+    img = torch.randn(1, 3, 224, 224)
+
+    print("Phase 1: Weight Loading")
+    assert compare_weights(original, reimpl), "Weights don't match!"
+
+    print("\nPhase 2: Layer Activations")
+    compare_layer_activations(original, reimpl, img)
+
+    print("\nPhase 3: Timestep-by-Timestep")
+    debug_timestep_by_timestep(original, reimpl, img)
+
+    print("\nPhase 4: Temporal Parameters")
+    reimpl.debug_temporal_params()
+
+    print("\nPhase 5: Final Output Comparison")
+    with torch.no_grad():
+        # Ensure IDENTICAL inputs
+        img_temporal = img.unsqueeze(1).repeat(1, 5, 1, 1, 1)
+
+        # Original (manual time loop)
+        states = {}
+        outputs = {"inp": img}
+        for t in range(5):
+            for block in ["V1", "V2", "V4", "IT"]:
+                layer = getattr(original, block)
+                prev = outputs["inp"] if (block == "V1" and t == 0) else outputs.get(prev_block, None)
+                state = states.get(block, None)
+                outputs[block], states[block] = layer(prev, state)
+                prev_block = block
+        out_orig = outputs["IT"]
+
+        # Reimplemented
+        out_reimpl = reimpl(img_temporal)[:, -1]
+
+    # Compare predictions
+    diff = (out_orig - out_reimpl).abs()
+    pred_orig = out_orig.argmax(dim=1)
+    pred_reimpl = out_reimpl.argmax(dim=1)
+
+    print(f"Max output difference: {diff.max():.6f}")
+    print(f"Mean output difference: {diff.mean():.6f}")
+    print(f"Original prediction: {pred_orig.item()}")
+    print(f"Reimpl prediction: {pred_reimpl.item()}")
+
+    assert pred_orig == pred_reimpl, "Predictions don't match!"
+    print("✓ Models produce identical predictions")
+```
+
+**Key Debugging Insights**:
+
+1. **Test incrementally**: Don't jump to full model comparison. Verify weights → single layer → single timestep → multiple timesteps.
+
+2. **IDENTICAL inputs**: Ensure both models receive EXACTLY the same input tensor (same seed, same preprocessing, same device).
+
+3. **Mind the hooks**: Hooks capture at registration point. If comparing activations, ensure you're comparing apples-to-apples (same post-processing).
+
+4. **Document operation sequences**: Write out the exact sequence for both implementations. Count operations. Verify they match.
+
+5. **Check parameter scope**: Verify which parameters go where (e.g., dt and t_recurrence to RConv2d, but NOT t_feedforward).
+
+6. **State semantics matter**: Check if original uses scalar 0 vs None vs torch.zeros for uninitialized states.
 
 ---
 
@@ -833,6 +1405,354 @@ print(f"After V1 (stride={self.V1.stride}): {self.V1.dim_y} x {self.V1.dim_x}")
 2. Check `history_length` is sufficient: `max(t_recurrence, t_feedforward) / dt + 1`
 3. Verify `delay_recurrence` matches original model's delay
 4. Ensure "delay" operation is in `layer_operations`
+
+---
+
+## Phase 5.5: Lessons Learned - Common Mistakes in Practice
+
+> **Note**: These are real examples from CorNet/CordsNet integration where incorrect assumptions were corrected through careful investigation.
+
+### Mistake 1: Claiming Architecture is Wrong Without Full Tracing
+
+**What Happened**: Initial analysis claimed the CorNet reimplementation was architecturally incorrect because operations appeared to be in the wrong order.
+
+**The User's Challenge**: "Reevaluate... I believe the current implementation accurately replicates the original implementation. Pinpoint the difference if I'm mistaken."
+
+**What Was Actually True**: After careful line-by-line tracing of BOTH implementations, they were equivalent. Operations could be split between inside RConv2d (via `mid_modules`) and outside (via `layer_operations`), and both paths led to the same operation order.
+
+**Lesson Learned**:
+> **Never claim something is wrong before tracing it completely.** When comparing implementations, trace both end-to-end and document the exact operation sequence at each step. Don't rely on intuition about what "should" happen.
+
+**How to Avoid**:
+```python
+# WRONG: "This looks incorrect because recurrence should be here"
+# RIGHT: Trace both implementations step-by-step:
+
+# Original (line by line):
+# 1. x = conv_input(x)        # Conv 3→64, k=7, s=4
+# 2. x = norm_input(x)        # GroupNorm(32, 64)
+# 3. x = nonlin_input(x)      # ReLU
+# 4. x = x + state            # Add recurrent state ← HERE
+# 5. x = conv1(x)             # Conv 64→64, k=3, s=1
+# 6. x = norm1(x)             # GroupNorm(32, 64)
+# 7. x = nonlin1(x)           # ReLU
+# 8. state = x                # Store for next timestep
+
+# DynVision (RConv2d with recurrence_target="middle"):
+# Inside RConv2d:
+# 1. x = self.conv(x)         # Conv 3→64, k=7, s=4
+# 2. x = self.mid_modules(x)  # GroupNorm(32, 64)
+# 3. x = self.nonlin(x)       # ReLU (internal to RConv2d)
+# 4. x = x + recurrence(h)    # Add recurrent state ← HERE (same point!)
+# 5. x = self.conv2(x)        # Conv 64→64, k=3, s=1
+# Via layer_operations:
+# 6. x = norm_V1(x)           # GroupNorm(32, 64)
+# 7. x = nonlin(x)            # ReLU
+# 8. layer.set_hidden_state(x) # Store via "delay" operation
+
+# Conclusion: Sequences are IDENTICAL
+```
+
+### Mistake 2: Building New Infrastructure Instead of Using Existing Systems
+
+**What Happened**: When implementing normalization override for CorNet (which was trained without normalization), proposed solution involved:
+- New utility module in transforms.py
+- Helper functions for model requirements
+- Updates to 5+ files
+- Model attribute system
+- ~200 lines of new code
+
+**The User's Guidance**: "I just guided you to a much simpler and straightforward solution, that had minimal implementation effort and used the existing structures and functionalities."
+
+**What the Simple Solution Was**:
+- Update Pydantic validator to handle JSON null: 3 lines
+- Update Snakemake rule to check for normalize config override: 4 lines
+- Total: ~10 lines of actual changes
+- Usage: `snakemake test_model --config normalize=null`
+
+**Lesson Learned**:
+> **Always check if existing systems can handle the requirement before building new infrastructure.** Follow the solution hierarchy: Configuration → Parameter → Extension → New Code. Most requirements can be solved at earlier levels.
+
+**The Solution Hierarchy (Always Apply in Order)**:
+1. **Configuration only**: Can changing config values solve this?
+   ```bash
+   # Example: Override normalization
+   snakemake --config normalize=null
+   ```
+
+2. **Parameter modification**: Can existing parameters accept new values?
+   ```python
+   # Example: Make validator handle None
+   if v is None:
+       return None
+   ```
+
+3. **Extend existing code**: Can current functions/classes be enhanced?
+   ```python
+   # Example: Check for config override in existing rule
+   params:
+       normalize = lambda w: config.get('normalize', None) if 'normalize' in config else default
+   ```
+
+4. **New focused utility**: Is new, isolated functionality needed?
+   ```python
+   # Only if steps 1-3 can't solve it
+   ```
+
+5. **New abstraction**: Is a fundamentally new concept required?
+   ```python
+   # Rarely needed - usually indicates you haven't searched enough
+   ```
+
+**Question to Ask Yourself**: "What's the smallest change that solves this specific problem?"
+
+### Mistake 3: Misunderstanding Skip Connection Flow
+
+**What Happened**: Initially thought each layer received multiple skip inputs that needed to be explicitly combined (e.g., `addskip1_layer2`, `addskip2_layer2`).
+
+**The User's Correction**: Pointed out to review how activity flows through layers and that each layer only needs ONE `addskip` operation.
+
+**What Was Actually True**:
+- Previous layer's output is already in `x` from the `delay` operation
+- Each layer adds ONE skip from a non-adjacent layer
+- The skip is added TO the current `x`, not combined with multiple sources
+
+**Lesson Learned**:
+> **Trace the data flow through `layer_operations` to understand what's already in `x` at each step.** Don't assume you need to explicitly fetch multiple sources.
+
+**Correct Flow**:
+```python
+# After layer1 completes its operations:
+# ... layer1 operations ...
+x = relu(x)                              # nonlin
+layer1.set_hidden_state(x)               # delay: store
+x = layer1.get_hidden_state(delay_ff)    # delay: retrieve
+
+# Now x = layer1 output (already there!)
+
+# Layer2 begins:
+x = addskip_layer2(x)                    # x += learned_skip(inp)
+                                         # Now x = layer1_out + skip(inp)
+x = layer2(x)                            # RConv2d on combined input
+x = addbias_layer2(x)                    # Add spatial bias
+x = relu(x)                              # Nonlin
+```
+
+**Key Insight**: Each operation in `layer_operations` modifies `x` in sequence. By the time you reach `"addskip"`, `x` already contains the previous layer's output from the `"delay"` operation.
+
+### Mistake 4: Not Checking What Framework Components Already Provide
+
+**What Happened**: Proposed creating `_make_stateful_sequential()` to wrap input processing layers with state management.
+
+**The User's Question**: "Why do you need the _make_stateful_sequential function? What required functionality is not covered by the hidden state management in recurrence.py?"
+
+**What Was Actually True**:
+- RConv2d already has `get_hidden_state()`, `set_hidden_state()`, `reset()`
+- Can use `RConv2d` with `recurrence_type="none"` for layer0
+- No custom wrapper needed
+
+**Lesson Learned**:
+> **Before implementing helper functions, check if the framework's core components already provide that functionality.** Read the source code of base classes and components before building utilities.
+
+**Correct Approach**:
+```python
+# WRONG: Build custom wrapper
+class StatefulWrapper(nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.layer = layer
+        self._hidden_states = []
+    def get_hidden_state(self, delay=0): ...
+    def set_hidden_state(self, x): ...
+    def reset(self): ...
+
+self.layer0 = StatefulWrapper(nn.Conv2d(...))
+
+# RIGHT: Use RConv2d with recurrence_type="none"
+self.layer0 = RConv2d(
+    in_channels=3,
+    out_channels=64,
+    kernel_size=7,
+    stride=2,
+    recurrence_type="none",  # ← No recurrence, but still has state management!
+    history_length=max(self.t_feedforward, self.t_skip),
+)
+```
+
+**How to Check**: Before implementing, search codebase:
+```bash
+# Search for existing methods
+grep -r "get_hidden_state" dynvision/model_components/
+grep -r "set_hidden_state" dynvision/model_components/
+grep -r "class.*Base" dynvision/base/
+```
+
+### Mistake 5: Not Understanding Recurrence Configuration Deeply
+
+**What Happened**: Initially didn't fully understand the distinction between feedforward and recurrent convolutions in CordsNet, and how RConv2d parameters map to them.
+
+**The User's Guidance**: "Review how the recurrent connection (an extra convolution) is configured in recurrence.py, then review the recurrent connections 'area_area' in the original cordsnet."
+
+**What Was Actually True**:
+```python
+# Original CordsNet:
+# area_conv: Recurrent connection (channels[i+1] → channels[i+1], k=3, s=1)
+# area_area: Feedforward connection (channels[i] → channels[i+1], k=3, s=stride)
+
+# RConv2d mapping:
+RConv2d(
+    # Feedforward conv (area_area)
+    in_channels=channels[i],      # From previous layer
+    out_channels=channels[i+1],   # To this layer
+    kernel_size=3,
+    stride=strides[i],            # Can downsample
+
+    # Recurrence conv (area_conv)
+    recurrence_type="full",       # 3x3 convolution
+    recurrence_kernel_size=3,     # Same as feedforward
+    recurrence_target="output",   # On layer output
+    # Recurrence is always: channels[i+1]→channels[i+1], stride=1
+)
+```
+
+**Lesson Learned**:
+> **Understand the exact mapping between original parameters and DynVision parameters.** Read both the original code AND the framework component source to see how parameters translate.
+
+**Verification Checklist**:
+- [ ] Traced original: What are the input/output channels for feedforward?
+- [ ] Traced original: What are the input/output channels for recurrence?
+- [ ] Traced original: What are the kernel sizes?
+- [ ] Traced original: What are the strides?
+- [ ] Checked RConv2d: How do I specify each of these?
+- [ ] Verified: Do the parameter values match exactly?
+
+### Mistake 6: Not Understanding Parameter Scope and Responsibility Separation
+
+**What Happened**: During CorNet-RT reimplementation, initially passed NO temporal parameters to RConv2d, then ALL temporal parameters (dt, t_feedforward, t_recurrence), causing confusion about what belonged where.
+
+**The User's Correction**: "Actually, I corrected you that t_feedforward does not need to be passed to the RConv2D module because delays between layers are handled in the delay step. However, the delays can influence the history_length argument."
+
+**What Was Actually True**:
+
+DynVision separates temporal concerns:
+- **RConv2d responsibility**: Within-layer recurrence delay
+- **Delay operation responsibility**: Between-layer feedforward delay
+
+```python
+# WRONG Approach 1: Pass nothing
+self.V1 = RConv2d(
+    in_channels=3,
+    out_channels=64,
+    # ✗ Missing dt, t_recurrence → delay_recurrence = 0 (incorrect!)
+)
+
+# WRONG Approach 2: Pass everything
+self.V1 = RConv2d(
+    in_channels=3,
+    out_channels=64,
+    dt=self.dt,
+    t_feedforward=self.t_feedforward,  # ✗ RConv2d doesn't use this!
+    t_recurrence=self.t_recurrence,
+)
+
+# CORRECT Approach: Pass only what each component needs
+# In __init__:
+self.history_length = int(max(self.t_recurrence, self.t_feedforward) / self.dt) + 1
+
+# Pass to RConv2d:
+self.V1 = RConv2d(
+    in_channels=3,
+    out_channels=64,
+    dt=self.dt,                       # ✓ For calculating delay_recurrence
+    t_recurrence=self.t_recurrence,   # ✓ Sets delay_recurrence internally
+    history_length=self.history_length,  # ✓ Large enough for both delays
+    # t_feedforward NOT passed - handled by delay operation!
+)
+```
+
+**Why This Matters**:
+
+1. **Passing nothing**: `delay_recurrence` defaults to 0, meaning recurrence is instantaneous instead of delayed
+2. **Passing t_feedforward unnecessarily**: Creates confusion about what RConv2d is responsible for
+3. **Missing history_length consideration**: Buffer too small if you only consider recurrence delay
+
+**The Correct Mental Model**:
+
+```
+Time t=0    Time t=1    Time t=2
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layer 1:
+  [process] ──→ [recurrence]  (RConv2d handles this)
+                ↓
+              [store in buffer]
+                ↓
+              [delay operation retrieves with delay_feedforward]
+                ↓
+Layer 2:
+  [process] ──→ [recurrence]  (RConv2d handles this)
+```
+
+**Lesson Learned**:
+> **Understand the separation of concerns between components.** RConv2d handles recurrence WITHIN a layer. The delay operation (in `layer_operations`) handles delays BETWEEN layers. Don't pass parameters to components that aren't responsible for that aspect of temporal dynamics.
+
+**How to Verify**:
+
+After initialization, check computed values match expectations:
+
+```python
+# Add this debug method to your model (from Section 2.6)
+def debug_temporal_params(self):
+    print(f"Model level:")
+    print(f"  dt: {self.dt}")
+    print(f"  t_feedforward: {self.t_feedforward}")
+    print(f"  t_recurrence: {self.t_recurrence}")
+    print(f"  delay_feedforward: {self.delay_feedforward}")  # Model level
+    print(f"  history_length: {self.history_length}")
+    print()
+
+    for layer_name in self.layer_names:
+        layer = getattr(self, layer_name)
+        print(f"{layer_name}:")
+        print(f"  dt: {layer.dt}")
+        print(f"  t_recurrence: {layer.t_recurrence}")
+        print(f"  delay_recurrence: {layer.delay_recurrence}")  # RConv2d level
+        print(f"  history_length: {layer.history_length}")
+        print(f"  Expected delay_recurrence: {int(self.t_recurrence / self.dt)}")
+        assert layer.delay_recurrence == int(self.t_recurrence / self.dt), \
+            f"delay_recurrence mismatch! Got {layer.delay_recurrence}, expected {int(self.t_recurrence / self.dt)}"
+```
+
+**When You'd Notice This Bug**:
+
+- Recurrent model behaves like feedforward (delay_recurrence=0)
+- Outputs don't match original despite correct weights
+- First timestep works, but subsequent timesteps diverge (wrong delays)
+- Buffer overflow errors (history_length too small)
+
+---
+
+### Meta-Lesson: The Investigation-First Mindset
+
+All these mistakes share a common root cause: **Acting before fully investigating**.
+
+**The Wrong Approach**:
+1. See a requirement → immediately design a solution
+2. Encounter unfamiliar code → guess at its behavior
+3. Find complexity → build custom infrastructure
+4. See a problem → assume existing code is wrong
+
+**The Right Approach** (From AI Style Guide):
+1. **Investigate thoroughly**: Trace existing code, search for patterns, read docs
+2. **Understand constraints**: What exists? What can be reused? What must not change?
+3. **Apply solution hierarchy**: Config → Parameter → Extension → New code
+4. **Validate assumptions**: Never claim something is wrong without proof
+
+**Before implementing anything, ask**:
+- What does the existing code actually do? (trace it completely)
+- Does similar functionality already exist? (search the codebase)
+- Can existing systems handle this? (check configuration, parameters, extensions)
+- What's the simplest solution that works? (not the most general or elegant)
 
 ---
 
@@ -1073,6 +1993,13 @@ Before considering integration complete:
 - [ ] Compared outputs with original implementation
 - [ ] Tested with different configurations
 - [ ] Verified pretrained weights load correctly
+
+**Lessons Learned Check** (See Phase 5.5):
+- [ ] Did I trace the original code completely before claiming anything was wrong?
+- [ ] Did I check existing systems before building new infrastructure?
+- [ ] Did I understand the data flow through `layer_operations`?
+- [ ] Did I check what framework components already provide?
+- [ ] Did I verify parameter mappings between original and DynVision?
 
 **Documentation Phase**:
 - [ ] Written comprehensive docstrings

@@ -100,6 +100,11 @@ class DataParams(BaseParams):
         description="Custom normalization (mean, std) as JSON string or tuple",
     )
 
+    pixel_range: Literal["0-1", "0-255"] = Field(
+        default="0-1",
+        description="Pixel value range: '0-1' (normalized) or '0-255' (raw)",
+    )
+
     # === Temporal Parameters ===
     data_timesteps: int = Field(
         default=1, ge=1, description="number of timesteps to load"
@@ -499,6 +504,7 @@ class DataParams(BaseParams):
                 "encoding": self.encoding,
                 "resolution": self.resolution,
                 "normalize": self.normalize,
+                "pixel_range": self.pixel_range,
                 "data_transform": self.data_transform,
                 "target_transform": self.target_transform,
                 "drop_last": self.drop_last,
@@ -631,6 +637,7 @@ class DataParams(BaseParams):
         logging.info(f"     • Data transform: {get_value('data_transform')}")
         logging.info(f"     • Target transform: {get_value('target_transform')}")
         logging.info(f"     • Normalize: {get_value('normalize')}")
+        logging.info(f"     • Pixel range: {get_value('pixel_range')}")
         logging.info(f"     • Train ratio: {get_value('train_ratio')}")
 
         # Temporal Parameters
@@ -706,6 +713,7 @@ class DataParams(BaseParams):
             "data_transform",
             "target_transform",
             "normalize",
+            "pixel_range",
             "train_ratio",
             "data_timesteps",
             "non_input_value",

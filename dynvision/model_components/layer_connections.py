@@ -27,9 +27,18 @@ class ConnectionBase(LightningModule):
     a) Initialize without parameters `conn = Connection()`, and manually pass hidden state tensor to the forward call `conn(x, h)`.
     b) Initialize with a source module and delay index `conn = Connection(source=source, delay_index=0)` to internally retrieve the relevant hidden state when calling `conn(x)`. Note: the source module must have a `get_hidden_state` function that takes the delay_index as an argument.
 
-    In either case, when h doesn't have the same shape as x, a 1x1 convolution is applied to h to match the shapes. If the scale_factor = shape h / shape x is a positive integer a corresponding stride is applied in the convolution, if scale_factor is < 1 a corresponding upsampling is applied using a given upsampling mode (default=bilinear).
-    To define the convolution, you have to pass the `in_channels` (n_channels of h), `out_channels` (n_channels of x), and stride (factor between spatial dimension of h and x). If you don't pass them, the module will try to infer them from the source module.
-    If the shape mismatch is not previously known or the architecture should remain more flexible, you can instead set `auto_adapt=True`, which will automatically infer the `in_channels`, `out_channels`, and `stride` upon the first forward pass that combines x and h. Note that this may cause issues with loading state_dicts or checkpoints.
+    Shape Adaptation:
+    When h doesn't have the same shape as x, two transformations are applied to h:
+    1. Channel adaptation: A 1x1 convolution adapts h from `in_channels` to `out_channels`
+    2. Spatial adaptation: nn.Upsample resizes h's spatial dimensions to match x's spatial dimensions
+
+    The `scale_factor` parameter represents how much LARGER h is compared to x (h_size / x_size):
+    - scale_factor >= 1: h is larger than x and will be downsampled (e.g., scale_factor=2 means h is 2× larger)
+    - scale_factor < 1: h is smaller than x and will be upsampled (e.g., scale_factor=0.5 means h is 2× smaller)
+
+    Usage:
+    - Explicit setup: Pass `in_channels`, `out_channels`, and `scale_factor` to define transformations upfront
+    - Auto-adapt: Set `auto_adapt=True` to infer shapes on first forward pass (may cause checkpoint issues)
     """
 
     def __init__(
@@ -44,6 +53,7 @@ class ConnectionBase(LightningModule):
         parametrization: Callable[[torch.Tensor], torch.Tensor] = None,
         upsample_mode: str = "nearest",
         auto_adapt: bool = False,
+        force_conv: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -56,6 +66,7 @@ class ConnectionBase(LightningModule):
         self.parametrization = parametrization
         self.setup_transform = True
         self.auto_adapt = auto_adapt
+        self.force_conv = force_conv
 
         if not auto_adapt:
             # infer in_channels, out_channels from source module
@@ -98,7 +109,8 @@ class ConnectionBase(LightningModule):
         in_channels = h.shape[-3]
         out_channels = x.shape[-3]
 
-        if in_channels == out_channels:
+        # Create conv if channels differ OR if force_conv is True
+        if in_channels == out_channels and not self.force_conv:
             self.conv = False
             self.setup_transform = False
             return False
@@ -160,9 +172,6 @@ class ConnectionBase(LightningModule):
     def forward(
         self, x: torch.Tensor, h: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        if x is None:
-            return None
-
         # Get hidden state if not provided
         if h is None:
             try:
@@ -171,12 +180,13 @@ class ConnectionBase(LightningModule):
                     f"Retrieved hidden state h: {'None' if h is None else h.shape}"
                 )
             except Exception as e:
-                logger.error(
-                    f"Failed to get state from source: {str(e)}"
-                )
+                logger.error(f"Failed to get state from source: {str(e)}")
                 return x
 
-        if h is None:
+        # Handle cases where x or h is None before transformation
+        if x is None and h is None:
+            return None
+        elif h is None:
             return x
 
         # Setup transform if needed (but avoid during training)
@@ -188,12 +198,21 @@ class ConnectionBase(LightningModule):
             self._setup_conv(x, h)
             self._setup_upsample(x, h)
 
+        # Apply transformations to h to match x's expected shape
         if self.conv:
             h = self.conv(h)
 
         if self.upsample:
             h = self.upsample(h)
 
+        # Now handle the case where x is None (early timesteps)
+        if x is None:
+            return h  # h is now properly transformed
+
+        # Both x and h exist, integrate them
+        logger.debug(
+            f"Layer Connection forward: x shape: {x.shape}, h shape: {h.shape}"
+        )
         output = self.integrate_signal(x, h)
         return output
 

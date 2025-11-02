@@ -18,6 +18,7 @@ from dynvision.model_components import (
     RecurrentConnectedConv2d as RConv2d,
     SpatialBias,
     Skip,
+    EulerStep,
 )
 from dynvision.project_paths import project_paths
 from dynvision.utils import alias_kwargs
@@ -78,6 +79,7 @@ class CordsNet(BaseModel):
         tau: float = 10.0,  # alpha = dt/tau = 0.1 by default
         t_feedforward: float = 1.0,
         t_recurrence: float = 1.0,
+        t_feedback=0.0,  # Not used in CordsNet
         t_skip: float = 1.0,
         recurrence_type: str = "full",  # 3x3 conv for recurrence
         idle_timesteps: int = 100,
@@ -99,8 +101,8 @@ class CordsNet(BaseModel):
             tau=float(tau),
             t_feedforward=float(t_feedforward),
             t_recurrence=float(t_recurrence),
+            t_feedback=float(t_feedback),
             t_skip=float(t_skip),
-            t_feedback=0.0,  # Not used in CordsNet
             recurrence_type=recurrence_type,
             idle_timesteps=int(idle_timesteps),
             **kwargs,
@@ -133,6 +135,7 @@ class CordsNet(BaseModel):
             logger.info(f"Downloading pretrained CordsNet from {url}")
 
             import requests
+
             response = requests.get(url, stream=True)
             if response.status_code == 200:
                 with open(save_path, "wb") as f:
@@ -198,11 +201,18 @@ class CordsNet(BaseModel):
         return translate_layer_names
 
     def reset(self) -> None:
-        """Reset all layer hidden states."""
+        """Reset all layer hidden states and dynamics solvers."""
         for layer_name in self.layer_names:
+            # Reset layer hidden states
             layer = getattr(self, layer_name)
             if hasattr(layer, "reset"):
                 layer.reset()
+
+            # Reset dynamics solvers (layers 1-8 only)
+            solver_name = f"tstep_{layer_name}"
+            if hasattr(self, solver_name):
+                solver = getattr(self, solver_name)
+                solver.reset()
 
     def _define_architecture(self) -> None:
         """
@@ -228,19 +238,27 @@ class CordsNet(BaseModel):
 
         # Include input processing as layer0
         self.layer_names = [
-            "layer0", "layer1", "layer2", "layer3", "layer4",
-            "layer5", "layer6", "layer7", "layer8"
+            "layer0",
+            "layer1",
+            "layer2",
+            "layer3",
+            "layer4",
+            "layer5",
+            "layer6",
+            "layer7",
+            "layer8",
         ]
 
         # Define operation sequence (matches DyRCNN pattern)
         self.layer_operations = [
-            "layer",      # RConv2d (feedforward + recurrence)
-            "pool",       # Pooling (layer0 only)
-            "addskip",    # Skip connection (if defined)
-            "addbias",    # Spatial bias (layers 1-8 only)
-            "nonlin",     # Shared ReLU
-            "delay",      # Store and retrieve delayed activation
-            "record",     # Record response
+            "layer",  # RConv2d (feedforward + recurrence)
+            "pool",  # Pooling (layer0 only)
+            "addskip",  # Skip connection (if defined)
+            "addbias",  # Spatial bias (layers 1-8 only)
+            "nonlin",  # Shared ReLU
+            "tstep",  # Euler integration (continuous-time dynamics)
+            "delay",  # Store and retrieve delayed activation
+            "record",  # Record response
         ]
 
         # Shared nonlinearity
@@ -286,7 +304,7 @@ class CordsNet(BaseModel):
             # RConv2d layer: feedforward (area_area) + recurrence (area_conv)
             layer = RConv2d(
                 in_channels=channels[i],
-                out_channels=channels[i+1],
+                out_channels=channels[i + 1],
                 kernel_size=3,  # Feedforward kernel
                 stride=strides[i],  # Feedforward stride
                 padding=1,
@@ -296,12 +314,23 @@ class CordsNet(BaseModel):
 
             # Spatial bias module (per-unit bias)
             bias = SpatialBias(
-                channels=channels[i+1],
+                channels=channels[i + 1],
                 height=sizes[i],
                 width=sizes[i],
                 init_value=0.0,
             )
             setattr(self, f"addbias_{layer_name}", bias)
+
+            # Dynamics solver (Euler integration)
+            # Original: r = (1-alpha)*r + alpha*relu(...)  where alpha = dt/tau
+            tau = torch.nn.Parameter(
+                torch.tensor(self.tau, dtype=torch.float32),
+                requires_grad=False,
+            )
+            setattr(self, f"tau_{layer_name}", tau)
+
+            solver = EulerStep(dt=self.dt, tau=tau)
+            setattr(self, f"tstep_{layer_name}", solver)
 
         # Skip connections (matching original pattern)
         self._define_skip_connections()

@@ -254,6 +254,7 @@ def get_dataset(
     dataset_class: Callable[..., Dataset] = PathFolder,
     normalize: Optional[Tuple[List[float], List[float]]] = None,
     dtype: Optional[torch.dtype] = None,
+    pixel_range: str = "0-1",
     cache_size: int = 1000,
     pin_memory: bool = False,
     pil_to_tensor: bool = True,
@@ -268,6 +269,8 @@ def get_dataset(
         target_transform: Target transform name or callable
         dataset_class: Dataset class to use
         normalize: Normalization parameters (mean, std)
+        dtype: Target dtype for tensors
+        pixel_range: Pixel value range - "0-1" (scaled) or "0-255" (raw)
         cache_size: Size of LRU cache
         pin_memory: Whether to pin memory
         pil_to_tensor: Whether to convert PIL images to tensors
@@ -307,9 +310,14 @@ def get_dataset(
     # else:
     #     transform.append(tv.transforms.ToTensor())
 
-    # dtype transform
+    # dtype transform with pixel range control
     if dtype is not None:
-        transform.append(tv.transforms.ConvertImageDtype(dtype))
+        if pixel_range == "0-255":
+            # Convert dtype WITHOUT scaling (keep [0, 255] range)
+            transform.append(tv.transforms.Lambda(lambda x: x.to(dtype)))
+        else:
+            # Default: convert and scale to [0, 1]
+            transform.append(tv.transforms.ConvertImageDtype(dtype))
 
     # tensor transforms
     if normalize:

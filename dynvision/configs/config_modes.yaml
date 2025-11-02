@@ -1,5 +1,5 @@
 # Local Settings
-use_local_mode: False
+use_local_mode: "auto"
 local:
   enable_progress_bar: True
   use_debug_mode: False
@@ -66,5 +66,3 @@ distributed:
   # strategy_kwargs:
   #   state_dict_type: "sharded"
   #   sharding_strategy: "NO_SHARD"
-
-  

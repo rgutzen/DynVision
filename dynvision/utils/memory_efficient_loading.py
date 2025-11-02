@@ -383,7 +383,9 @@ def extract_metric_values_for_dataframe(
     if resolution == "sample":
         # Extract ALL samples at (sample_index, times_index) resolution
         n_samples_pt = metric_tensor.shape[0]  # Samples actually in PT file
-        n_samples = n_samples_expected if n_samples_expected is not None else n_samples_pt
+        n_samples = (
+            n_samples_expected if n_samples_expected is not None else n_samples_pt
+        )
         n_times = len(unique_times)
         n_rows = n_samples * n_times
         values = np.empty(n_rows, dtype=np.float32)
@@ -787,15 +789,15 @@ def process_layer_responses_incremental(
                         trend = memory_monitor.get_memory_trend()
                         logger.error(f"Memory trend: {trend}")
 
-                        # If still too high, abort this layer
+                        # If still too high, log a strong warning but continue
                         if (
                             memory_monitor.get_current_memory_gb()
                             > memory_monitor.memory_limit_gb * 0.85
                         ):
-                            raise RuntimeError(
-                                f"Cannot continue: memory usage too high after emergency cleanup. "
+                            logger.warning(
+                                f"🚨 HIGH MEMORY WARNING: Memory usage remains very high after emergency cleanup. "
                                 f"Current: {memory_monitor.get_current_memory_gb():.2f}GB, "
-                                f"Limit: {memory_monitor.memory_limit_gb}GB"
+                                f"Limit: {memory_monitor.memory_limit_gb}GB. Continuing but risk of OOM."
                             )
 
                 # STEP 3E: Final layer cleanup

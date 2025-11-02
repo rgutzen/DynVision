@@ -25,7 +25,7 @@ rule all:
 # sh snakecharm.sh "idle"
 # sh snakecharm.sh "timeparams"
 # sh snakecharm.sh "stability --config test_batch_size=16"
-# sh snakecharm.sh "unrolling"
+# sh snakecharm.sh "unrolling --config batch_size=128"
 # # sh snakecharm.sh "imagenet --config use_distributed_mode=True batch_size=512"
 # # sh snakecharm.sh "dataloader"
 # ###############

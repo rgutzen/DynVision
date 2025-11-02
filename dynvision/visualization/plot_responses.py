@@ -1166,7 +1166,7 @@ def main():
     parser.add_argument("--parameter-key", type=str, help="Parameter column name")
     parser.add_argument("--experiment", type=str, help="Experiment name")
     parser.add_argument(
-        "--confidenc-measure",
+        "--confidence-measure",
         type=str,
         default="first_label_confidence",
         help="Confidence measure column name",
@@ -1212,7 +1212,7 @@ def main():
         category_key=args.category_key,
         parameter_key=args.parameter_key,
         experiment=args.experiment,
-        confidence_measure=args.confidenc_measure,
+        confidence_measure=args.confidence_measure,
         dt=args.dt,
         config=config,
     )

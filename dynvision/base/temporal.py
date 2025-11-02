@@ -246,10 +246,14 @@ class TemporalBase(nn.Module):
                     h = layer.get_newest_hidden_state()
                     x = module(x, h)
 
-                # apply layer operations (if defined)
-                elif hasattr(self, module_name) and x is not None:
                     module = getattr(self, module_name)
                     x = module(x)
+
+                # apply layer operations (if defined)
+                elif hasattr(self, module_name):
+                    module = getattr(self, module_name)
+                    if x is not None or "feedback" in operation or "skip" in operation:
+                        x = module(x)
 
                 elif hasattr(self, operation) and x is not None:
                     module = getattr(self, operation)
@@ -258,7 +262,7 @@ class TemporalBase(nn.Module):
                 else:
                     pass
 
-                if x is not None and (~torch.isfinite(x)).any():
+                if isinstance(x, torch.Tensor) and (~torch.isfinite(x)).any():
                     logger.warning(
                         f"NaN/inf detected in {module_name} output! \n\t {(~torch.isfinite(x)).sum()}/{x.numel()} NaNs"
                     )
