@@ -59,12 +59,13 @@ class CorNetRT(DyRCNN):
         **kwargs: Any,
     ) -> None:
 
+        breakpoint()
+
         self.model_letter = "rt"
         self.model_hash = "933c001c"
         self.init_with_pretrained = init_with_pretrained
         self.fixed_self_weight = fixed_self_weight
         self.recurrence_bias = recurrence_bias
-        self.history_length = int(max(t_recurrence, t_feedforward) / dt) + 1
 
         super().__init__(
             n_timesteps=n_timesteps,
@@ -164,6 +165,7 @@ class CorNetRT(DyRCNN):
             mid_modules=nn.GroupNorm(32, 64),
             fixed_self_weight=self.fixed_self_weight,
             recurrence_bias=self.recurrence_bias,
+            recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
@@ -184,6 +186,7 @@ class CorNetRT(DyRCNN):
             mid_modules=nn.GroupNorm(32, 128),
             fixed_self_weight=self.fixed_self_weight,
             recurrence_bias=self.recurrence_bias,
+            recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
@@ -204,6 +207,7 @@ class CorNetRT(DyRCNN):
             mid_modules=nn.GroupNorm(32, 256),
             fixed_self_weight=self.fixed_self_weight,
             recurrence_bias=self.recurrence_bias,
+            recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
@@ -224,6 +228,7 @@ class CorNetRT(DyRCNN):
             mid_modules=nn.GroupNorm(32, 512),
             fixed_self_weight=self.fixed_self_weight,
             recurrence_bias=self.recurrence_bias,
+            recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,

@@ -65,7 +65,10 @@ class TemporalBase(nn.Module):
         self.t_feedback = float(t_feedforward if t_feedback is None else t_feedback)
         self.t_skip = float(self.t_feedback if t_skip is None else t_skip)
         self.history_length = max(
-            self.t_feedforward, self.t_recurrence, self.t_feedback, self.t_skip
+            self.t_feedforward,
+            self.t_recurrence,
+            self.t_feedback if self.feedback else 0,
+            self.skip if self.skip else 0,
         )
         self.classifier_name = classifier_name
         self.dynamics_solver = str(dynamics_solver)
@@ -78,7 +81,11 @@ class TemporalBase(nn.Module):
         self.feedforward_only = str_to_bool(feedforward_only)
 
         # Process feedforward delay
-        self.delay_feedforward = int(t_feedforward / dt)
+        # Add dt to account for "set then get" pattern in delay operation:
+        # The delay operation sets the current state first, then retrieves with delay
+        # So delay=0 gets what was just set, delay=1 gets previous timestep
+        # To implement t_feedforward delay, we need delay_feedforward = int(t_feedforward/dt) + 1
+        self.delay_feedforward = int((t_feedforward + dt) / dt)
 
         # Process input dimensions and determine timesteps
         self._process_input_dimensions(input_dims, n_timesteps)
@@ -232,6 +239,7 @@ class TemporalBase(nn.Module):
                         module_name = layer._get_name()
                     else:
                         module_name = "layer"
+                    breakpoint()
                     x = layer(x, feedforward_only=feedforward_only)
 
                 elif operation == "record" and store_responses:

@@ -5,19 +5,19 @@ classifier_name: classifier
 status: trained
 n_timesteps: 20
 dt: 2  # ms
-tau: 5  # ms
-t_recurrence: 6  # ms
-t_feedforward: 0  # ms
-t_skip: 0  # ms
-t_feedback: 34  # ms
-loss_reaction_time: 4  # ms 
-recurrence_type: 'full'
-recurrence_target: 'output'
-integration_strategy: 'additive'  # 'additive' or 'multiplicative'
-dynamics_solver: "euler" 
-skip: True
-feedback: False
-init_with_pretrained: False
+# tau: 5  # ms
+# t_recurrence: 6  # ms
+# t_feedforward: 0  # ms
+# t_skip: 0  # ms
+# t_feedback: 34  # ms
+# loss_reaction_time: 4  # ms 
+# recurrence_type: 'full'
+# recurrence_target: 'output'
+# integration_strategy: 'additive'  # 'additive' or 'multiplicative'
+# dynamics_solver: "euler" 
+# skip: True
+# feedback: False
+# init_with_pretrained: False
 store_train_responses: 0 # n_batches
 store_val_responses: 0  # n_batches
 store_test_responses: 5  # n_batches

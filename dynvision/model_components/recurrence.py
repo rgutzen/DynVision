@@ -118,12 +118,18 @@ class ForwardRecurrenceBase(RecurrenceBase):
         if len(self._hidden_states) == 0:
             return None
 
+        # Check if requested delay exceeds available history
+        # Use > not >= to allow recurrence (accessed before set) to work:
+        # At t=1: buffer=[state_t0] (1 entry), delay_recurrence=1 should return state_t0
+        if delay > len(self._hidden_states):
+            return None
+
         # Convert delay to buffer index: delay=0 → -1, delay=1 → -2, etc.
         try:
             buffer_index = -(delay + 1)
             return self._hidden_states.get(buffer_index)
         except (IndexError, ValueError):
-            # Index out of range or buffer not full enough
+            # Index out of range - shouldn't happen with our check, but handle gracefully
             return None
 
     def get_oldest_hidden_state(self) -> Optional[torch.Tensor]:
