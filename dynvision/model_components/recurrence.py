@@ -1,5 +1,4 @@
-from collections import deque
-from typing import Callable, Optional, Union, Deque, Dict, Any
+from typing import Callable, Optional, Union, Dict, Any
 
 import torch
 import torch.nn as nn
@@ -13,6 +12,7 @@ from dynvision.model_components.topographic_recurrence import (
 # from dynvision.base import DtypeDeviceCoordinatorMixin
 from dynvision.model_components.integration_strategy import setup_integration_strategy
 from dynvision.utils import apply_parametrization, str_to_bool, calculate_conv_out_dim
+from dynvision.base.storage import DataBuffer
 from pytorch_lightning import LightningModule
 import logging
 
@@ -83,82 +83,141 @@ class ForwardRecurrenceBase(RecurrenceBase):
     """
 
     def reset(self) -> None:
-        self.hidden_states: Deque[torch.Tensor] = deque(maxlen=self.n_hidden_states)
+        """Reset hidden states using DataBuffer with CyclicStrategy.
+
+        Configuration:
+        - cpu_offload=False: Keep on GPU for fast recurrent access
+        - detach_tensors=False: Preserve gradients through recurrence
+        - thread_safe=True: Safe for distributed training
+        """
+        self._hidden_states = DataBuffer(
+            max_size=self.n_hidden_states,
+            strategy="cyclic",
+            cpu_offload=False,
+            detach_tensors=False,
+            thread_safe=True,
+        )
 
     def get_hidden_state(self, delay: Optional[int] = None) -> Optional[torch.Tensor]:
         """
-        Get the hidden state at a specific index.
-        The index is the delay in time steps.
-        Index 0 is the newest entry, index 1 is the previous entry.
+        Get the hidden state at a specific delay.
+        The delay is measured in timesteps from the present.
 
         Args:
-            i (Optional[int]): Index of the hidden state. Default is None.
+            delay (Optional[int]): Delay in timesteps. delay=0 is the most recent state,
+                                   delay=1 is one timestep back, etc. If None, defaults to 0.
 
         Returns:
-            Optional[torch.Tensor]: Hidden state tensor.
+            Optional[torch.Tensor]: Hidden state tensor at the specified delay, or None if unavailable.
         """
+        # Default to most recent state
         if delay is None:
-            return self.hidden_states
-        elif delay >= 0:
-            i = -1 * (delay + 1)
-        else:
-            i = delay
+            delay = 0
 
-        if abs(i) > len(self.hidden_states):
+        # Check if buffer is empty
+        if len(self._hidden_states) == 0:
             return None
-        else:
-            return self.hidden_states[i]
+
+        # Convert delay to buffer index: delay=0 → -1, delay=1 → -2, etc.
+        try:
+            buffer_index = -(delay + 1)
+            return self._hidden_states.get(buffer_index)
+        except (IndexError, ValueError):
+            # Index out of range or buffer not full enough
+            return None
 
     def get_oldest_hidden_state(self) -> Optional[torch.Tensor]:
-        if len(self.hidden_states):
-            return self.hidden_states[0]
-        else:
+        """Get the oldest hidden state in the buffer.
+
+        Returns:
+            Optional[torch.Tensor]: Oldest hidden state, or None if buffer is empty.
+        """
+        if len(self._hidden_states) == 0:
+            return None
+        try:
+            return self._hidden_states.get(0)
+        except (IndexError, ValueError):
             return None
 
     def get_newest_hidden_state(self) -> Optional[torch.Tensor]:
-        if len(self.hidden_states):
-            return self.hidden_states[-1]
-        else:
+        """Get the newest hidden state in the buffer.
+
+        Returns:
+            Optional[torch.Tensor]: Newest hidden state, or None if buffer is empty.
+        """
+        if len(self._hidden_states) == 0:
+            return None
+        try:
+            return self._hidden_states.get(-1)
+        except (IndexError, ValueError):
             return None
 
     def set_hidden_state(self, h: torch.Tensor, delay: Optional[int] = None) -> None:
-        """Fast reference storage - only coordinate if actually needed."""
-        if delay is None:
-            self.hidden_states.append(h)
-            return
-        elif delay >= 0:
-            i = -1 * (delay + 1)
-        else:
-            i = delay
+        """Store a hidden state in the buffer.
 
-        self.hidden_states[i] = h
+        Args:
+            h (torch.Tensor): Hidden state tensor to store.
+            delay (Optional[int]): If None, appends the state as the newest entry.
+                                   Setting at specific delays is not supported with DataBuffer.
+
+        Raises:
+            NotImplementedError: If delay is specified (not supported with circular buffer).
+        """
+        if delay is None:
+            self._hidden_states.append(h)
+            return
+        else:
+            raise NotImplementedError(
+                "Setting hidden states at specific delays is not supported with DataBuffer. "
+                "Only appending new states (delay=None) is allowed."
+            )
 
     def sync_persistent_state(self) -> None:
-        """Only sync if there's actually a mismatch."""
-        if not hasattr(self, "hidden_states") or not self.hidden_states:
+        """Sync hidden states to match model's device and dtype.
+
+        Only performs synchronization if there's actually a device/dtype mismatch.
+        """
+        if not hasattr(self, "_hidden_states") or len(self._hidden_states) == 0:
             return
 
         target_dtype = self.get_target_dtype()
         target_device = self.get_target_device()
 
         # Check if any tensor needs syncing
-        needs_sync = any(
-            h.dtype != target_dtype or h.device != target_device
-            for h in self.hidden_states
-        )
+        needs_sync = False
+        for i in range(len(self._hidden_states)):
+            try:
+                h = self._hidden_states.get(i)
+                if h is not None and (h.dtype != target_dtype or h.device != target_device):
+                    needs_sync = True
+                    break
+            except (IndexError, ValueError):
+                break
 
         if needs_sync:
-            # Only then do the coordination (preserves references when possible)
-            synced_states = deque(maxlen=self.n_hidden_states)
-            for hidden in self.hidden_states:
-                if hidden.dtype != target_dtype or hidden.device != target_device:
-                    synced_states.append(
-                        hidden.to(dtype=target_dtype, device=target_device)
-                    )
-                else:
-                    synced_states.append(hidden)  # Keep original reference
+            # Create new buffer and sync all tensors
+            synced_buffer = DataBuffer(
+                max_size=self.n_hidden_states,
+                strategy="cyclic",
+                cpu_offload=False,
+                detach_tensors=False,
+                thread_safe=True,
+            )
 
-            self.hidden_states = synced_states
+            for i in range(len(self._hidden_states)):
+                try:
+                    hidden = self._hidden_states.get(i)
+                    if hidden is not None:
+                        if hidden.dtype != target_dtype or hidden.device != target_device:
+                            synced_buffer.append(
+                                hidden.to(dtype=target_dtype, device=target_device)
+                            )
+                        else:
+                            synced_buffer.append(hidden)  # Keep original reference
+                except (IndexError, ValueError):
+                    break
+
+            self._hidden_states = synced_buffer
 
 
 class DepthwiseSeparableConnection(RecurrenceBase):
