@@ -629,7 +629,7 @@ def _define_architecture(self):
 Clear hidden states at the start of each forward pass:
 
 ```python
-def reset(self):
+def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
     """Reset all hidden states in recurrent layers."""
     for layer in [self.V1, self.V2, self.V4, self.IT]:
         layer.reset()
@@ -744,7 +744,7 @@ If the original uses scalar 0 (or similar sentinel values), you must override Dy
 For CorNet-RT, we needed to patch both `get_hidden_state()` and the recurrence's `forward()`:
 
 ```python
-def reset(self):
+def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
     """Reset hidden states and patch to return 0 instead of None.
 
     Original CorNet-RT initializes state=0, not None. We patch both
@@ -823,7 +823,7 @@ If outputs diverge at the first timestep despite matching weights:
 
 ```python
 # Add debug logging to check state retrieval
-def reset(self):
+def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
     for layer in [self.V1, self.V2, self.V4, self.IT]:
         layer.reset()
 
@@ -1564,7 +1564,7 @@ class StatefulWrapper(nn.Module):
         self._hidden_states = []
     def get_hidden_state(self, delay=0): ...
     def set_hidden_state(self, x): ...
-    def reset(self): ...
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) : ...
 
 self.layer0 = StatefulWrapper(nn.Conv2d(...))
 

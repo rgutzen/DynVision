@@ -77,7 +77,7 @@ def set_hidden_state(self, state, t=None):
 def get_hidden_state(self, t):
     """Get hidden state from timestep t."""
     
-def reset(self):
+def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
     """Reset all stateful components."""
 ```
 

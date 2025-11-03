@@ -200,7 +200,7 @@ class CordsNet(BaseModel):
 
         return translate_layer_names
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset all layer hidden states and dynamics solvers."""
         for layer_name in self.layer_names:
             # Reset layer hidden states

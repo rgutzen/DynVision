@@ -104,7 +104,7 @@ class RecurrentModel(LightningBase):
             recurrence_type="full"
         )
     
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
         """Reset between sequences."""
         for layer in self.modules():
             if hasattr(layer, 'reset'):

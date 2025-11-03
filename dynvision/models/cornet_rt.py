@@ -52,14 +52,12 @@ class CorNetRT(DyRCNN):
         fixed_self_weight: float = 1.0,
         recurrence_bias: bool = False,
         recurrence_target: str = "middle",
-        skip: bool = True,  # Force skip connections to inject zeros at early timesteps
-        t_skip: float = 0.0,  # Zero delay for immediate effect
+        skip: bool = False,  # Force skip connections to inject zeros at early timesteps
+        t_skip: float = 0.0,  # Zero delay for immediate effect → delay_skip = int(0/2) = 0
         feedback: bool = False,
         init_with_pretrained=True,
         **kwargs: Any,
     ) -> None:
-
-        breakpoint()
 
         self.model_letter = "rt"
         self.model_hash = "933c001c"
@@ -94,31 +92,6 @@ class CorNetRT(DyRCNN):
                 p for p in list(self.state_dict().keys())
             ]
 
-        # Initialize skip connections to provide zeros
-        self._init_skip_connections()
-
-    def _init_skip_connections(self) -> None:
-        """Initialize skip connection weights to 0 and freeze them.
-
-        This makes skip connections always output zeros, which:
-        - At early timesteps: Provides zero tensors when no feedforward input exists
-        - At later timesteps: Adding zeros doesn't change feedforward input
-        """
-        for layer_name in ["V2", "V4", "IT"]:
-            skip_name = f"addskip_{layer_name}"
-            if hasattr(self, skip_name):
-                skip = getattr(self, skip_name)
-                logger.info(f"Initializing {skip_name} weights to 0 (frozen)")
-
-                # Skip connections use a Conv2d layer to adapt channels
-                if hasattr(skip, "conv") and isinstance(skip.conv, nn.Conv2d):
-                    skip.conv.weight.data.fill_(0.0)
-                    skip.conv.weight.requires_grad = False
-                    if skip.conv.bias is not None:
-                        skip.conv.bias.data.fill_(0.0)
-                        skip.conv.bias.requires_grad = False
-                    logger.info(f"  Froze {skip_name}.conv weights to 0")
-
     def download_pretrained_state_dict(self):
         url = f"https://s3.amazonaws.com/cornet-models/cornet_{self.model_letter.lower()}-{self.model_hash}.pth"
         ckpt_data = torch.utils.model_zoo.load_url(url, map_location=self.device)
@@ -147,12 +120,12 @@ class CorNetRT(DyRCNN):
         self.layer_names = ["V1", "V2", "V4", "IT"]
         # define operations order within layer
         self.layer_operations = [
-            "addskip",  # add skip connection (provides zeros when no feedforward input)
             "layer",  # apply (recurrent) convolutional layer
             "norm",  # apply normalization
             "nonlin",  # apply nonlinearity
             "record",  # record activations in responses dict
             "delay",  # set and get delayed activations for next layer
+            "skipzeros",  # check for zero hidden states and initialize if needed (BEFORE delay!)
         ]
         # V1
         self.V1 = RConv2d(
@@ -167,13 +140,14 @@ class CorNetRT(DyRCNN):
             recurrence_bias=self.recurrence_bias,
             recurrence_target=self.recurrence_target,
             dt=self.dt,
-            t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
             dim_y=self.dim_y,
             dim_x=self.dim_x,
             history_length=self.history_length,
         )
         self.norm_V1 = nn.GroupNorm(32, 64)
+
+        self.skipzeros_V1 = self.zerofilter("V2")
 
         # V2
         self.V2 = RConv2d(
@@ -188,13 +162,14 @@ class CorNetRT(DyRCNN):
             recurrence_bias=self.recurrence_bias,
             recurrence_target=self.recurrence_target,
             dt=self.dt,
-            t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
             dim_y=self.V1.dim_y // self.V1.stride[0] // self.V1.stride[1],
             dim_x=self.V1.dim_x // self.V1.stride[0] // self.V1.stride[1],
             history_length=self.history_length,
         )
         self.norm_V2 = nn.GroupNorm(32, 128)
+
+        self.skipzeros_V2 = self.zerofilter("V4")
 
         # V4
         self.V4 = RConv2d(
@@ -209,13 +184,14 @@ class CorNetRT(DyRCNN):
             recurrence_bias=self.recurrence_bias,
             recurrence_target=self.recurrence_target,
             dt=self.dt,
-            t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
             dim_y=self.V2.dim_y // self.V2.stride[0] // self.V2.stride[1],
             dim_x=self.V2.dim_x // self.V2.stride[0] // self.V2.stride[1],
             history_length=self.history_length,
         )
         self.norm_V4 = nn.GroupNorm(32, 256)
+
+        self.skipzeros_V4 = self.zerofilter("IT")
 
         # IT
         self.IT = RConv2d(
@@ -230,7 +206,6 @@ class CorNetRT(DyRCNN):
             recurrence_bias=self.recurrence_bias,
             recurrence_target=self.recurrence_target,
             dt=self.dt,
-            t_feedforward=self.t_feedforward,
             t_recurrence=self.t_recurrence,
             dim_y=self.V4.dim_y // self.V4.stride[0] // self.V4.stride[1],
             dim_x=self.V4.dim_x // self.V4.stride[0] // self.V4.stride[1],
@@ -242,39 +217,6 @@ class CorNetRT(DyRCNN):
         # IMPORTANT: inplace=False to avoid corrupting activations when reused across layers
         self.nonlin = nn.ReLU(inplace=False)
 
-        # Skip connections from V1 to inject zeros at early timesteps
-        # When there's no feedforward input (delay), skip provides zeros tensor
-        # When there is feedforward input, adding zeros doesn't change anything
-        # force_conv=True ensures conv is created even when channels match (V2)
-        if self.skip:
-            # V2: V1 is 56x56, V2 expects 28x28 → V1 is 2× larger → scale_factor=2
-            self.addskip_V2 = Skip(
-                source=self.V1,
-                in_channels=64,
-                out_channels=64,
-                scale_factor=2,
-                force_conv=True,  # Create conv even though channels match
-                delay_index=int(self.t_skip / self.dt),  # 0 for immediate effect
-            )
-            # V4: V1 is 56x56, V4 expects 14x14 → V1 is 4× larger → scale_factor=4
-            self.addskip_V4 = Skip(
-                source=self.V1,
-                in_channels=64,
-                out_channels=128,
-                scale_factor=4,
-                force_conv=True,
-                delay_index=int(self.t_skip / self.dt),
-            )
-            # IT: V1 is 56x56, IT expects 7x7 → V1 is 8× larger → scale_factor=8
-            self.addskip_IT = Skip(
-                source=self.V1,
-                in_channels=64,
-                out_channels=256,
-                scale_factor=8,
-                force_conv=True,
-                delay_index=int(self.t_skip / self.dt),
-            )
-
         # Classifier
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -282,54 +224,46 @@ class CorNetRT(DyRCNN):
             nn.Linear(512, self.n_classes),
         )
 
-    def forward(self, x, **kwargs):
-        """Forward pass with input statistics logging.
+    def _zero_init_hidden_states(
+        self,
+        layer_name: Optional[str] = None,
+    ):
+        """Initialize all hidden states in recurrent layers to zeros to replicate the behavior of the original implementation."""
+        if hasattr(self, "batch_size"):
+            batch_size = self.batch_size
+        else:
+            batch_size = 1
+        if layer_name is None:
+            layer_names = self.layer_names
+        else:
+            layer_names = [layer_name]
 
-        Args:
-            x: Input tensor
-            **kwargs: Additional arguments passed to parent forward
+        for layer in [getattr(self, name) for name in layer_names]:
+            if self.recurrence_target == "input":
+                n_channels = layer.in_channels
+                stride = 1
+            elif self.recurrence_target == "middle":
+                n_channels = layer.mid_channels
+                stride = layer.stride[0]
+            else:  # 'output'
+                n_channels = layer.out_channels
+                if hasattr(layer, "mid_channels") and layer.mid_channels:
+                    stride = layer.stride[0] * layer.stride[1]
+                else:
+                    stride = layer.stride
 
-        Returns:
-            Model output
-        """
-        # Log input statistics as received by the model
-        logger.warning(
-            f"🔍 CorNetRT input stats: mean={x.mean():.3f}, std={x.std():.3f}, "
-            f"min={x.min():.3f}, max={x.max():.3f}, shape={x.shape}"
-        )
+            for i in range(layer.n_hidden_states):
+                layer.set_hidden_state(
+                    torch.zeros(
+                        batch_size,
+                        n_channels,
+                        layer.dim_y // stride,
+                        layer.dim_x // stride,
+                        device=self.device,
+                    )
+                )
 
-        # Call parent forward pass
-        return super().forward(x, **kwargs)
-
-    def debug_temporal_params(self):
-        """Debug helper to print temporal parameters for all layers.
-
-        Note: t_feedforward is not stored in RConv2d since forward delay
-        happens in the delay operation between layers. RConv2d only handles
-        recurrence delay internally.
-        """
-        print("\n" + "=" * 80)
-        print("Temporal Parameters Debug")
-        print("=" * 80)
-        print(f"Model level:")
-        print(f"  dt: {self.dt}")
-        print(f"  t_feedforward: {self.t_feedforward}")
-        print(f"  t_recurrence: {self.t_recurrence}")
-        print(f"  history_length: {self.history_length} (=max(t_ff, t_rec)/dt + 1)")
-        print()
-        for layer_name in self.layer_names:
-            layer = getattr(self, layer_name)
-            print(f"{layer_name}:")
-            print(f"  dt: {layer.dt}")
-            print(f"  t_recurrence: {layer.t_recurrence}")
-            print(f"  delay_recurrence: {layer.delay_recurrence} (=int(t_rec/dt))")
-            print(f"  history_length: {layer.history_length}")
-            print(
-                f"  n_hidden_states: {layer.n_hidden_states} (=int(history_len/dt)+1)"
-            )
-        print("=" * 80 + "\n")
-
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None):
         """Reset all hidden states in recurrent layers.
 
         Note: DynVision's None handling for uninitialized recurrent states
@@ -339,7 +273,38 @@ class CorNetRT(DyRCNN):
         Both return x unchanged when there's no recurrent state.
         """
         for layer in [self.V1, self.V2, self.V4, self.IT]:
-            layer.reset()
+            layer.reset(input_shape=input_shape)
+
+    def zerofilter(self, layer_name: str):
+        """Return function that adds zeros to hidden states if uninitialized.
+
+        Args:
+            layer_name: Name of the target layer to initialize with zeros
+
+        Returns:
+            Function that checks if input is all zeros and initializes target layer's hidden states
+        """
+
+        def zerofilter_fn(x):
+            # Check if we need to initialize target layer with zeros
+            # This happens when: (1) no feedforward input yet (x is None), or (2) input is all zeros
+            if x is None or (isinstance(x, torch.Tensor) and not torch.any(x).item()):
+                self._zero_init_hidden_states(layer_name=layer_name)
+                return None  # Return None to signal no feedforward input yet
+            return x  # Pass through unchanged
+
+        return zerofilter_fn
+
+    def forward(
+        self,
+        x_0: torch.Tensor,
+        *args: Any,
+        **kwargs: Any,
+    ) -> torch.Tensor:
+
+        self.batch_size = x_0.shape[0]
+
+        return super().forward(x_0, *args, **kwargs)
 
 
 def test_cornet(

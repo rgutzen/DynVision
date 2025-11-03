@@ -302,7 +302,7 @@ class RCNNModelBuilder:
     def __init__(self):
         self.reset()
         
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
         self.model = RCNNModel()
         
     def set_recurrence_type(self, recurrence_type):

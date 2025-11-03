@@ -32,7 +32,7 @@ class SamplingStrategy:
         """Get the index where to store the sample, or None if shouldn't store."""
         raise NotImplementedError
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset strategy state."""
         pass
 
@@ -98,7 +98,7 @@ class CyclicStrategy(SamplingStrategy):
                 indices.append(physical_idx)
             return indices
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         self.head = 0
 
 
@@ -141,7 +141,7 @@ class FixedStrategy(SamplingStrategy):
         n_items = min(n_items, buffer_size)
         return list(range(buffer_size - n_items, buffer_size))
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         pass
 
 
@@ -180,7 +180,7 @@ class UnlimitedStrategy(SamplingStrategy):
         n_items = min(n_items, buffer_size)
         return list(range(buffer_size - n_items, buffer_size))
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         pass
 
 
@@ -234,7 +234,7 @@ class ReservoirStrategy(SamplingStrategy):
         n_items = min(n_items, buffer_size)
         return list(range(min(n_items, buffer_size)))
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         pass
 
 

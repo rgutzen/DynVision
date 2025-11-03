@@ -80,12 +80,7 @@ class TemporalBase(nn.Module):
         self.idle_timesteps = int(idle_timesteps)
         self.feedforward_only = str_to_bool(feedforward_only)
 
-        # Process feedforward delay
-        # Add dt to account for "set then get" pattern in delay operation:
-        # The delay operation sets the current state first, then retrieves with delay
-        # So delay=0 gets what was just set, delay=1 gets previous timestep
-        # To implement t_feedforward delay, we need delay_feedforward = int(t_feedforward/dt) + 1
-        self.delay_feedforward = int((t_feedforward + dt) / dt)
+        self.delay_feedforward = int(t_feedforward / dt)
 
         # Process input dimensions and determine timesteps
         self._process_input_dimensions(input_dims, n_timesteps)
@@ -112,7 +107,14 @@ class TemporalBase(nn.Module):
 
         # Reset model state
         if hasattr(self, "reset"):
-            self.reset()
+            input_shape = (
+                1,
+                self.n_timesteps,
+                self.n_channels,
+                self.dim_y,
+                self.dim_x,
+            )
+            self.reset(input_shape)
 
     # Data processing
     #################
@@ -169,7 +171,7 @@ class TemporalBase(nn.Module):
     def verify_initialization(self) -> None:
         pass
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset the model state, in particular hidden states."""
         pass
 
@@ -239,7 +241,6 @@ class TemporalBase(nn.Module):
                         module_name = layer._get_name()
                     else:
                         module_name = "layer"
-                    breakpoint()
                     x = layer(x, feedforward_only=feedforward_only)
 
                 elif operation == "record" and store_responses:
@@ -247,7 +248,10 @@ class TemporalBase(nn.Module):
 
                 elif operation == "delay" and hasattr(layer, "set_hidden_state"):
                     layer.set_hidden_state(x)
-                    x = layer.get_hidden_state(self.delay_feedforward)
+                    # increment delay by one to account for "set then get" pattern in delay operation:
+                    # The delay operation sets the current state first, then retrieves with delay
+                    # So delay=0 gets what was just set, delay=1 gets previous timestep
+                    x = layer.get_hidden_state(self.delay_feedforward + 1)
 
                 elif operation == "tstep" and hasattr(self, module_name):
                     module = getattr(self, module_name)
@@ -308,7 +312,7 @@ class TemporalBase(nn.Module):
         batch_size, n_timesteps, dim_channels, dim_y, dim_x = x_0.shape
 
         if hasattr(self, "reset"):
-            self.reset()
+            self.reset(x_0.shape)
 
         store_responses = (
             hasattr(self, "storage") and self.storage.responses.should_store()
@@ -441,12 +445,13 @@ class TemporalBase(nn.Module):
         Raises:
             ValueError: If the number of residual timesteps exceeds max_timesteps.
         """
+        input_shape = (1, self.n_channels, self.dim_y, self.dim_x)
         random_input = self.create_aligned_tensor(
-            size=(1, self.n_channels, self.dim_y, self.dim_x), creation_method="randn"
+            size=input_shape, creation_method="randn"
         )
 
         if hasattr(self, "reset"):
-            self.reset()
+            self.reset(input_shape)
 
         x = None
         t = -1
@@ -469,7 +474,7 @@ class TemporalBase(nn.Module):
         logger.info(f"Residual timesteps: {t}")
 
         if hasattr(self, "reset"):
-            self.reset()
+            self.reset(input_shape)
 
         return t
 

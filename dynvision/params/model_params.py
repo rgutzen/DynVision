@@ -23,46 +23,50 @@ class ModelParams(BaseParams):
     """
 
     # ===== CORE ARCHITECTURE =====
-    model_name: str = Field(
-        default="None", description="Name of the model architecture"
+    # All defaults moved to config_defaults.yaml
+    # None = "not set" → filtered out → model class default used
+    model_name: Optional[str] = Field(
+        default=None, description="Name of the model architecture"
     )
-    n_classes: int = Field(default=10, description="Number of output classes", ge=1)
-    input_dims: Tuple[int, ...] = Field(
-        default=(1, 3, 224, 224),
+    n_classes: Optional[int] = Field(
+        default=None, description="Number of output classes"
+    )
+    input_dims: Optional[Tuple[int, ...]] = Field(
+        default=None,
         description="Input dimensions (timesteps, channels, height, width)",
     )
-    n_timesteps: int = Field(
-        default=1, description="Number of timesteps for model processing", ge=1
+    n_timesteps: Optional[int] = Field(
+        default=None, description="Number of timesteps for model processing"
     )
-    data_presentation_pattern: List[int] = Field(
-        default=[1],
+    data_presentation_pattern: Optional[List[int]] = Field(
+        default=None,
         description="Pattern for data presentation across timesteps (1 = present, 0 = absent)",
     )
     input_adaption_weight: Optional[float] = Field(
-        default=0.0,
+        default=None,
         description="weight to multiply the input for each consecutive timestep",
     )
 
     # ===== BIOLOGICAL PARAMETERS =====
-    dt: float = Field(default=1.0, description="Integration time step (ms)", gt=0.0)
-    tau: float = Field(default=10.0, description="Neural time constant (ms)", gt=0.0)
-    t_feedforward: float = Field(
-        default=0.0, description="Feedforward delay (ms)", ge=0.0
+    dt: Optional[float] = Field(default=None, description="Integration time step (ms)")
+    tau: Optional[float] = Field(default=None, description="Neural time constant (ms)")
+    t_feedforward: Optional[float] = Field(
+        default=None, description="Feedforward delay (ms)"
     )
-    t_recurrence: float = Field(
-        default=1.0, description="Recurrent delay (ms)", ge=1.0
+    t_recurrence: Optional[float] = Field(
+        default=None, description="Recurrent delay (ms)"
     )
-    t_feedback: float = Field(default=1.0, description="Feedback delay (ms)", ge=1.0)
-    t_skip: float = Field(default=1.0, description="Skip delay (ms)", ge=0.0)
-    dynamics_solver: Literal["euler", "rk4"] = Field(
-        default="euler", description="Dynamical systems solver"
+    t_feedback: Optional[float] = Field(default=None, description="Feedback delay (ms)")
+    t_skip: Optional[float] = Field(default=None, description="Skip delay (ms)")
+    dynamics_solver: Optional[Literal["euler", "rk4"]] = Field(
+        default=None, description="Dynamical systems solver"
     )
-    idle_timesteps: int = Field(
-        default=0,
+    idle_timesteps: Optional[int] = Field(
+        default=None,
         description="Number of idle timesteps for spontaneous activity to converge",
     )
-    feedforward_only: bool = Field(
-        default=False, description="Use only feedforward connections"
+    feedforward_only: Optional[bool] = Field(
+        default=None, description="Use only feedforward connections"
     )
     # ===== RECURRENT ARCHITECTURE =====
     recurrence_type: Optional[
@@ -77,34 +81,32 @@ class ModelParams(BaseParams):
             "localdepthwise",
             "none",
         ]
-    ] = Field(default="none", description="Type of recurrent connections")
+    ] = Field(default=None, description="Type of recurrent connections")
 
     # ===== CONNECTIVITY =====
-    skip: bool = Field(
-        default=False, description="Enable skip connections between layers"
+    skip: Optional[bool] = Field(
+        default=None, description="Enable skip connections between layers"
     )
-    feedback: Union[bool, str] = Field(
-        default=False,
+    feedback: Optional[Union[bool, str]] = Field(
+        default=None,
         description="Enable feedback connections from higher to lower layers",
     )
 
     # ===== NONLINEARITIES =====
-    supralinearity: float = Field(
-        default=1, description="Supralinearity exponent", gt=0.0
+    supralinearity: Optional[float] = Field(
+        default=None, description="Supralinearity exponent"
     )
 
     # ===== RESPONSE STORAGE (DEPRECATED - use storage configuration below) =====
-    store_responses: int = Field(
-        default=0,
+    store_responses: Optional[int] = Field(
+        default=None,
         description="DEPRECATED: Use store_test_responses instead. Number of responses to store during evaluation (0 = disabled)",
-        ge=-1,
-        le=1000,
     )
-    store_responses_on_cpu: bool = Field(
-        default=True, description="Store responses on CPU to save GPU memory"
+    store_responses_on_cpu: Optional[bool] = Field(
+        default=None, description="Store responses on CPU to save GPU memory"
     )
-    classifier_name: str = Field(
-        default="classifier", description="Name of the classifier layer"
+    classifier_name: Optional[str] = Field(
+        default=None, description="Name of the classifier layer"
     )
 
     # ===== STORAGE BUFFER CONFIGURATION =====
@@ -138,64 +140,64 @@ class ModelParams(BaseParams):
         description="Number of records to store during testing (None = use default, 0 = disabled, -1 = unlimited)",
         ge=-1,
     )
-    early_test_stop: bool = Field(
-        default=True,
+    early_test_stop: Optional[bool] = Field(
+        default=None,
         description="Stop testing early when buffer is filled (only for fixed strategy)",
     )
 
     # ===== LOSS CONFIGURATION =====
-    loss: Union[str, List[str]] = Field(
-        default="CrossEntropyLoss",
+    loss: Optional[Union[str, List[str]]] = Field(
+        default=None,
         description="Loss function name or list of loss functions",
     )
-    loss_configs: Dict[str, Dict] = Field(
-        default_factory=dict, description="Configurations for the loss function"
+    loss_configs: Optional[Dict[str, Dict]] = Field(
+        default=None, description="Configurations for the loss function"
     )
-    loss_reaction_time: float = Field(
-        default=0.0, description="Reaction time for loss calculation (ms)", ge=0.0
+    loss_reaction_time: Optional[float] = Field(
+        default=None, description="Reaction time for loss calculation (ms)"
     )
     # ===== OPTIMIZER CONFIGURATION =====
-    learning_rate: float = Field(
-        default=0.001, description="Learning rate for optimizer", gt=0.0
+    learning_rate: Optional[float] = Field(
+        default=None, description="Learning rate for optimizer"
     )
-    optimizer: str = Field(
-        default="Adam", description="Optimizer type (Adam, SGD, AdamW, etc.)"
+    optimizer: Optional[str] = Field(
+        default=None, description="Optimizer type (Adam, SGD, AdamW, etc.)"
     )
-    optimizer_kwargs: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional optimizer arguments"
+    optimizer_kwargs: Optional[Dict[str, Any]] = Field(
+        default=None, description="Additional optimizer arguments"
     )
-    optimizer_configs: Dict[str, Any] = Field(
-        default_factory=dict, description="Optimizer configuration dictionary"
+    optimizer_configs: Optional[Dict[str, Any]] = Field(
+        default=None, description="Optimizer configuration dictionary"
     )
     target_dtype: Optional[str] = Field(
-        default="float16",
+        default=None,
         description="Target data type for model outputs (e.g., 'float32', 'int64')",
     )
 
     # ===== LEARNING RATE PARAMETER GROUPS =====
-    lr_parameter_groups: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict,
+    lr_parameter_groups: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
         description="Learning rate factors for different parameter groups",
     )
 
     # ===== SCHEDULER CONFIGURATION =====
-    scheduler: str = Field(
-        default="StepLR", description="Learning rate scheduler type"
+    scheduler: Optional[str] = Field(
+        default=None, description="Learning rate scheduler type"
     )
-    scheduler_kwargs: Dict[str, Any] = Field(
-        default_factory=dict, description="Scheduler arguments"
+    scheduler_kwargs: Optional[Dict[str, Any]] = Field(
+        default=None, description="Scheduler arguments"
     )
-    scheduler_configs: Dict[str, Any] = Field(
-        default_factory=dict, description="Scheduler configuration"
+    scheduler_configs: Optional[Dict[str, Any]] = Field(
+        default=None, description="Scheduler configuration"
     )
 
     # ===== TRAINING BEHAVIOR =====
-    retain_graph: bool = Field(
-        default=False,
+    retain_graph: Optional[bool] = Field(
+        default=None,
         description="Whether to retain computation graph for backward pass",
     )
-    non_label_index: int = Field(
-        default=-1, description="Index for non-label timesteps"
+    non_label_index: Optional[int] = Field(
+        default=None, description="Index for non-label timesteps"
     )
 
     # ===== CUSTOM MODEL PARAMETERS =====
@@ -253,8 +255,10 @@ class ModelParams(BaseParams):
         return aliases
 
     @field_validator("store_responses")
-    def convert_store_responses(cls, v) -> int:
+    def convert_store_responses(cls, v) -> Optional[int]:
         """Convert store_responses to int, handling string inputs."""
+        if v is None:
+            return None
         if isinstance(v, str):
             if v.lower() == "all":
                 return -1  # Use -1 to indicate "all responses"
@@ -263,12 +267,16 @@ class ModelParams(BaseParams):
 
     @field_validator("recurrence_type")
     def validate_recurrence_type(cls, v):
+        # None means "not set" → will be filtered out → model decides
+        # This is different from the old default "none" which disabled recurrence
         if v is None:
-            return "none"
+            return None
         return v
 
     @field_validator("loss")
-    def validate_loss(cls, v) -> list:
+    def validate_loss(cls, v) -> Optional[list]:
+        if v is None:
+            return None
         if isinstance(v, list):
             return v
         else:
@@ -276,6 +284,8 @@ class ModelParams(BaseParams):
 
     @field_validator("optimizer")
     def validate_optimizer(cls, v):
+        if v is None:
+            return None
         valid_optimizers = [
             "Adam",
             "AdamW",
@@ -300,6 +310,8 @@ class ModelParams(BaseParams):
     @field_validator("scheduler")
     def validate_scheduler(cls, v):
         """Validate scheduler name."""
+        if v is None:
+            return None
         valid_schedulers = [
             "StepLR",
             "MultiStepLR",
@@ -323,6 +335,8 @@ class ModelParams(BaseParams):
     @field_validator("model_name")
     def validate_model_name(cls, v):
         """Validate model name."""
+        if v is None:
+            return None
         valid_models = [
             "DyRCNNx4",
             "AlexNet",
@@ -330,6 +344,7 @@ class ModelParams(BaseParams):
             "ResNet34",
             "ResNet50",
             "CORnet-RT",
+            "CorNetRT",
             "CordsNet",
             "BLT",
             "TwoLayerCNN",
@@ -343,6 +358,8 @@ class ModelParams(BaseParams):
     @field_validator("input_dims")
     def validate_input_dims(cls, v):
         """Validate input dimensions."""
+        if v is None:
+            return None
         if len(v) not in [3, 4]:
             raise ValueError(
                 "input_dims must be (channels, height, width) or (timesteps, channels, height, width)"
@@ -356,8 +373,14 @@ class ModelParams(BaseParams):
 
     @model_validator(mode="after")
     def setup_defaults_and_validate_constraints(self):
-        """Set up defaults and validate all constraints."""
-        if not self.loss_configs:
+        """Set up defaults and validate all constraints.
+
+        Note: Many parameters can now be None (not set), which means they'll
+        be filtered out in get_model_kwargs() and model class defaults will be used.
+        Only validate parameters that are explicitly set (not None).
+        """
+        # Set up loss_configs default only if loss is set but configs aren't
+        if self.loss is not None and not self.loss_configs:
             object.__setattr__(
                 self,
                 "loss_configs",
@@ -366,12 +389,15 @@ class ModelParams(BaseParams):
                     "EnergyLoss": {"weight": 100},
                 },
             )
-        for loss in self.loss:
-            if loss not in self.loss_configs:
-                logging.warning(f"Loss configuration for '{loss}' not found.")
 
-        # Provide default lr_parameter_groups if empty
-        if not self.lr_parameter_groups:
+        # Validate loss configs if both loss and loss_configs are set
+        if self.loss is not None and self.loss_configs is not None:
+            for loss in self.loss:
+                if loss not in self.loss_configs:
+                    logging.warning(f"Loss configuration for '{loss}' not found.")
+
+        # Provide default lr_parameter_groups if empty (but not if None)
+        if self.lr_parameter_groups is not None and not self.lr_parameter_groups:
             object.__setattr__(
                 self,
                 "lr_parameter_groups",
@@ -383,14 +409,15 @@ class ModelParams(BaseParams):
             )
             logging.info("Using default lr_parameter_groups")
 
-        # Validate lr_parameter_groups
-        for group_name, group_config in self.lr_parameter_groups.items():
-            if "lr_factor" not in group_config:
-                group_config["lr_factor"] = 1.0
-                logging.info(f"Added missing lr_factor=1.0 to group '{group_name}'")
+        # Validate lr_parameter_groups if set
+        if self.lr_parameter_groups is not None:
+            for group_name, group_config in self.lr_parameter_groups.items():
+                if "lr_factor" not in group_config:
+                    group_config["lr_factor"] = 1.0
+                    logging.info(f"Added missing lr_factor=1.0 to group '{group_name}'")
 
-        # Provide default scheduler configs
-        if not self.scheduler_configs:
+        # Provide default scheduler configs if scheduler is set but configs aren't
+        if self.scheduler is not None and not self.scheduler_configs:
             default_configs = {
                 "interval": "epoch",
                 "frequency": 1,
@@ -402,7 +429,7 @@ class ModelParams(BaseParams):
             logging.info("Using default scheduler_configs")
 
         # Provide default scheduler kwargs based on scheduler type
-        if not self.scheduler_kwargs:
+        if self.scheduler is not None and not self.scheduler_kwargs:
             if self.scheduler == "StepLR":
                 object.__setattr__(
                     self, "scheduler_kwargs", {"step_size": 30, "gamma": 0.1}
@@ -413,61 +440,78 @@ class ModelParams(BaseParams):
                 logging.info("Using default CosineAnnealingLR scheduler_kwargs")
 
         # Scheduler configuration consistency
-        if self.scheduler == "ReduceLROnPlateau":
+        if (
+            self.scheduler == "ReduceLROnPlateau"
+            and self.scheduler_configs is not None
+        ):
             if "monitor" not in self.scheduler_configs:
                 self.scheduler_configs["monitor"] = "val_loss"
 
-        # Biological timing constraints (informational warnings only)
-        if self.dt >= self.tau:
-            logging.warning(
-                f"dt ({self.dt}) should be much smaller than tau ({self.tau}) "
-                "for numerical stability (typically dt < tau/10)"
-            )
+        # Biological timing constraints (only validate if both dt and tau are set)
+        if self.dt is not None and self.tau is not None:
+            if self.dt >= self.tau:
+                logging.warning(
+                    f"dt ({self.dt}) should be much smaller than tau ({self.tau}) "
+                    "for numerical stability (typically dt < tau/10)"
+                )
 
-        # Delay constraints
-        if self.t_feedforward < 0 or self.t_recurrence < 1:
-            raise DynVisionValidationError(
-                "t_feedforward must be non-negative, t_recurrence must be at least 1."
-            )
+        # Delay constraints (only validate if set)
+        if self.t_feedforward is not None and self.t_feedforward < 0:
+            raise DynVisionValidationError("t_feedforward must be non-negative")
 
-        # Check if delays are exact multiples of dt (informational)
-        if self.t_feedforward % self.dt != 0:
-            steps = int(self.t_feedforward / self.dt)
-            logging.info(
-                f"t_feedforward ({self.t_feedforward}ms) rounds to {steps} timesteps "
-                f"(dt={self.dt}ms)"
-            )
+        if self.t_recurrence is not None and self.t_recurrence < 1:
+            raise DynVisionValidationError("t_recurrence must be at least 1")
 
-        if self.t_recurrence % self.dt != 0:
-            steps = int(self.t_recurrence / self.dt)
-            logging.info(
-                f"t_recurrence ({self.t_recurrence}ms) rounds to {steps} timesteps "
-                f"(dt={self.dt}ms)"
-            )
+        # Check if delays are exact multiples of dt (informational, only if both set)
+        if self.dt is not None and self.t_feedforward is not None:
+            if self.t_feedforward % self.dt != 0:
+                steps = int(self.t_feedforward / self.dt)
+                logging.info(
+                    f"t_feedforward ({self.t_feedforward}ms) rounds to {steps} timesteps "
+                    f"(dt={self.dt}ms)"
+                )
 
-        # Architecture consistency checks
-        if self.supralinearity != 1 and self.recurrence_type == "none":
+        if self.dt is not None and self.t_recurrence is not None:
+            if self.t_recurrence % self.dt != 0:
+                steps = int(self.t_recurrence / self.dt)
+                logging.info(
+                    f"t_recurrence ({self.t_recurrence}ms) rounds to {steps} timesteps "
+                    f"(dt={self.dt}ms)"
+                )
+
+        # Architecture consistency checks (only if both set)
+        if (
+            self.supralinearity is not None
+            and self.recurrence_type is not None
+            and self.supralinearity != 1
+            and self.recurrence_type == "none"
+        ):
             logging.warning(
                 "Supralinearity enabled but no recurrence - may cause instability"
             )
 
-        # Input dimensions consistency
-        if len(self.input_dims) == 4:
-            timesteps_from_dims = self.input_dims[0]
-            if timesteps_from_dims > 1 and timesteps_from_dims != self.n_timesteps:
-                logging.warning(
-                    f"n_timesteps ({self.n_timesteps}) doesn't match "
-                    f"input_dims timesteps ({timesteps_from_dims})"
-                )
+        # Input dimensions consistency (only if both set)
+        if self.input_dims is not None and self.n_timesteps is not None:
+            if len(self.input_dims) == 4:
+                timesteps_from_dims = self.input_dims[0]
+                if timesteps_from_dims > 1 and timesteps_from_dims != self.n_timesteps:
+                    logging.warning(
+                        f"n_timesteps ({self.n_timesteps}) doesn't match "
+                        f"input_dims timesteps ({timesteps_from_dims})"
+                    )
 
-        # Input/output consistency
-        if self.n_classes < 2:
+        # Input/output consistency (only if set)
+        if self.n_classes is not None and self.n_classes < 2:
             logging.warning(
                 f"n_classes ({self.n_classes}) should be >= 2 for meaningful classification"
             )
 
-        # Handle deprecated store_responses parameter
-        if self.store_responses != 0 and self.store_test_responses is None:
+        # Handle deprecated store_responses parameter (only if set)
+        if (
+            self.store_responses is not None
+            and self.store_responses != 0
+            and self.store_test_responses is None
+        ):
             logging.warning(
                 f"'store_responses' is deprecated. Setting 'store_test_responses={self.store_responses}' instead. "
                 "Please use store_test_responses, store_val_responses, store_train_responses explicitly."
@@ -523,23 +567,31 @@ class ModelParams(BaseParams):
     # ===== COMPUTED PROPERTIES (DERIVED PARAMETERS) =====
 
     @property
-    def delay_feedforward(self) -> int:
+    def delay_feedforward(self) -> Optional[int]:
         """Number of timesteps for feedforward delay."""
+        if self.t_feedforward is None or self.dt is None:
+            return None
         return int(self.t_feedforward / self.dt)
 
     @property
-    def delay_recurrence(self) -> int:
+    def delay_recurrence(self) -> Optional[int]:
         """Number of timesteps for recurrence delay."""
+        if self.t_recurrence is None or self.dt is None:
+            return None
         return int(self.t_recurrence / self.dt)
 
     @property
-    def stability_ratio(self) -> float:
+    def stability_ratio(self) -> Optional[float]:
         """Ratio dt/tau for numerical stability assessment."""
+        if self.dt is None or self.tau is None:
+            return None
         return self.dt / self.tau
 
     @property
-    def criterion_params(self) -> List[Tuple[str, Dict[str, Any]]]:
+    def criterion_params(self) -> Optional[List[Tuple[str, Dict[str, Any]]]]:
         """Get the parameters for the criterion used in the model."""
+        if self.loss is None or self.loss_configs is None:
+            return None
         if not isinstance(self.loss, list):
             self.loss = [self.loss]
         return [(l, self.loss_configs[l]) for l in self.loss]
@@ -573,6 +625,9 @@ class ModelParams(BaseParams):
     def get_model_kwargs(self, model_class=None) -> Dict[str, Any]:
         """
         Get filtered kwargs appropriate for model creation.
+
+        None values are filtered out to allow model class defaults to be used.
+        This implements the sentinel pattern: None = "not set" → use model default.
 
         Args:
             model_class: The model class to filter kwargs for
@@ -630,11 +685,16 @@ class ModelParams(BaseParams):
         }
 
         # Add custom model kwargs
-        model_kwargs.update(self.model_kwargs)
+        if self.model_kwargs:
+            model_kwargs.update(self.model_kwargs)
 
         # Add extra fields if any
         if hasattr(self, "__pydantic_extra__"):
             model_kwargs.update(self.__pydantic_extra__)
+
+        # CRITICAL: Filter out None values to allow model class defaults
+        # None = "not set" → don't pass to model → model uses its own default
+        model_kwargs = {k: v for k, v in model_kwargs.items() if v is not None}
 
         # Filter kwargs if model_class is provided
         if model_class is not None:

@@ -15,7 +15,7 @@ References:
 """
 
 import logging
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -197,7 +197,7 @@ class DyRCNNx4(DyRCNN):
     Four-layer DyRCNN implementing a biologically-inspired visual hierarchy.
     """
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset model state."""
         self.V1.reset()
         self.tstep_V1.reset()
@@ -386,7 +386,7 @@ class DyRCNNx8(DyRCNNx4):
     Four-layer DyRCNN (with double conv per layer) implementing a biologically-inspired visual hierarchy.
     """
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset model state."""
         self.V1.reset()
         self.tstep_V1.reset()
@@ -581,7 +581,7 @@ class DyRCNNx8(DyRCNNx4):
 
 class DyRCNNx2(DyRCNN):
 
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None):
         self.layer1.reset()
         self.tstep_layer1.reset()
         self.layer2.reset()

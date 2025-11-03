@@ -78,7 +78,7 @@ class CustomRCNN(LightningBase):
         # For now, we'll just use default initialization
         pass
     
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
         # Reset all stateful components of the model
         for layer_name in self.layer_names:
             # Reset recurrent layers
@@ -473,7 +473,7 @@ class CustomRCNN(LightningBase):
         
         return x
     
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
         # Reset all stateful components
         for layer_name in self.layer_names:
             # Reset recurrent layers
@@ -697,7 +697,7 @@ class CustomRK4(nn.Module):
     def forward(self, x, driving_input):
         return CustomRK4Step.apply(x, driving_input, self.dt, self.tau)
         
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) :
         pass
 ```
 

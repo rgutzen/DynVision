@@ -67,6 +67,7 @@ class ConnectionBase(LightningModule):
         self.setup_transform = True
         self.auto_adapt = auto_adapt
         self.force_conv = force_conv
+        self.scale_factor = scale_factor
 
         if not auto_adapt:
             # infer in_channels, out_channels from source module

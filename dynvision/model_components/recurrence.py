@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Union, Dict, Any
+from typing import Callable, Optional, Union, Dict, Any, Tuple
 
 import torch
 import torch.nn as nn
@@ -82,7 +82,7 @@ class ForwardRecurrenceBase(RecurrenceBase):
     Base class for combined forward and recurrence operations.
     """
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset hidden states using DataBuffer with CyclicStrategy.
 
         Configuration:
@@ -104,15 +104,17 @@ class ForwardRecurrenceBase(RecurrenceBase):
         The delay is measured in timesteps from the present.
 
         Args:
-            delay (Optional[int]): Delay in timesteps. delay=0 is the most recent state,
-                                   delay=1 is one timestep back, etc. If None, defaults to 0.
+            delay (Optional[int]): Delay in timesteps. delay=1 is the most recent state,
+                                   delay=2 is one timestep back, etc. If None, defaults to 1.
 
         Returns:
             Optional[torch.Tensor]: Hidden state tensor at the specified delay, or None if unavailable.
         """
         # Default to most recent state
         if delay is None:
-            delay = 0
+            delay = 1
+        elif delay == 0:
+            delay = 1
 
         # Check if buffer is empty
         if len(self._hidden_states) == 0:
@@ -124,9 +126,9 @@ class ForwardRecurrenceBase(RecurrenceBase):
         if delay > len(self._hidden_states):
             return None
 
-        # Convert delay to buffer index: delay=0 → -1, delay=1 → -2, etc.
+        # Convert delay to buffer index: delay=1 → -1, delay=2 → -2, etc.
         try:
-            buffer_index = -(delay + 1)
+            buffer_index = -delay
             return self._hidden_states.get(buffer_index)
         except (IndexError, ValueError):
             # Index out of range - shouldn't happen with our check, but handle gracefully
@@ -194,7 +196,9 @@ class ForwardRecurrenceBase(RecurrenceBase):
         for i in range(len(self._hidden_states)):
             try:
                 h = self._hidden_states.get(i)
-                if h is not None and (h.dtype != target_dtype or h.device != target_device):
+                if h is not None and (
+                    h.dtype != target_dtype or h.device != target_device
+                ):
                     needs_sync = True
                     break
             except (IndexError, ValueError):
@@ -214,7 +218,10 @@ class ForwardRecurrenceBase(RecurrenceBase):
                 try:
                     hidden = self._hidden_states.get(i)
                     if hidden is not None:
-                        if hidden.dtype != target_dtype or hidden.device != target_device:
+                        if (
+                            hidden.dtype != target_dtype
+                            or hidden.device != target_device
+                        ):
                             synced_buffer.append(
                                 hidden.to(dtype=target_dtype, device=target_device)
                             )
@@ -506,7 +513,7 @@ class InputAdaption(LightningModule):
         )
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """
         Reset the hidden state.
         """
@@ -848,6 +855,7 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         if h is None:  # passed hidden state takes precedence
             h = self.get_hidden_state(self.delay_recurrence)
 
+        # breakpoint()
         # Response to recurrent input
         if h is None or self.recurrence is None:
             h = None
