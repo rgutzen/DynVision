@@ -848,7 +848,7 @@ def _add_horizontal_legend(
 
 
 def plot_temporal_ridge_responses(
-    data: Union[Path, pd.DataFrame],
+    data: Union[Path, List[Path], pd.DataFrame],
     output: Path,
     subplot_var: Literal["layers", "category", "parameter"],
     hue_var: Literal["layers", "category", "parameter"],
@@ -864,7 +864,7 @@ def plot_temporal_ridge_responses(
     """Plot temporal ridge responses with flexible dimension mapping.
 
     Args:
-        data: Path to test_data.csv or DataFrame
+        data: Path to test_data.csv, list of paths to multiple test_data.csv files, or DataFrame
         output: Path to save figure
         subplot_var: Variable for vertical subplots (ridge plots)
         hue_var: Variable for color coding
@@ -892,7 +892,20 @@ def plot_temporal_ridge_responses(
         logger.info("No config provided, using empty defaults")
 
     # Load data
-    if isinstance(data, Path):
+    if isinstance(data, list):
+        logger.info(f"Loading and concatenating data from {len(data)} files")
+        dfs = []
+        for i, path in enumerate(data):
+            logger.info(f"  Loading file {i+1}/{len(data)}: {path}")
+            df_temp = pd.read_csv(path)
+            logger.debug(
+                f"  Loaded {len(df_temp)} rows, {len(df_temp.columns)} columns"
+            )
+            dfs.append(df_temp)
+        df = pd.concat(dfs, ignore_index=True)
+        logger.info(f"Concatenated total: {len(df)} rows, {len(df.columns)} columns")
+        logger.debug(f"Columns: {list(df.columns)}")
+    elif isinstance(data, Path):
         logger.info(f"Loading data from: {data}")
         df = pd.read_csv(data)
         logger.info(f"Loaded {len(df)} rows, {len(df.columns)} columns")
@@ -1136,7 +1149,11 @@ def main():
         description="Plot temporal ridge responses with flexible dimensions"
     )
     parser.add_argument(
-        "--data", type=Path, required=True, help="Path to test_data.csv"
+        "--data",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="Path(s) to test_data.csv file(s). Multiple paths will be concatenated.",
     )
     parser.add_argument(
         "--output", type=Path, required=True, help="Output figure path"
@@ -1202,9 +1219,12 @@ def main():
         ordering_str=args.ordering,
     )
 
+    # Handle single vs multiple data files
+    data_input = args.data if len(args.data) > 1 else args.data[0]
+
     # Plot
     plot_temporal_ridge_responses(
-        data=args.data,
+        data=data_input,
         output=args.output,
         subplot_var=args.subplot,
         hue_var=args.hue,

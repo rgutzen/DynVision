@@ -55,6 +55,24 @@ def _calculate_signal_power(images: torch.Tensor) -> torch.Tensor:
     return torch.var(images)
 
 
+def _get_dtype_safe_max(dtype: torch.dtype) -> float:
+    """
+    Get maximum safe value for a given dtype to prevent overflow in clamp operations.
+
+    Args:
+        dtype: PyTorch dtype (e.g., torch.float32, torch.float16)
+
+    Returns:
+        Maximum safe value that can be represented in the dtype
+    """
+    if dtype == torch.float16:
+        return 65000.0  # Slightly below float16 max (~65,504) for safety
+    elif dtype == torch.bfloat16:
+        return 3.3e38  # bfloat16 has same range as float32 but less precision
+    else:  # float32, float64, etc.
+        return 1e6  # Original safe value for higher precision types
+
+
 def _validate_noise_parameters(
     snr: Optional[float] = None, ssnr: Optional[float] = None
 ) -> float:
@@ -342,8 +360,9 @@ def poisson_noise(
         # Generate Poisson noise with robust parameter checking
         lambda_param = images_positive * lambda_scale + 0.1
 
-        # Ensure lambda_param is positive and finite
-        lambda_param = torch.clamp(lambda_param, min=0.1, max=1e6)
+        # Ensure lambda_param is positive and finite (dtype-safe max to prevent overflow)
+        max_value = _get_dtype_safe_max(images.dtype)
+        lambda_param = torch.clamp(lambda_param, min=0.1, max=max_value)
 
         # Verify parameters before Poisson sampling
         if torch.any(torch.isnan(lambda_param)) or torch.any(
@@ -372,8 +391,9 @@ def poisson_noise(
         noisy_images = images + noise_pattern
         noise_state = {"noise_pattern": noise_pattern, "function_type": "poisson"}
 
-    # Clamp to reasonable range
-    noisy_images = torch.clamp(noisy_images, -6.0, 8.0)
+    # Clamp to reasonable range (dtype-safe bounds)
+    max_clamp = min(8.0, _get_dtype_safe_max(images.dtype))
+    noisy_images = torch.clamp(noisy_images, -6.0, max_clamp)
 
     return _standardize_noise_return(noisy_images, noise_state, cached_noise_state)
 

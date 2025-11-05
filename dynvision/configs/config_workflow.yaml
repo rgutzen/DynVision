@@ -20,7 +20,7 @@ model_args:
   # skip: 'true'
   # feedback: 'false'
 
-init_with_pretrained: False
+# init_with_pretrained: False
 
 # data_name: imagenet
 # data_name: tinyimagenet

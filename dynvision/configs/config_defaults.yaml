@@ -1,29 +1,54 @@
-# Namespace
+# ===== NAMESPACE =====
 classifier_name: classifier
 
-# Model
+# ===== MODEL STATUS =====
 status: trained
-n_timesteps: 20
-dt: 2  # ms
-# tau: 5  # ms
-# t_recurrence: 6  # ms
-# t_feedforward: 0  # ms
-# t_skip: 0  # ms
-# t_feedback: 34  # ms
-# loss_reaction_time: 4  # ms 
-# recurrence_type: 'full'
-# recurrence_target: 'output'
-# integration_strategy: 'additive'  # 'additive' or 'multiplicative'
-# dynamics_solver: "euler" 
-# skip: True
-# feedback: False
-# init_with_pretrained: False
-store_train_responses: 0 # n_batches
+
+# ===== CORE ARCHITECTURE =====
+# # Framework defaults - models can override in their __init__
+# n_classes: 10  # Number of output classes
+# input_dims: [1, 3, 224, 224]  # (timesteps, channels, height, width)
+# n_timesteps: 20  # Number of temporal timesteps
+# data_presentation_pattern: [1]  # 1 = present input, 0 = blank
+# input_adaption_weight: 0.0  # Weight for consecutive timestep inputs
+
+# # ===== BIOLOGICAL PARAMETERS =====
+# dt: 2  # ms - integration time step
+# tau: 10  # ms - neural time constant
+# t_feedforward: 0  # ms - feedforward delay
+# t_recurrence: 6  # ms - recurrent delay
+# t_feedback: 34  # ms - feedback delay
+# t_skip: 0  # ms - skip connection delay
+# dynamics_solver: "euler"  # "euler" or "rk4"
+# idle_timesteps: 0  # Idle timesteps for convergence
+# feedforward_only: False  # Use only feedforward connections
+
+# # ===== RECURRENT ARCHITECTURE =====
+# recurrence_type: "none"  # "full", "self", "depthwise", etc.
+
+# # ===== CONNECTIVITY =====
+# skip: False  # Enable skip connections
+# feedback: False  # Enable feedback connections
+
+# # ===== NONLINEARITIES =====
+# supralinearity: 1  # Supralinearity exponent
+
+# ===== RESPONSE STORAGE =====
+store_responses: 0  # DEPRECATED: use store_test_responses
+store_train_responses: 0  # n_batches
 store_val_responses: 0  # n_batches
 store_test_responses: 5  # n_batches
-store_responses_on_cpu: True
-target_dtype: "float16"
-retain_graph: False  # retain the computational graph for repeated backprop paths
+store_responses_on_cpu: True  # Store on CPU to save GPU memory
+early_test_stop: True  # Stop testing early when buffer filled
+
+# ===== LOSS CONFIGURATION =====
+loss: CrossEntropyLoss  # Loss function name
+loss_reaction_time: 0  # ms - reaction time for loss calculation
+non_label_index: -1  # Index for non-label timesteps
+
+# ===== TRAINING BEHAVIOR =====
+target_dtype: "float16"  # Target dtype for model outputs
+retain_graph: False  # Retain computational graph for repeated backprop
 
 # Data
 data_name: mnist
@@ -67,8 +92,8 @@ prefetch_factor: 1
 # Test run
 logger: False
 
-# Loss
-loss: 
+# ===== LOSS CONFIGURATION (DETAILED) =====
+loss:
   - CrossEntropyLoss
 loss_configs:
   CrossEntropyLoss:
@@ -77,11 +102,9 @@ loss_configs:
   EnergyLoss:
     weight: 0.05
     p: 1
-loss_reaction_time: 0  # ms (+ residual time)
-non_label_index: -1
 non_input_value: 0
 
-# Optimizer
+# ===== OPTIMIZER CONFIGURATION =====
 optimizer: Adam
 optimizer_kwargs:
   weight_decay: 0.0005
@@ -89,7 +112,7 @@ optimizer_kwargs:
 optimizer_configs:
   monitor: val_loss
 
-# Learning rate parameter groups
+# ===== LEARNING RATE PARAMETER GROUPS =====
 lr_parameter_groups:
   regular:
     lr_factor: 1.0
@@ -98,7 +121,7 @@ lr_parameter_groups:
   feedback:
     lr_factor: 0.5
 
-# Learning rate
+# ===== LEARNING RATE & SCHEDULER =====
 learning_rate: 0.0002
 scheduler: CosineAnnealingLR
 scheduler_kwargs:

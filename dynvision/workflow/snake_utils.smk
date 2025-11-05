@@ -50,6 +50,7 @@ wildcard_constraints:
     data_loader = r'[a-zA-Z]+',
     status = r'[a-z\#]+',
     seed = r'\d+',
+    seeds = r'[\d\.]+',
     category = r'(?!folder)[a-z0-9]+',
     category_str = r'([a-z0-9]+=\*|\s?)',
     model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',

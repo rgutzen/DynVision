@@ -250,10 +250,14 @@ checkpoint plot_adaption:
 
 rule plot_performance:
     input:
-        data = expand(project_paths.reports / '{experiment}' / '{experiment}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
-            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment),
-        dataffonly = expand(project_paths.reports / '{experiment}ffonly' / '{experiment}ffonly_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
-            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment),
+        data = expand(project_paths.reports / '{experiment}' / '{experiment}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        dataffonly = expand(project_paths.reports / '{experiment}ffonly' / '{experiment}ffonly_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
+            seeds = lambda w: w.seeds.split('.')
+            ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
         row = 'experiment',
@@ -263,7 +267,7 @@ rule plot_performance:
         category = lambda w: w.category_str.strip('=*'),
         experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
         confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
-        dt = config.dt,
+        dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -274,7 +278,7 @@ rule plot_performance:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'performance.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'performance.png',
     shell:
         """
         {params.execution_cmd} \
@@ -323,7 +327,7 @@ rule plot_training:
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
-        dt = config.dt, 
+        dt = getattr(config, 'dt', 2),
     output:
         project_paths.figures / 'training' / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}.png',
     shell:
@@ -346,12 +350,14 @@ rule plot_training:
 
 rule plot_dynamics:
     input:
-        data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}{{category}}=*{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
         script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         # focus_layer = 'IT',
-        dt = float(config.dt),
+        dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -361,7 +367,7 @@ rule plot_dynamics:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'dynamics_{focus_layer}.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'dynamics_{focus_layer}.png',
     # group: "visualization"
     shell:
         """
@@ -381,7 +387,9 @@ rule plot_dynamics:
 
 rule plot_responses:
     input:
-        data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
         script = SCRIPTS / 'visualization' / 'plot_responses.py'
     params:
         column = getattr(config, 'column', 'parameter'),
@@ -400,7 +408,7 @@ rule plot_responses:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'responses.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'responses.png',
     shell:
         """
         {params.execution_cmd} \
@@ -421,9 +429,15 @@ rule plot_responses:
 
 rule plot_timeparams_tripytch:
     input:
-        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=6+tsk=0{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=5+tff=0+trc=*+tsk=0{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}tau=5+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data1 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}tau=*+tff=0+trc=6+tsk=0{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        data2 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}tau=5+tff=0+trc=*+tsk=0{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        data3 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}tau=5+tff=0+trc=6+tsk=*{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
         accuracy1 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=*+tff=0+trc=6+tsk=0{args2}_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy2 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=5+tff=0+trc=*+tsk=0{args2}_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy3 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=5+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_accuracy.csv',
@@ -436,12 +450,12 @@ rule plot_timeparams_tripytch:
             use_executor=get_param('use_executor', False)(w)
         ),
         category = ' '.join(['tau', 'trc', 'tsk']),
-        dt = 2,
+        dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
     # group: "visualization"
     shell:
         """
@@ -464,9 +478,15 @@ rule plot_timeparams_tripytch:
 
 rule plot_timestep_tripytch:
     input:
-        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=*{args1}lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20{args1}skip=true+lossrt=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20{args1}lossrt=4+idle=*_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data1 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=*{{args1}}lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        data2 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=20{{args1}}skip=true+lossrt=*_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        data3 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=20{{args1}}lossrt=4+idle=*_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
         accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=*{args1}lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20{args1}skip=true+lossrt=*_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20{args1}lossrt=4+idle=*_{seed}_{data_name}_{status}_accuracy.csv',
@@ -479,12 +499,12 @@ rule plot_timestep_tripytch:
             use_executor=get_param('use_executor', False)(w)
         ),
         category = ' '.join(['tsteps', 'lossrt', 'idle']),
-        dt = 2,
+        dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:tsteps=*{args1}lossrt=*+idle=*_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:tsteps=*{args1}lossrt=*+idle=*_{seeds}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
     # group: "visualization"
     shell:
         """
@@ -507,9 +527,15 @@ rule plot_timestep_tripytch:
 
 rule plot_connection_tripytch:
     input:
-        data1 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=*{args2}lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data2 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=20+rctype=full+rctarget=output{args2}skip=*+lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        data3 = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:tsteps=30+rctype=full+rctarget=output{args2}tfb=30+feedback=*+lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        data1 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=20+rctype=full+rctarget=*{{args2}}lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        data2 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=20+rctype=full+rctarget=output{{args2}}skip=*+lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
+        data3 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=30+rctype=full+rctarget=output{{args2}}tfb=30+feedback=*+lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.')
+            ),
         accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=*{args2}lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=output{args2}skip=*+lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
         accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=30+rctype=full+rctarget=output{args2}tfb=30+feedback=*+lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
@@ -522,13 +548,13 @@ rule plot_connection_tripytch:
             use_executor=get_param('use_executor', False)(w)
         ),
         category = ' '.join(['rctarget', 'skip', 'feedback']),
-        dt = config.dt,
+        dt = getattr(config, 'dt', 2),
         outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seed}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seeds}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
     shell:
         """
         {params.execution_cmd} \

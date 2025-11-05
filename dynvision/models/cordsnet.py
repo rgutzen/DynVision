@@ -28,6 +28,13 @@ __all__ = ["CordsNet"]
 logger = logging.getLogger(__name__)
 
 
+class Identity(nn.Module):
+    """Identity module that ignores additional arguments."""
+
+    def forward(self, x, *args, **kwargs):
+        return x
+
+
 class CordsNet(BaseModel):
     """
     CordsNet: Contextual Recurrent Deep Structured Network
@@ -75,24 +82,26 @@ class CordsNet(BaseModel):
         n_timesteps: int = 100,
         input_dims: Tuple[int, int, int, int] = (100, 3, 224, 224),
         n_classes: int = 1000,
-        dt: float = 1.0,
+        dt: float = 2.0,
         tau: float = 10.0,  # alpha = dt/tau = 0.1 by default
-        t_feedforward: float = 1.0,
-        t_recurrence: float = 1.0,
-        t_feedback=0.0,  # Not used in CordsNet
-        t_skip: float = 1.0,
+        t_feedforward: float = 2.0,
+        t_recurrence: float = 2.0,
+        t_skip: float = 2.0,
+        t_feedback: float = 0.0,  # Not used in CordsNet
         recurrence_type: str = "full",  # 3x3 conv for recurrence
-        idle_timesteps: int = 100,
-        init_with_pretrained: bool = False,
+        recurrence_target: str = "output",
+        skip: bool = True,
+        feedback: bool = False,
+        idle_timesteps: int = 10,  # trained with 100,
+        init_with_pretrained: bool = True,
         **kwargs: Any,
     ) -> None:
         """
         Initialize CordsNet model.
 
-        Note: The original CordsNet uses alpha=0.1, which corresponds to dt=1, tau=10.
+        Note: The original CordsNet uses alpha=0.2, which corresponds to dt=2, tau=10.
         """
         self.init_with_pretrained = init_with_pretrained
-
         super().__init__(
             n_timesteps=n_timesteps,
             input_dims=input_dims,
@@ -104,6 +113,9 @@ class CordsNet(BaseModel):
             t_feedback=float(t_feedback),
             t_skip=float(t_skip),
             recurrence_type=recurrence_type,
+            recurrence_target=recurrence_target,
+            skip=skip,
+            feedback=feedback,
             idle_timesteps=int(idle_timesteps),
             **kwargs,
         )
@@ -116,6 +128,7 @@ class CordsNet(BaseModel):
             self.trainable_parameter_names = [
                 p for p in list(self.state_dict().keys()) if "out_fc" in p
             ]
+
         else:
             self.trainable_parameter_names = list(self.state_dict().keys())
 
@@ -178,8 +191,8 @@ class CordsNet(BaseModel):
         """
         translate_layer_names = {
             "inp_conv": "layer0.conv",
-            "inp_avgpool": "pool_layer0",
-            "out_fc": "classifier.2",
+            # Note: inp_avgpool has no parameters, not in state_dict
+            "out_fc": "classifier.3",
         }
 
         # Map layers 1-8
@@ -207,12 +220,6 @@ class CordsNet(BaseModel):
             layer = getattr(self, layer_name)
             if hasattr(layer, "reset"):
                 layer.reset()
-
-            # Reset dynamics solvers (layers 1-8 only)
-            solver_name = f"tstep_{layer_name}"
-            if hasattr(self, solver_name):
-                solver = getattr(self, solver_name)
-                solver.reset()
 
     def _define_architecture(self) -> None:
         """
@@ -251,14 +258,15 @@ class CordsNet(BaseModel):
 
         # Define operation sequence (matches DyRCNN pattern)
         self.layer_operations = [
-            "layer",  # RConv2d (feedforward + recurrence)
-            "pool",  # Pooling (layer0 only)
             "addskip",  # Skip connection (if defined)
+            "layer",  # RConv2d (feedforward + recurrence)
             "addbias",  # Spatial bias (layers 1-8 only)
+            "pool",  # Pooling (layer0 only)
             "nonlin",  # Shared ReLU
             "tstep",  # Euler integration (continuous-time dynamics)
-            "delay",  # Store and retrieve delayed activation
+            "nonlin",
             "record",  # Record response
+            "delay",  # Store and retrieve delayed activation
         ]
 
         # Shared nonlinearity
@@ -278,28 +286,46 @@ class CordsNet(BaseModel):
             padding=3,
             bias=False,
             recurrence_type="none",  # No recurrence for input layer
-            history_length=max(self.t_feedforward, self.t_skip),
+            t_feedforward=0.0,  # Immediate skip to layer2, no delay (matches original inp_skip)
+            history_length=self.dt,
+            dim_y=self.dim_y,  # Input spatial dimensions
+            dim_x=self.dim_x,
             parametrization=nn.utils.parametrizations.weight_norm,
         )
         self.pool_layer0 = nn.AvgPool2d(
             kernel_size=3, stride=2, padding=1, ceil_mode=False
         )
+        self.nonlin_layer0 = Identity()  # No nonlinearity for layer0!
 
         # Common parameters for recurrent layers
         common_params = {
             "bias": False,  # Using spatial bias modules instead
             "recurrence_type": self.recurrence_type,  # "full" = 3x3 conv
             "recurrence_kernel_size": 3,  # 3x3 recurrent convolution
-            "recurrence_target": "output",  # Recurrence on layer output
+            "recurrence_target": self.recurrence_target,  # Recurrence on layer output
             "recurrence_bias": False,  # No bias in recurrent conv
+            "dt": self.dt,
             "t_recurrence": self.t_recurrence,
-            "history_length": max(self.t_feedforward, self.t_skip, self.t_recurrence),
+            "t_feedforward": self.t_feedforward,
+            "history_length": max(
+                self.t_feedforward, self.t_skip + self.dt, self.t_recurrence
+            ),
             "parametrization": nn.utils.parametrizations.weight_norm,
         }
+
+        # Calculate spatial dimensions for each layer
+        # After layer0: 224 -> 112 (stride 2) -> 56 (pool stride 2)
+        current_dim_y = self.dim_y // self.layer0.stride // self.pool_layer0.stride
+        current_dim_x = self.dim_x // self.layer0.stride // self.pool_layer0.stride
 
         # Layers 1-8: Recurrent layers with spatial biases
         for i in range(8):
             layer_name = f"layer{i+1}"
+
+            # Per-layer params: make t_feedforward = 0 for the last layer
+            layer_params = dict(common_params)
+            if i == 7:  # last layer (layer8)
+                layer_params["t_feedforward"] = 0.0
 
             # RConv2d layer: feedforward (area_area) + recurrence (area_conv)
             layer = RConv2d(
@@ -308,15 +334,21 @@ class CordsNet(BaseModel):
                 kernel_size=3,  # Feedforward kernel
                 stride=strides[i],  # Feedforward stride
                 padding=1,
-                **common_params,
+                dim_y=current_dim_y,  # Input dimensions for this layer
+                dim_x=current_dim_x,
+                **layer_params,
             )
             setattr(self, layer_name, layer)
+
+            # Update dimensions for next layer based on stride
+            current_dim_y = current_dim_y // strides[i]
+            current_dim_x = current_dim_x // strides[i]
 
             # Spatial bias module (per-unit bias)
             bias = SpatialBias(
                 channels=channels[i + 1],
-                height=sizes[i],
-                width=sizes[i],
+                height=current_dim_y,
+                width=current_dim_x,
                 init_value=0.0,
             )
             setattr(self, f"addbias_{layer_name}", bias)
@@ -333,10 +365,24 @@ class CordsNet(BaseModel):
             setattr(self, f"tstep_{layer_name}", solver)
 
         # Skip connections (matching original pattern)
-        self._define_skip_connections()
+        if self.skip:
+            self._define_skip_connections()
+
+        # sum the output of the last two layers (layer7 and layer8) to pass to the classifier
+        combine_layer7_layer8 = Skip(
+            source=self.layer7,
+            in_channels=512,
+            out_channels=512,
+            scale_factor=1,
+            delay_index=1,
+            bias=False,
+            force_conv=False,
+            auto_adapt=False,
+        )
 
         # Output classifier
         self.classifier = nn.Sequential(
+            combine_layer7_layer8,
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
             nn.utils.parametrizations.weight_norm(
@@ -348,84 +394,108 @@ class CordsNet(BaseModel):
         """
         Define skip connections matching original CordsNet pattern.
 
-        Skip pattern:
-        - layer2: from layer0 with learned 3x3 conv
-        - layer3: from layer1 (direct, same channels)
-        - layer4: from layer2 with learned 1x1 conv + stride
-        - layer5: from layer3 (direct, different channels but auto-adapt)
-        - layer6: from layer4 with learned 1x1 conv + stride
-        - layer7: from layer5 (direct, different channels but auto-adapt)
-        - layer8: from layer6 with learned 1x1 conv + stride
-        """
-        delay_skip = int(self.t_skip / self.dt)
+        Skip pattern from original (cordsnet_original.py lines 162-177):
+        - layer2 (area 1): relu(r[0]) + inp_skip(inp)  - 3x3 conv, 64→64, same size
+        - layer3 (area 2): relu(r[1]) + relu(r[0])  - direct, 64→64, same size
+        - layer4 (area 3): relu(r[2]) + skip_area[0](relu(r[1]))  - 1x1 conv stride 2, 64→128
+        - layer5 (area 4): relu(r[3]) + relu(r[2])  - direct, 128→128, same size
+        - layer6 (area 5): relu(r[4]) + skip_area[1](relu(r[3]))  - 1x1 conv stride 2, 128→256
+        - layer7 (area 6): relu(r[5]) + relu(r[4])  - direct, 256→256, same size
+        - layer8 (area 7): relu(r[6]) + skip_area[2](relu(r[5]))  - 1x1 conv stride 2, 256→512
 
-        # layer2: learned skip from layer0 (3x3 conv, same channels)
+        Note: scale_factor = target_size / source_size (x_size / h_size)
+        This matches nn.Upsample convention where scale_factor>1 means upsampling.
+
+        Dimension tracking (output dimensions after each layer):
+        - layer0: 56×56, layer1: 56×56, layer2: 56×56
+        - layer3: 28×28 (stride 2), layer4: 28×28, layer5: 28×28
+        - layer6: 14×14 (stride 2), layer7: 14×14, layer8: 7×7 (stride 2)
+        """
+
+        # layer2 ← layer0: 56×56 ← 56×56 (inp_skip, immediate/no delay)
         self.addskip_layer2 = Skip(
             source=self.layer0,
             in_channels=64,
             out_channels=64,
-            delay_index=delay_skip,
+            kernel_size=3,
+            stride=1,
+            delay_index=0,  # Immediate skip (no delay), matching original inp_skip
             bias=False,
+            force_conv=True,  # Force conv to match original 3x3 skip
             parametrization=nn.utils.parametrizations.weight_norm,
             auto_adapt=False,
         )
-        # Override with 3x3 conv instead of default 1x1
-        self.addskip_layer2.conv = nn.utils.parametrizations.weight_norm(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        )
 
-        # layer3: direct skip from layer1 (same channels)
+        # layer3 ← layer1: 28×28 ← 56×56 (direct, needs downsample)
         self.addskip_layer3 = Skip(
             source=self.layer1,
-            delay_index=delay_skip,
-            auto_adapt=True,
+            in_channels=64,
+            out_channels=64,
+            t_connection=self.t_skip,
+            dt=self.dt,
+            force_conv=False,
+            auto_adapt=False,
         )
 
-        # layer4: learned skip from layer2 (1x1 conv with stride=2)
+        # layer4 ← layer2: 28×28 ← 56×56 (skip_area[0])
         self.addskip_layer4 = Skip(
             source=self.layer2,
             in_channels=64,
             out_channels=128,
-            scale_factor=2,  # Downsample by 2
-            delay_index=delay_skip,
+            kernel_size=1,
+            stride=2,
+            t_connection=self.t_skip,
+            dt=self.dt,
             bias=False,
             parametrization=nn.utils.parametrizations.weight_norm,
             auto_adapt=False,
         )
 
-        # layer5: direct skip from layer3 (auto-adapt for channel mismatch)
+        # layer5 ← layer3: 14×14 ← 28×28 (direct, needs downsample)
         self.addskip_layer5 = Skip(
             source=self.layer3,
-            delay_index=delay_skip,
-            auto_adapt=True,
+            in_channels=128,
+            out_channels=128,
+            t_connection=self.t_skip,
+            dt=self.dt,
+            force_conv=False,
+            auto_adapt=False,
         )
 
-        # layer6: learned skip from layer4 (1x1 conv with stride=2)
+        # layer6 ← layer4: 14×14 ← 28×28 (skip_area[1])
         self.addskip_layer6 = Skip(
             source=self.layer4,
             in_channels=128,
             out_channels=256,
-            scale_factor=2,
-            delay_index=delay_skip,
+            kernel_size=1,
+            stride=2,
+            t_connection=self.t_skip,
+            dt=self.dt,
             bias=False,
             parametrization=nn.utils.parametrizations.weight_norm,
             auto_adapt=False,
         )
 
-        # layer7: direct skip from layer5 (auto-adapt for channel mismatch)
+        # layer7 ← layer5: 7×7 ← 14×14 (direct, needs downsample)
         self.addskip_layer7 = Skip(
             source=self.layer5,
-            delay_index=delay_skip,
-            auto_adapt=True,
+            in_channels=256,
+            out_channels=256,
+            t_connection=self.t_skip,
+            dt=self.dt,
+            force_conv=False,
+            auto_adapt=False,
         )
 
-        # layer8: learned skip from layer6 (1x1 conv with stride=2)
+        # layer8 ← layer6: 7×7 ← 14×14 (skip_area[2])
         self.addskip_layer8 = Skip(
             source=self.layer6,
             in_channels=256,
             out_channels=512,
-            scale_factor=2,
-            delay_index=delay_skip,
+            kernel_size=1,
+            stride=2,
+            t_connection=self.t_skip,
+            dt=self.dt,
             bias=False,
             parametrization=nn.utils.parametrizations.weight_norm,
             auto_adapt=False,

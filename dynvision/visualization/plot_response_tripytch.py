@@ -467,24 +467,40 @@ def create_triptych_plot(
 
         column_left = column_positions[col_idx]
 
-        # Load main data
+        # Load main data - handle both single Path and list of Paths
         df = None
-        if data_path and data_path.exists():
+        if data_path:
             try:
-                df = pd.read_csv(data_path)
-                logger.info(f"Loaded {len(df)} rows from {data_path}")
+                if isinstance(data_path, list):
+                    # Load and concatenate multiple files
+                    logger.info(f"Loading and concatenating {len(data_path)} files")
+                    dfs = []
+                    for i, path in enumerate(data_path):
+                        if path and path.exists():
+                            logger.info(
+                                f"  Loading file {i+1}/{len(data_path)}: {path}"
+                            )
+                            dfs.append(pd.read_csv(path))
+                    if dfs:
+                        df = pd.concat(dfs, ignore_index=True)
+                        logger.info(f"Concatenated total: {len(df)} rows")
+                elif data_path.exists():
+                    # Single file
+                    df = pd.read_csv(data_path)
+                    logger.info(f"Loaded {len(df)} rows from {data_path}")
 
-                # Filter to first parameter value only
-                df = _filter_first_parameter_value(df, parameter_key)
+                if df is not None:
+                    # Filter to first parameter value only
+                    df = _filter_first_parameter_value(df, parameter_key)
 
-                # Standardize category values in the dataframe to match dimension extraction
-                if category_key in df.columns:
-                    df[category_key] = df[category_key].apply(
-                        _standardize_category_value
-                    )
+                    # Standardize category values in the dataframe to match dimension extraction
+                    if category_key in df.columns:
+                        df[category_key] = df[category_key].apply(
+                            _standardize_category_value
+                        )
 
             except Exception as e:
-                logger.error(f"Error loading data from {data_path}: {e}")
+                logger.error(f"Error loading data: {e}")
 
         # Load training accuracy data
         accuracy_df = None
@@ -736,9 +752,24 @@ def main():
     parser = argparse.ArgumentParser(
         description="Create response triptych plots using plot_responses.py functionality"
     )
-    parser.add_argument("--data", type=Path, help="Path to first dataset")
-    parser.add_argument("--data2", type=Path, help="Path to second dataset")
-    parser.add_argument("--data3", type=Path, help="Path to third dataset")
+    parser.add_argument(
+        "--data",
+        type=Path,
+        nargs="+",
+        help="Path(s) to first dataset. Multiple paths will be concatenated.",
+    )
+    parser.add_argument(
+        "--data2",
+        type=Path,
+        nargs="+",
+        help="Path(s) to second dataset. Multiple paths will be concatenated.",
+    )
+    parser.add_argument(
+        "--data3",
+        type=Path,
+        nargs="+",
+        help="Path(s) to third dataset. Multiple paths will be concatenated.",
+    )
     parser.add_argument(
         "--accuracy1", type=Path, help="Path to first training accuracy CSV file"
     )
@@ -803,16 +834,41 @@ def main():
             f"Expected 3 categories, got {len(category_list)}: {category_list}"
         )
 
-    # Prepare data paths
-    data_paths = [args.data, args.data2, args.data3]
+    # Handle single vs multiple data files - convert lists to single Path or keep as list
+    data_paths = [
+        (
+            args.data
+            if args.data and len(args.data) > 1
+            else (args.data[0] if args.data else None)
+        ),
+        (
+            args.data2
+            if args.data2 and len(args.data2) > 1
+            else (args.data2[0] if args.data2 else None)
+        ),
+        (
+            args.data3
+            if args.data3 and len(args.data3) > 1
+            else (args.data3[0] if args.data3 else None)
+        ),
+    ]
     accuracy_paths = [args.accuracy1, args.accuracy2, args.accuracy3]
 
-    # Validate that we have some data
-    valid_data_paths = [p for p in data_paths if p and p.exists()]
+    # Validate that we have some data (check both single Path and lists)
+    valid_data_paths = []
+    for dp in data_paths:
+        if dp is None:
+            continue
+        if isinstance(dp, list):
+            if any(p and p.exists() for p in dp):
+                valid_data_paths.append(dp)
+        elif dp.exists():
+            valid_data_paths.append(dp)
+
     if not valid_data_paths:
         raise ValueError("No valid data files found")
 
-    logger.info(f"Processing {len(valid_data_paths)} data files")
+    logger.info(f"Processing {len(valid_data_paths)} data file groups")
     logger.info(f"Categories: {category_list}")
     logger.info(f"Parameter: {args.parameter}")
     logger.info(f"Temporal resolution: {args.dt} ms")

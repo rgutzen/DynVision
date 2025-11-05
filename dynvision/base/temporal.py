@@ -17,6 +17,19 @@ logger = logging.getLogger(__name__)
 class TemporalBase(nn.Module):
     """Core neural network functionality for temporal dynamics models."""
 
+    # Class-level defaults for layer operation behavior
+    # These can be overridden per instance or subclass
+    DEFAULT_NON_FEEDFORWARD_OPERATIONS = [
+        "addfeedback",
+        "tstep",
+    ]
+    DEFAULT_OPERATIONS_SKIPPED_ON_NULL_INPUT = [
+        "nonlin",
+        "supralin",
+        "pool",
+        "norm",
+    ]
+
     @alias_kwargs(
         trc="t_recurrence",
         tff="t_feedforward",
@@ -42,6 +55,8 @@ class TemporalBase(nn.Module):
         t_recurrence: float = 6.0,
         t_feedback: Optional[float] = None,
         t_skip: Optional[float] = None,
+        skip: bool = False,
+        feedback: bool = False,
         data_presentation_pattern: Union[List[int], str] = [1],
         non_label_index: int = -1,
         non_input_value: float = 0.0,
@@ -52,6 +67,9 @@ class TemporalBase(nn.Module):
         dynamics_solver: str = "euler",
         recurrence_type: str = "none",
         recurrence_target: str = "output",
+        # Operation selection configuration
+        non_feedforward_operations: Optional[List[str]] = None,
+        operations_skipped_on_null_input: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> None:
         nn.Module.__init__(self)
@@ -64,6 +82,8 @@ class TemporalBase(nn.Module):
         self.t_recurrence = float(t_recurrence)
         self.t_feedback = float(t_feedforward if t_feedback is None else t_feedback)
         self.t_skip = float(self.t_feedback if t_skip is None else t_skip)
+        self.skip = skip
+        self.feedback = feedback
         self.history_length = max(
             self.t_feedforward,
             self.t_recurrence,
@@ -79,6 +99,18 @@ class TemporalBase(nn.Module):
         self.non_input_value = float(non_input_value)
         self.idle_timesteps = int(idle_timesteps)
         self.feedforward_only = str_to_bool(feedforward_only)
+
+        # Set operation selections (use defaults if not provided)
+        self.non_feedforward_operations = (
+            non_feedforward_operations
+            if non_feedforward_operations is not None
+            else list(self.DEFAULT_NON_FEEDFORWARD_OPERATIONS)
+        )
+        self.operations_skipped_on_null_input = (
+            operations_skipped_on_null_input
+            if operations_skipped_on_null_input is not None
+            else list(self.DEFAULT_OPERATIONS_SKIPPED_ON_NULL_INPUT)
+        )
 
         self.delay_feedforward = int(t_feedforward / dt)
 
@@ -225,17 +257,17 @@ class TemporalBase(nn.Module):
             layer = getattr(self, layer_name)
 
             for operation in self.layer_operations:
-
-                if feedforward_only and operation in [
-                    "addskip",
-                    "addext",
-                    "addfeedback",
-                    "tstep",
-                ]:
-                    continue
-
                 module_name = f"{operation}_{layer_name}"
 
+                # Skip operations that require temporal dynamics during feedforward-only pass
+                if feedforward_only and operation in self.non_feedforward_operations:
+                    continue
+
+                # Skip operations that require valid input when input is None
+                if x is None and operation in self.operations_skipped_on_null_input:
+                    continue
+
+                # RConv2d layer operation
                 if operation == "layer":
                     if hasattr(layer, "_get_name"):
                         module_name = layer._get_name()
@@ -243,41 +275,51 @@ class TemporalBase(nn.Module):
                         module_name = "layer"
                     x = layer(x, feedforward_only=feedforward_only)
 
+                # Record layer responses
                 elif operation == "record" and store_responses:
                     responses[layer_name] = x
 
-                elif operation == "delay" and hasattr(layer, "set_hidden_state"):
-                    layer.set_hidden_state(x)
-                    # increment delay by one to account for "set then get" pattern in delay operation:
-                    # The delay operation sets the current state first, then retrieves with delay
-                    # So delay=0 gets what was just set, delay=1 gets previous timestep
-                    x = layer.get_hidden_state(self.delay_feedforward + 1)
+                # Forward delay of layer activations
+                elif (
+                    operation == "delay"
+                ):  # ToDo: standardize the forward delay mechanism
+                    # Try layer-specific delay function first (e.g., delay_layer0)
+                    if hasattr(self, f"delay_{layer_name}"):
+                        delay_func = getattr(self, f"delay_{layer_name}")
+                        x = delay_func(x)
+                    # Then try layer's delay method
+                    elif hasattr(layer, "delay"):
+                        x = layer.delay(x)
+                    # Fall back to original implementation
+                    elif hasattr(layer, "set_hidden_state"):
+                        layer.set_hidden_state(x)
+                        # increment delay by one to account for "set then get" pattern:
+                        # delay=1 gets what was just set, delay=2 gets previous timestep
+                        if self.delay_feedforward > 0:
+                            x = layer.get_hidden_state(self.delay_feedforward + 1)
 
+                # Dynamical systems time step operation
                 elif operation == "tstep" and hasattr(self, module_name):
                     module = getattr(self, module_name)
                     h = layer.get_newest_hidden_state()
                     x = module(x, h)
 
-                    module = getattr(self, module_name)
-                    x = module(x)
-
-                # apply layer operations (if defined)
+                # Apply any other operations (if defined)
                 elif hasattr(self, module_name):
                     module = getattr(self, module_name)
-                    if x is not None or "feedback" in operation or "skip" in operation:
-                        x = module(x)
-
-                elif hasattr(self, operation) and x is not None:
+                    x = module(x)
+                elif hasattr(self, operation):
                     module = getattr(self, operation)
                     x = module(x)
 
                 else:
+                    logger.debug(f"No {operation} defined for {layer_name}. Skipping.")
                     pass
 
-                if isinstance(x, torch.Tensor) and (~torch.isfinite(x)).any():
-                    logger.warning(
-                        f"NaN/inf detected in {module_name} output! \n\t {(~torch.isfinite(x)).sum()}/{x.numel()} NaNs"
-                    )
+                # if isinstance(x, torch.Tensor) and (~torch.isfinite(x)).any():
+                #     logger.warning(
+                #         f"NaN/inf detected in {module_name} output! \n\t {(~torch.isfinite(x)).sum()}/{x.numel()} NaNs"
+                #     )
 
         if x is None:
             x = torch.zeros(
@@ -665,7 +707,7 @@ class TemporalBase(nn.Module):
         return state_dict
 
     def load_pretrained_state_dict(
-        self, check_mismatch_layer: List[str] = [], strict: bool = True
+        self, check_mismatch_layer: List[str] = [], strict: bool = False
     ) -> None:
         """
         Load a pretrained state dictionary into the model. This function requires the model to implement a method to download the pretrained weights 'download_pretrained_state_dict()'. If modules in the model have different names in the pretrained weights, a method 'translate_pretrained_layer_names()' should be implemented to return a mapping between the pretrained and model layer names in the form of a dictionary {"pretrained_name": "new_name"}', where pretrained_name can be any substring of a named parameter.

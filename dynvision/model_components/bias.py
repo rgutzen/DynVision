@@ -7,6 +7,10 @@ This module provides standardized bias implementations at different granularitie
 - ScalarBias: Single bias value per layer (1,)
 
 These are useful for models like CordsNet that use spatially-varying biases.
+
+All bias modules support None input handling: when input is None and allow_null_input=True,
+the module returns just the bias tensor. This is useful in temporal models where certain
+operations (like feedback) may need to generate output without external input.
 """
 
 import torch
@@ -39,6 +43,8 @@ class SpatialBias(nn.Module):
         width: Spatial width dimension
         init_value: Initial bias value (default: 0.0)
         requires_grad: Whether bias is trainable (default: True)
+        allow_null_input: Whether to allow None input (returns bias only) (default: True)
+        dtype: Data type for bias tensor (default: torch.float32)
 
     Example:
         >>> bias = SpatialBias(channels=64, height=56, width=56)
@@ -46,6 +52,10 @@ class SpatialBias(nn.Module):
         >>> out = bias(x)
         >>> out.shape
         torch.Size([2, 64, 56, 56])
+        >>> # With None input
+        >>> out = bias(None)
+        >>> out.shape
+        torch.Size([64, 56, 56])
     """
 
     def __init__(
@@ -55,31 +65,52 @@ class SpatialBias(nn.Module):
         width: int,
         init_value: float = 0.0,
         requires_grad: bool = True,
+        allow_null_input: bool = True,
+        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
 
         self.channels = channels
         self.height = height
         self.width = width
+        self.allow_null_input = allow_null_input
 
         # Create bias parameter
         bias_tensor = torch.full(
             (channels, height, width),
             init_value,
-            dtype=torch.float32,
+            dtype=dtype,
         )
         self.bias = nn.Parameter(bias_tensor, requires_grad=requires_grad)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: Optional[torch.Tensor] = None, batch_size: int = 1
+    ) -> torch.Tensor:
         """
         Add spatial bias to input tensor.
 
         Args:
-            x: Input tensor of shape (batch, channels, height, width)
+            x: Input tensor of shape (batch, channels, height, width), or None
+            batch_size: Batch size to use when x is None (default: 1)
 
         Returns:
-            Output tensor with bias added
+            Output tensor with bias added. If x is None and allow_null_input=True,
+            returns the bias tensor with batch dimension added.
+
+        Raises:
+            ValueError: If x is None and allow_null_input=False, or if input shape
+                       doesn't match bias shape.
         """
+        # Handle None input
+        if x is None:
+            if not self.allow_null_input:
+                raise ValueError(
+                    "Input is None but allow_null_input=False. "
+                    "Set allow_null_input=True to enable bias-only output."
+                )
+            # Add batch dimension: (C, H, W) -> (batch_size, C, H, W)
+            return self.bias.unsqueeze(0).expand(batch_size, -1, -1, -1)
+
         # Verify input shape matches bias shape
         if x.shape[1:] != self.bias.shape:
             raise ValueError(
@@ -93,7 +124,8 @@ class SpatialBias(nn.Module):
         return (
             f"SpatialBias(channels={self.channels}, "
             f"height={self.height}, width={self.width}, "
-            f"requires_grad={self.bias.requires_grad})"
+            f"requires_grad={self.bias.requires_grad}, "
+            f"allow_null_input={self.allow_null_input})"
         )
 
 
@@ -108,6 +140,8 @@ class FeatureBias(nn.Module):
         channels: Number of feature channels
         init_value: Initial bias value (default: 0.0)
         requires_grad: Whether bias is trainable (default: True)
+        allow_null_input: Whether to allow None input (returns bias only) (default: True)
+        dtype: Data type for bias tensor (default: torch.float32)
 
     Example:
         >>> bias = FeatureBias(channels=64)
@@ -115,6 +149,10 @@ class FeatureBias(nn.Module):
         >>> out = bias(x)
         >>> out.shape
         torch.Size([2, 64, 56, 56])
+        >>> # With None input
+        >>> out = bias(None)
+        >>> out.shape
+        torch.Size([64, 1, 1])
     """
 
     def __init__(
@@ -122,29 +160,51 @@ class FeatureBias(nn.Module):
         channels: int,
         init_value: float = 0.0,
         requires_grad: bool = True,
+        allow_null_input: bool = True,
+        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
 
         self.channels = channels
+        self.allow_null_input = allow_null_input
 
         # Create bias parameter with shape (channels, 1, 1) for broadcasting
         bias_tensor = torch.full(
             (channels, 1, 1),
             init_value,
-            dtype=torch.float32,
+            dtype=dtype,
         )
         self.bias = nn.Parameter(bias_tensor, requires_grad=requires_grad)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: Optional[torch.Tensor] = None, batch_size: int = 1
+    ) -> torch.Tensor:
         """
         Add feature bias to input tensor.
 
         Args:
-            x: Input tensor of shape (batch, channels, height, width)
+            x: Input tensor of shape (batch, channels, height, width), or None
+            batch_size: Batch size to use when x is None (default: 1)
 
         Returns:
-            Output tensor with bias added (broadcast across spatial dims)
+            Output tensor with bias added (broadcast across spatial dims).
+            If x is None and allow_null_input=True, returns the bias tensor with batch dimension.
+
+        Raises:
+            ValueError: If x is None and allow_null_input=False, or if input channel
+                       count doesn't match bias channels.
         """
+        # Handle None input
+        if x is None:
+            if not self.allow_null_input:
+                raise ValueError(
+                    "Input is None but allow_null_input=False. "
+                    "Set allow_null_input=True to enable bias-only output."
+                )
+            # Add batch dimension: (C, 1, 1) -> (batch_size, C, 1, 1)
+            return self.bias.unsqueeze(0).expand(batch_size, -1, -1, -1)
+
+        # Verify input channels match bias channels
         if x.shape[1] != self.channels:
             raise ValueError(
                 f"Input has {x.shape[1]} channels but bias expects {self.channels}"
@@ -155,7 +215,8 @@ class FeatureBias(nn.Module):
     def __repr__(self):
         return (
             f"FeatureBias(channels={self.channels}, "
-            f"requires_grad={self.bias.requires_grad})"
+            f"requires_grad={self.bias.requires_grad}, "
+            f"allow_null_input={self.allow_null_input})"
         )
 
 
@@ -169,6 +230,8 @@ class ScalarBias(nn.Module):
     Args:
         init_value: Initial bias value (default: 0.0)
         requires_grad: Whether bias is trainable (default: True)
+        allow_null_input: Whether to allow None input (returns bias only) (default: True)
+        dtype: Data type for bias tensor (default: torch.float32)
 
     Example:
         >>> bias = ScalarBias()
@@ -176,33 +239,61 @@ class ScalarBias(nn.Module):
         >>> out = bias(x)
         >>> out.shape
         torch.Size([2, 64, 56, 56])
+        >>> # With None input
+        >>> out = bias(None)
+        >>> out.shape
+        torch.Size([])
     """
 
     def __init__(
         self,
         init_value: float = 0.0,
         requires_grad: bool = True,
+        allow_null_input: bool = True,
+        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
 
+        self.allow_null_input = allow_null_input
+
         # Create scalar bias parameter
-        bias_tensor = torch.tensor(init_value, dtype=torch.float32)
+        bias_tensor = torch.tensor(init_value, dtype=dtype)
         self.bias = nn.Parameter(bias_tensor, requires_grad=requires_grad)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: Optional[torch.Tensor] = None, batch_size: int = 1
+    ) -> torch.Tensor:
         """
         Add scalar bias to input tensor.
 
         Args:
-            x: Input tensor of any shape
+            x: Input tensor of any shape, or None
+            batch_size: Batch size to use when x is None (default: 1)
 
         Returns:
-            Output tensor with bias added (broadcast across all dims)
+            Output tensor with bias added (broadcast across all dims).
+            If x is None and allow_null_input=True, returns the bias tensor with batch dimension added.
+
+        Raises:
+            ValueError: If x is None and allow_null_input=False.
         """
+        # Handle None input
+        if x is None:
+            if not self.allow_null_input:
+                raise ValueError(
+                    "Input is None but allow_null_input=False. "
+                    "Set allow_null_input=True to enable bias-only output."
+                )
+            # Add batch dimension: () -> (batch_size,)
+            return self.bias.unsqueeze(0).expand(batch_size)
+
         return x + self.bias
 
     def __repr__(self):
-        return f"ScalarBias(requires_grad={self.bias.requires_grad})"
+        return (
+            f"ScalarBias(requires_grad={self.bias.requires_grad}, "
+            f"allow_null_input={self.allow_null_input})"
+        )
 
 
 def create_bias(
@@ -212,6 +303,8 @@ def create_bias(
     width: Optional[int] = None,
     init_value: float = 0.0,
     requires_grad: bool = True,
+    allow_null_input: bool = True,
+    dtype: torch.dtype = torch.float32,
 ) -> nn.Module:
     """
     Factory function to create bias modules.
@@ -223,6 +316,8 @@ def create_bias(
         width: Spatial width (required for spatial)
         init_value: Initial bias value
         requires_grad: Whether bias is trainable
+        allow_null_input: Whether to allow None input (returns bias only)
+        dtype: Data type for bias tensor (default: torch.float32)
 
     Returns:
         Bias module of requested type, or Identity if bias_type="none"
@@ -249,6 +344,8 @@ def create_bias(
             width=width,
             init_value=init_value,
             requires_grad=requires_grad,
+            allow_null_input=allow_null_input,
+            dtype=dtype,
         )
 
     elif bias_type == "feature":
@@ -258,12 +355,16 @@ def create_bias(
             channels=channels,
             init_value=init_value,
             requires_grad=requires_grad,
+            allow_null_input=allow_null_input,
+            dtype=dtype,
         )
 
     elif bias_type == "scalar":
         return ScalarBias(
             init_value=init_value,
             requires_grad=requires_grad,
+            allow_null_input=allow_null_input,
+            dtype=dtype,
         )
 
     else:
@@ -290,6 +391,7 @@ if __name__ == "__main__":
     print(f"SpatialBias: {spatial_bias}")
     print(f"  Parameters: {sum(p.numel() for p in spatial_bias.parameters()):,}")
     print(f"  Output shape: {out.shape}")
+    print(f"  None input shape: {spatial_bias(None).shape}")
     print()
 
     # Test FeatureBias
@@ -298,6 +400,7 @@ if __name__ == "__main__":
     print(f"FeatureBias: {feature_bias}")
     print(f"  Parameters: {sum(p.numel() for p in feature_bias.parameters()):,}")
     print(f"  Output shape: {out.shape}")
+    print(f"  None input shape: {feature_bias(None).shape}")
     print()
 
     # Test ScalarBias
@@ -306,6 +409,7 @@ if __name__ == "__main__":
     print(f"ScalarBias: {scalar_bias}")
     print(f"  Parameters: {sum(p.numel() for p in scalar_bias.parameters()):,}")
     print(f"  Output shape: {out.shape}")
+    print(f"  None input shape: {scalar_bias(None).shape}")
     print()
 
     # Test factory function
@@ -317,5 +421,14 @@ if __name__ == "__main__":
 
     bias = create_bias("none")
     print(f"Factory (none): {bias}")
+
+    # Test allow_null_input=False
+    print("\nTesting allow_null_input=False:")
+    strict_bias = ScalarBias(allow_null_input=False)
+    try:
+        strict_bias(None)
+        print("  ERROR: Should have raised ValueError!")
+    except ValueError as e:
+        print(f"  ✓ Correctly raised error: {e}")
 
     print("\n✓ All bias types tested successfully!")

@@ -1665,7 +1665,12 @@ def main():
     parser.add_argument("--category-key", type=str, help="Category column name")
     parser.add_argument("--parameter-key", type=str, help="Parameter column name")
     parser.add_argument(
-        "--experiment-names", type=str, nargs="*", help="Experiment names"
+        "--experiment",
+        "--experiment-names",
+        dest="experiment_names",
+        type=str,
+        nargs="*",
+        help="Experiment names",
     )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
     parser.add_argument("--palette", type=str, help="JSON color palette")

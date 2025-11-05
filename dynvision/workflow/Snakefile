@@ -4,15 +4,19 @@ include: "snake_runtime.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 
-SEED = ["1000", "1001", "1002"]
+SEED = ["1003", "1004"] #"1000", "1001", "1002", 
 
 rule all:
-    input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040_imagenette_trained_all/dynamics_{focus_layer}.png",
-            experiment=['duration', 'contrast', 'interval'],
-            focus_layer=['V1', 'V2', 'V4', 'IT'],
-            categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*']
-            )
+    # input:
+    #     expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040_imagenette_trained_all/dynamics_{focus_layer}.png",
+    #         experiment=['duration', 'contrast', 'interval'],
+    #         focus_layer=['V1', 'V2', 'V4', 'IT'],
+    #         categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*']
+    #         )
+    shell:
+        """
+        echo 'executing all rule'
+        """
 
 # ###############
 # echo "Run all trainings and experiments"
@@ -26,17 +30,47 @@ rule all:
 # sh snakecharm.sh "timeparams"
 # sh snakecharm.sh "stability --config test_batch_size=16"
 # sh snakecharm.sh "unrolling --config batch_size=128"
+# sh snakecharm.sh "cornet"
 # # sh snakecharm.sh "imagenet --config use_distributed_mode=True batch_size=512"
 # # sh snakecharm.sh "dataloader"
 # ###############
 
-rule manuscript_figures:  # run with --allowed-rules process_test_data test_model
+rule manuscript_figures:  # run with --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training
     input:
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040_imagenette_trained_all/dynamics_{focus_layer}.png",
+        # neural dynamics comparison figures
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all/dynamics_{focus_layer}.png",
             experiment=['duration', 'contrast', 'interval'],
             focus_layer=['V1', 'V2', 'V4', 'IT'],
-            categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*']
-            )
+            categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*'],
+            seeds='.'.join(SEED),
+        ),
+        # timestep tripytch
+        expand(project_paths.figures / '{experiment}' / '{experiment}_DyRCNNx8:tsteps=*+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=*+idle=*_{seeds}_imagenette_trained_all' / 'response_tripytch.png',
+            experiment=['response'],
+            seeds='.'.join(SEED),
+        ),
+        # timeparams tripytch
+        expand(project_paths.figures / '{experiment}' / '{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=*+tff=0+trc=*+tsk=*+skip=true+lossrt=4_{seeds}_imagenette_trained_all' / 'response_tripytch.png',
+            experiment=['response'],
+            seeds='.'.join(SEED),
+        ),
+        # connection tripytch
+        expand(project_paths.figures / '{experiment}' / '{experiment}_DyRCNNx8:rctype=full+dt=2+tau=5+tff=0+trc=5+tsk=0+rctarget=*+skip=*+feedback=*+lossrt=4_{seeds}_imagenette_trained_all' / 'response_tripytch.png',
+            experiment=['response'],
+            seeds='.'.join(SEED),
+        ),
+        # noise performance
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all/performance.png",
+            experiment='noise',
+            seeds='.'.join(SEED),
+        ),
+        # stability
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all/responses.png",
+            experiment='stability',
+            categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*'],
+            seeds='.'.join(SEED),
+        ),
+        # temporal parameter exploration figure
     
 rule idle:
     input:
@@ -122,7 +156,7 @@ rule cornet:
     input:
         expand(project_paths.reports / "{experiment}" / "{experiment}_CorNetRT:dt=*_0000_imagenet_init_imagenette" / "test_data.csv",
         seed=SEED,
-        experiment=['idleresponse'], #, 'duration', 'contrast', 'interval']
+        experiment=['response', 'idleresponse'], #, 'duration', 'contrast', 'interval']
         )
         
 

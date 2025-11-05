@@ -679,7 +679,11 @@ def main():
         description="Create unified dynamics visualization"
     )
     parser.add_argument(
-        "--data", type=Path, required=True, help="Path to response data CSV"
+        "--data",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="Path(s) to response data CSV file(s). Multiple paths will be concatenated.",
     )
     parser.add_argument(
         "--output", type=Path, required=True, help="Path to save output figure"
@@ -701,8 +705,18 @@ def main():
 
     args = parser.parse_args()
 
-    # Load data
-    df = pd.read_csv(args.data)
+    # Load and concatenate data
+    if len(args.data) > 1:
+        logger.info(f"Loading and concatenating data from {len(args.data)} files")
+        dfs = []
+        for i, path in enumerate(args.data):
+            logger.info(f"  Loading file {i+1}/{len(args.data)}: {path}")
+            dfs.append(pd.read_csv(path))
+        df = pd.concat(dfs, ignore_index=True)
+        logger.info(f"Concatenated total: {len(df)} rows")
+    else:
+        logger.info(f"Loading data from: {args.data[0]}")
+        df = pd.read_csv(args.data[0])
 
     # Load config
     config = load_config_from_args(

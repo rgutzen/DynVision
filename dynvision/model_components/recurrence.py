@@ -104,16 +104,14 @@ class ForwardRecurrenceBase(RecurrenceBase):
         The delay is measured in timesteps from the present.
 
         Args:
-            delay (Optional[int]): Delay in timesteps. delay=1 is the most recent state,
-                                   delay=2 is one timestep back, etc. If None, defaults to 1.
+            delay (Optional[int]): Delay in timesteps. delay=0 is the most recent state,
+                                   delay=1 is one timestep back, etc. If None, defaults to 0.
 
         Returns:
             Optional[torch.Tensor]: Hidden state tensor at the specified delay, or None if unavailable.
         """
         # Default to most recent state
-        if delay is None:
-            delay = 1
-        elif delay == 0:
+        if delay is None or delay == 0:
             delay = 1
 
         # Check if buffer is empty
@@ -128,8 +126,7 @@ class ForwardRecurrenceBase(RecurrenceBase):
 
         # Convert delay to buffer index: delay=1 → -1, delay=2 → -2, etc.
         try:
-            buffer_index = -delay
-            return self._hidden_states.get(buffer_index)
+            return self._hidden_states.get(-delay)
         except (IndexError, ValueError):
             # Index out of range - shouldn't happen with our check, but handle gracefully
             return None
@@ -552,12 +549,12 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         dim_y: Optional[int] = None,
         dim_x: Optional[int] = None,
         dt: float = 1,  # ms
-        tau: float = 1,  # ms
         recurrence_target: str = "output",
         recurrence_type: str = "self",
         recurrence_kernel_size: Optional[int] = None,  # defaults to kernel_size
         recurrence_bias: Optional[bool] = None,  # defaults to bias
         t_recurrence: float = 0,  # ms
+        t_feedforward: Optional[float] = 0,  # ms,
         integration_strategy: Union[Callable, str] = "additive",
         history_length: Optional[int] = None,  # ms
         fixed_self_weight: Optional[float] = None,
@@ -598,11 +595,6 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
                 self.padding = (padding, padding)
 
             self.bias = bias if isinstance(bias, (list, tuple)) else (bias, bias)
-            self.parametrization = (
-                parametrization
-                if isinstance(parametrization, (list, tuple))
-                else (parametrization, parametrization)
-            )
         else:
             self.padding = kernel_size // 2 if padding is None else padding
 
@@ -622,9 +614,9 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
 
         # Store recurrence parameters
         self.dt = dt
-        self.tau = tau
         self.recurrence_type = recurrence_type
         self.t_recurrence = t_recurrence
+        self.t_feedforward = t_feedforward  # Optional per-layer feedforward delay
         self.integration_strategy = integration_strategy
         self.recurrence_target = recurrence_target
         self.fixed_self_weight = fixed_self_weight
@@ -716,10 +708,12 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
     def _setup_hidden_state_memory(
         self, history_length: Optional[float] = None
     ) -> None:
-        self.history_length = (
-            self.t_recurrence if history_length is None else history_length
-        )
-        self.n_hidden_states = int(self.history_length / self.dt) + 1
+        if history_length is None:
+            self.history_length = max(self.t_recurrence, self.t_feedforward)
+        else:
+            self.history_length = history_length
+
+        self.n_hidden_states = int(self.history_length / self.dt)  # + 1
         self.delay_recurrence = int(self.t_recurrence / self.dt)
 
     def _define_architecture(self) -> None:
@@ -763,8 +757,8 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
                 bias=self.bias[1],
             )
             if self.parametrization is not None:
-                self.conv = apply_parametrization(self.conv, self.parametrization[0])
-                self.conv2 = apply_parametrization(self.conv2, self.parametrization[1])
+                self.conv = apply_parametrization(self.conv, self.parametrization)
+                self.conv2 = apply_parametrization(self.conv2, self.parametrization)
 
     def _setup_recurrence(self) -> None:
         """Set up the recurrent connection based on specified type."""
@@ -819,6 +813,23 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         else:
             recurrence_class = recurrence_types[self.recurrence_type.lower()]
             self.recurrence = recurrence_class(**recurrence_params)
+            if self.parametrization is not None:
+                if hasattr(self.recurrence, "conv"):
+                    self.recurrence.conv = apply_parametrization(
+                        self.recurrence.conv, self.parametrization
+                    )
+                elif hasattr(self.recurrence, "depthwise_conv"):
+                    self.recurrence.depthwise_conv = apply_parametrization(
+                        self.recurrence.depthwise_conv, self.parametrization
+                    )
+                elif hasattr(self.recurrence, "pointwise_conv"):
+                    self.recurrence.pointwise_conv = apply_parametrization(
+                        self.recurrence.pointwise_conv, self.parametrization
+                    )
+                elif hasattr(self.recurrence, "weight"):
+                    self.recurrence.weight = apply_parametrization(
+                        self.recurrence.weight, self.parametrization
+                    )
 
         # Configure recurrence influence
         self.integrate_signal = setup_integration_strategy(self.integration_strategy)
@@ -855,7 +866,6 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         if h is None:  # passed hidden state takes precedence
             h = self.get_hidden_state(self.delay_recurrence)
 
-        # breakpoint()
         # Response to recurrent input
         if h is None or self.recurrence is None:
             h = None
@@ -943,6 +953,46 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             raise ValueError(f"Invalid recurrence target: {self.recurrence_target}")
 
         return x
+
+    def delay(
+        self, x: torch.Tensor, delay_feedforward: Optional[int] = None
+    ) -> torch.Tensor:
+        """
+        Apply delay operation: store current state and retrieve delayed state.
+
+        This method handles the feedforward delay by storing the current activation
+        in the hidden state buffer and retrieving a delayed version for feedforward
+        to the next layer.
+
+        Args:
+            x: Current activation to store
+            delay_feedforward: Optional override for feedforward delay in timesteps.
+                             If None, uses layer's t_feedforward parameter.
+
+        Returns:
+            Delayed activation for feedforward to next layer
+        """
+        # Determine delay amount
+        if delay_feedforward is not None:
+            # Use provided delay
+            delay = delay_feedforward
+        elif hasattr(self, "t_feedforward"):
+            # Use per-layer t_feedforward if defined
+            delay = int(self.t_feedforward / self.dt)
+        else:
+            # Default to no delay if not specified
+            delay = 0
+
+        # Retrieve delayed state before updating with current state
+        if delay > 0:
+            x1 = self.get_hidden_state(delay)
+        else:
+            x1 = x
+
+        # Store current state
+        self.set_hidden_state(x)
+
+        return x1
 
 
 # Create alias for shorter name
