@@ -4,44 +4,38 @@ include: "snake_runtime.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 
-SEED = ["1003", "1004"] #"1000", "1001", "1002", 
-
-rule all:
-    # input:
-    #     expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040_imagenette_trained_all/dynamics_{focus_layer}.png",
-    #         experiment=['duration', 'contrast', 'interval'],
-    #         focus_layer=['V1', 'V2', 'V4', 'IT'],
-    #         categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*']
-    #         )
-    shell:
-        """
-        echo 'executing all rule'
-        """
+# SEED = ["1000", "1001", "1002"] #, "1003", "1004","1005"]  # energy loss weight 0.05 & use_ffcv=False
+SEED = ["2000", "2001", "2002"] # energy loss weight 0.2 & use_ffcv=True
 
 # ###############
-# echo "Run all trainings and experiments"
-# sh snakecharm.sh "rctarget"
-# sh snakecharm.sh "rctype"
-# sh snakecharm.sh "skip"
-# sh snakecharm.sh "feedback --config batch_size=128"
-# sh snakecharm.sh "tsteps"
-# sh snakecharm.sh "lossrt"
-# sh snakecharm.sh "idle"
-# sh snakecharm.sh "timeparams"
-# sh snakecharm.sh "stability --config test_batch_size=16"
-# sh snakecharm.sh "unrolling --config batch_size=128"
-# sh snakecharm.sh "cornet"
+# for cmd in \
+#     "rctarget" \
+#     "rctype" \
+#     "skip" \
+#     "feedback --config batch_size=128" \
+#     "tsteps" \
+#     "lossrt" \
+#     "idle" \
+#     "timeparams" \
+#     "stability --config test_batch_size=16" \
+#     "references --config test_batch_size=32" \
+#     "unrolling --config batch_size=128" \
+#     "energyloss" \
+#     "dataloader --config epochs=100"; do
+#     sh snakecharm.sh "$cmd"
+#     sleep 120
+# done
 # # sh snakecharm.sh "imagenet --config use_distributed_mode=True batch_size=512"
-# # sh snakecharm.sh "dataloader"
 # ###############
 
-rule manuscript_figures:  # run with --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training
+rule all: # manuscript figures  
+# sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"
     input:
         # neural dynamics comparison figures
         expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all/dynamics_{focus_layer}.png",
             experiment=['duration', 'contrast', 'interval'],
             focus_layer=['V1', 'V2', 'V4', 'IT'],
-            categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*'],
+            categories=['rctype=*+rctarget=output'], # , 'rctype=full+rctarget=*'],
             seeds='.'.join(SEED),
         ),
         # timestep tripytch
@@ -60,17 +54,42 @@ rule manuscript_figures:  # run with --allowed-rules plot_dynamics plot_response
             seeds='.'.join(SEED),
         ),
         # noise performance
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all/performance.png",
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4_{seeds}_imagenette_trained_all/performance.png",
             experiment='noise',
             seeds='.'.join(SEED),
         ),
         # stability
-        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all/responses.png",
+        expand(project_paths.figures / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4_{seeds}_imagenette_trained_all/responses.png",
             experiment='stability',
             categories=['rctype=*+rctarget=output', 'rctype=full+rctarget=*'],
             seeds='.'.join(SEED),
         ),
-        # temporal parameter exploration figure
+        # reference models
+        expand(project_paths.figures / "{experiment}" / "{experiment}_{model}:pretrained=*_{seeds}_imagenet_init_imagenette/responses.png",
+            experiment=['response', 'idleresponse', 'hundred'],
+            model=['CorNetRT', 'CordsNet'],
+            seeds=SEED[0],
+        )
+        # unrolling figure
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=30+rctype=full+rctarget=output+dt=2+tau=5+tff=10+trc=6+tsk=20+tfb=10+skip=true+feedback=true+lossrt=4_{seed}_imagenette_trained.pt",
+        seed=SEED[0],
+        )
+        # training progress
+        project_paths.figures / 'response' / 'response_{model_name}:{args1}{category}=*{args2}_{seeds}_{data_name}_{status}' / 'training.png',
+
+    params:
+        figure_folder = project_paths.figures / "manuscript_figures"
+    shell:
+        """
+        mkdir -p {params.figure_folder}
+        if [ -n "{input}" ]; then
+            for file in {input}; do
+            folder_name=$(basename "$(dirname "$file")")
+            file_name=$(basename "$file")
+            cp "$file" "{params.figure_folder}/${{folder_name}}_${{file_name}}"
+            done
+        fi
+        """
     
 rule idle:
     input:
@@ -81,13 +100,13 @@ rule idle:
 rule feedback:  # run with --config batch_size=128
     input:
         expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=30+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+tfb=30+skip=true+feedback=*+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
-            seed=SEED,
+            seed="2003",
             experiment=['response', 'responseffonly'])
 
 rule skip:
     input:
         expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=*+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
-            seed=SEED,
+            seed="2003",
             experiment=['response', 'responseffonly'])
 
 rule tsteps:
@@ -105,26 +124,26 @@ rule lossrt:
 rule rctarget:
     input:
         expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
-        seed=SEED,
-        experiment=['responseffonly', 'response', 'uniformnoise', 'uniformnoiseffonly', 'poissonnoise', 'poissonnoiseffonly', 'gaussiannoise', 'gaussiannoiseffonly', 'gaussiancorrnoise', 'gaussiancorrnoiseffonly',]) 
+        seed=["1002", "1003", "1004"],  # non-oscillatory seeds only
+        experiment=['responseffonly', 'response', 'duration', 'contrast', 'interval', 'uniformnoise', 'uniformnoiseffonly', 'poissonnoise', 'poissonnoiseffonly', 'gaussiannoise', 'gaussiannoiseffonly', 'gaussiancorrnoise', 'gaussiancorrnoiseffonly', 'phasescramblednoise', 'phasescramblednoiseffonly']), 
 
 rule rctype:
     input:
-        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=*+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response', 'duration', 'contrast', 'interval', 'responseffonly']),
 
-rule timeparams:
+rule timeparams:  # add rctarget=output
     input:
-        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=*+tff=0+trc=6+tsk=0+skip=true+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response']),
-        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=*+tsk=0+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=*+tsk=0+skip=true+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
         experiment=['response']),
-        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=6+tsk=*+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
+        expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+dt=2+tau=5+tff=0+trc=6+tsk=*+skip=true+lossrt=4_{seed}_imagenette_trained_all" / "test_data.csv",
         seed=SEED,
-        experiment=['response'])
+        experiment=['response']),
 
 rule stability:  # run with --config test_batch_size=16
     input:
@@ -141,23 +160,29 @@ rule unrolling:
         seed=SEED,
         )
 
+rule energyloss:
+    input:
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss={energyloss}_{seed}_imagenette_trained.pt",
+        energyloss=[0.05, 0.1, 0.2, 0.5],
+        seed=SEED,
+        )
+
 rule dataloader:
     input:
         expand(project_paths.figures / 'response' / 'response_DyRCNNx8:{configuration}_{seed}_imagenette_trained_all' / 'response.png',
         seed=SEED,
         configuration=[
-            'tsteps=20+dataloader=ffcv+dsteps=1',
-            'tsteps=20+dataloader=torch+dsteps=1',
-            'tsteps=1+dataloader=ffcv+dsteps=20',
-            'tsteps=1+dataloader=torch+dsteps=20',
+            'tsteps=20+dataloader=*+dsteps=1',
+            'tsteps=1+dataloader=*+dsteps=20',
         ]),
 
-rule cornet:
+rule references:
     input:
-        expand(project_paths.reports / "{experiment}" / "{experiment}_CorNetRT:dt=*_0000_imagenet_init_imagenette" / "test_data.csv",
-        seed=SEED,
-        experiment=['response', 'idleresponse'], #, 'duration', 'contrast', 'interval']
-        )
+        expand(project_paths.figures / "{experiment}" / "{experiment}_{model}:pretrained=*_{seeds}_imagenet_init_imagenette/responses.png",
+            experiment=['response', 'hundred', 'stability'],
+            model=['CorNetRT', 'CordsNet'],
+            seeds=SEED[0], #'.'.join(SEED),
+        ),
         
 
 rule imagenet:  # run with --config use_distributed_mode=True

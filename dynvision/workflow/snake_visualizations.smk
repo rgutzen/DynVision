@@ -70,8 +70,9 @@ rule plot_classifier_responses:
     """
     input:
         dataframe = project_paths.reports \
-            / '{model_name}' \
-            / '{model_name}{data_identifier}_test_outputs.csv',
+            / '{data_loader}' \
+            / '{model_name}{data_identifier}' \
+            / 'test_outputs.csv',
         script = SCRIPTS / 'visualization' / 'plot_classifier_responses.py'
     params:
         n_units = 10,
@@ -126,7 +127,7 @@ rule plot_weight_distributions:
         """
         {params.execution_cmd} \
             --input {input.state:q} \
-            --output {output.plot:q} \
+            --output {output.plot:q} 
             --format {wildcards.format} 
         """
 
@@ -161,8 +162,7 @@ rule process_test_data:
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
-        measures = ['response_avg', 'response_std', 'label_confidence', 'guess_confidence', 'first_label_confidence'], # 'spatial_variance', 'feature_variance',
-        topk = [3, 5],
+        measures = ['response_avg', 'response_std', 'label_confidence', 'guess_confidence', 'first_label_confidence', 'classifier_top10', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         batch_size = 1,
         remove_input_responses = True,
@@ -184,7 +184,6 @@ rule process_test_data:
             --parameter {params.parameter} \
             --category {wildcards.category} \
             --measures {params.measures} \
-            --topk {params.topk} \
             --batch_size {params.batch_size} \
             --sample_resolution {params.sample_resolution} \
             --remove_input_responses {params.remove_input_responses}
@@ -209,54 +208,15 @@ rule process_wandb_data:
             --output {output:q}
         """
 
-checkpoint plot_adaption:
-    """Analyze and visualize model adaptation.
-
-    This rule generates visualizations of how models
-    adapt to different conditions over time.
-
-    Input:
-        responses: Model responses
-        test_outputs: Test results
-        script: Analysis script
-    
-    Output:
-        Adaptation analysis plots
-    """
-    input:
-        data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
-        script = SCRIPTS / 'visualization' / 'plot_{plot}.py'
-    params:
-        measures = ['power', 'peak_height', 'peak_time'],
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
-        ),
-    output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / '{plot}.flag',
-    # group: "visualization"
-    shell:
-        """
-        {params.execution_cmd} \
-            --data {input.data:q} \
-            --output {output:q} \
-            --parameter {params.parameter} \
-            --experiment {wildcards.experiment} \
-            --category {wildcards.category} \
-            --measures {params.measures} 
-        """
-
 rule plot_performance:
     input:
         data = expand(project_paths.reports / '{experiment}' / '{experiment}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
-            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
-            seeds = lambda w: w.seeds.split('.')
+            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'gaussiancorrnoise'] if w.experiment == 'noise' else w.experiment,
+            seeds = lambda w: w.seeds.split('.'),
             ),
         dataffonly = expand(project_paths.reports / '{experiment}ffonly' / '{experiment}ffonly_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
-            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
-            seeds = lambda w: w.seeds.split('.')
+            experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'gaussiancorrnoise'] if w.experiment == 'noise' else w.experiment,
+            seeds = lambda w: w.seeds.split('.'),
             ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
@@ -265,7 +225,7 @@ rule plot_performance:
         hue = 'category',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
-        experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'phasescramblednoise'] if w.experiment == 'noise' else w.experiment,
+        experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'gaussiancorrnoise'] if w.experiment == 'noise' else w.experiment,
         confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
         dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
@@ -301,24 +261,26 @@ rule plot_performance:
 
 rule plot_training:
     input:
-        test_data = project_paths.reports / 'response' / 'response_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_all' / 'test_data.csv',
-        accuracy_csv = project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_accuracy.csv',
-        memory_csv = project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_gpu_mem_alloc.csv',
-        epoch_csv = project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_epoch.csv',
-        energy_csv= project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_energyloss.csv',
-        cross_entropy_csv= project_paths.reports \
-            / 'wandb' \
-            / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_crossentropyloss.csv',
+        test_data = expand(project_paths.reports / '{experiment}' / '{experiment}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.'),
+            ),
         script = SCRIPTS / 'visualization' / 'plot_training.py'
     params:
+        accuracy_csv = lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        memory_csv = lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
+        epoch_csv = lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
+        energy_csv= lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
+        cross_entropy_csv= lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -329,16 +291,16 @@ rule plot_training:
         ordering = lambda w: json.dumps(config.ordering),
         dt = getattr(config, 'dt', 2),
     output:
-        project_paths.figures / 'training' / '{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}' / 'training.png',
     shell:
         """
         {params.execution_cmd} \
             --test_data {input.test_data:q} \
-            --accuracy_csv {input.accuracy_csv:q} \
-            --memory_csv {input.memory_csv:q} \
-            --epoch_csv {input.epoch_csv:q} \
-            --energy_csv {input.energy_csv:q} \
-            --cross_entropy_csv {input.cross_entropy_csv:q} \
+            --accuracy_csv {params.accuracy_csv:q} \
+            --memory_csv {params.memory_csv:q} \
+            --epoch_csv {params.epoch_csv:q} \
+            --energy_csv {params.energy_csv:q} \
+            --cross_entropy_csv {params.cross_entropy_csv:q} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q} \
@@ -392,13 +354,14 @@ rule plot_responses:
             ),
         script = SCRIPTS / 'visualization' / 'plot_responses.py'
     params:
-        column = getattr(config, 'column', 'parameter'),
-        subplot = getattr(config, 'subplot', 'layers'),
+        column = getattr(config, 'column', 'parameter'),  # first_label_index
+        subplot = getattr(config, 'subplot', 'layers'),  # classifier_topk
         hue = getattr(config, 'hue', 'category'),
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
         dt = getattr(config, 'dt', 2),
         confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -421,6 +384,7 @@ rule plot_responses:
             --category-key {params.category} \
             --experiment {wildcards.experiment} \
             --confidence-measure {params.confidence_measure} \
+            --accuracy-measure {params.accuracy_measure} \
             --dt {params.dt} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
@@ -438,11 +402,11 @@ rule plot_timeparams_tripytch:
         data3 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}tau=5+tff=0+trc=6+tsk=*{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
             seeds = lambda w: w.seeds.split('.')
             ),
-        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=*+tff=0+trc=6+tsk=0{args2}_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=5+tff=0+trc=*+tsk=0{args2}_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:{args1}tau=5+tff=0+trc=6+tsk=*{args2}_{seed}_{data_name}_{status}_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=*+tff=0+trc=6+tsk=0{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=5+tff=0+trc=*+tsk=0{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=5+tff=0+trc=6+tsk=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -463,9 +427,9 @@ rule plot_timeparams_tripytch:
             --data {input.data1:q} \
             --data2 {input.data2:q} \
             --data3 {input.data3:q} \
-            --accuracy1 {input.accuracy1:q} \
-            --accuracy2 {input.accuracy2:q} \
-            --accuracy3 {input.accuracy3:q} \
+            --accuracy1 {params.accuracy1:q} \
+            --accuracy2 {params.accuracy2:q} \
+            --accuracy3 {params.accuracy3:q} \
             --output {output:q} \
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
@@ -487,11 +451,11 @@ rule plot_timestep_tripytch:
         data3 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=20{{args1}}lossrt=4+idle=*_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
             seeds = lambda w: w.seeds.split('.')
             ),
-        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=*{args1}lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20{args1}skip=true+lossrt=*_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20{args1}lossrt=4+idle=*_{seed}_{data_name}_{status}_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=*{w.args1}lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20{w.args1}skip=true+lossrt=*_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20{w.args1}lossrt=4+idle=*_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -512,9 +476,9 @@ rule plot_timestep_tripytch:
             --data {input.data1:q} \
             --data2 {input.data2:q} \
             --data3 {input.data3:q} \
-            --accuracy1 {input.accuracy1:q} \
-            --accuracy2 {input.accuracy2:q} \
-            --accuracy3 {input.accuracy3:q} \
+            --accuracy1 {params.accuracy1:q} \
+            --accuracy2 {params.accuracy2:q} \
+            --accuracy3 {params.accuracy3:q} \
             --output {output:q} \
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
@@ -536,11 +500,11 @@ rule plot_connection_tripytch:
         data3 = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:tsteps=30+rctype=full+rctarget=output{{args2}}tfb=30+feedback=*+lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
             seeds = lambda w: w.seeds.split('.')
             ),
-        accuracy1 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=*{args2}lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy2 = project_paths.reports / 'wandb' / '{model_name}:tsteps=20+rctype=full+rctarget=output{args2}skip=*+lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
-        accuracy3 = project_paths.reports / 'wandb' / '{model_name}:tsteps=30+rctype=full+rctarget=output{args2}tfb=30+feedback=*+lossrt=4_{seed}_{data_name}_{status}_accuracy.csv',
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20+rctype=full+rctarget=*{w.args2}lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20+rctype=full+rctarget=output{w.args2}skip=*+lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=30+rctype=full+rctarget=output{w.args2}tfb=30+feedback=*+lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -561,9 +525,9 @@ rule plot_connection_tripytch:
             --data {input.data1:q} \
             --data2 {input.data2:q} \
             --data3 {input.data3:q} \
-            --accuracy1 {input.accuracy1:q} \
-            --accuracy2 {input.accuracy2:q} \
-            --accuracy3 {input.accuracy3:q} \
+            --accuracy1 {params.accuracy1:q} \
+            --accuracy2 {params.accuracy2:q} \
+            --accuracy3 {params.accuracy3:q} \
             --output {output:q} \
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \

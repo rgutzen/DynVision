@@ -25,6 +25,8 @@ nohup bash -c "
 sh ./_snakecharm.sh $@
 " "$@" > "$slurm_logdir/snakecharm_$id.log" 2>&1 &
 
+# nohup bash ./_snakecharm.sh "$@" > "$slurm_logdir/snakecharm_$id.log" 2>&1 &
+
 pid=$!  # Process ID of the last background command (stop with `kill $pid`)
 echo "PID: $pid" >> "$slurm_logdir/snakecharm_$id.log"
 

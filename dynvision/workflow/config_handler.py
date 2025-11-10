@@ -41,7 +41,7 @@ class ConfigHandler:
         self._detect_available_modes()
 
         # Create config directory
-        self.config_dir = self.project_paths.logs / "configs"
+        self.config_dir = self.project_paths.large_logs / "configs"
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info("ConfigHandler initialized")
@@ -198,7 +198,9 @@ class ConfigHandler:
 
         # Generate unique filename and write config
         filename = self._generate_unique_filename(wildcards)
-        config_path = self.config_dir / filename
+        config_path = (
+            self.config_dir / filename
+        )  # place not restricted by number of files
 
         with open(config_path, "w") as f:
             f.write("# Automatically generated configuration file\n")
