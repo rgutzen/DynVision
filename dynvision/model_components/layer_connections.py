@@ -111,7 +111,7 @@ class ConnectionBase(LightningModule):
         if self.delay_index is not None:
             return
         elif self.t_connection is not None and self.dt is not None:
-            # +1 accounts that previous layers already had their hidden state updated this timestep
+            # for skip connections, +1 accounts that previous layers already had their hidden state updated this timestep
             self.delay_index = int(self.t_connection / self.dt) + 1
         else:
             raise ValueError(

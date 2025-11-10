@@ -56,7 +56,9 @@ class ModelParams(BaseParams):
     t_recurrence: Optional[float] = Field(
         default=None, description="Recurrent delay (ms)"
     )
-    t_feedback: Optional[float] = Field(default=None, description="Feedback delay (ms)")
+    t_feedback: Optional[float] = Field(
+        default=None, description="Feedback delay (ms)"
+    )
     t_skip: Optional[float] = Field(default=None, description="Skip delay (ms)")
     dynamics_solver: Optional[Literal["euler", "rk4"]] = Field(
         default=None, description="Dynamical systems solver"
@@ -338,16 +340,15 @@ class ModelParams(BaseParams):
         if v is None:
             return None
         valid_models = [
+            "DyRCNNx2",
             "DyRCNNx4",
+            "DyRCNNx8",
+            "CorNetRT",
+            "CordsNet",
             "AlexNet",
             "ResNet18",
             "ResNet34",
             "ResNet50",
-            "CORnet-RT",
-            "CorNetRT",
-            "CordsNet",
-            "BLT",
-            "TwoLayerCNN",
         ]
         if v not in valid_models:
             logging.warning(
@@ -414,7 +415,9 @@ class ModelParams(BaseParams):
             for group_name, group_config in self.lr_parameter_groups.items():
                 if "lr_factor" not in group_config:
                     group_config["lr_factor"] = 1.0
-                    logging.info(f"Added missing lr_factor=1.0 to group '{group_name}'")
+                    logging.info(
+                        f"Added missing lr_factor=1.0 to group '{group_name}'"
+                    )
 
         # Provide default scheduler configs if scheduler is set but configs aren't
         if self.scheduler is not None and not self.scheduler_configs:

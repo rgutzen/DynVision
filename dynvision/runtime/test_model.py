@@ -298,7 +298,7 @@ class TestingOrchestrator:
         if unknown:
             logger.debug(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
 
-        # wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms
+        # wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms, but testing is not logged
         return pl.Trainer(**trainer_kwargs)
 
     def save_results(self, model: pl.LightningModule, precision: int = 16) -> None:

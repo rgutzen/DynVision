@@ -985,14 +985,14 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
 
         # Retrieve delayed state before updating with current state
         if delay > 0:
-            x1 = self.get_hidden_state(delay)
+            out = self.get_hidden_state(delay)
         else:
-            x1 = x
+            out = x
 
         # Store current state
         self.set_hidden_state(x)
 
-        return x1
+        return out
 
 
 # Create alias for shorter name

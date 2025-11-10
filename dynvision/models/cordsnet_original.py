@@ -198,7 +198,7 @@ class cordsnet(nn.Module):
         ]
 
         timesteps = 100
-        total_steps = timesteps * 2
+        total_steps = timesteps  # * 2
 
         activity = {
             layer: torch.zeros(
@@ -213,7 +213,7 @@ class cordsnet(nn.Module):
         }
 
         with torch.no_grad():
-            for t in range(timesteps):
+            for t in range(0):
                 for j in range(self.depth - 1, -1, -1):
                     rs[j] = self.rnn(j, rs, inputs * 0, alpha)
                 for layer in layers:
@@ -223,6 +223,6 @@ class cordsnet(nn.Module):
             for j in range(self.depth - 1, -1, -1):
                 rs[j] = self.rnn(j, rs, inputs, alpha)
             for layer in layers:
-                activity[layer][timesteps + t] = rs[layer]
+                activity[layer][0 + t] = rs[layer]
 
         return activity

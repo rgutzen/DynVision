@@ -16,6 +16,7 @@ import torch.nn as nn
 from torch.utils import model_zoo
 
 from dynvision.models.dyrcnn import DyRCNN
+from dynvision.utils import alias_kwargs, str_to_bool
 from dynvision.model_components import (
     InputAdaption,
     RConv2d,
@@ -40,6 +41,15 @@ logger = logging.getLogger(__name__)
 
 
 class CorNetRT(DyRCNN):
+    @alias_kwargs(
+        tff="t_feedforward",
+        trc="t_recurrence",
+        tsk="t_skip",
+        rctype="recurrence_type",
+        rctarget="recurrence_target",
+        idle="idle_timesteps",
+        pretrained="init_with_pretrained",
+    )
     def __init__(
         self,
         n_timesteps: int = 5,
@@ -61,7 +71,7 @@ class CorNetRT(DyRCNN):
 
         self.model_letter = "rt"
         self.model_hash = "933c001c"
-        self.init_with_pretrained = init_with_pretrained
+        self.init_with_pretrained = str_to_bool(init_with_pretrained)
         self.fixed_self_weight = fixed_self_weight
         self.recurrence_bias = recurrence_bias
 
@@ -141,6 +151,7 @@ class CorNetRT(DyRCNN):
             recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             dim_y=self.dim_y,
             dim_x=self.dim_x,
             history_length=self.history_length,
@@ -163,6 +174,7 @@ class CorNetRT(DyRCNN):
             recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             dim_y=self.V1.dim_y // self.V1.stride[0] // self.V1.stride[1],
             dim_x=self.V1.dim_x // self.V1.stride[0] // self.V1.stride[1],
             history_length=self.history_length,
@@ -185,6 +197,7 @@ class CorNetRT(DyRCNN):
             recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             dim_y=self.V2.dim_y // self.V2.stride[0] // self.V2.stride[1],
             dim_x=self.V2.dim_x // self.V2.stride[0] // self.V2.stride[1],
             history_length=self.history_length,
@@ -207,6 +220,7 @@ class CorNetRT(DyRCNN):
             recurrence_target=self.recurrence_target,
             dt=self.dt,
             t_recurrence=self.t_recurrence,
+            t_feedforward=0.0,
             dim_y=self.V4.dim_y // self.V4.stride[0] // self.V4.stride[1],
             dim_x=self.V4.dim_x // self.V4.stride[0] // self.V4.stride[1],
             history_length=self.history_length,

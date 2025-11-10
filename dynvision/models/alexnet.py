@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 from torchvision import models as torch_models
 
+
 from dynvision.base import BaseModel
+from typing import Optional, Tuple
 from dynvision.model_components import (
     InputAdaption,
     RecurrentConnectedConv2d,
@@ -149,7 +151,7 @@ class AlexNet(BaseModel):
             nn.Linear(4096, self.n_classes),
         )
 
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None):
         for layer in [self.layer1, self.layer2, self.layer3, self.layer4, self.layer5]:
             layer.reset()
 

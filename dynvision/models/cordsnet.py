@@ -21,7 +21,7 @@ from dynvision.model_components import (
     EulerStep,
 )
 from dynvision.project_paths import project_paths
-from dynvision.utils import alias_kwargs
+from dynvision.utils import alias_kwargs, str_to_bool
 
 __all__ = ["CordsNet"]
 
@@ -76,6 +76,9 @@ class CordsNet(BaseModel):
         trc="t_recurrence",
         tsk="t_skip",
         rctype="recurrence_type",
+        rctarget="recurrence_target",
+        idle="idle_timesteps",
+        pretrained="init_with_pretrained",
     )
     def __init__(
         self,
@@ -92,7 +95,7 @@ class CordsNet(BaseModel):
         recurrence_target: str = "output",
         skip: bool = True,
         feedback: bool = False,
-        idle_timesteps: int = 10,  # trained with 100,
+        idle_timesteps: int = 100,
         init_with_pretrained: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -101,7 +104,8 @@ class CordsNet(BaseModel):
 
         Note: The original CordsNet uses alpha=0.2, which corresponds to dt=2, tau=10.
         """
-        self.init_with_pretrained = init_with_pretrained
+        self.init_with_pretrained = str_to_bool(init_with_pretrained)
+
         super().__init__(
             n_timesteps=n_timesteps,
             input_dims=input_dims,
@@ -322,10 +326,11 @@ class CordsNet(BaseModel):
         for i in range(8):
             layer_name = f"layer{i+1}"
 
-            # Per-layer params: make t_feedforward = 0 for the last layer
-            layer_params = dict(common_params)
-            if i == 7:  # last layer (layer8)
-                layer_params["t_feedforward"] = 0.0
+            layer_params = common_params.copy()
+            if i == 7:
+                layer_params.update(
+                    {"t_feedforward": 0.0}
+                )  # No delay for last layer feedforward
 
             # RConv2d layer: feedforward (area_area) + recurrence (area_conv)
             layer = RConv2d(
@@ -374,7 +379,7 @@ class CordsNet(BaseModel):
             in_channels=512,
             out_channels=512,
             scale_factor=1,
-            delay_index=1,
+            delay_index=0,
             bias=False,
             force_conv=False,
             auto_adapt=False,
@@ -500,6 +505,43 @@ class CordsNet(BaseModel):
             parametrization=nn.utils.parametrizations.weight_norm,
             auto_adapt=False,
         )
+
+    def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
+        """Replicate CordsNet's original accuracy computation.
+
+        The reference implementation only evaluated predictions over the
+        concluding portion of the trial (timesteps >= 70). To mirror that
+        behaviour we fill guesses with the model's ``non_label_index`` for
+        the earlier timesteps and use per-timestep argmax predictions on the
+        last 70 steps. This ensures the upstream accuracy metric matches the
+        legacy code path, which summed accuracies across that evaluation
+        window.
+        """
+
+        if outputs.ndim != 3:
+            raise ValueError(
+                f"Expected classifier outputs with shape (batch, timesteps, classes), got {outputs.shape}"
+            )
+
+        batch_size, n_timesteps, _ = outputs.shape
+        eval_window = min(70, n_timesteps)
+
+        # Prepare default predictions ignored by accuracy for earlier steps.
+        guess_index = torch.full(
+            (batch_size, n_timesteps),
+            fill_value=int(getattr(self, "non_label_index", -1)),
+            dtype=torch.long,
+            device=outputs.device,
+        )
+
+        if eval_window == 0:
+            return guess_index
+
+        guess_index[:, -eval_window:] = torch.argmax(
+            outputs[:, -eval_window:, :], dim=-1
+        )
+
+        return guess_index
 
 
 if __name__ == "__main__":

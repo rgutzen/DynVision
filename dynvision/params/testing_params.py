@@ -112,7 +112,7 @@ class TestingParams(BaseParams):
             "use_distributed": False,
             "use_ffcv": False,
             "pin_memory": True,
-            "drop_last": False,
+            "drop_last": True,
             "prefetch_factor": None,
             "max_workers": min(4, config.get("data", {}).get("num_workers", 0)),
         }
@@ -161,7 +161,7 @@ class TestingParams(BaseParams):
     def update_model_parameters_from_data(
         self,
         input_dims: Tuple[int, ...],
-        n_classes: Optional[int] = None,
+        n_classes: Optional[int] = None,  # DEPRECATED
         dataset_size: Optional[int] = None,
         verbose: bool = True,
     ) -> None:
@@ -186,6 +186,7 @@ class TestingParams(BaseParams):
 
         # Update n_classes if provided
         if n_classes is not None and self.model.n_classes != n_classes:
+            logger.warning("Number of classes mismatches between model and data!")
             self.model.update_field("n_classes", n_classes, verbose=verbose)
 
         # Optimize response storage based on dataset size

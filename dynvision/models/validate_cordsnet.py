@@ -1,31 +1,35 @@
 """
-Comprehensive validation script comparing CordsNet reimplementation with original.
+Comprehensive validation script comparing CordsNet reimplementation with the
+reference implementation shipped alongside this repository.
 
-This script implements the debugging hierarchy from the model integration guide:
-1. Verify weight loading and structure
-2. Compare layer activations
-3. Timestep-by-timestep comparison
-4. Check temporal parameters
-5. Final output comparison
+The script mirrors the debugging hierarchy outlined in the model integration
+guide:
+1. Verify pretrained weight loading and structural alignment
+2. Compare intermediate activations across timesteps
+3. Trace the original dynamics step by step
+4. Evaluate final classifier outputs
 
-Usage:
-    python -m dynvision.models.validate_cordsnet_vs_original
+Usage::
+
+    python -m dynvision.models.validate_cordsnet
 """
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
-import logging
-from typing import Dict, List, Tuple, Optional
-import numpy as np
-import sys
-from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from dynvision.models.cordsnet_original import cordsnet as CordsNetOriginal
+from dynvision.model_components.layer_connections import Skip
 from dynvision.models.cordsnet import CordsNet
+from dynvision.models.cordsnet_original import cordsnet as CordsNetOriginal
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -44,13 +48,31 @@ class CordsNetValidator:
         dataset: str = "imagenet",
         depth: int = 8,
         n_timesteps: int = 10,
+        idle_timesteps: int = 10,
+        batch_size: int = 1,
+        alpha: Optional[float] = None,
         device: Optional[torch.device] = None,
-    ):
+    ) -> None:
         self.dataset = dataset
         self.depth = depth
         self.n_timesteps = n_timesteps
-        self.device = device or torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
+        self.idle_timesteps = idle_timesteps
+        self.batch_size = batch_size
+
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif not isinstance(device, torch.device):
+            device = torch.device(device)
+
+        self.device = device
+
+        logger.info(
+            "Validator configuration: dataset=%s depth=%d idle=%d active=%d batch=%d",
+            self.dataset,
+            self.depth,
+            self.idle_timesteps,
+            self.n_timesteps,
+            self.batch_size,
         )
 
         logger.info(f"Initializing validator on {self.device}")
@@ -67,6 +89,7 @@ class CordsNetValidator:
             init_with_pretrained=True,
             input_dims=input_dims,
             n_timesteps=n_timesteps,
+            idle_timesteps=idle_timesteps,
         ).to(self.device)
         self.reimpl.setup("fit")
         self.reimpl.eval()
@@ -74,6 +97,24 @@ class CordsNetValidator:
         # load pretrained weights into original model for fair comparison
         pretrained_weights = self.reimpl.download_pretrained_state_dict()
         self.original.load_state_dict(pretrained_weights)
+
+        # Determine alpha from the reimplementation unless explicitly provided
+        tau_value = self.reimpl.tau
+        if isinstance(tau_value, torch.Tensor):
+            tau_value = tau_value.item()
+
+        dt_value = self.reimpl.dt
+        if isinstance(dt_value, torch.Tensor):
+            dt_value = dt_value.item()
+
+        self.dt = float(dt_value)
+        self.tau = float(tau_value)
+        self.alpha = float(alpha) if alpha is not None else self.dt / self.tau
+        self.total_timesteps = self.idle_timesteps + self.n_timesteps
+
+        logger.info(
+            "Using alpha=%.4f (dt=%.3f, tau=%.3f)", self.alpha, self.dt, self.tau
+        )
 
         logger.info("Models created successfully\n")
 
@@ -208,6 +249,19 @@ class CordsNetValidator:
         logger.info("Creating reimplementation with pretrained loading enabled...")
         reimpl_with_pretrained = CordsNet(
             init_with_pretrained=True,  # Enable pretrained loading
+            input_dims=self.reimpl.input_dims,
+            n_timesteps=self.reimpl.n_timesteps,
+            idle_timesteps=self.reimpl.idle_timesteps,
+            n_classes=self.reimpl.n_classes,
+            dt=self.dt,
+            tau=self.tau,
+            t_feedforward=self.reimpl.t_feedforward,
+            t_recurrence=self.reimpl.t_recurrence,
+            t_skip=self.reimpl.t_skip,
+            recurrence_type=self.reimpl.recurrence_type,
+            recurrence_target=self.reimpl.recurrence_target,
+            skip=self.reimpl.skip,
+            feedback=self.reimpl.feedback,
         ).to(self.device)
         reimpl_with_pretrained.setup("fit")
         reimpl_with_pretrained.eval()
@@ -399,48 +453,6 @@ class CordsNetValidator:
             issues.append(issue)
             logger.error("❌ idle_timesteps not configured\n")
 
-        # Issue 3: Output computation
-        logger.info("Checking output computation...")
-
-        # Check if classifier receives combined input from last two layers
-        # In original: out = avgpool(relu(rs[7]) + relu(rs[6]))
-        # In reimpl: should have combine_layer8 module that adds layer7 to layer8
-
-        # Check if combine_layer8 exists and is in layer_operations
-        has_combine_module = hasattr(self.reimpl, "combine_layer8")
-        has_combine_operation = "combine" in self.reimpl.layer_operations
-
-        if has_combine_module and has_combine_operation:
-            combine_module = self.reimpl.combine_layer8
-            # Verify it's a Skip connection from layer7
-            if hasattr(combine_module, "source"):
-                source_name = combine_module.source.__class__.__name__
-                logger.info(
-                    f"✅ Output computation IMPLEMENTED correctly\n"
-                    f"   combine_layer8 module exists: {has_combine_module}\n"
-                    f"   'combine' in layer_operations: {has_combine_operation}\n"
-                    f"   Source module type: {source_name}\n"
-                    f"   This adds layer7 output to layer8 before classifier\n"
-                )
-            else:
-                issue = (
-                    "⚠️  WARNING: combine_layer8 exists but no source attribute\n"
-                    f"    Module: {combine_module}\n"
-                )
-                issues.append(issue)
-                logger.warning("⚠️  combine_layer8 configuration unclear\n")
-        else:
-            issue = (
-                "⚠️  CRITICAL: Output computation differs\n"
-                "    Original: out = avgpool(relu(layer8_state) + relu(layer7_state))\n"
-                "              Combines BOTH last layers before classification\n"
-                f"    Current:  combine_layer8 exists: {has_combine_module}\n"
-                f"              'combine' in layer_operations: {has_combine_operation}\n"
-                "    Impact: Missing layer7 contribution will change predictions\n"
-            )
-            issues.append(issue)
-            logger.error("❌ Output combination not properly implemented\n")
-
         # Issue 4: Processing order
         logger.info("Checking layer processing order...")
 
@@ -481,6 +493,35 @@ class CordsNetValidator:
         else:
             logger.info("✅ All layers have recurrence_target='output'\n")
 
+        # Issue 6: Classifier construction
+        logger.info("Checking classifier skip integration...")
+
+        classifier = getattr(self.reimpl, self.reimpl.classifier_name, None)
+        if not isinstance(classifier, nn.Sequential):
+            issues.append(
+                "⚠️  ERROR: Classifier is not an nn.Sequential module; expected Skip → AvgPool → Flatten → Linear"
+            )
+        else:
+            first_module = classifier[0]
+            if not isinstance(first_module, Skip):
+                issues.append(
+                    "⚠️  ERROR: Classifier does not begin with a Skip module combining layer7"
+                )
+            else:
+                expected_source = getattr(self.reimpl, "layer7", None)
+                if first_module.source is not expected_source:
+                    issues.append(
+                        "⚠️  ERROR: Classifier Skip source does not reference layer7"
+                    )
+                elif getattr(first_module, "delay_index", None) not in (0, 1):
+                    issues.append(
+                        "⚠️  ERROR: Classifier Skip delay misconfigured (expected immediate integration)"
+                    )
+                else:
+                    logger.info(
+                        "✅ Classifier combines layer8 activations with layer7 via Skip module"
+                    )
+
         return issues
 
     def test_3_trace_original_dynamics(self, img: torch.Tensor, timesteps: int = 5):
@@ -498,7 +539,10 @@ class CordsNetValidator:
         batch_size = img.shape[0]
         channels = [64, 64, 128, 128, 256, 256, 512, 512]
         sizes = [56, 56, 28, 28, 14, 14, 7, 7]
-        alpha = 0.1
+        alpha = self.alpha
+
+        idle_to_trace = min(self.idle_timesteps, timesteps)
+        active_to_trace = min(self.n_timesteps, timesteps)
 
         # Initialize states
         rs = [
@@ -508,18 +552,37 @@ class CordsNetValidator:
             for j in range(self.depth)
         ]
 
-        logger.info(f"Tracing {timesteps} timesteps...\n")
+        logger.info(
+            "Tracing %d idle and %d active timesteps (alpha=%.3f)...\n",
+            idle_to_trace,
+            active_to_trace,
+            alpha,
+        )
 
         with torch.no_grad():
-            for t in range(timesteps):
-                logger.info(f"Timestep {t}:")
+            # Warm-up / idle timesteps
+            for t in range(idle_to_trace):
+                logger.info(f"Idle timestep {t}:")
 
-                # Process in reverse order (original behavior)
                 for j in range(self.depth - 1, -1, -1):
                     old_state = rs[j].clone()
-                    rs[j] = self.original.rnn(j, rs, img if t > 0 else img * 0, alpha)
+                    rs[j] = self.original.rnn(j, rs, img * 0, alpha)
+                    logger.info(
+                        f"  Layer {j}: mean={rs[j].mean():.6f}, "
+                        f"std={rs[j].std():.6f}, "
+                        f"max={rs[j].max():.6f}, "
+                        f"change={((rs[j] - old_state).abs().mean()):.6f}"
+                    )
 
-                    # Log statistics
+                logger.info("")
+
+            # Active timesteps with stimulus
+            for t in range(active_to_trace):
+                logger.info(f"Active timestep {t}:")
+
+                for j in range(self.depth - 1, -1, -1):
+                    old_state = rs[j].clone()
+                    rs[j] = self.original.rnn(j, rs, img, alpha)
                     logger.info(
                         f"  Layer {j}: mean={rs[j].mean():.6f}, "
                         f"std={rs[j].std():.6f}, "
@@ -536,7 +599,7 @@ class CordsNetValidator:
         img: torch.Tensor,
         n_timesteps: int = 10,
         idle_timesteps: int = 10,
-        alpha: float = 0.2,
+        alpha: Optional[float] = None,
         verbose: bool = True,
     ) -> Dict[str, any]:
         """
@@ -558,6 +621,8 @@ class CordsNetValidator:
         print("\n" + "=" * 80)
         print(f"PHASE 4: Layer-by-Layer Comparison")
         print("=" * 80)
+        alpha = self.alpha if alpha is None else alpha
+
         print(
             f"Configuration: {idle_timesteps} idle + {n_timesteps} active timesteps, alpha={alpha}"
         )
@@ -806,7 +871,7 @@ class CordsNetValidator:
         img: torch.Tensor,
         timesteps: int = 10,
         idle_timesteps: int = 10,
-        alpha: float = 0.2,
+        alpha: Optional[float] = None,
     ) -> Dict[str, any]:
         """
         Phase 5: Compare final model outputs.
@@ -824,6 +889,8 @@ class CordsNetValidator:
         logger.info("PHASE 5: Final Output Comparison")
         logger.info("=" * 80 + "\n")
 
+        alpha = self.alpha if alpha is None else alpha
+
         batch_size = img.shape[0]
         channels = [64, 64, 128, 128, 256, 256, 512, 512]
         sizes = [56, 56, 28, 28, 14, 14, 7, 7]
@@ -832,6 +899,20 @@ class CordsNetValidator:
         # Original model
         # ==================
         logger.info("Running original model...")
+
+        pre_fc_orig: Dict[str, torch.Tensor] = {}
+        pooled_orig: Dict[str, torch.Tensor] = {}
+
+        def _capture_orig_fc(module: nn.Module, inputs, _output):
+            pre_fc_orig["features"] = inputs[0].detach().cpu()
+
+        def _capture_orig_pool(module: nn.Module, inputs, output):
+            pooled_orig["features"] = output.detach().cpu()
+
+        hook_orig_fc = self.original.out_fc.register_forward_hook(_capture_orig_fc)
+        hook_orig_pool = self.original.out_avgpool.register_forward_hook(
+            _capture_orig_pool
+        )
 
         with torch.no_grad():
             rs = [
@@ -861,12 +942,28 @@ class CordsNetValidator:
             out_orig = self.original.out_flatten(out_orig)
             out_orig = self.original.out_fc(out_orig)
 
+        hook_orig_fc.remove()
+        hook_orig_pool.remove()
+
         logger.info(f"  Original output: {list(out_orig.shape)}\n")
 
         # ==================
         # Reimplementation
         # ==================
         logger.info("Running reimplementation...")
+
+        classifier = getattr(self.reimpl, self.reimpl.classifier_name)
+        pre_fc_reimpl: Dict[str, torch.Tensor] = {}
+        pooled_reimpl: Dict[str, torch.Tensor] = {}
+
+        def _capture_reimpl_fc(module: nn.Module, inputs, _output):
+            pre_fc_reimpl["features"] = inputs[0].detach().cpu()
+
+        def _capture_reimpl_pool(module: nn.Module, inputs, output):
+            pooled_reimpl["features"] = output.detach().cpu()
+
+        hook_reimpl_fc = classifier[-1].register_forward_hook(_capture_reimpl_fc)
+        hook_reimpl_pool = classifier[1].register_forward_hook(_capture_reimpl_pool)
 
         with torch.no_grad():
             # DynVision expects [batch, time, channels, height, width]
@@ -875,6 +972,9 @@ class CordsNetValidator:
 
             # Get last timestep
             out_reimpl = out_reimpl[:, -1]
+
+        hook_reimpl_fc.remove()
+        hook_reimpl_pool.remove()
 
         logger.info(f"  Reimpl output: {list(out_reimpl.shape)}\n")
 
@@ -891,6 +991,33 @@ class CordsNetValidator:
 
         diff = (out_orig - out_reimpl).abs()
         rel_diff = diff / (out_orig.abs() + 1e-8)
+
+        classifier_input_metrics: Dict[str, float] = {}
+        pooled_feature_metrics: Dict[str, float] = {}
+
+        if "features" in pre_fc_orig and "features" in pre_fc_reimpl:
+            orig_features = pre_fc_orig["features"].to(out_orig.device)
+            reimpl_features = pre_fc_reimpl["features"].to(out_reimpl.device)
+            feature_diff = (orig_features - reimpl_features).abs()
+            classifier_input_metrics = {
+                "max": feature_diff.max().item(),
+                "mean": feature_diff.mean().item(),
+                "std": feature_diff.std().item(),
+            }
+
+        if "features" in pooled_orig and "features" in pooled_reimpl:
+            orig_pool_flat = (
+                pooled_orig["features"].view(batch_size, -1).to(out_orig.device)
+            )
+            reimpl_pool_flat = (
+                pooled_reimpl["features"].view(batch_size, -1).to(out_reimpl.device)
+            )
+            pool_diff = (orig_pool_flat - reimpl_pool_flat).abs()
+            pooled_feature_metrics = {
+                "max": pool_diff.max().item(),
+                "mean": pool_diff.mean().item(),
+                "std": pool_diff.std().item(),
+            }
 
         # Get top-5 predictions
         top5_orig = out_orig.topk(5, dim=1)
@@ -913,6 +1040,11 @@ class CordsNetValidator:
             "top5_reimpl": top5_reimpl.indices[0].cpu().tolist(),
         }
 
+        if classifier_input_metrics:
+            metrics["classifier_input"] = classifier_input_metrics
+        if pooled_feature_metrics:
+            metrics["pooled_features"] = pooled_feature_metrics
+
         # Calculate top-5 overlap
         top5_overlap = len(set(metrics["top5_orig"]) & set(metrics["top5_reimpl"]))
         metrics["top5_overlap"] = top5_overlap
@@ -926,6 +1058,18 @@ class CordsNetValidator:
         print(f"\nRelative Differences:")
         print(f"  Max:  {metrics['max_rel_diff']*100:.2f}%")
         print(f"  Mean: {metrics['mean_rel_diff']*100:.2f}%")
+
+        if classifier_input_metrics:
+            print("\nClassifier Input Differences (pre-linear features):")
+            print(
+                f"  Max: {classifier_input_metrics['max']:.6f} | Mean: {classifier_input_metrics['mean']:.6f} | Std: {classifier_input_metrics['std']:.6f}"
+            )
+
+        if pooled_feature_metrics:
+            print("\nPooled Feature Differences (post-avgpool, pre-flatten):")
+            print(
+                f"  Max: {pooled_feature_metrics['max']:.6f} | Mean: {pooled_feature_metrics['mean']:.6f} | Std: {pooled_feature_metrics['std']:.6f}"
+            )
 
         print(f"\nTop-1 Predictions:")
         print(f"  Original: {metrics['pred_orig'][0]}")
@@ -970,12 +1114,35 @@ class CordsNetValidator:
         else:
             logger.warning("   Output differences are significant (>= 0.1)")
 
+        if classifier_input_metrics:
+            logger.info(
+                "   Classifier input diff (max/mean/std): %.6f / %.6f / %.6f",
+                classifier_input_metrics["max"],
+                classifier_input_metrics["mean"],
+                classifier_input_metrics["std"],
+            )
+
+        if pooled_feature_metrics:
+            logger.info(
+                "   Pooled feature diff (max/mean/std): %.6f / %.6f / %.6f",
+                pooled_feature_metrics["max"],
+                pooled_feature_metrics["mean"],
+                pooled_feature_metrics["std"],
+            )
+
         logger.info("")
 
         return metrics
 
-    def run_full_validation(self) -> Dict[str, any]:
-        """Run complete validation suite."""
+    def run_full_validation(
+        self, max_diagnostic_steps: Optional[int] = 10
+    ) -> Dict[str, any]:
+        """Run complete validation suite.
+
+        Args:
+            max_diagnostic_steps: Limits the number of timesteps traced during
+                detailed diagnostics. Use <=0 to run full idle/active windows.
+        """
 
         print("\n" + "=" * 80)
         print(" " * 20 + "CORDSNET VALIDATION SUITE")
@@ -996,25 +1163,31 @@ class CordsNetValidator:
 
         # Phase 3: Trace original dynamics
         torch.manual_seed(42)
-        test_img = torch.randn(2, 3, 224, 224, device=self.device)
+        test_img = torch.randn(self.batch_size, 3, 224, 224, device=self.device)
         self.test_3_trace_original_dynamics(test_img, timesteps=3)
 
+        # Use capped values for detailed diagnostics to keep logging manageable
+        if max_diagnostic_steps is None or max_diagnostic_steps <= 0:
+            idle_steps = self.idle_timesteps
+            active_steps = self.n_timesteps
+        else:
+            idle_steps = min(self.idle_timesteps, max_diagnostic_steps)
+            active_steps = min(self.n_timesteps, max_diagnostic_steps)
+
         # Phase 4: Layer-by-layer comparison
-        # Note: alpha = dt/tau = 2/10 = 0.2 (from original CordsNet)
-        # Using full timesteps to allow proper activity buildup
         results["layer_metrics"] = self.test_4_compare_layer_by_layer(
             test_img,
-            n_timesteps=10,  # Full timesteps for proper activity buildup
-            idle_timesteps=10,  # Full idle timesteps as in original
-            alpha=0.2,  # dt/tau = 2/10
+            n_timesteps=active_steps,
+            idle_timesteps=idle_steps,
+            alpha=self.alpha,
         )
 
         # Phase 5: Output comparison
         results["output_metrics"] = self.test_5_final_output_comparison(
             test_img,
-            timesteps=10,  # Full timesteps for proper activity buildup
-            idle_timesteps=10,  # Full idle timesteps as in original
-            alpha=0.2,  # dt/tau = 2/10
+            timesteps=active_steps,
+            idle_timesteps=idle_steps,
+            alpha=self.alpha,
         )
 
         # ==================
@@ -1046,48 +1219,18 @@ class CordsNetValidator:
             f"  Prediction agreement: {results['output_metrics']['agreement']*100:.1f}%\n"
         )
 
-        # ==================
-        # Recommendations
-        # ==================
-        print("=" * 80)
-        print(" " * 28 + "RECOMMENDATIONS")
-        print("=" * 80 + "\n")
-
-        print("Based on the model integration guide (Section 5.5: Lessons Learned),")
-        print("the following CRITICAL issues must be fixed for exact replication:\n")
-
-        print("1. Skip Connection Order:")
-        print("   - Current: Skip added AFTER feedforward convolution")
-        print("   - Required: Skip must be integrated BEFORE convolution")
-        print(
-            "   - Fix: Modify layer_operations order or RConv2d to accept pre-combined input\n"
-        )
-
-        print("2. Idle Timesteps:")
-        print("   - Current: Not implemented in forward pass")
-        print("   - Required: 100 timesteps of spontaneous activity before input")
-        print("   - Fix: Implement custom forward() method to run idle timesteps\n")
-
-        print("3. Output Computation:")
-        print("   - Current: Uses only layer8 output")
-        print("   - Required: Combine relu(layer8) + relu(layer7)")
-        print("   - Fix: Modify classifier to receive combined input\n")
-
-        print("4. Processing Order:")
-        print("   - Current: Forward order (0→8)")
-        print("   - Required: Reverse order (7→0)")
-        print(
-            "   - Fix: Verify delay mechanism compensates, or modify processing order\n"
-        )
-
-        print("See:")
-        print(
-            "  - Model Integration Guide: docs/development/guides/model-integration.md"
-        )
-        print("  - Section 5.5: Lessons Learned - Common Mistakes in Practice")
-        print("  - Section 4.6: Incremental Debugging Methodology\n")
-
-        print("=" * 80 + "\n")
+        if results["architectural_issues"]:
+            print("=" * 80)
+            print(" " * 20 + "FOLLOW-UP RECOMMENDATIONS")
+            print("=" * 80 + "\n")
+            for issue in results["architectural_issues"]:
+                print(issue)
+                if not issue.endswith("\n"):
+                    print()
+            print("Refer to docs/development/guides/model-integration.md for fixes.\n")
+            print("=" * 80 + "\n")
+        else:
+            print("No architectural mismatches detected in static checks.\n")
 
         return results
 
@@ -1095,15 +1238,72 @@ class CordsNetValidator:
 def main():
     """Main validation function."""
 
+    def _parse_args() -> argparse.Namespace:
+        parser = argparse.ArgumentParser(
+            description="Validate CordsNet implementation against reference model"
+        )
+        parser.add_argument(
+            "--dataset",
+            default="imagenet",
+            help="Dataset key used to configure the models",
+        )
+        parser.add_argument(
+            "--depth", type=int, default=8, help="Number of recurrent layers (areas)"
+        )
+        parser.add_argument(
+            "--timesteps",
+            type=int,
+            default=10,
+            help="Number of active timesteps to evaluate in diagnostic runs",
+        )
+        parser.add_argument(
+            "--idle-timesteps",
+            type=int,
+            default=10,
+            help="Number of idle timesteps to run before stimulus onset",
+        )
+        parser.add_argument(
+            "--batch-size",
+            type=int,
+            default=1,
+            help="Batch size to use for synthetic validation inputs",
+        )
+        parser.add_argument(
+            "--alpha",
+            type=float,
+            default=None,
+            help="Optional override for integration constant (dt/tau)",
+        )
+        parser.add_argument(
+            "--device",
+            default=None,
+            help="Torch device identifier (e.g. 'cuda', 'cpu', 'cuda:0')",
+        )
+        parser.add_argument(
+            "--max-diagnostic-steps",
+            type=int,
+            default=10,
+            help="Cap per-phase diagnostics to this many timesteps (<=0 for full window)",
+        )
+        return parser.parse_args()
+
+    args = _parse_args()
+
     # Create validator
     validator = CordsNetValidator(
-        dataset="imagenet",
-        depth=8,
-        n_timesteps=10,
+        dataset=args.dataset,
+        depth=args.depth,
+        n_timesteps=args.timesteps,
+        idle_timesteps=args.idle_timesteps,
+        batch_size=args.batch_size,
+        alpha=args.alpha,
+        device=args.device,
     )
 
     # Run validation
-    results = validator.run_full_validation()
+    results = validator.run_full_validation(
+        max_diagnostic_steps=args.max_diagnostic_steps
+    )
 
     return results
 

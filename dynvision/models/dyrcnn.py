@@ -89,6 +89,8 @@ class DyRCNN(BaseModel):
         recurrence_type: str = "full",
         recurrence_target: str = "output",  # Target for recurrent connections
         feedback_mode: str = "additive",
+        skip: bool = False,
+        feedback: bool = False,
         # DyRCNN-specific biological parameters
         train_tau: bool = False,
         bias: bool = True,
@@ -96,8 +98,6 @@ class DyRCNN(BaseModel):
         supralinearity: float = 1,
         input_adaption_weight: float = 0,
         use_retina: bool = False,
-        skip: bool = True,
-        feedback: bool = False,
         **kwargs: Any,
     ) -> None:
 
@@ -109,9 +109,7 @@ class DyRCNN(BaseModel):
         self.input_adaption_weight = float(input_adaption_weight)
         self.use_retina = str_to_bool(use_retina)
         self.feedback_mode = feedback_mode
-        self.feedback = feedback
-        self.skip = str_to_bool(skip)
-        self._parse_feedback_mode(self.feedback)
+        self._parse_feedback_mode(feedback)  # set self.feedback
 
         # Pass core neural network parameters to parent classes
         # BaseModel will distribute these properly to TemporalBase and LightningBase
@@ -125,6 +123,8 @@ class DyRCNN(BaseModel):
             t_skip=float(t_skip),
             recurrence_type=recurrence_type,
             recurrence_target=recurrence_target,
+            skip=skip,
+            feedback=self.feedback,
             # All other Lightning/training parameters pass through kwargs
             **kwargs,
         )
