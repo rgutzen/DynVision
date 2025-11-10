@@ -66,11 +66,13 @@ naming:
   uniformnoise_experiment: "Uniform Noise"
   poissonnoise_experiment: "Poisson Noise"
   saltpeppernoise_experiment: "Salt & Pepper"
-  gaussiablurnnoise_experiment: "Gaussian Blur"
-  motionblurnoise_experiment: "Motion Blur"
+  gaussiannoise_experiment: "Gaussian Noise"
+  gaussiancorrnoise_experiment: "Correlated Gaussian Noise"
+  phasescramblednoise_experiment: "Phase-scrambled Noise"
 
 # Ordering dictionaries for consistent display order
 ordering:
-  layers: ["IT", "V4", "V2", "V1"]
+  layers: ["IT", "V4", "V2", "V1", 'layer8', 'layer7', 'layer6', 'layer5', 'layer4', 'layer3', 'layer2', 'layer1']
   rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise"]
+  rctarget: ['input', 'middle', 'output']
   feedback: ['false', 'add', 'mul']

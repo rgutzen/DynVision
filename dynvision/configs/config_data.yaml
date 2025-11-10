@@ -4,8 +4,6 @@ data_presentation_pattern: [1]
 mounted_datasets:
     - imagenet
 
-use_ffcv: False
-
 # used for setup the ffcv dataloader
 data_resolution:
     mnist: 28
@@ -35,22 +33,6 @@ data_statistics:
     tinyimagenet:
         mean: [0.485, 0.456, 0.406]
         std: [0.229, 0.224, 0.225]
-
-# Model-specific data preprocessing requirements
-# Models listed here override default normalization behavior
-model_requirements:
-    CorNetRT:
-        normalize: null  # No normalization - expects raw pixel values
-        pixel_range: "0-255"  # Expects [0, 255] range, not [0, 1]
-        note: "CorNet models trained without normalization on [0, 255] pixel values"
-    CorNetZ:
-        normalize: null
-        pixel_range: "0-255"
-        note: "CorNet models trained without normalization on [0, 255] pixel values"
-    CorNetS:
-        normalize: null
-        pixel_range: "0-255"
-        note: "CorNet models trained without normalization on [0, 255] pixel values"
 
 data_groups:
     mnist:
@@ -115,6 +97,8 @@ data_groups:
             - 317 # leafhopper
             - 318 # lacewing
             - 319 # dragonfly
+        one:
+            - 0 # tench
     imagenette:
         one:
             - 0 # tench
