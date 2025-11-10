@@ -619,170 +619,166 @@ def plot_training_losses(
     Returns:
         Matplotlib figure
     """
-    # Set style
     sns.set_context("talk")
     sns.set_style("ticks")
 
-    # Parse color palette
-    colors = parse_palette(palette)
+    colors = _resolve_palette(config, palette)
 
-    # Create figure with custom layout for three columns
     fig = plt.figure(figsize=figsize)
 
-    # Define grid layout:
-    # - Left column: 2 subplots (training accuracy, loss)
-    # - Center column: Statistics table
-    # - Right column: 2 subplots (test accuracy/confidence, V1 response)
+    ax1 = fig.add_subplot(2, 3, 1)
+    ax2 = fig.add_subplot(2, 3, 4)
+    ax3 = fig.add_axes([0.35, 0.1, 0.31, 0.8])
 
-    # Left column: Training plots
-    ax1 = fig.add_subplot(2, 3, 1)  # Top left - Training/Validation accuracy
-    ax2 = fig.add_subplot(2, 3, 4)  # Bottom left - Loss curves
-
-    # Center column: Stats table (spanning both rows) - adjusted to provide more space
-    ax3 = fig.add_axes([0.35, 0.1, 0.31, 0.8])  # [left, bottom, width, height]
-
-    # Right column: Test performance (only if test_data is provided)
     if test_data is not None:
-        ax4 = fig.add_subplot(2, 3, 3)  # Top right - Accuracy/Confidence
-        ax5 = fig.add_subplot(2, 3, 6)  # Bottom right - V1 Response
+        ax4 = fig.add_subplot(2, 3, 3)
+        ax5 = fig.add_subplot(2, 3, 6)
     else:
-        ax4, ax5 = None, None
+        ax4 = ax5 = None
 
-    # Get available model types
-    all_models = set()
-    for df in [accuracy_df, energy_loss_df, cross_entropy_loss_df]:
-        if df is not None and "model_type" in df.columns:
-            all_models.update(df.model_type.unique())
+    all_models: set = set()
+    for df in [accuracy_df, energy_loss_df, cross_entropy_loss_df, memory_df, epoch_df]:
+        if df is not None and not df.empty and "model_type" in df.columns:
+            all_models.update(df["model_type"].dropna().unique())
 
-    # Filter MODEL_ORDER to only include available models
-    available_model_order = [m for m in MODEL_ORDER if m in all_models]
+    if (
+        test_data is not None
+        and isinstance(test_data, pd.DataFrame)
+        and category_col in test_data.columns
+    ):
+        all_models.update(test_data[category_col].dropna().unique())
 
-    # Plot 1: Training and validation accuracy over epochs (top left)
-    # Plot training accuracy (solid lines)
-    for model_type in available_model_order:
-        if model_type in accuracy_df.model_type.values:
-            model_data = accuracy_df[accuracy_df.model_type == model_type]
-            # Apply smoothing to training accuracy
-            if len(model_data) > 0 and not model_data.train_accuracy.isnull().all():
-                sns.lineplot(
-                    data=model_data,
-                    x="epoch",
-                    y="train_accuracy",
-                    color=colors.get(model_type, "gray"),
+    available_model_order = _determine_model_order(list(all_models), config)
+    display_names = {
+        model: _format_model_label(model, config) for model in available_model_order
+    }
+    color_lookup = {
+        model: _get_model_color(model, colors, config) for model in available_model_order
+    }
+
+    # Plot training and validation accuracy curves
+    if accuracy_df is not None and not accuracy_df.empty and "model_type" in accuracy_df.columns:
+        for model_type in available_model_order:
+            model_slice = accuracy_df[accuracy_df.model_type == model_type].copy()
+            if model_slice.empty:
+                continue
+
+            model_slice = model_slice.sort_values("epoch")
+            color = color_lookup.get(model_type, DEFAULT_COLOR)
+
+            train_slice = model_slice.dropna(subset=["train_accuracy"]).reset_index(
+                drop=True
+            )
+            if not train_slice.empty:
+                smoothed_train = smooth_data(train_slice.train_accuracy)
+                ax1.plot(
+                    train_slice.epoch.values,
+                    smoothed_train.values,
+                    color=color,
                     linewidth=2,
-                    label=model_type,
-                    alpha=0.8,
-                    ax=ax1,
+                    alpha=0.85,
                 )
 
-    # Plot validation accuracy (dotted lines)
-    for model_type in available_model_order:
-        if model_type in accuracy_df.model_type.values:
-            model_data = accuracy_df[accuracy_df.model_type == model_type]
-            # Debugging to check validation data
-            print(
-                f"Model {model_type} val accuracy data available: {not model_data.val_accuracy.isnull().all()}"
+            val_slice = model_slice.dropna(subset=["val_accuracy"]).reset_index(
+                drop=True
             )
-
-            # Apply smoothing to validation accuracy if data exists
-            if len(model_data) > 0 and not model_data.val_accuracy.isnull().all():
-                sns.lineplot(
-                    data=model_data,
-                    x="epoch",
-                    y="val_accuracy",
-                    color=colors.get(model_type, "gray"),
+            if not val_slice.empty:
+                smoothed_val = smooth_data(val_slice.val_accuracy)
+                ax1.plot(
+                    val_slice.epoch.values,
+                    smoothed_val.values,
+                    color=color,
                     linewidth=2,
                     linestyle=":",
-                    alpha=0.8,
-                    ax=ax1,
+                    alpha=0.75,
                 )
 
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Accuracy")
     ax1.grid(True, alpha=0.3)
 
-    # Add legend for Training/Validation in bottom right of this plot
     from matplotlib.lines import Line2D
 
     train_val_legend = [
         Line2D([0], [0], color="black", linewidth=2, linestyle="-", label="Training"),
-        Line2D(
-            [0], [0], color="black", linewidth=2, linestyle=":", label="Validation"
-        ),
+        Line2D([0], [0], color="black", linewidth=2, linestyle=":", label="Validation"),
     ]
     ax1.legend(handles=train_val_legend, loc="lower right", frameon=False)
 
-    # Plot 2: Loss curves over training steps (bottom left)
-    # Plot cross entropy loss (solid lines) using matplotlib for consistent handling
-    for model_type in available_model_order:
-        if model_type in cross_entropy_loss_df.model_type.values:
-            model_data = cross_entropy_loss_df[
+    # Plot loss curves
+    if (
+        cross_entropy_loss_df is not None
+        and not cross_entropy_loss_df.empty
+        and "model_type" in cross_entropy_loss_df.columns
+    ):
+        for model_type in available_model_order:
+            model_slice = cross_entropy_loss_df[
                 cross_entropy_loss_df.model_type == model_type
-            ]
-            if (
-                len(model_data) > 0
-                and not model_data.cross_entropy_loss.isnull().all()
-            ):
-                # Apply smoothing to cross entropy loss
-                smoothed_loss = smooth_data(
-                    model_data.cross_entropy_loss, window_size=5
-                )
-                ax2.plot(
-                    model_data.epoch,
-                    smoothed_loss,
-                    color=colors.get(model_type, "gray"),
-                    linewidth=2,
-                    alpha=0.8,
-                    label=model_type,
-                )
+            ].copy()
+            if model_slice.empty:
+                continue
 
-    # Plot energy loss (dashed lines) using matplotlib
-    for model_type in available_model_order:
-        if model_type in energy_loss_df.model_type.values:
-            model_data = energy_loss_df[energy_loss_df.model_type == model_type]
-            if len(model_data) > 0 and not model_data.energy_loss.isnull().all():
-                # Apply smoothing to energy loss
-                smoothed_energy = smooth_data(model_data.energy_loss, window_size=5)
-                ax2.plot(
-                    model_data.epoch,
-                    smoothed_energy,
-                    color=colors.get(model_type, "gray"),
-                    linewidth=2,
-                    linestyle="--",
-                    alpha=0.8,
-                )
+            model_slice = model_slice.sort_values("epoch")
+            ce_slice = model_slice.dropna(subset=["cross_entropy_loss"]).reset_index(
+                drop=True
+            )
+            if ce_slice.empty:
+                continue
+
+            smoothed_loss = smooth_data(ce_slice.cross_entropy_loss)
+            ax2.plot(
+                ce_slice.epoch.values,
+                smoothed_loss.values,
+                color=color_lookup.get(model_type, DEFAULT_COLOR),
+                linewidth=2,
+                alpha=0.85,
+            )
+
+    if (
+        energy_loss_df is not None
+        and not energy_loss_df.empty
+        and "model_type" in energy_loss_df.columns
+    ):
+        for model_type in available_model_order:
+            model_slice = energy_loss_df[energy_loss_df.model_type == model_type].copy()
+            if model_slice.empty:
+                continue
+
+            model_slice = model_slice.sort_values("epoch")
+            energy_slice = model_slice.dropna(subset=["energy_loss"]).reset_index(
+                drop=True
+            )
+            if energy_slice.empty:
+                continue
+
+            smoothed_energy = smooth_data(energy_slice.energy_loss)
+            ax2.plot(
+                energy_slice.epoch.values,
+                smoothed_energy.values,
+                color=color_lookup.get(model_type, DEFAULT_COLOR),
+                linewidth=2,
+                linestyle="--",
+                alpha=0.85,
+            )
 
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("Loss")
     ax2.grid(True, alpha=0.3)
 
-    # Add legend for loss types
     loss_legend = [
-        Line2D(
-            [0], [0], color="black", linewidth=2, linestyle="-", label="Cross Entropy"
-        ),
+        Line2D([0], [0], color="black", linewidth=2, linestyle="-", label="Cross Entropy"),
         Line2D([0], [0], color="black", linewidth=2, linestyle="--", label="Energy"),
     ]
     ax2.legend(handles=loss_legend, loc="upper right", frameon=False)
 
-    # Plot 3: Comprehensive Statistics table (center column)
-    ax3.axis("off")  # Turn off axis for text display
-
-    # Calculate statistics
+    # Statistics table
+    ax3.axis("off")
     stats = calculate_model_statistics(
         accuracy_df, energy_loss_df, cross_entropy_loss_df, memory_df, epoch_df
     )
 
-    # Create table format with adjusted column widths for better spacing
-    col_widths = [
-        0.16,
-        0.14,
-        0.17,
-        0.14,
-        0.16,
-        0.17,
-    ]  # Slightly reduced widths to prevent overlap
-    col_offset = 0.0  # Adjusted offset for better alignment
+    col_widths = [0.16, 0.14, 0.17, 0.14, 0.16, 0.17]
+    col_offset = 0.0
     col_headers = [
         "Recurrence",
         "# Params",
@@ -792,7 +788,6 @@ def plot_training_losses(
         "Max\nVal Acc",
     ]
 
-    # Header row
     y_start = 0.9
     row_height = 0.12
 
@@ -808,86 +803,83 @@ def plot_training_losses(
             va="center",
         )
 
-    # Data rows
     for row_idx, model_type in enumerate(available_model_order):
-        if model_type in stats:
-            model_stats = stats[model_type]
-            y_pos = y_start - (row_idx + 1) * row_height
-            model_label = model_type.replace("wise", "w.")
+        if model_type not in stats:
+            continue
 
-            # Model name (colored)
-            x_pos = col_widths[0] / 2 + col_offset
-            ax3.text(
-                x_pos,
-                y_pos,
-                model_label,
-                fontsize=13,
-                color=colors.get(model_type, "#000000"),
-                fontweight="bold",
-                ha="center",
-                va="center",
-            )
+        model_stats = stats[model_type]
+        y_pos = y_start - (row_idx + 1) * row_height
 
-            fontsize = 14
+        model_label = display_names.get(model_type, model_type)
+        color = color_lookup.get(model_type, DEFAULT_COLOR)
 
-            # Number of parameters
-            n_params = model_stats.get("n_parameters")
-            text_str = format_parameter_count(n_params)
-            x_pos = col_widths[0] + col_widths[1] / 2 + col_offset
-            ax3.text(
-                x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center"
-            )
+        x_pos = col_widths[0] / 2 + col_offset
+        ax3.text(
+            x_pos,
+            y_pos,
+            model_label,
+            fontsize=13,
+            color=color,
+            fontweight="bold",
+            ha="center",
+            va="center",
+        )
 
-            # Average runtime per epoch
-            avg_time = model_stats.get("avg_epoch_time")
-            text_str = format_time(avg_time) if avg_time is not None else "N/A"
-            x_pos = sum(col_widths[:2]) + col_widths[2] / 2 + col_offset
-            ax3.text(
-                x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center"
-            )
+        fontsize = 14
 
-            # Average GPU memory
-            avg_mem = model_stats.get("avg_gpu_mem")
-            text_str = format_memory(avg_mem) if avg_mem is not None else "N/A"
-            x_pos = sum(col_widths[:3]) + col_widths[3] / 2 + col_offset
-            ax3.text(
-                x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center"
-            )
+        n_params = model_stats.get("n_parameters")
+        text_str = format_parameter_count(n_params)
+        x_pos = col_widths[0] + col_widths[1] / 2 + col_offset
+        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
 
-            # Max train accuracy
-            max_train = model_stats.get("max_train_acc")
-            text_str = f"{max_train:.3f}" if max_train is not None else "N/A"
-            x_pos = sum(col_widths[:4]) + col_widths[4] / 2 + col_offset
-            ax3.text(
-                x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center"
-            )
+        avg_time = model_stats.get("avg_epoch_time")
+        text_str = format_time(avg_time) if avg_time is not None else "N/A"
+        x_pos = sum(col_widths[:2]) + col_widths[2] / 2 + col_offset
+        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
 
-            # Max val accuracy
-            max_val = model_stats.get("max_val_acc")
-            text_str = f"{max_val:.3f}" if max_val is not None else "N/A"
-            x_pos = sum(col_widths[:5]) + col_widths[5] / 2 + col_offset
-            ax3.text(
-                x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center"
-            )
+        avg_mem = model_stats.get("avg_gpu_mem")
+        text_str = format_memory(avg_mem) if avg_mem is not None else "N/A"
+        x_pos = sum(col_widths[:3]) + col_widths[3] / 2 + col_offset
+        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
 
-    # Only add right column plots if test_data is provided
+        max_train = model_stats.get("max_train_acc")
+        text_str = f"{max_train:.3f}" if max_train is not None else "N/A"
+        x_pos = sum(col_widths[:4]) + col_widths[4] / 2 + col_offset
+        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
+
+        max_val = model_stats.get("max_val_acc")
+        text_str = f"{max_val:.3f}" if max_val is not None else "N/A"
+        x_pos = sum(col_widths[:5]) + col_widths[5] / 2 + col_offset
+        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
+
     if test_data is not None and ax4 is not None and ax5 is not None:
-        # Plot 4: Test Performance (Accuracy/Confidence over time) similar to plot_test_performance.py
-        plot_test_accuracy_confidence(test_data, ax4, colors, dt, category_col)
+        plot_test_accuracy_confidence(
+            test_data,
+            ax4,
+            color_lookup,
+            dt,
+            category_col,
+            model_order=available_model_order,
+            display_names=display_names,
+        )
+        plot_v1_response(
+            test_data,
+            ax5,
+            color_lookup,
+            dt,
+            category_col,
+            model_order=available_model_order,
+            display_names=display_names,
+        )
 
-        # Plot 5: V1 Response over time (similar to plot_response.py but only for V1)
-        plot_v1_response(test_data, ax5, colors, dt, category_col)
-
-    # Final styling - remove grids and spines
     sns.despine(ax=ax1)
     sns.despine(ax=ax2)
 
     if test_data is not None:
-        for ax in [ax4, ax5]:
-            sns.despine(ax=ax)
-            ax.grid(True, alpha=0.3)
+        for axis in [ax4, ax5]:
+            sns.despine(ax=axis)
+            axis.grid(True, alpha=0.3)
 
-    # Adjust spacing
     plt.subplots_adjust(wspace=0.3, hspace=0.3)
 
     return fig
