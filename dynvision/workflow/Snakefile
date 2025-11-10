@@ -75,8 +75,10 @@ rule all: # manuscript figures
         seed=SEED[0],
         )
         # training progress
-        project_paths.figures / 'response' / 'response_{model_name}:{args1}{category}=*{args2}_{seeds}_{data_name}_{status}' / 'training.png',
-
+        expand(project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=20+{categories}+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_{seeds}_imagenette_trained_all' / 'training.png',
+            categories=['rctype=*+rctarget=output'], #, 'rctype=full+rctarget=*'],
+            seeds='.'.join(SEED),
+        ),
     params:
         figure_folder = project_paths.figures / "manuscript_figures"
     shell:

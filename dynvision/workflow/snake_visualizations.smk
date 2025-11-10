@@ -291,7 +291,7 @@ rule plot_training:
         ordering = lambda w: json.dumps(config.ordering),
         dt = getattr(config, 'dt', 2),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}' / 'training.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'training.png',
     shell:
         """
         {params.execution_cmd} \
