@@ -6,15 +6,19 @@ dynamics of neural network layer responses with three flexible dimensions:
 - Color hues
 - Columns
 
-Each dimension can represent: layers, category, or parameter.
+Each dimension can represent: layers, category, parameter, classifier_topk, classifier_top{N}, or any
+column present in the dataframe (e.g. *_index columns) so long as it remains
+categorical (by default, fewer than 60 unique values).
 """
 
 import argparse
+import ast
 import json
 import logging
+import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -68,6 +72,7 @@ FORMATTING = {
     "linewidth_indicator": 3,
     "alpha_line": 0.8,
     "alpha_indicator": 0.6,
+    "greyscale_color": "#5a5a5a",
     "layer_circle_colors": {
         "V1": "#ff69b4ff",
         "V2": "#dda0ddff",
@@ -80,10 +85,18 @@ FORMATTING = {
 
 # Errorbar configuration for lineplot
 ERRORBAR_CONFIG = {
-    "errorbar": "ci",  # ("ci", 99.999),  # Default: no errorbars
+    "errorbar": "ci",
     "err_style": "band",
     "err_kws": {"alpha": 0.2, "edgecolor": "none"},
 }
+
+
+CLASSIFIER_TOP_PREFIX = "classifier_top"
+SPECIAL_DIMENSIONS = {"layers", "classifier_topk"}
+MAX_DIMENSION_VALUES = 15
+
+# Cache classifier unit indices for legend formatting
+CLASSIFIER_UNIT_ID_MAP: Dict[str, Optional[int]] = {}
 
 
 def _format_legend_label(key: str, value: str, config: Dict, dt: float = 1.0) -> str:
@@ -162,10 +175,138 @@ def _get_dimension_key(
         return parameter_key
     elif dimension == "layers":
         return "layers"  # Special handling
+    elif dimension == "classifier_topk":
+        return CLASSIFIER_TOP_PREFIX  # Special handling
     elif dimension == "experiment":
         return "experiment"  # Special handling for experiment dimension
     else:
-        raise ValueError(f"Unknown dimension: {dimension}")
+        if not dimension:
+            raise ValueError("Dimension name cannot be empty")
+        return dimension
+
+
+def _normalize_dimension(
+    dimension: Optional[str],
+) -> Tuple[Optional[str], Optional[int]]:
+    """Normalize dimension string and extract classifier_top limit if present."""
+    if dimension is None:
+        return None, None
+
+    dim = dimension.strip()
+    if not dim:
+        return None, None
+
+    if dim.startswith(CLASSIFIER_TOP_PREFIX):
+        suffix = dim[len(CLASSIFIER_TOP_PREFIX) :]
+        if suffix == "k" or suffix == "":
+            return "classifier_topk", None
+        if suffix.isdigit():
+            return "classifier_topk", int(suffix)
+
+    return dim, None
+
+
+def _coerce_measure_list(
+    selection: Optional[Union[str, List[str]]],
+    default: Optional[str],
+) -> List[str]:
+    """Normalize measure selection into an ordered, duplicate-free list."""
+
+    def _dedupe_append(target: List[str], value: Optional[str]) -> None:
+        if value is None:
+            return
+        text = str(value).strip()
+        if not text:
+            return
+        if text not in target:
+            target.append(text)
+
+    result: List[str] = []
+
+    if selection is None:
+        if default:
+            _dedupe_append(result, default)
+        return result
+
+    if isinstance(selection, str):
+        value = selection.strip()
+        if not value:
+            return result
+        if "," in value and not (value.startswith("[") and value.endswith("]")):
+            for part in value.split(","):
+                _dedupe_append(result, part)
+            return result
+        if value.startswith("[") and value.endswith("]"):
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError, MemoryError):
+                _dedupe_append(result, value)
+            else:
+                return _coerce_measure_list(parsed, default=None)
+        else:
+            _dedupe_append(result, value)
+        return result
+
+    if isinstance(selection, (list, tuple, set)):
+        for item in selection:
+            _dedupe_append(result, item)
+        return result
+
+    _dedupe_append(result, selection)
+    return result
+
+
+def _prettify_measure_suffix(suffix: str) -> str:
+    """Convert raw metric suffix into human-friendly text."""
+
+    cleaned = suffix.strip(" _")
+    if not cleaned:
+        return ""
+
+    compact = re.sub(r"[\s_]+", "", cleaned.lower())
+    match = re.fullmatch(r"top(\d+)", compact)
+    if match:
+        return f"Top {match.group(1)}"
+
+    normalized = cleaned.replace("_", " ").strip()
+    return normalized.title()
+
+
+def _format_measure_label(column: str, base_label: str) -> str:
+    """Format metric legend text based on column name and base label."""
+
+    base_lower = base_label.lower()
+    column_lower = column.lower()
+
+    if column_lower == base_lower:
+        return base_label
+
+    suffix: str
+    if column_lower.startswith(f"{base_lower}_"):
+        suffix = column[len(base_lower) + 1 :]
+    elif column_lower.endswith(f"_{base_lower}"):
+        suffix = column[: -(len(base_lower) + 1)]
+    else:
+        suffix = column
+
+    pretty_suffix = _prettify_measure_suffix(suffix)
+    if not pretty_suffix:
+        return base_label
+    return f"{base_label} ({pretty_suffix})"
+
+
+def _resolve_measure_column(df: pd.DataFrame, column: str) -> Optional[str]:
+    """Return the actual dataframe column to use for a requested measure."""
+
+    candidates = [column]
+    if not column.endswith("_avg"):
+        candidates.append(f"{column}_avg")
+    if not column.endswith("_mean"):
+        candidates.append(f"{column}_mean")
+    for candidate in candidates:
+        if candidate in df.columns:
+            return candidate
+    return None
 
 
 def _standardize_category_value(value: str) -> str:
@@ -177,11 +318,60 @@ def _standardize_category_value(value: str) -> str:
     return value_str
 
 
+def _classifier_sort_key(column_name: str) -> int:
+    suffix = column_name.replace(CLASSIFIER_TOP_PREFIX, "", 1)
+    if suffix.isdigit():
+        return int(suffix)
+    return float("inf")
+
+
+def _extract_classifier_top_values(df: pd.DataFrame) -> List[str]:
+    columns = [
+        col
+        for col in df.columns
+        if col.startswith(CLASSIFIER_TOP_PREFIX) and not col.endswith("_id")
+    ]
+
+    sorted_cols = sorted(columns, key=_classifier_sort_key)
+
+    # Update cache with unit indices when available
+    CLASSIFIER_UNIT_ID_MAP.clear()
+    for col in sorted_cols:
+        meta_col = f"{col}_id"
+        unit_id: Optional[int] = None
+        if meta_col in df.columns:
+            series = df[meta_col].dropna()
+            if not series.empty:
+                try:
+                    unit_id = int(series.iloc[0])
+                except (ValueError, TypeError):
+                    unit_id = None
+        CLASSIFIER_UNIT_ID_MAP[col] = unit_id
+
+    return sorted_cols
+
+
+def _format_classifier_label(value: str) -> str:
+    unit_id = CLASSIFIER_UNIT_ID_MAP.get(value)
+    if unit_id is not None:
+        return f"Unit {unit_id}"
+
+    suffix = value.replace(CLASSIFIER_TOP_PREFIX, "", 1)
+    if suffix.isdigit():
+        return f"Top {int(suffix)}"
+    return value.replace("_", " ").title()
+
+
+def _is_special_dimension(dimension: Optional[str]) -> bool:
+    return dimension in SPECIAL_DIMENSIONS
+
+
 def _extract_dimension_values(
     df: pd.DataFrame,
     dimension: str,
     dimension_key: str,
     config: Dict,
+    dimension_limit: Optional[int] = None,
 ) -> List[str]:
     """Extract and order unique values for a dimension."""
     if dimension == "layers":
@@ -198,6 +388,32 @@ def _extract_dimension_values(
         ordered = order_layers(layers, config)
         logger.info(f"Found {len(ordered)} layers: {ordered}")
         return ordered
+    elif dimension == "classifier_topk":
+        classifier_cols = _extract_classifier_top_values(df)
+        if dimension_limit is not None:
+            original_count = len(classifier_cols)
+            classifier_cols = classifier_cols[:dimension_limit]
+            if dimension_limit < original_count:
+                logger.info(
+                    "Limiter applied to classifier dimension: using %d of %d columns",
+                    len(classifier_cols),
+                    original_count,
+                )
+            else:
+                logger.info(
+                    "Classifier dimension limit %d exceeds available columns (%d); using all available",
+                    dimension_limit,
+                    original_count,
+                )
+        if not classifier_cols:
+            logger.warning(
+                "No classifier_top* columns found in data (expected classifier_top1, classifier_top2, ... )"
+            )
+            return []
+        logger.info(
+            f"Found {len(classifier_cols)} classifier units: {classifier_cols}"
+        )
+        return classifier_cols
     else:
         # Check if column exists
         if dimension_key not in df.columns:
@@ -206,12 +422,20 @@ def _extract_dimension_values(
             )
             return []
 
-        # Get unique values from dataframe column and standardize them
-        raw_values = df[dimension_key].unique()
-        values = [_standardize_category_value(v) for v in sorted(raw_values)]
-        # Remove duplicates while preserving order
+        series = df[dimension_key]
+        raw_values = pd.unique(series)
+        if pd.api.types.is_numeric_dtype(series):
+            raw_values = sorted(raw_values)
+        else:
+            raw_values = sorted(raw_values, key=lambda x: str(x))
+
+        values: List[str] = []
         seen = set()
-        values = [v for v in values if not (v in seen or seen.add(v))]
+        for raw in raw_values:
+            standardized = _standardize_category_value(raw)
+            if standardized not in seen:
+                values.append(standardized)
+                seen.add(standardized)
 
         if not values:
             logger.warning(f"No unique values found for dimension '{dimension_key}'")
@@ -231,7 +455,14 @@ def _extract_dimension_values(
             logger.info(
                 f"Found {len(ordered)} values for '{dimension_key}': {ordered} (config ordering applied)"
             )
-            return ordered
+            values = ordered
+
+        if len(values) > MAX_DIMENSION_VALUES:
+            raise ValueError(
+                f"Dimension '{dimension_key}' has {len(values)} unique values, which exceeds the maximum "
+                f"allowed ({MAX_DIMENSION_VALUES}). Choose a column with categorical data or reduce the "
+                "number of unique values."
+            )
 
         logger.info(f"Found {len(values)} values for '{dimension_key}': {values}")
         return values
@@ -261,13 +492,10 @@ def _filter_data_for_column(
     df: pd.DataFrame, column_var: Optional[str], column_value: Optional[str]
 ) -> pd.DataFrame:
     """Filter dataframe for a specific column value."""
-    if column_var and column_value:
+    if column_var and column_value and column_var in df.columns:
         # Standardize both the column values and the filter value for comparison
         df_copy = df.copy()
-        if column_var in df_copy.columns:
-            df_copy[column_var] = df_copy[column_var].apply(
-                _standardize_category_value
-            )
+        df_copy[column_var] = df_copy[column_var].apply(_standardize_category_value)
         standardized_column_value = _standardize_category_value(str(column_value))
         return df_copy[df_copy[column_var] == standardized_column_value].copy()
     return df.copy()
@@ -283,7 +511,8 @@ def _plot_accuracy_panel(
     dt: float,
     show_ylabel: bool,
     show_legend: bool,
-    confidence_col: str,
+    accuracy_cols: List[str],
+    confidence_cols: List[str],
     **kwargs,
 ) -> None:
     """Plot accuracy and confidence over time.
@@ -298,78 +527,168 @@ def _plot_accuracy_panel(
         dt: Temporal resolution in ms
         show_ylabel: Whether to show y-axis label
         show_legend: Whether to show line style legend
+        accuracy_cols: Column names for accuracy metrics
+        confidence_cols: Column names for confidence metrics
         **kwargs: Override FORMATTING defaults
     """
     fmt = {**FORMATTING, **kwargs}
 
     ax.patch.set_alpha(0)
 
+    accuracy_linestyles = ["-", "--", "-."]
+    confidence_linestyles = [":", (0, (3, 2)), (0, (1, 2))]
+    greyscale_color = fmt.get("greyscale_color", "#5a5a5a")
+
     # Create time in ms
     data_plot = data.copy()
     data_plot["time_ms"] = data_plot["times_index"] * dt
 
     # Ensure hue column is standardized to match hue_values
-    if hue_key in data_plot.columns:
+    has_hue_column = hue_key in data_plot.columns
+    if has_hue_column:
         data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
+        allowed_hues = {_standardize_category_value(val) for val in hue_values}
+        if allowed_hues:
+            before_filter = len(data_plot)
+            data_plot = data_plot[data_plot[hue_key].isin(allowed_hues)].copy()
+            if len(data_plot) != before_filter:
+                logger.debug(
+                    "Filtered accuracy panel data from %d to %d rows using hue selection",
+                    before_filter,
+                    len(data_plot),
+                )
+        if data_plot.empty:
+            logger.warning(
+                "No data remaining after applying hue filter for accuracy panel"
+            )
+            return
+
+    use_hue = has_hue_column and not _is_special_dimension(hue_var)
 
     # Check for required columns
     n_datapoints = len(data_plot)
     logger.info(f"Plotting accuracy panel with {n_datapoints} datapoints")
 
-    has_accuracy = "accuracy" in data_plot.columns
-    has_confidence = confidence_col in data_plot.columns
+    plotted_accuracy: List[Tuple[str, str, str]] = []
+    plotted_confidence: List[Tuple[str, str, str]] = []
 
-    if not has_accuracy and not has_confidence:
-        logger.warning("Neither 'accuracy' nor 'confidence_avg' columns found in data")
+    if not accuracy_cols and not confidence_cols:
+        logger.warning("No accuracy or confidence measures requested; skipping panel")
         return
 
-    # Plot accuracy (solid lines)
-    if has_accuracy:
-        logger.debug(
-            f"Plotting accuracy with hue='{hue_key if hue_var != 'layers' else None}'"
-        )
-        sns.lineplot(
-            data=data_plot,
-            x="time_ms",
-            y="accuracy",
-            hue=hue_key if hue_var != "layers" else None,
-            hue_order=hue_values if hue_var != "layers" else None,
-            palette=colors if hue_var != "layers" else None,
-            ax=ax,
-            legend=False,
-            linewidth=fmt["linewidth_main"],
-            marker="o",
-            markersize=3,
-            alpha=fmt["alpha_line"],
-            linestyle="-",
-            **ERRORBAR_CONFIG,
-        )
-    else:
-        logger.warning("'accuracy' column not found, skipping accuracy plot")
+    # Plot accuracy metrics
+    for idx, column in enumerate(accuracy_cols):
+        resolved_column = _resolve_measure_column(data_plot, column)
+        if not resolved_column:
+            logger.warning("Accuracy column '%s' not found, skipping", column)
+            continue
 
-    # Plot confidence (dotted lines)
-    if has_confidence:
+        linestyle = accuracy_linestyles[idx % len(accuracy_linestyles)]
+
         logger.debug(
-            f"Plotting confidence with hue='{hue_key if hue_var != 'layers' else None}'"
+            "Plotting accuracy column '%s' (resolved to '%s') with hue='%s'",
+            column,
+            resolved_column,
+            hue_key if use_hue else None,
         )
-        sns.lineplot(
-            data=data_plot,
-            x="time_ms",
-            y=confidence_col,
-            hue=hue_key if hue_var != "layers" else None,
-            hue_order=hue_values if hue_var != "layers" else None,
-            palette=colors if hue_var != "layers" else None,
-            ax=ax,
-            legend=False,
-            linewidth=fmt["linewidth_main"],
-            marker="s",
-            markersize=2,
-            alpha=fmt["alpha_line"],
-            linestyle=":",
-            **ERRORBAR_CONFIG,
+        lineplot_kwargs = {
+            "data": data_plot,
+            "x": "time_ms",
+            "y": resolved_column,
+            "ax": ax,
+            "legend": False,
+            "linewidth": fmt["linewidth_main"],
+            "alpha": fmt["alpha_line"],
+            "linestyle": linestyle,
+        }
+        if use_hue:
+            palette = {
+                value: colors.get(value, greyscale_color) for value in hue_values
+            }
+            lineplot_kwargs.update(
+                hue=hue_key,
+                hue_order=hue_values,
+                palette=palette,
+            )
+        else:
+            lineplot_kwargs["color"] = greyscale_color
+
+        lineplot_kwargs.update(ERRORBAR_CONFIG)
+        sns.lineplot(**lineplot_kwargs)
+        plotted_accuracy.append((column, resolved_column, linestyle))
+
+    # Plot confidence metrics
+    for idx, column in enumerate(confidence_cols):
+        resolved_column = _resolve_measure_column(data_plot, column)
+        if not resolved_column:
+            logger.warning("Confidence column '%s' not found, skipping", column)
+            continue
+
+        linestyle = confidence_linestyles[idx % len(confidence_linestyles)]
+
+        logger.debug(
+            "Plotting confidence column '%s' (resolved to '%s') with hue='%s'",
+            column,
+            resolved_column,
+            hue_key if use_hue else None,
         )
-    else:
-        logger.warning("'confidence_avg' column not found, skipping confidence plot")
+        lineplot_kwargs = {
+            "data": data_plot,
+            "x": "time_ms",
+            "y": resolved_column,
+            "ax": ax,
+            "legend": False,
+            "linewidth": fmt["linewidth_main"],
+            "alpha": fmt["alpha_line"],
+            "linestyle": linestyle,
+        }
+        if use_hue:
+            palette = {
+                value: colors.get(value, greyscale_color) for value in hue_values
+            }
+            lineplot_kwargs.update(
+                hue=hue_key,
+                hue_order=hue_values,
+                palette=palette,
+            )
+        else:
+            lineplot_kwargs["color"] = greyscale_color
+
+        lineplot_kwargs.update(ERRORBAR_CONFIG)
+        sns.lineplot(**lineplot_kwargs)
+        plotted_confidence.append((column, resolved_column, linestyle))
+
+    if not plotted_accuracy and not plotted_confidence:
+        logger.warning(
+            "No valid accuracy or confidence columns found after filtering; skipping panel"
+        )
+        return
+
+    if len(plotted_accuracy) > 1:
+        base_name, base_resolved, _ = plotted_accuracy[0]
+        base_values = data_plot[base_resolved].to_numpy()
+        for column, resolved, _ in plotted_accuracy[1:]:
+            if np.allclose(
+                base_values, data_plot[resolved].to_numpy(), equal_nan=True
+            ):
+                logger.info(
+                    "Accuracy measure '%s' matches '%s'; traces will overlap",
+                    column,
+                    base_name,
+                )
+
+    if len(plotted_confidence) > 1:
+        base_name, base_resolved, _ = plotted_confidence[0]
+        base_values = data_plot[base_resolved].to_numpy()
+        for column, resolved, _ in plotted_confidence[1:]:
+            if np.allclose(
+                base_values, data_plot[resolved].to_numpy(), equal_nan=True
+            ):
+                logger.info(
+                    "Confidence measure '%s' matches '%s'; traces will overlap",
+                    column,
+                    base_name,
+                )
 
     # Styling
     ax.set_ylim(-0.01, 1.01)
@@ -384,34 +703,58 @@ def _plot_accuracy_panel(
     ax.set_xlabel("Time (ms)", fontsize=fmt["fontsize_axis"])
     ax.tick_params(labelsize=fmt["fontsize_tick"])
 
-    # Add legend for line styles on first panel
-    if show_legend and has_confidence:
-        legend_elements = [
-            plt.Line2D(
-                [0],
-                [0],
-                color="black",
-                linewidth=fmt["linewidth_main"],
-                linestyle="-",
-                label="Accuracy",
-                alpha=fmt["alpha_line"],
-            ),
-            plt.Line2D(
-                [0],
-                [0],
-                color="black",
-                linewidth=fmt["linewidth_main"],
-                linestyle=":",
-                label="Confidence",
-                alpha=fmt["alpha_line"],
-            ),
-        ]
-        ax.legend(
-            handles=legend_elements,
-            loc="best",
-            frameon=False,
-            fontsize=fmt["fontsize_legend"] - 2,
-        )
+    # Build legend entries based on plotted metrics
+    if show_legend:
+        legend_handles: List[plt.Line2D] = []
+        legend_labels: List[str] = []
+
+        single_accuracy = len(plotted_accuracy) == 1
+        single_confidence = len(plotted_confidence) == 1
+
+        for column, _, linestyle in plotted_accuracy:
+            label = (
+                "Accuracy"
+                if single_accuracy
+                else _format_measure_label(column, "Accuracy")
+            )
+            legend_handles.append(
+                plt.Line2D(
+                    [0],
+                    [0],
+                    color="black",
+                    linewidth=fmt["linewidth_main"],
+                    linestyle=linestyle,
+                    alpha=fmt["alpha_line"],
+                )
+            )
+            legend_labels.append(label)
+
+        for column, _, linestyle in plotted_confidence:
+            label = (
+                "Confidence"
+                if single_confidence
+                else _format_measure_label(column, "Confidence")
+            )
+            legend_handles.append(
+                plt.Line2D(
+                    [0],
+                    [0],
+                    color="black",
+                    linewidth=fmt["linewidth_main"],
+                    linestyle=linestyle,
+                    alpha=fmt["alpha_line"],
+                )
+            )
+            legend_labels.append(label)
+
+        if legend_handles:
+            ax.legend(
+                handles=legend_handles,
+                labels=legend_labels,
+                loc="best",
+                frameon=False,
+                fontsize=fmt["fontsize_legend"] - 2,
+            )
 
     # Add label indicator
     try:
@@ -599,7 +942,6 @@ def _plot_response_ridges(
                 ax=ax,
                 legend=False,
                 linewidth=fmt["linewidth_main"],
-                marker=".",
                 alpha=fmt["alpha_line"],
                 **ERRORBAR_CONFIG,
             )
@@ -611,6 +953,47 @@ def _plot_response_ridges(
                 ax=ax,
                 config=config,
                 **fmt,
+            )
+        elif subplot_var == "classifier_topk":
+            response_col = subplot_value
+            if response_col not in data_plot.columns:
+                logger.warning(
+                    f"Classifier activation column '{response_col}' not found, skipping"
+                )
+                continue
+
+            plot_data = data_plot.copy()
+            n_points = len(plot_data)
+
+            sns.lineplot(
+                data=plot_data,
+                x="time_ms",
+                y=response_col,
+                hue=hue_key if not _is_special_dimension(hue_var) else None,
+                hue_order=hue_values if not _is_special_dimension(hue_var) else None,
+                palette=colors if not _is_special_dimension(hue_var) else None,
+                ax=ax,
+                legend=False,
+                linewidth=fmt["linewidth_main"],
+                alpha=fmt["alpha_line"],
+                **ERRORBAR_CONFIG,
+            )
+
+            label_text = _format_classifier_label(subplot_value)
+            ax.text(
+                0.95,
+                0.25,
+                label_text,
+                horizontalalignment="right",
+                verticalalignment="center",
+                transform=ax.transAxes,
+                fontsize=fmt["fontsize_label"],
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor="white",
+                    edgecolor="gray",
+                    alpha=0.8,
+                ),
             )
 
         else:
@@ -634,7 +1017,6 @@ def _plot_response_ridges(
                         ax=ax,
                         legend=False,
                         linewidth=fmt["linewidth_main"],
-                        marker=".",
                         alpha=fmt["alpha_line"],
                         **ERRORBAR_CONFIG,
                     )
@@ -657,13 +1039,32 @@ def _plot_response_ridges(
                             ax=ax,
                             legend=False,
                             linewidth=fmt["linewidth_main"],
-                            marker=".",
                             alpha=fmt["alpha_line"],
                         )
                         plotted_any = True
                     else:
                         logger.warning(
                             f"Response column '{response_col}' not found for hue '{hue_val}'"
+                        )
+            elif hue_var == "classifier_topk":
+                for hue_val in hue_values:
+                    response_col = hue_val
+                    if response_col in plot_data.columns:
+                        hue_data = plot_data.copy()
+                        sns.lineplot(
+                            data=hue_data,
+                            x="time_ms",
+                            y=response_col,
+                            color=colors.get(hue_val, "#808080"),
+                            ax=ax,
+                            legend=False,
+                            linewidth=fmt["linewidth_main"],
+                            alpha=fmt["alpha_line"],
+                        )
+                        plotted_any = True
+                    else:
+                        logger.warning(
+                            f"Classifier activation column '{response_col}' not found for hue '{hue_val}'"
                         )
 
             if not plotted_any:
@@ -692,7 +1093,7 @@ def _plot_response_ridges(
 
         # Adjust limits to common scale across all subplots
         ymin, ymax = ax.get_ylim()
-        global_ymin = max(min(global_ymin, ymin), fmt["min_global_ymin"])
+        global_ymin = min(min(global_ymin, ymin), fmt["min_global_ymin"])
         global_ymax = min(max(global_ymax, ymax), fmt["max_global_ymax"])
         xmin, xmax = ax.get_xlim()
         global_xmin = min(global_xmin, xmin)
@@ -810,14 +1211,14 @@ def _add_horizontal_legend(
                     [0],
                     color=colors[val],
                     linewidth=fmt["linewidth_main"],
-                    marker=".",
-                    markersize=8,
                     alpha=fmt["alpha_line"],
                 )
             )
 
             if hue_var == "layers":
                 label = val.upper()
+            elif hue_var == "classifier_topk":
+                label = _format_classifier_label(val)
             else:
                 label = _format_legend_label(hue_key, val, config, dt)
             legend_labels.append(label)
@@ -850,13 +1251,14 @@ def _add_horizontal_legend(
 def plot_temporal_ridge_responses(
     data: Union[Path, List[Path], pd.DataFrame],
     output: Path,
-    subplot_var: Literal["layers", "category", "parameter"],
-    hue_var: Literal["layers", "category", "parameter"],
-    column_var: Optional[Literal["parameter"]] = None,
+    subplot_var: str,
+    hue_var: str,
+    column_var: Optional[str] = None,
     category_key: Optional[str] = None,
     parameter_key: Optional[str] = None,
     experiment: Optional[str] = None,
-    confidence_measure: Optional[str] = "first_label_confidence",
+    confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
+    accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
     config: Optional[Dict] = None,
     **kwargs,
@@ -866,11 +1268,18 @@ def plot_temporal_ridge_responses(
     Args:
         data: Path to test_data.csv, list of paths to multiple test_data.csv files, or DataFrame
         output: Path to save figure
-        subplot_var: Variable for vertical subplots (ridge plots)
-        hue_var: Variable for color coding
-        column_var: Variable for columns (optional, must be 'parameter')
+        subplot_var: Variable for vertical subplots (ridge plots). Accepts
+            'layers', 'category', 'parameter', 'classifier_topk', 'classifier_top{N}',
+            or any dataframe column name (e.g., 'first_label_index') with a manageable
+            number of unique values (<= MAX_DIMENSION_VALUES).
+        hue_var: Variable for color coding. Accepts the same options as
+            subplot_var and should remain categorical.
+        column_var: Variable for columns (optional). Accepts the same options as
+            subplot_var and should remain categorical.
         category_key: Column name for category (e.g., 'rctype')
         parameter_key: Column name for parameter (e.g., 'duration', 'contrast')
+        confidence_measure: Column name or list of names for confidence metrics
+        accuracy_measure: Column name or list of names for accuracy metrics
         dt: Temporal resolution in ms per timestep
         config: Configuration dict with palette, naming, ordering
         **kwargs: Override LAYOUT and FORMATTING defaults
@@ -879,10 +1288,41 @@ def plot_temporal_ridge_responses(
     logger.info("Starting temporal ridge response plotting")
     logger.info("=" * 60)
 
-    # Validation
+    # Normalize dimension configuration
+    raw_subplot_var = subplot_var
+    raw_hue_var = hue_var
+    raw_column_var = column_var
+
+    subplot_var, subplot_limit = _normalize_dimension(subplot_var)
+    hue_var, hue_limit = _normalize_dimension(hue_var)
+    column_var, column_limit = _normalize_dimension(column_var)
+
     logger.info(
-        f"Dimension mapping: subplot={subplot_var}, hue={hue_var}, column={column_var}"
+        "Dimension mapping: subplot=%s (base=%s, limit=%s), hue=%s (base=%s, limit=%s), column=%s (base=%s, limit=%s)",
+        raw_subplot_var,
+        subplot_var,
+        subplot_limit,
+        raw_hue_var,
+        hue_var,
+        hue_limit,
+        raw_column_var,
+        column_var,
+        column_limit,
     )
+
+    for dim_name, limit in (
+        ("subplot", subplot_limit),
+        ("hue", hue_limit),
+        ("column", column_limit),
+    ):
+        if limit is not None and limit <= 0:
+            raise ValueError(
+                f"{dim_name} classifier limit must be positive; got {limit}"
+            )
+
+    if subplot_var is None or hue_var is None:
+        raise ValueError("subplot and hue dimensions cannot be empty")
+
     _validate_dimensions(
         subplot_var=subplot_var, hue_var=hue_var, column_var=column_var
     )
@@ -890,6 +1330,20 @@ def plot_temporal_ridge_responses(
     if config is None:
         config = {"palette": {}, "naming": {}, "ordering": {}}
         logger.info("No config provided, using empty defaults")
+
+    accuracy_measures = _coerce_measure_list(accuracy_measure, default="accuracy")
+    confidence_measures = _coerce_measure_list(
+        confidence_measure, default="first_label_confidence"
+    )
+
+    logger.info(
+        "Selected accuracy measures: %s",
+        accuracy_measures if accuracy_measures else "[none]",
+    )
+    logger.info(
+        "Selected confidence measures: %s",
+        confidence_measures if confidence_measures else "[none]",
+    )
 
     # Load data
     if isinstance(data, list):
@@ -940,14 +1394,26 @@ def plot_temporal_ridge_responses(
     # Extract dimension values
     logger.info("Extracting dimension values...")
     subplot_values = _extract_dimension_values(
-        df=df, dimension=subplot_var, dimension_key=subplot_key, config=config
+        df=df,
+        dimension=subplot_var,
+        dimension_key=subplot_key,
+        config=config,
+        dimension_limit=subplot_limit,
     )
     hue_values = _extract_dimension_values(
-        df=df, dimension=hue_var, dimension_key=hue_key, config=config
+        df=df,
+        dimension=hue_var,
+        dimension_key=hue_key,
+        config=config,
+        dimension_limit=hue_limit,
     )
     column_values = (
         _extract_dimension_values(
-            df=df, dimension=column_var, dimension_key=column_key, config=config
+            df=df,
+            dimension=column_var,
+            dimension_key=column_key,
+            config=config,
+            dimension_limit=column_limit,
         )
         if column_var
         else [None]
@@ -1069,7 +1535,8 @@ def plot_temporal_ridge_responses(
             dt=dt,
             show_ylabel=(col_idx == 0),
             show_legend=(col_idx == 0),
-            confidence_col=confidence_measure,
+            accuracy_cols=accuracy_measures,
+            confidence_cols=confidence_measures,
             **kwargs,
         )
 
@@ -1162,31 +1629,51 @@ def main():
         "--subplot",
         type=str,
         required=True,
-        choices=["layers", "category", "parameter"],
-        help="Variable for vertical subplots",
+        help=(
+            "Variable for vertical subplots. Use 'layers', 'category', 'parameter', "
+            "'classifier_topk', 'classifier_top{N}', or any dataframe column name (e.g., 'first_label_index') "
+            "with a manageable number of unique values."
+        ),
     )
     parser.add_argument(
         "--hue",
         type=str,
         required=True,
-        choices=["layers", "category", "parameter"],
-        help="Variable for color hues",
+        help=(
+            "Variable for color hues. Use 'layers', 'category', 'parameter', "
+            "'classifier_topk', 'classifier_top{N}', or any dataframe column name (e.g., 'first_label_index') "
+            "with a manageable number of unique values."
+        ),
     )
     parser.add_argument(
         "--column",
         type=str,
         default=None,
-        choices=["layers", "category", "parameter"],
-        help="Variable for columns (optional)",
+        help=(
+            "Variable for columns (optional). Use 'layers', 'category', 'parameter', "
+            "'classifier_topk', 'classifier_top{N}', or any dataframe column name with a manageable number of unique values."
+        ),
     )
     parser.add_argument("--category-key", type=str, help="Category column name")
     parser.add_argument("--parameter-key", type=str, help="Parameter column name")
     parser.add_argument("--experiment", type=str, help="Experiment name")
     parser.add_argument(
         "--confidence-measure",
+        "--confidence_measure",
         type=str,
         default="first_label_confidence",
-        help="Confidence measure column name",
+        help=(
+            "Confidence measure column name or list (comma-separated or Python literal list)"
+        ),
+    )
+    parser.add_argument(
+        "--accuracy-measure",
+        "--accuracy_measure",
+        type=str,
+        default="accuracy",
+        help=(
+            "Accuracy measure column name or list (comma-separated or Python literal list)"
+        ),
     )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
     parser.add_argument("--palette", type=str, help="JSON color palette")
@@ -1233,6 +1720,7 @@ def main():
         parameter_key=args.parameter_key,
         experiment=args.experiment,
         confidence_measure=args.confidence_measure,
+        accuracy_measure=args.accuracy_measure,
         dt=args.dt,
         config=config,
     )

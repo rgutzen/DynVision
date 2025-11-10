@@ -11,27 +11,30 @@ Supports multiple input files for different experiments.
 """
 
 import argparse
-import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 import numpy as np
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import pandas as pd
 import seaborn as sns
 
 # Import functions and configurations from plot_responses
 from dynvision.visualization.plot_responses import (
     FORMATTING as RESPONSES_FORMATTING,
+    _coerce_measure_list,
     _filter_data_for_column,
     _format_legend_label,
+    _format_measure_label,
     _get_colors_for_dimension,
     _get_dimension_key,
     _extract_dimension_values,
-    _plot_accuracy_panel,
+    _normalize_dimension,
+    _resolve_measure_column,
     _standardize_category_value,
-    _validate_dimensions,
+    _validate_dimensions as _validate_dimension_choices,
 )
 
 from dynvision.utils.visualization_utils import (
@@ -85,26 +88,19 @@ ERRORBAR_CONFIG = {
 }
 
 
-def _validate_dimensions(subplot_var: str, hue_var: str, row_var: str) -> None:
-    """Validate that dimension variables are unique and supported."""
-    supported_dims = ["category", "parameter", "experiment"]
+def _append_suffix_to_label(label: str, suffix: str) -> str:
+    """Append a suffix to an existing legend label, handling parentheses."""
 
-    for dim_name, dim_var in [
-        ("subplot", subplot_var),
-        ("hue", hue_var),
-        ("row", row_var),
-    ]:
-        if dim_var not in supported_dims:
-            raise ValueError(
-                f"{dim_name} dimension '{dim_var}' not supported. Must be one of: {supported_dims}"
-            )
+    if not suffix:
+        return label
 
-    used = [subplot_var, hue_var, row_var]
-    if len(used) != len(set(used)):
-        raise ValueError(
-            f"Dimension variables must be unique. Got: subplot={subplot_var}, "
-            f"hue={hue_var}, row={row_var}"
-        )
+    cleaned_suffix = suffix.strip()
+    if not cleaned_suffix:
+        return label
+
+    if label.endswith(")"):
+        return f"{label[:-1]}, {cleaned_suffix})"
+    return f"{label} ({cleaned_suffix})"
 
 
 def _filter_data_for_cell(
@@ -156,56 +152,45 @@ def _plot_accuracy_panel_with_ffonly(
     dt: float,
     show_ylabel: bool,
     show_legend: bool,
+    accuracy_cols: Optional[List[str]] = None,
+    confidence_cols: Optional[List[str]] = None,
     **kwargs,
 ) -> None:
-    """Plot accuracy and confidence over time for both full and feedforward-only models.
+    """Plot accuracy and confidence over time for both full and feedforward-only models."""
 
-    Args:
-        ax: Matplotlib axes
-        data: DataFrame with accuracy and confidence data (includes model_type column)
-        hue_var: Variable for color coding
-        hue_key: Column name for hue variable
-        hue_values: Ordered list of hue values
-        colors: Color mapping for hue values
-        dt: Temporal resolution in ms
-        show_ylabel: Whether to show y-axis label
-        show_legend: Whether to show line style legend
-        **kwargs: Override FORMATTING defaults
-    """
     fmt = {**FORMATTING, **kwargs}
-
-    # Extract errorbar settings from kwargs, with defaults from ERRORBAR_CONFIG
     errorbar_settings = {
         "errorbar": kwargs.get("errorbar", ERRORBAR_CONFIG["errorbar"]),
         "err_style": kwargs.get("err_style", ERRORBAR_CONFIG["err_style"]),
     }
 
+    requested_accuracy = list(accuracy_cols or [])
+    requested_confidence = list(confidence_cols or [])
+
+    if not requested_accuracy and not requested_confidence:
+        logger.warning("No accuracy or confidence measures requested; skipping panel")
+        return
+
     ax.patch.set_alpha(0)
 
     # Create time in ms
     data_plot = data.copy()
+    if "times_index" not in data_plot.columns:
+        logger.warning("Missing 'times_index' column; cannot plot performance panel")
+        return
     data_plot["time_ms"] = data_plot["times_index"] * dt
 
-    # Ensure hue column is standardized to match hue_values
     if hue_key in data_plot.columns:
         data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
 
-    # Check for required columns
     n_datapoints = len(data_plot)
-    logger.info(f"Plotting accuracy panel with {n_datapoints} datapoints")
+    logger.info("Plotting accuracy panel with %d datapoints", n_datapoints)
 
-    has_accuracy = "accuracy" in data_plot.columns
-    has_confidence = "confidence_avg" in data_plot.columns
     has_ffonly = (
         "model_type" in data_plot.columns
         and "ffonly" in data_plot["model_type"].values
     )
 
-    if not has_accuracy and not has_confidence:
-        logger.warning("Neither 'accuracy' nor 'confidence_avg' columns found in data")
-        return
-
-    # Split data by model type
     full_data = (
         data_plot[data_plot.get("model_type", "full") == "full"]
         if "model_type" in data_plot.columns
@@ -217,94 +202,134 @@ def _plot_accuracy_panel_with_ffonly(
         else pd.DataFrame()
     )
 
-    # Plot full model data (solid lines)
-    if has_accuracy and len(full_data) > 0:
-        logger.debug(
-            f"Plotting full model accuracy with hue='{hue_key if hue_var != 'layers' else None}'"
-        )
-        sns.lineplot(
-            data=full_data,
-            x="time_ms",
-            y="accuracy",
-            hue=hue_key if hue_var != "layers" else None,
-            hue_order=hue_values if hue_var != "layers" else None,
-            palette=colors if hue_var != "layers" else None,
-            ax=ax,
-            legend=False,
-            linewidth=fmt["linewidth_main"],
-            marker="o",
-            markersize=3,
-            alpha=fmt["alpha_line"],
-            linestyle="-",
-            **errorbar_settings,
-        )
+    accuracy_styles_full = [
+        {"linestyle": "-", "marker": "o", "markersize": 3},
+        {"linestyle": "-", "marker": "D", "markersize": 3},
+        {"linestyle": "-", "marker": "^", "markersize": 3},
+    ]
+    accuracy_styles_ff = [
+        {"linestyle": "--", "marker": "^", "markersize": 3},
+        {"linestyle": "--", "marker": "v", "markersize": 3},
+        {"linestyle": "--", "marker": "<", "markersize": 3},
+    ]
+    confidence_styles_full = [
+        {"linestyle": ":", "marker": "s", "markersize": 2},
+        {"linestyle": ":", "marker": "P", "markersize": 2},
+        {"linestyle": ":", "marker": "X", "markersize": 2},
+    ]
+    confidence_styles_ff = [
+        {"linestyle": "-.", "marker": "v", "markersize": 2},
+        {"linestyle": "-.", "marker": "<", "markersize": 2},
+        {"linestyle": "-.", "marker": ">", "markersize": 2},
+    ]
 
-    # Plot full model confidence (dotted lines)
-    if has_confidence and len(full_data) > 0:
-        logger.debug(
-            f"Plotting full model confidence with hue='{hue_key if hue_var != 'layers' else None}'"
-        )
-        sns.lineplot(
-            data=full_data,
-            x="time_ms",
-            y="confidence_avg",
-            hue=hue_key if hue_var != "layers" else None,
-            hue_order=hue_values if hue_var != "layers" else None,
-            palette=colors if hue_var != "layers" else None,
-            ax=ax,
-            legend=False,
-            linewidth=fmt["linewidth_main"],
-            marker="s",
-            markersize=2,
-            alpha=fmt["alpha_line"],
-            linestyle=":",
-            **errorbar_settings,
-        )
+    plotted_accuracy_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
+    plotted_accuracy_ff: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
+    plotted_confidence_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
+    plotted_confidence_ff: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
 
-    # Plot feedforward-only data (dashed lines) with slightly reduced alpha
-    if has_ffonly and len(ffonly_data) > 0:
-
-        if has_accuracy:
+    def _plot_series(
+        dataset: pd.DataFrame,
+        requested: List[str],
+        styles: List[Dict[str, Union[str, float]]],
+        storage: List[Tuple[str, str, Dict[str, Union[str, float]]]],
+        dataset_label: str,
+    ) -> None:
+        if len(dataset) == 0:
+            return
+        for idx, column in enumerate(requested):
+            resolved = _resolve_measure_column(dataset, column)
+            if not resolved:
+                logger.warning("Column '%s' missing in %s data", column, dataset_label)
+                continue
+            style = styles[idx % len(styles)]
             logger.debug(
-                f"Plotting feedforward-only accuracy with hue='{hue_key if hue_var != 'layers' else None}'"
+                "Plotting %s column '%s' (resolved to '%s')",
+                dataset_label,
+                column,
+                resolved,
             )
             sns.lineplot(
-                data=ffonly_data,
+                data=dataset,
                 x="time_ms",
-                y="accuracy",
+                y=resolved,
                 hue=hue_key if hue_var != "layers" else None,
                 hue_order=hue_values if hue_var != "layers" else None,
                 palette=colors if hue_var != "layers" else None,
                 ax=ax,
                 legend=False,
                 linewidth=fmt["linewidth_main"],
-                marker="^",
-                markersize=2,
                 alpha=fmt["alpha_line"],
-                linestyle="--",
+                **style,
                 **errorbar_settings,
             )
+            storage.append((column, resolved, style))
 
-        if has_confidence:
-            logger.debug(
-                f"Plotting feedforward-only confidence with hue='{hue_key if hue_var != 'layers' else None}'"
-            )
-            sns.lineplot(
-                data=ffonly_data,
-                x="time_ms",
-                y="confidence_avg",
-                hue=hue_key if hue_var != "layers" else None,
-                hue_order=hue_values if hue_var != "layers" else None,
-                palette=colors if hue_var != "layers" else None,
-                ax=ax,
-                legend=False,
-                linewidth=fmt["linewidth_main"],
-                marker="v",
-                markersize=1,
-                alpha=fmt["alpha_line"],
-                linestyle="-.",
-                **errorbar_settings,
-            )
+    _plot_series(
+        dataset=full_data,
+        requested=requested_accuracy,
+        styles=accuracy_styles_full,
+        storage=plotted_accuracy_full,
+        dataset_label="full-model accuracy",
+    )
+    _plot_series(
+        dataset=ffonly_data,
+        requested=requested_accuracy,
+        styles=accuracy_styles_ff,
+        storage=plotted_accuracy_ff,
+        dataset_label="feedforward accuracy",
+    )
+    _plot_series(
+        dataset=full_data,
+        requested=requested_confidence,
+        styles=confidence_styles_full,
+        storage=plotted_confidence_full,
+        dataset_label="full-model confidence",
+    )
+    _plot_series(
+        dataset=ffonly_data,
+        requested=requested_confidence,
+        styles=confidence_styles_ff,
+        storage=plotted_confidence_ff,
+        dataset_label="feedforward confidence",
+    )
+
+    if (
+        not plotted_accuracy_full
+        and not plotted_accuracy_ff
+        and not plotted_confidence_full
+        and not plotted_confidence_ff
+    ):
+        logger.warning(
+            "No valid accuracy or confidence columns found after filtering; skipping panel"
+        )
+        return
+
+    if len(plotted_accuracy_full) > 1:
+        base_column, base_resolved, _ = plotted_accuracy_full[0]
+        base_values = full_data[base_resolved].to_numpy()
+        for column, resolved, _ in plotted_accuracy_full[1:]:
+            if np.allclose(
+                base_values, full_data[resolved].to_numpy(), equal_nan=True
+            ):
+                logger.info(
+                    "Full-model accuracy measure '%s' matches '%s'; traces will overlap",
+                    column,
+                    base_column,
+                )
+
+    if len(plotted_confidence_full) > 1:
+        base_column, base_resolved, _ = plotted_confidence_full[0]
+        base_values = full_data[base_resolved].to_numpy()
+        for column, resolved, _ in plotted_confidence_full[1:]:
+            if np.allclose(
+                base_values, full_data[resolved].to_numpy(), equal_nan=True
+            ):
+                logger.info(
+                    "Full-model confidence measure '%s' matches '%s'; traces will overlap",
+                    column,
+                    base_column,
+                )
 
     if show_ylabel:
         ax.set_ylabel("Performance", fontsize=fmt["fontsize_axis"], fontweight="bold")
@@ -314,56 +339,126 @@ def _plot_accuracy_panel_with_ffonly(
     ax.set_xlabel("Time (ms)", fontsize=fmt["fontsize_axis"])
     ax.tick_params(labelsize=fmt["fontsize_tick"])
 
-    # Add legend for line styles on first panel
     if show_legend:
-        legend_elements = []
+        legend_elements: List[Line2D] = []
+        accuracy_columns_in_plot = [
+            column
+            for column in requested_accuracy
+            if any(entry[0] == column for entry in plotted_accuracy_full)
+            or any(entry[0] == column for entry in plotted_accuracy_ff)
+        ]
+        confidence_columns_in_plot = [
+            column
+            for column in requested_confidence
+            if any(entry[0] == column for entry in plotted_confidence_full)
+            or any(entry[0] == column for entry in plotted_confidence_ff)
+        ]
 
-        if has_accuracy:
+        single_accuracy = len(accuracy_columns_in_plot) <= 1
+        single_confidence = len(confidence_columns_in_plot) <= 1
+
+        for column in accuracy_columns_in_plot:
+            style = next(
+                (style for col, _, style in plotted_accuracy_full if col == column),
+                None,
+            )
+            if style is None:
+                style = next(
+                    (style for col, _, style in plotted_accuracy_ff if col == column),
+                    {},
+                )
+            label = (
+                "Accuracy"
+                if single_accuracy and len(accuracy_columns_in_plot) == 1
+                else _format_measure_label(column, "Accuracy")
+            )
             legend_elements.append(
-                plt.Line2D(
+                Line2D(
                     [0],
                     [0],
                     color="black",
                     linewidth=fmt["linewidth_main"],
-                    linestyle="-",
-                    label="Accuracy",
+                    linestyle=style.get("linestyle", "-"),
+                    marker=style.get("marker", "o"),
+                    markersize=style.get("markersize", 4),
+                    label=label,
                     alpha=fmt["alpha_line"],
                 )
             )
-            if has_ffonly:
+
+            if has_ffonly and any(col == column for col, _, _ in plotted_accuracy_ff):
+                ff_style = next(
+                    (style for col, _, style in plotted_accuracy_ff if col == column),
+                    {},
+                )
                 legend_elements.append(
-                    plt.Line2D(
+                    Line2D(
                         [0],
                         [0],
                         color="black",
                         linewidth=fmt["linewidth_main"],
-                        linestyle="--",
-                        label="Accuracy (Feedforward)",
+                        linestyle=ff_style.get("linestyle", "-."),
+                        marker=ff_style.get("marker", "v"),
+                        markersize=ff_style.get("markersize", 4),
+                        label=_append_suffix_to_label(label, "FF-only"),
                         alpha=fmt["alpha_line"],
                     )
                 )
 
-        if has_confidence:
+        for column in confidence_columns_in_plot:
+            style = next(
+                (style for col, _, style in plotted_confidence_full if col == column),
+                None,
+            )
+            if style is None:
+                style = next(
+                    (
+                        style
+                        for col, _, style in plotted_confidence_ff
+                        if col == column
+                    ),
+                    {},
+                )
+            label = (
+                "Confidence"
+                if single_confidence and len(confidence_columns_in_plot) == 1
+                else _format_measure_label(column, "Confidence")
+            )
             legend_elements.append(
-                plt.Line2D(
+                Line2D(
                     [0],
                     [0],
                     color="black",
                     linewidth=fmt["linewidth_main"],
-                    linestyle=":",
-                    label="Confidence",
+                    linestyle=style.get("linestyle", ":"),
+                    marker=style.get("marker", "s"),
+                    markersize=style.get("markersize", 4),
+                    label=label,
                     alpha=fmt["alpha_line"],
                 )
             )
-            if has_ffonly:
+
+            if has_ffonly and any(
+                col == column for col, _, _ in plotted_confidence_ff
+            ):
+                ff_style = next(
+                    (
+                        style
+                        for col, _, style in plotted_confidence_ff
+                        if col == column
+                    ),
+                    {},
+                )
                 legend_elements.append(
-                    plt.Line2D(
+                    Line2D(
                         [0],
                         [0],
                         color="black",
                         linewidth=fmt["linewidth_main"],
-                        linestyle="-.",
-                        label="Confidence (Feedforward)",
+                        linestyle=ff_style.get("linestyle", "-."),
+                        marker=ff_style.get("marker", "v"),
+                        markersize=ff_style.get("markersize", 4),
+                        label=_append_suffix_to_label(label, "FF-only"),
                         alpha=fmt["alpha_line"],
                     )
                 )
@@ -374,11 +469,10 @@ def _plot_accuracy_panel_with_ffonly(
                 loc="upper left",
                 frameon=False,
                 fontsize=fmt["fontsize_legend"],
-                ncol=1,  # Single row
+                ncol=1,
             )
 
     ax.grid(True, alpha=0.3)
-
     sns.despine(ax=ax, left=True)
 
 
@@ -396,9 +490,33 @@ def _plot_peak_height_panel(
     dt: float,
     show_ylabel: bool = False,
     show_legend: bool = True,
+    accuracy_cols: Optional[List[str]] = None,
+    confidence_cols: Optional[List[str]] = None,
+    primary_accuracy: Optional[str] = None,
+    primary_confidence: Optional[str] = None,
 ) -> None:
     """Plot max accuracy and confidence vs subplot value for each hue category."""
-    # Filter data for this row
+
+    requested_accuracy = list(accuracy_cols or [])
+    requested_confidence = list(confidence_cols or [])
+    primary_accuracy = primary_accuracy or (
+        requested_accuracy[0] if requested_accuracy else None
+    )
+    primary_confidence = primary_confidence or (
+        requested_confidence[0] if requested_confidence else None
+    )
+
+    if primary_accuracy is None and primary_confidence is None:
+        ax.text(
+            0.5,
+            0.5,
+            "No Performance Measures",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return
+
     row_data = data.copy()
     if row_key in row_data.columns:
         row_data[row_key] = row_data[row_key].apply(_standardize_category_value)
@@ -409,9 +527,30 @@ def _plot_peak_height_panel(
         ax.text(0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes)
         return
 
-    # Check for required columns
-    has_accuracy = "accuracy" in row_data.columns
-    has_confidence = "confidence_avg" in row_data.columns
+    accuracy_column = (
+        _resolve_measure_column(row_data, primary_accuracy)
+        if primary_accuracy is not None
+        else None
+    )
+    if primary_accuracy and not accuracy_column:
+        logger.warning(
+            "Primary accuracy measure '%s' not found for peak height panel",
+            primary_accuracy,
+        )
+
+    confidence_column = (
+        _resolve_measure_column(row_data, primary_confidence)
+        if primary_confidence is not None
+        else None
+    )
+    if primary_confidence and not confidence_column:
+        logger.warning(
+            "Primary confidence measure '%s' not found for peak height panel",
+            primary_confidence,
+        )
+
+    has_accuracy = accuracy_column is not None
+    has_confidence = confidence_column is not None
     has_ffonly = (
         "model_type" in row_data.columns and "ffonly" in row_data["model_type"].values
     )
@@ -427,23 +566,12 @@ def _plot_peak_height_panel(
         )
         return
 
-    # Clean NaN values
-    if has_accuracy:
-        row_data = row_data.dropna(subset=["accuracy"])
-    if has_confidence:
-        row_data = row_data.dropna(subset=["confidence_avg"])
-
-    if len(row_data) == 0:
-        ax.text(
-            0.5, 0.5, "No Valid Data", ha="center", va="center", transform=ax.transAxes
-        )
-        return
-
     logger.debug(
-        f"Computing max performance metrics from accuracy and confidence columns"
+        "Computing max performance metrics using accuracy='%s', confidence='%s'",
+        accuracy_column,
+        confidence_column,
     )
 
-    # Standardize hue and subplot columns for consistent filtering
     if hue_key in row_data.columns:
         row_data[hue_key] = row_data[hue_key].apply(_standardize_category_value)
     if subplot_key in row_data.columns:
@@ -451,7 +579,6 @@ def _plot_peak_height_panel(
             _standardize_category_value
         )
 
-    # Split data by model type
     full_data = (
         row_data[row_data.get("model_type", "full") == "full"]
         if "model_type" in row_data.columns
@@ -463,23 +590,47 @@ def _plot_peak_height_panel(
         else pd.DataFrame()
     )
 
-    # Prepare data for plotting - compute max of averages
-    accuracy_plot_data = []
-    confidence_plot_data = []
-    ffonly_accuracy_plot_data = []
+    accuracy_plot_data: List[Dict[str, Union[float, str]]] = []
+    confidence_plot_data: List[Dict[str, Union[float, str]]] = []
+    ff_accuracy_plot_data: List[Dict[str, Union[float, str]]] = []
+
+    def _compute_peak_value(subset: pd.DataFrame, column: str) -> Optional[float]:
+        if column not in subset.columns:
+            return None
+        valid_subset = subset.dropna(subset=[column])
+        if valid_subset.empty:
+            return None
+        if "times_index" in valid_subset.columns:
+            grouped = valid_subset.groupby("times_index")[column].mean()
+            if grouped.empty or grouped.isna().all():
+                return None
+            peak_val = grouped.max()
+        else:
+            peak_val = valid_subset[column].mean()
+        if peak_val is None or not np.isfinite(peak_val):
+            return None
+        return float(peak_val)
+
+    accuracy_label = (
+        _format_measure_label(primary_accuracy, "Accuracy")
+        if primary_accuracy
+        else "Accuracy"
+    )
+    confidence_label = (
+        _format_measure_label(primary_confidence, "Confidence")
+        if primary_confidence
+        else "Confidence"
+    )
 
     for hue_val in hue_values:
         hue_val_std = _standardize_category_value(str(hue_val))
 
-        # Full model data
         hue_data_full = (
             full_data[full_data[hue_key] == hue_val_std]
             if hue_key in full_data.columns
             else full_data
         )
-
-        # Feedforward-only model data
-        hue_data_ffonly = (
+        hue_data_ff = (
             ffonly_data[ffonly_data[hue_key] == hue_val_std]
             if hue_key in ffonly_data.columns and not ffonly_data.empty
             else ffonly_data
@@ -487,162 +638,77 @@ def _plot_peak_height_panel(
 
         for subplot_val in subplot_values:
             subplot_val_std = _standardize_category_value(str(subplot_val))
-
-            # Filter full model data
-            subplot_data_full = (
+            subset_full = (
                 hue_data_full[hue_data_full[subplot_key] == subplot_val_std]
                 if subplot_key in hue_data_full.columns
                 else hue_data_full
             )
-
-            # Filter feedforward-only model data
-            subplot_data_ffonly = (
-                hue_data_ffonly[hue_data_ffonly[subplot_key] == subplot_val_std]
-                if subplot_key in hue_data_ffonly.columns and not hue_data_ffonly.empty
-                else hue_data_ffonly
+            subset_ff = (
+                hue_data_ff[hue_data_ff[subplot_key] == subplot_val_std]
+                if subplot_key in hue_data_ff.columns and not hue_data_ff.empty
+                else hue_data_ff
             )
 
-            # Convert subplot value to numeric if possible for plotting
             try:
                 x_val = float(subplot_val)
             except (ValueError, TypeError):
-                # If not numeric, use index position
                 x_val = subplot_values.index(subplot_val)
 
-            # Process full model data
-            if len(subplot_data_full) > 0:
-                # Calculate max of the average accuracy/confidence across presentation labels
-                if has_accuracy:
-                    # Group by time and calculate mean across labels, then take max across time
-                    if "times_index" in subplot_data_full.columns:
-                        avg_accuracy_over_time = subplot_data_full.groupby(
-                            "times_index"
-                        )["accuracy"].mean()
-                        # Check for NaN values and handle them
-                        if (
-                            not avg_accuracy_over_time.empty
-                            and not avg_accuracy_over_time.isna().all()
-                        ):
-                            max_avg_accuracy = avg_accuracy_over_time.max()
-                            if np.isfinite(max_avg_accuracy):
-                                accuracy_plot_data.append(
-                                    {
-                                        "x": x_val,
-                                        "y": max_avg_accuracy,
-                                        "hue": hue_val,
-                                        "subplot_val": subplot_val,
-                                        "metric": "accuracy",
-                                        "model_type": "full",
-                                    }
-                                )
-                    else:
-                        mean_accuracy = subplot_data_full["accuracy"].mean()
-                        if np.isfinite(mean_accuracy):
-                            accuracy_plot_data.append(
-                                {
-                                    "x": x_val,
-                                    "y": mean_accuracy,
-                                    "hue": hue_val,
-                                    "subplot_val": subplot_val,
-                                    "metric": "accuracy",
-                                    "model_type": "full",
-                                }
-                            )
+            if len(subset_full) > 0:
+                if has_accuracy and accuracy_column:
+                    peak_val = _compute_peak_value(subset_full, accuracy_column)
+                    if peak_val is not None:
+                        accuracy_plot_data.append(
+                            {
+                                "x": x_val,
+                                "y": peak_val,
+                                "hue": hue_val,
+                                "subplot_val": subplot_val,
+                                "metric": accuracy_label,
+                                "model_type": "full",
+                            }
+                        )
 
-                # Calculate max of the average confidence across presentation labels
-                if has_confidence:
-                    # Group by time and calculate mean across labels, then take max across time
-                    if "times_index" in subplot_data_full.columns:
-                        avg_confidence_over_time = subplot_data_full.groupby(
-                            "times_index"
-                        )["confidence_avg"].mean()
-                        # Check for NaN values and handle them
-                        if (
-                            not avg_confidence_over_time.empty
-                            and not avg_confidence_over_time.isna().all()
-                        ):
-                            max_avg_confidence = avg_confidence_over_time.max()
-                            if np.isfinite(max_avg_confidence):
-                                confidence_plot_data.append(
-                                    {
-                                        "x": x_val,
-                                        "y": max_avg_confidence,
-                                        "hue": hue_val,
-                                        "subplot_val": subplot_val,
-                                        "metric": "confidence",
-                                        "model_type": "full",
-                                    }
-                                )
-                    else:
-                        mean_confidence = subplot_data_full["confidence_avg"].mean()
-                        if np.isfinite(mean_confidence):
-                            confidence_plot_data.append(
-                                {
-                                    "x": x_val,
-                                    "y": mean_confidence,
-                                    "hue": hue_val,
-                                    "subplot_val": subplot_val,
-                                    "metric": "confidence",
-                                    "model_type": "full",
-                                }
-                            )
+                if has_confidence and confidence_column:
+                    peak_val = _compute_peak_value(subset_full, confidence_column)
+                    if peak_val is not None:
+                        confidence_plot_data.append(
+                            {
+                                "x": x_val,
+                                "y": peak_val,
+                                "hue": hue_val,
+                                "subplot_val": subplot_val,
+                                "metric": confidence_label,
+                                "model_type": "full",
+                            }
+                        )
 
-            # Process feedforward-only model data
-            if has_ffonly and len(subplot_data_ffonly) > 0:
-                # Calculate max of the average accuracy across presentation labels
-                if has_accuracy:
-                    # Group by time and calculate mean across labels, then take max across time
-                    if "times_index" in subplot_data_ffonly.columns:
-                        avg_accuracy_over_time = subplot_data_ffonly.groupby(
-                            "times_index"
-                        )["accuracy"].mean()
-                        # Check for NaN values and handle them
-                        if (
-                            not avg_accuracy_over_time.empty
-                            and not avg_accuracy_over_time.isna().all()
-                        ):
-                            max_avg_accuracy = avg_accuracy_over_time.max()
-                            if np.isfinite(max_avg_accuracy):
-                                ffonly_accuracy_plot_data.append(
-                                    {
-                                        "x": x_val,
-                                        "y": max_avg_accuracy,
-                                        "hue": hue_val,
-                                        "subplot_val": subplot_val,
-                                        "metric": "accuracy",
-                                        "model_type": "ffonly",
-                                    }
-                                )
-                    else:
-                        mean_accuracy = subplot_data_ffonly["accuracy"].mean()
-                        if np.isfinite(mean_accuracy):
-                            ffonly_accuracy_plot_data.append(
-                                {
-                                    "x": x_val,
-                                    "y": mean_accuracy,
-                                    "hue": hue_val,
-                                    "subplot_val": subplot_val,
-                                    "metric": "accuracy",
-                                    "model_type": "ffonly",
-                                }
-                            )
+            if has_ffonly and len(subset_ff) > 0 and has_accuracy and accuracy_column:
+                peak_val = _compute_peak_value(subset_ff, accuracy_column)
+                if peak_val is not None:
+                    ff_accuracy_plot_data.append(
+                        {
+                            "x": x_val,
+                            "y": peak_val,
+                            "hue": hue_val,
+                            "subplot_val": subplot_val,
+                            "metric": accuracy_label,
+                            "model_type": "ffonly",
+                        }
+                    )
 
     if (
         not accuracy_plot_data
         and not confidence_plot_data
-        and not ffonly_accuracy_plot_data
+        and not ff_accuracy_plot_data
     ):
         ax.text(
             0.5, 0.5, "No Valid Data", ha="center", va="center", transform=ax.transAxes
         )
         return
 
-    # Plot full model accuracy data (solid lines with circles)
     if accuracy_plot_data:
-        accuracy_df = pd.DataFrame(accuracy_plot_data)
-        # Remove any remaining NaN values
-        accuracy_df = accuracy_df.dropna(subset=["x", "y"])
-
+        accuracy_df = pd.DataFrame(accuracy_plot_data).dropna(subset=["x", "y"])
         if not accuracy_df.empty:
             sns.lineplot(
                 data=accuracy_df,
@@ -661,15 +727,11 @@ def _plot_peak_height_panel(
                 **ERRORBAR_CONFIG,
             )
 
-    # Plot feedforward-only accuracy data (dashed lines with triangles)
-    if has_ffonly and ffonly_accuracy_plot_data:
-        ffonly_accuracy_df = pd.DataFrame(ffonly_accuracy_plot_data)
-        # Remove any remaining NaN values
-        ffonly_accuracy_df = ffonly_accuracy_df.dropna(subset=["x", "y"])
-
-        if not ffonly_accuracy_df.empty:
+    if has_ffonly and ff_accuracy_plot_data:
+        ff_df = pd.DataFrame(ff_accuracy_plot_data).dropna(subset=["x", "y"])
+        if not ff_df.empty:
             sns.lineplot(
-                data=ffonly_accuracy_df,
+                data=ff_df,
                 x="x",
                 y="y",
                 hue="hue",
@@ -685,12 +747,8 @@ def _plot_peak_height_panel(
                 **ERRORBAR_CONFIG,
             )
 
-    # Plot full model confidence data (dotted lines with squares)
     if confidence_plot_data:
-        confidence_df = pd.DataFrame(confidence_plot_data)
-        # Remove any remaining NaN values
-        confidence_df = confidence_df.dropna(subset=["x", "y"])
-
+        confidence_df = pd.DataFrame(confidence_plot_data).dropna(subset=["x", "y"])
         if not confidence_df.empty:
             sns.lineplot(
                 data=confidence_df,
@@ -709,7 +767,6 @@ def _plot_peak_height_panel(
                 **ERRORBAR_CONFIG,
             )
 
-    # Add y-label
     if show_ylabel:
         ax.set_ylabel(
             "Performance", fontsize=FORMATTING["fontsize_axis"], fontweight="bold"
@@ -721,20 +778,16 @@ def _plot_peak_height_panel(
     ax.set_xlabel(subplot_display, fontsize=FORMATTING["fontsize_axis"])
     ax.tick_params(labelsize=FORMATTING["fontsize_tick"])
 
-    # Set reasonable y-limits to handle potential axis issues
     try:
-        current_ylim = ax.get_ylim()
-        if not (np.isfinite(current_ylim[0]) and np.isfinite(current_ylim[1])):
+        ymin, ymax = ax.get_ylim()
+        if not (np.isfinite(ymin) and np.isfinite(ymax)):
             ax.set_ylim(0, 1)
-    except:
+    except Exception:
         ax.set_ylim(0, 1)
 
-    # Set x-axis labels if not numeric
     try:
-        # Check if all subplot values are numeric
-        numeric_vals = [float(v) for v in subplot_values]
+        [float(v) for v in subplot_values]
     except (ValueError, TypeError):
-        # Use categorical labels
         ax.set_xticks(range(len(subplot_values)))
         ax.set_xticklabels(
             [_format_legend_label(subplot_key, v, config, dt) for v in subplot_values],
@@ -742,10 +795,9 @@ def _plot_peak_height_panel(
             ha="right",
         )
 
-    # Add legend for line styles (accuracy vs confidence vs feedforward)
-    legend_elements = []
-
-    if has_accuracy and show_legend:
+    legend_elements: List[Line2D] = []
+    if show_legend and accuracy_plot_data:
+        legend_text = f"Max {accuracy_label}"
         legend_elements.append(
             plt.Line2D(
                 [0],
@@ -755,12 +807,11 @@ def _plot_peak_height_panel(
                 marker="o",
                 markersize=6,
                 linestyle="-",
-                label="Max Accuracy",
+                label=legend_text,
                 alpha=FORMATTING["alpha_line"],
             )
         )
-
-        if has_ffonly:
+        if has_ffonly and ff_accuracy_plot_data:
             legend_elements.append(
                 plt.Line2D(
                     [0],
@@ -770,12 +821,12 @@ def _plot_peak_height_panel(
                     marker="^",
                     markersize=6,
                     linestyle="--",
-                    label="Max Accuracy (FF-only)",
+                    label=_append_suffix_to_label(legend_text, "FF-only"),
                     alpha=FORMATTING["alpha_line"],
                 )
             )
 
-    if has_confidence and show_legend:
+    if show_legend and confidence_plot_data:
         legend_elements.append(
             plt.Line2D(
                 [0],
@@ -785,7 +836,7 @@ def _plot_peak_height_panel(
                 marker="s",
                 markersize=4,
                 linestyle=":",
-                label="Max Confidence",
+                label=f"Max {confidence_label}",
                 alpha=FORMATTING["alpha_line"],
             )
         )
@@ -817,24 +868,33 @@ def _plot_peak_time_panel(
     dt: float,
     show_ylabel: bool = False,
     show_legend: bool = True,
+    accuracy_cols: Optional[List[str]] = None,
+    confidence_cols: Optional[List[str]] = None,
+    primary_accuracy: Optional[str] = None,
+    primary_confidence: Optional[str] = None,
 ) -> None:
-    """Plot time of max accuracy and confidence vs subplot value for each hue category.
+    """Plot time of max accuracy and confidence vs subplot value for each hue category."""
 
-    Args:
-        ax: Matplotlib axes
-        data: Full dataset
-        row_key: Key for row dimension
-        row_value: Value for this row
-        subplot_key: Key for subplot dimension (x-axis)
-        subplot_values: All subplot values for x-axis
-        hue_key: Key for hue dimension (color coding)
-        hue_values: All hue values for color coding
-        colors: Color mapping for hue values
-        config: Configuration dict
-        dt: Temporal resolution
-        show_ylabel: Whether to show y-axis label
-    """
-    # Filter data for this row
+    requested_accuracy = list(accuracy_cols or [])
+    requested_confidence = list(confidence_cols or [])
+    primary_accuracy = primary_accuracy or (
+        requested_accuracy[0] if requested_accuracy else None
+    )
+    primary_confidence = primary_confidence or (
+        requested_confidence[0] if requested_confidence else None
+    )
+
+    if primary_accuracy is None and primary_confidence is None:
+        ax.text(
+            0.5,
+            0.5,
+            "No Performance Measures",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return
+
     row_data = data.copy()
     if row_key in row_data.columns:
         row_data[row_key] = row_data[row_key].apply(_standardize_category_value)
@@ -845,9 +905,30 @@ def _plot_peak_time_panel(
         ax.text(0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes)
         return
 
-    # Check for required columns
-    has_accuracy = "accuracy" in row_data.columns
-    has_confidence = "confidence_avg" in row_data.columns
+    accuracy_column = (
+        _resolve_measure_column(row_data, primary_accuracy)
+        if primary_accuracy is not None
+        else None
+    )
+    if primary_accuracy and not accuracy_column:
+        logger.warning(
+            "Primary accuracy measure '%s' not found for peak time panel",
+            primary_accuracy,
+        )
+
+    confidence_column = (
+        _resolve_measure_column(row_data, primary_confidence)
+        if primary_confidence is not None
+        else None
+    )
+    if primary_confidence and not confidence_column:
+        logger.warning(
+            "Primary confidence measure '%s' not found for peak time panel",
+            primary_confidence,
+        )
+
+    has_accuracy = accuracy_column is not None
+    has_confidence = confidence_column is not None
 
     if not has_accuracy and not has_confidence:
         ax.text(
@@ -860,9 +941,6 @@ def _plot_peak_time_panel(
         )
         return
 
-    logger.debug(f"Computing peak time metrics from accuracy and confidence columns")
-
-    # Standardize hue and subplot columns for consistent filtering
     if hue_key in row_data.columns:
         row_data[hue_key] = row_data[hue_key].apply(_standardize_category_value)
     if subplot_key in row_data.columns:
@@ -870,9 +948,33 @@ def _plot_peak_time_panel(
             _standardize_category_value
         )
 
-    # Prepare data for plotting - compute time of max of averages
-    accuracy_plot_data = []
-    confidence_plot_data = []
+    accuracy_plot_data: List[Dict[str, Union[float, str]]] = []
+    confidence_plot_data: List[Dict[str, Union[float, str]]] = []
+
+    def _compute_peak_time(subset: pd.DataFrame, column: str) -> Optional[float]:
+        if column not in subset.columns or "times_index" not in subset.columns:
+            return None
+        valid_subset = subset.dropna(subset=[column, "times_index"])
+        if valid_subset.empty:
+            return None
+        grouped = valid_subset.groupby("times_index")[column].mean()
+        if grouped.empty or grouped.isna().all():
+            return None
+        peak_index = grouped.idxmax()
+        if peak_index is None or not np.isfinite(peak_index):
+            return None
+        return float(peak_index) * dt
+
+    accuracy_label = (
+        _format_measure_label(primary_accuracy, "Accuracy")
+        if primary_accuracy
+        else "Accuracy"
+    )
+    confidence_label = (
+        _format_measure_label(primary_confidence, "Confidence")
+        if primary_confidence
+        else "Confidence"
+    )
 
     for hue_val in hue_values:
         hue_val_std = _standardize_category_value(str(hue_val))
@@ -884,55 +986,43 @@ def _plot_peak_time_panel(
 
         for subplot_val in subplot_values:
             subplot_val_std = _standardize_category_value(str(subplot_val))
-            subplot_data = (
+            subset = (
                 hue_data[hue_data[subplot_key] == subplot_val_std]
                 if subplot_key in hue_data.columns
                 else hue_data
             )
 
-            if len(subplot_data) > 0:
-                # Convert subplot value to numeric if possible for plotting
-                try:
-                    x_val = float(subplot_val)
-                except (ValueError, TypeError):
-                    # If not numeric, use index position
-                    x_val = subplot_values.index(subplot_val)
+            if len(subset) == 0:
+                continue
 
-                # Calculate time of max of the average accuracy/confidence across presentation labels
-                if has_accuracy and "times_index" in subplot_data.columns:
-                    # Group by time and calculate mean across labels, then find time of max
-                    avg_accuracy_over_time = subplot_data.groupby("times_index")[
-                        "accuracy"
-                    ].mean()
-                    peak_time_idx = avg_accuracy_over_time.idxmax()
-                    peak_time_ms = peak_time_idx * dt
+            try:
+                x_val = float(subplot_val)
+            except (ValueError, TypeError):
+                x_val = subplot_values.index(subplot_val)
 
+            if has_accuracy and accuracy_column:
+                peak_time = _compute_peak_time(subset, accuracy_column)
+                if peak_time is not None:
                     accuracy_plot_data.append(
                         {
                             "x": x_val,
-                            "y": peak_time_ms,
+                            "y": peak_time,
                             "hue": hue_val,
                             "subplot_val": subplot_val,
-                            "metric": "accuracy",
+                            "metric": accuracy_label,
                         }
                     )
 
-                # Calculate time of max of the average confidence across presentation labels
-                if has_confidence and "times_index" in subplot_data.columns:
-                    # Group by time and calculate mean across labels, then find time of max
-                    avg_confidence_over_time = subplot_data.groupby("times_index")[
-                        "confidence_avg"
-                    ].mean()
-                    peak_time_idx = avg_confidence_over_time.idxmax()
-                    peak_time_ms = peak_time_idx * dt
-
+            if has_confidence and confidence_column:
+                peak_time = _compute_peak_time(subset, confidence_column)
+                if peak_time is not None:
                     confidence_plot_data.append(
                         {
                             "x": x_val,
-                            "y": peak_time_ms,
+                            "y": peak_time,
                             "hue": hue_val,
                             "subplot_val": subplot_val,
-                            "metric": "confidence",
+                            "metric": confidence_label,
                         }
                     )
 
@@ -942,11 +1032,8 @@ def _plot_peak_time_panel(
         )
         return
 
-    # Plot accuracy data (solid lines with circles)
     if accuracy_plot_data:
         accuracy_df = pd.DataFrame(accuracy_plot_data)
-
-        # Use seaborn lineplot with errorbar configuration
         sns.lineplot(
             data=accuracy_df,
             x="x",
@@ -964,11 +1051,8 @@ def _plot_peak_time_panel(
             **ERRORBAR_CONFIG,
         )
 
-    # Plot confidence data (dashed lines with squares)
     if confidence_plot_data:
         confidence_df = pd.DataFrame(confidence_plot_data)
-
-        # Use seaborn lineplot with errorbar configuration
         sns.lineplot(
             data=confidence_df,
             x="x",
@@ -986,7 +1070,6 @@ def _plot_peak_time_panel(
             **ERRORBAR_CONFIG,
         )
 
-    # Styling
     if show_ylabel:
         ax.set_ylabel(
             "Peak Time (ms)", fontsize=FORMATTING["fontsize_axis"], fontweight="bold"
@@ -998,12 +1081,9 @@ def _plot_peak_time_panel(
     ax.set_xlabel(subplot_display, fontsize=FORMATTING["fontsize_axis"])
     ax.tick_params(labelsize=FORMATTING["fontsize_tick"])
 
-    # Set x-axis labels if not numeric
     try:
-        # Check if all subplot values are numeric
-        numeric_vals = [float(v) for v in subplot_values]
+        [float(v) for v in subplot_values]
     except (ValueError, TypeError):
-        # Use categorical labels
         ax.set_xticks(range(len(subplot_values)))
         ax.set_xticklabels(
             [_format_legend_label(subplot_key, v, config, dt) for v in subplot_values],
@@ -1011,10 +1091,10 @@ def _plot_peak_time_panel(
             ha="right",
         )
 
-    # Add legend for line styles (accuracy vs confidence)
-    if has_accuracy and has_confidence and show_legend:
-        legend_elements = [
-            plt.Line2D(
+    legend_elements: List[Line2D] = []
+    if show_legend and accuracy_plot_data:
+        legend_elements.append(
+            Line2D(
                 [0],
                 [0],
                 color="gray",
@@ -1022,10 +1102,14 @@ def _plot_peak_time_panel(
                 marker="o",
                 markersize=6,
                 linestyle="-",
-                label="Peak Time (Accuracy)",
+                label=f"Peak Time ({accuracy_label})",
                 alpha=FORMATTING["alpha_line"],
-            ),
-            plt.Line2D(
+            )
+        )
+
+    if show_legend and confidence_plot_data:
+        legend_elements.append(
+            Line2D(
                 [0],
                 [0],
                 color="gray",
@@ -1033,10 +1117,12 @@ def _plot_peak_time_panel(
                 marker="s",
                 markersize=4,
                 linestyle=":",
-                label="Peak Time (Confidence)",
+                label=f"Peak Time ({confidence_label})",
                 alpha=FORMATTING["alpha_line"],
-            ),
-        ]
+            )
+        )
+
+    if legend_elements:
         ax.legend(
             handles=legend_elements,
             loc="upper left",
@@ -1155,13 +1241,15 @@ def _add_hue_legend(
 def plot_performance_grid(
     data_paths: List[Path],
     output: Path,
-    subplot_var: Literal["category", "parameter", "experiment"],
-    row_var: Literal["category", "parameter", "experiment"],
-    hue_var: Literal["category", "parameter", "experiment"],
+    subplot_var: str,
+    row_var: str,
+    hue_var: str,
     category_key: Optional[str] = None,
     parameter_key: Optional[str] = None,
     experiment_names: Optional[List[str]] = None,
     data_ffonly_paths: Optional[List[Path]] = None,
+    confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
+    accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
     config: Optional[Dict] = None,
     subplot_filter: Optional[List[str]] = None,
@@ -1172,14 +1260,59 @@ def plot_performance_grid(
     logger.info("Starting performance grid plotting")
     logger.info("=" * 60)
 
-    # Validation
+    # Normalize dimensions and validate uniqueness
+    raw_subplot_var = subplot_var
+    raw_row_var = row_var
+    raw_hue_var = hue_var
+
+    subplot_var, subplot_limit = _normalize_dimension(subplot_var)
+    row_var, row_limit = _normalize_dimension(row_var)
+    hue_var, hue_limit = _normalize_dimension(hue_var)
+
     logger.info(
-        f"Dimension mapping: subplot={subplot_var}, row={row_var}, hue={hue_var}"
+        "Dimension mapping: subplot=%s (base=%s, limit=%s), row=%s (base=%s, limit=%s), hue=%s (base=%s, limit=%s)",
+        raw_subplot_var,
+        subplot_var,
+        subplot_limit,
+        raw_row_var,
+        row_var,
+        row_limit,
+        raw_hue_var,
+        hue_var,
+        hue_limit,
     )
-    _validate_dimensions(subplot_var=subplot_var, hue_var=hue_var, row_var=row_var)
+
+    if subplot_var is None or row_var is None or hue_var is None:
+        raise ValueError("subplot, row, and hue dimensions cannot be empty")
+
+    _validate_dimension_choices(
+        subplot_var=subplot_var, hue_var=hue_var, column_var=row_var
+    )
 
     if config is None:
         config = {"palette": {}, "naming": {}, "ordering": {}}
+
+    # Parse accuracy and confidence selections
+    accuracy_measures = _coerce_measure_list(accuracy_measure, default="accuracy")
+    confidence_measures = _coerce_measure_list(
+        confidence_measure, default="first_label_confidence"
+    )
+
+    logger.info(
+        "Selected accuracy measures: %s",
+        accuracy_measures if accuracy_measures else "[none]",
+    )
+    logger.info(
+        "Selected confidence measures: %s",
+        confidence_measures if confidence_measures else "[none]",
+    )
+
+    primary_accuracy_measure: Optional[str] = (
+        accuracy_measures[0] if accuracy_measures else None
+    )
+    primary_confidence_measure: Optional[str] = (
+        confidence_measures[0] if confidence_measures else None
+    )
 
     # Load and combine data from multiple files
     logger.info(f"Loading data from {len(data_paths)} full model files...")
@@ -1247,13 +1380,25 @@ def plot_performance_grid(
 
     # Extract dimension values
     subplot_values_all = _extract_dimension_values(
-        df=df, dimension=subplot_var, dimension_key=subplot_key, config=config
+        df=df,
+        dimension=subplot_var,
+        dimension_key=subplot_key,
+        config=config,
+        dimension_limit=subplot_limit,
     )
     row_values = _extract_dimension_values(
-        df=df, dimension=row_var, dimension_key=row_key, config=config
+        df=df,
+        dimension=row_var,
+        dimension_key=row_key,
+        config=config,
+        dimension_limit=row_limit,
     )
     hue_values = _extract_dimension_values(
-        df=df, dimension=hue_var, dimension_key=hue_key, config=config
+        df=df,
+        dimension=hue_var,
+        dimension_key=hue_key,
+        config=config,
+        dimension_limit=hue_limit,
     )
 
     # Filter subplot values for display if filter is provided
@@ -1455,6 +1600,8 @@ def plot_performance_grid(
                 show_legend=(
                     row_idx == 0 and col_idx == 0
                 ),  # Legend only in first subplot
+                accuracy_cols=accuracy_measures,
+                confidence_cols=confidence_measures,
                 **kwargs,
             )
             if col_idx == 0:
@@ -1511,6 +1658,10 @@ def plot_performance_grid(
             dt=dt,
             show_ylabel=(row_idx == 0),  # Only show ylabel on first row
             show_legend=(row_idx == 0),
+            accuracy_cols=accuracy_measures,
+            confidence_cols=confidence_measures,
+            primary_accuracy=primary_accuracy_measure,
+            primary_confidence=primary_confidence_measure,
         )
 
     # Plot peak time panels (using all subplot values for analysis)
@@ -1533,6 +1684,10 @@ def plot_performance_grid(
             dt=dt,
             show_ylabel=(row_idx == 0),  # Only show ylabel on first row
             show_legend=(row_idx == 0),
+            accuracy_cols=accuracy_measures,
+            confidence_cols=confidence_measures,
+            primary_accuracy=primary_accuracy_measure,
+            primary_confidence=primary_confidence_measure,
         )
 
     # Synchronize y-limits and y-ticks across performance panels (Panel A) and peak height panels (Panel B)
@@ -1672,6 +1827,20 @@ def main():
         nargs="*",
         help="Experiment names",
     )
+    parser.add_argument(
+        "--confidence-measure",
+        "--confidence_measure",
+        type=str,
+        default="first_label_confidence",
+        help="Confidence measure column name or list (comma-separated or Python literal list)",
+    )
+    parser.add_argument(
+        "--accuracy-measure",
+        "--accuracy_measure",
+        type=str,
+        default="accuracy",
+        help="Accuracy measure column name or list (comma-separated or Python literal list)",
+    )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
@@ -1703,6 +1872,8 @@ def main():
         parameter_key=args.parameter_key,
         experiment_names=args.experiment_names,
         data_ffonly_paths=args.data_ffonly,
+        confidence_measure=args.confidence_measure,
+        accuracy_measure=args.accuracy_measure,
         dt=args.dt,
         config=config,
         subplot_filter=args.subplot_filter,
