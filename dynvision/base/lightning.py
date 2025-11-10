@@ -26,6 +26,7 @@ class LightningBase(pl.LightningModule):
         lr="learning_rate",
         solver="dynamics_solver",
         lossrt="loss_reaction_time",
+        energyloss="energy_loss_weight",
     )
     def __init__(
         self,
@@ -35,6 +36,7 @@ class LightningBase(pl.LightningModule):
         criterion_params: List[Tuple[str, Dict[str, Any]]] = [
             ("CrossEntropyLoss", {"weight": 1.0})
         ],
+        energy_loss_weight: Optional[float] = None,
         loss_reaction_time: float = 4.0,  # ms
         non_label_index: int = -1,
         # Optimizer configuration
@@ -57,6 +59,10 @@ class LightningBase(pl.LightningModule):
         self.retain_graph = retain_graph
         self.criterion_params = criterion_params
         self.non_label_index = non_label_index
+        self.energy_loss_weight = (
+            float(energy_loss_weight) if energy_loss_weight is not None else None
+        )
+        self.update_criterion_params("EnergyLoss", {"weight": self.energy_loss_weight})
 
         # Optimizer attributes
         self.optimizer = optimizer
@@ -270,6 +276,7 @@ class LightningBase(pl.LightningModule):
             self.ignore_initial_n_labels = 0
 
         for criterion_name, criterion_config in self.criterion_params:
+
             # Set criterion weight
             if "weight" in criterion_config.keys():
                 criterion_weight = criterion_config.pop("weight")
@@ -522,6 +529,54 @@ class LightningBase(pl.LightningModule):
             "scheduler": scheduler,
             **self.scheduler_configs,
         }
+
+    def update_criterion_params(
+        self, criterion_name: str, config: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Generalized updater for self.criterion_params.
+
+        - Merges non-None entries from `config` into any existing criterion configs
+            whose name matches `criterion_name` (case-insensitive).
+        - If no matching criterion exists, will append a new (name, config) tuple
+            only when `config` contains at least one non-None value.
+        - Avoids mutating caller-owned dicts by copying configs.
+        """
+        if config is None:
+            return
+
+        # Ensure criterion_params exists and is a list
+        if not hasattr(self, "criterion_params") or self.criterion_params is None:
+            self.criterion_params = []
+
+        name_lower = criterion_name.lower()
+        updated = False
+
+        for idx, (cname, cconfig) in enumerate(list(self.criterion_params)):
+            if isinstance(cname, str) and cname.lower() == name_lower:
+                # copy existing config (or start new) and merge non-None updates
+                new_config = dict(cconfig) if isinstance(cconfig, dict) else {}
+                for k, v in config.items():
+                    if v is not None:
+                        new_config[k] = v
+                # replace tuple with copied config to avoid mutating caller objects
+                self.criterion_params[idx] = (cname, dict(new_config))
+                logger.debug(
+                    f"Updated criterion_params[{idx}] ({cname}) with {config}"
+                )
+                updated = True
+
+        # If nothing matched, append only if config contains meaningful values
+        if not updated:
+            if any(v is not None for v in config.values()):
+                self.criterion_params.append((criterion_name, dict(config)))
+                logger.debug(
+                    f"Appended new criterion '{criterion_name}' with {config}"
+                )
+            else:
+                logger.debug(
+                    f"No update/appended for '{criterion_name}' because config values were all None"
+                )
 
     # Logging
     #########

@@ -82,8 +82,8 @@ class TemporalBase(nn.Module):
         self.t_recurrence = float(t_recurrence)
         self.t_feedback = float(t_feedforward if t_feedback is None else t_feedback)
         self.t_skip = float(self.t_feedback if t_skip is None else t_skip)
-        self.skip = skip
-        self.feedback = feedback
+        self.skip = str_to_bool(skip)
+        self.feedback = str_to_bool(feedback)
         self.history_length = max(
             self.t_feedforward,
             self.t_recurrence,
@@ -386,7 +386,6 @@ class TemporalBase(nn.Module):
                     feedforward_only=False,
                     store_responses=False,
                 )
-
         # Forward the model over all timesteps
         for t in torch.arange(n_timesteps, device=x_0.device):
             x = x_0[:, t, ...]
@@ -398,10 +397,7 @@ class TemporalBase(nn.Module):
                 store_responses=store_responses,
             )
 
-            if x is not None:
-                # Add time dimension and append to list
-                output_list.append(x.unsqueeze(1))
-            else:
+            if x is None:
                 # Handle None case - create zero tensor with gradients
                 zero_output = torch.zeros(
                     (batch_size, 1, self.n_classes),
@@ -410,6 +406,15 @@ class TemporalBase(nn.Module):
                     requires_grad=True,
                 )
                 output_list.append(zero_output)
+            elif x.size(0) == 1 and x.size(0) != batch_size:
+                # Handle case where only model self-generated activity (with batch size 1) reaches the classifier
+                x = x.repeat(batch_size, 1).unsqueeze(
+                    1
+                )  # Repeat the single output to match batch size
+            else:
+                x = x.unsqueeze(1)
+
+            output_list.append(x)
 
             if store_responses and len(responses_t):
                 t_responses = {
@@ -428,9 +433,6 @@ class TemporalBase(nn.Module):
 
         del output_list
         return outputs
-
-    def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
-        return torch.argmax(outputs, dim=-1)
 
     # Input processing utilities
     ############################
