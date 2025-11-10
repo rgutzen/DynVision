@@ -4,10 +4,11 @@
 
 import argparse
 import json
+import logging
 import re
 import ast  # Add this import for ast.literal_eval
 from pathlib import Path
-from typing import Tuple, Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,6 +24,169 @@ from dynvision.utils.visualization_utils import (
     calculate_label_indicator,
     get_category_plotting_settings,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+DEFAULT_PALETTE = {
+    "full": "#1f77b4",  # Blue
+    "self": "#ff7f0e",  # Orange
+    "depthpointwise": "#2ca02c",  # Green
+    "pointdepthwise": "#d62728",  # Red
+    "local": "#9467bd",  # Purple
+    "localdepthwise": "#8c564b",  # Brown
+}
+
+DEFAULT_COLOR = "#5a5a5a"
+
+
+def _coerce_to_json_string(value: Optional[str]) -> Optional[str]:
+    """Convert loose JSON-like CLI strings into valid JSON strings."""
+
+    if value is None:
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+
+    try:
+        json.loads(text)
+        return text
+    except json.JSONDecodeError:
+        try:
+            literal_value = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            logger.warning("Unable to parse configuration string: %s", text)
+            return None
+
+        try:
+            return json.dumps(literal_value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Unable to convert configuration literal to JSON: %s", text
+            )
+            return None
+
+
+def parse_palette(palette_input: Optional[Union[str, Dict[str, str]]]) -> Dict[str, str]:
+    """Parse palette input from CLI/config into a dictionary."""
+
+    if palette_input is None:
+        return {}
+
+    if isinstance(palette_input, dict):
+        return {str(k): str(v) for k, v in palette_input.items()}
+
+    try:
+        parsed = ast.literal_eval(palette_input)
+    except (ValueError, SyntaxError):
+        logger.warning("Could not parse palette input: %s", palette_input)
+        return {}
+
+    if not isinstance(parsed, dict):
+        logger.warning("Palette input is not a mapping: %s", palette_input)
+        return {}
+
+    return {str(k): str(v) for k, v in parsed.items()}
+
+
+def _resolve_palette(
+    config: Optional[Dict[str, Dict[str, str]]],
+    palette_input: Optional[Union[str, Dict[str, str]]],
+) -> Dict[str, str]:
+    """Merge default palette with config overrides and CLI overrides."""
+
+    palette = DEFAULT_PALETTE.copy()
+
+    if config:
+        palette.update(config.get("palette", {}))
+
+    parsed_palette = parse_palette(palette_input)
+    if parsed_palette:
+        palette.update(parsed_palette)
+
+    return palette
+
+
+def _determine_model_order(
+    all_models: Sequence[str], config: Optional[Dict[str, Dict[str, str]]]
+) -> List[str]:
+    """Determine plotting order for model categories."""
+
+    candidate_order: List[str] = []
+
+    if config:
+        ordering = config.get("ordering", {})
+        for key in ("model_type", "model_types", "recurrence_type", "recurrence", "rctype"):
+            values = ordering.get(key) or ordering.get(key.lower())
+            if values:
+                candidate_order = list(values)
+                break
+
+    if not candidate_order:
+        candidate_order = list(MODEL_ORDER)
+
+    ordered = [model for model in candidate_order if model in all_models]
+    remaining = [model for model in sorted(set(all_models)) if model not in ordered]
+    ordered.extend(remaining)
+
+    return ordered
+
+
+def _get_model_color(
+    model_type: str, colors: Dict[str, str], config: Optional[Dict[str, Dict[str, str]]]
+) -> str:
+    """Resolve color for a model based on config overrides and palette."""
+
+    if config:
+        configured_color = get_color(model_type, config)
+        if configured_color:
+            return configured_color
+
+    if model_type in colors:
+        return colors[model_type]
+
+    model_lower = model_type.lower()
+    if model_lower in colors:
+        return colors[model_lower]
+
+    logger.debug("Falling back to default color for model '%s'", model_type)
+    return DEFAULT_COLOR
+
+
+def _format_model_label(model_type: str, config: Optional[Dict[str, Dict[str, str]]]) -> str:
+    """Format model label using config naming overrides when available."""
+
+    if config:
+        display = get_display_name(model_type, config)
+        if display:
+            return display
+
+    return model_type.replace("wise", "w.")
+
+
+def _load_test_data(test_data_paths: Sequence[Path]) -> pd.DataFrame:
+    """Load and concatenate test performance CSV files."""
+
+    if not test_data_paths:
+        raise ValueError("No test data paths provided")
+
+    dataframes = []
+    for idx, path in enumerate(test_data_paths, start=1):
+        logger.info("Loading test data file %s/%s: %s", idx, len(test_data_paths), path)
+        df = pd.read_csv(path)
+        logger.debug("Loaded test data shape %s from %s", df.shape, path)
+        dataframes.append(df)
+
+    concatenated = pd.concat(dataframes, ignore_index=True)
+    logger.info(
+        "Concatenated test data: %s rows, %s columns",
+        concatenated.shape[0],
+        concatenated.shape[1],
+    )
+    return concatenated
 
 # Global model order for consistent plotting across all subplots
 MODEL_ORDER = [
@@ -52,36 +216,6 @@ def parse_model_identifier_from_column(column_name: str) -> str:
         return result
     else:
         return "unknown"
-
-
-def parse_palette(palette_str: str) -> Dict[str, str]:
-    """
-    Parse palette string into dictionary.
-
-    Args:
-        palette_str: String representation of color palette dictionary
-
-    Returns:
-        Dictionary mapping model names to colors
-    """
-    try:
-        # Try to parse as literal dictionary
-        return ast.literal_eval(palette_str)
-    except (ValueError, SyntaxError):
-        # Fallback to default palette if parsing fails
-        print(
-            f"Warning: Could not parse palette '{palette_str}', using default colors"
-        )
-        return {
-            "full": "#1f77b4",  # Blue
-            "self": "#ff7f0e",  # Orange
-            "depthpointwise": "#2ca02c",  # Green
-            "pointdepthwise": "#d62728",  # Red
-            "local": "#9467bd",  # Purple
-            "localdepthwise": "#8c564b",  # Brown
-        }
-
-
 def load_accuracy_data(accuracy_csv_path: Path) -> pd.DataFrame:
     """
     Load and process training and validation accuracy data from W&B export.
@@ -456,7 +590,7 @@ def plot_training_losses(
     cross_entropy_loss_df: pd.DataFrame,
     memory_df: pd.DataFrame,
     epoch_df: pd.DataFrame,
-    palette: str,
+    palette: Optional[Union[str, Dict[str, str]]],
     test_data=None,
     dt=None,
     category_col="model_type",
@@ -475,7 +609,7 @@ def plot_training_losses(
         cross_entropy_loss_df: Processed cross entropy loss data
         memory_df: Processed memory data
         epoch_df: Processed epoch timing data
-        palette: Color palette string (dictionary format)
+    palette: Color palette override (string or dict)
         test_data: Optional DataFrame with test performance and layer responses
         dt: Optional time step duration in milliseconds for x-axis in test plots
         category_col: Column name containing model categories in test data
@@ -993,39 +1127,6 @@ def plot_v1_response(test_data, ax, colors, dt=None, category_col="model_type"):
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Avg V1 Response")  # Changed as requested
     # Remove title as requested
-
-
-def load_config_from_args(palette_str=None, naming_str=None, ordering_str=None):
-    """Load visualization configuration from command line arguments"""
-    config = {}
-
-    # Parse palette
-    if palette_str:
-        try:
-            config["palette"] = json.loads(palette_str.replace("'", '"'))
-        except json.JSONDecodeError:
-            print(f"Warning: Could not parse palette string: {palette_str}")
-
-    # Parse naming dictionary
-    if naming_str:
-        try:
-            config["naming"] = json.loads(naming_str.replace("'", '"'))
-        except json.JSONDecodeError:
-            print(f"Warning: Could not parse naming string: {naming_str}")
-
-    # Parse ordering dictionary
-    if ordering_str:
-        try:
-            config["ordering"] = json.loads(ordering_str.replace("'", '"'))
-        except json.JSONDecodeError:
-            print(f"Warning: Could not parse ordering string: {ordering_str}")
-
-    return config
-
-
-# Changes to main function to add the test_data parameter
-
-
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(
