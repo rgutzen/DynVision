@@ -707,7 +707,124 @@ def translate_pretrained_layer_names(self):
 
 **Method to verify**: Add print statements or use `torch.set_printoptions` and compare intermediate outputs with the original model on the same input.
 
-### 3.6 Hidden State Initialization
+### 3.6 Handling None in Bias Modules
+
+**Critical for exact replication**: Bias modules must handle `None` input correctly during idle timesteps.
+
+**The Issue**:
+
+During idle timesteps before a layer activates, DynVision may pass `None` through the operation sequence. Standard PyTorch modules typically propagate `None`, but some original models expect to output bias terms even without input:
+
+```python
+# Original CordsNet behavior during idle timesteps:
+def forward(self, inp=None):
+    if inp is None:
+        # Still return bias, not None!
+        return self.bias.view(1, -1, *self.bias.shape[1:])
+    return inp + self.bias
+```
+
+**Solution**: Override bias module behavior to return bias when input is None:
+
+```python
+from dynvision.model_components import AddBias
+
+class MyModel(BaseModel):
+    def _define_architecture(self):
+        # ... other layers ...
+
+        # Create bias modules
+        for i in range(1, 9):
+            layer_name = f"layer{i}"
+            # AddBias automatically handles None by returning bias
+            setattr(self, f"addbias_{layer_name}",
+                   AddBias(out_channels, dim_y, dim_x))
+```
+
+**When to use this**:
+
+Check if the original model returns non-None values during initialization before layers receive their first input. If the original has code like:
+
+```python
+if inp is None:
+    return some_initial_value  # Not None
+```
+
+Then you need to ensure your bias modules (or other modules) follow the same pattern.
+
+### 3.7 Per-Layer Temporal Parameters
+
+**Critical for complex temporal architectures**: Not all layers need the same feedforward delays.
+
+**The Standard Case** (covered in Section 2.6):
+
+Most models have uniform delays:
+```python
+# All layers use same t_feedforward
+self.t_feedforward = 1.0
+# Passed to delay operation in temporal.py
+```
+
+**The Special Case** (CordsNet-like):
+
+Some architectures need per-layer variation:
+
+1. **Input layer with immediate skip**: Layer0 output must be immediately available
+   ```python
+   self.layer0 = RConv2d(
+       # ... other params ...
+       t_feedforward=0,  # Immediate output
+   )
+   ```
+
+2. **Final layer with immediate output**: Layer8 feeds directly to classifier
+   ```python
+   self.layer8 = RConv2d(
+       # ... other params ...
+       t_feedforward=0,  # Immediate to classifier
+   )
+   ```
+
+3. **Combined layer outputs**: When combining outputs from layers processed in same timestep
+   ```python
+   # Layer7 + Layer8 → Classifier
+   # Layer8 processed after Layer7, so Layer8 is immediate
+   # But Layer7's output was already written to hidden state
+
+   def combine_outputs(self):
+       layer8_out = self.layer8.get_hidden_state(delay=0)  # Immediate
+       layer7_out = self.layer7.get_hidden_state(delay=1)  # From hidden state
+       return layer8_out + layer7_out
+   ```
+
+**Implementation Pattern**:
+
+For per-layer delays, add a `delay()` method to RConv2d and refactor the delay operation in `temporal.py`:
+
+```python
+# In temporal.py _forward() method:
+elif operation == "delay":
+    # Try layer-specific delay function first
+    if hasattr(self, f"delay_{layer_name}"):
+        delay_func = getattr(self, f"delay_{layer_name}")
+        x = delay_func(x)
+    # Then try layer's delay method
+    elif hasattr(layer, "delay"):
+        x = layer.delay(x, delay_feedforward=self.delay_feedforward)
+    # Fall back to standard implementation
+    elif hasattr(layer, "set_hidden_state"):
+        layer.set_hidden_state(x)
+        if self.delay_feedforward > 0:
+            x = layer.get_hidden_state(self.delay_feedforward + 1)
+```
+
+**When you need this**:
+
+- Skip connections requiring immediate input (layer0 → layer2)
+- Multi-layer combinations before classifier
+- Heterogeneous delay patterns in the original model
+
+### 3.8 Hidden State Initialization
 
 **Critical for exact replication**: Some original models return specific values (e.g., scalar 0) for uninitialized hidden states, while DynVision returns `None` by default.
 
@@ -978,6 +1095,65 @@ When outputs don't match despite all checks passing, use a structured debugging 
 
 **The Debugging Hierarchy** (Apply in order):
 
+#### Level 0: Verify Translation Mapping Completeness
+
+Before checking weight structure, ensure the translation mapping handles all keys:
+
+```python
+def verify_translation_mapping(model):
+    """Verify translation mapping covers all pretrained keys."""
+    # Get pretrained state dict
+    pretrained_state = model.download_pretrained_state_dict()
+    translation = model.translate_pretrained_layer_names()
+
+    print(f"Pretrained state dict has {len(pretrained_state)} keys")
+    print(f"Translation mapping has {len(translation)} entries\n")
+
+    # Check if all pretrained keys have a translation
+    untranslated = []
+    for key in pretrained_state.keys():
+        # Check if any translation pattern matches this key
+        translated = False
+        for orig_pattern in translation.keys():
+            if orig_pattern in key:
+                translated = True
+                break
+        if not translated:
+            untranslated.append(key)
+
+    if untranslated:
+        print(f"❌ {len(untranslated)} keys have no translation:")
+        for key in untranslated[:10]:
+            print(f"  {key}")
+        return False
+    else:
+        print(f"✅ All {len(pretrained_state)} pretrained keys have translations")
+        return True
+```
+
+**Critical for models with weight_norm parametrization**:
+
+If pretrained weights use `weight_norm`, keys look like:
+```
+layer1.conv.parametrizations.weight.original0
+layer1.conv.parametrizations.weight.original1
+```
+
+Your translation must handle the **full path**, not just the base:
+```python
+# WRONG: Only maps base layer name
+translate_layer_names = {
+    "layer1": "v1",  # Won't match parametrized keys!
+}
+
+# RIGHT: Maps the conv part, parametrization suffix auto-matches
+translate_layer_names = {
+    "layer1.conv": "v1.conv",  # Matches layer1.conv.parametrizations.weight.*
+}
+```
+
+The translation uses **substring replacement**, so `layer1.conv` in `layer1.conv.parametrizations.weight.original0` gets replaced to create `v1.conv.parametrizations.weight.original0`.
+
 #### Level 1: Verify Weight Loading
 
 Before testing outputs, ensure weights are actually loaded correctly:
@@ -1019,6 +1195,113 @@ def compare_weights(original, reimpl):
 - Shapes match?
 - Values identical (within floating point precision)?
 - Translation mapping correct? (Check `translate_pretrained_layer_names()`)
+
+#### Level 1b: Verify Loaded Weight VALUES (Critical!)
+
+**The Issue**: Level 1 checks that weights CAN be loaded (structure matches), but doesn't verify they WERE loaded. Weights might remain randomly initialized if loading silently fails.
+
+```python
+def verify_weights_actually_loaded(model_class):
+    """Create fresh model with pretrained loading and verify values transferred."""
+    from models.original_model import OriginalModel
+
+    # Get original pretrained weights
+    original = OriginalModel()
+    original.load_state_dict(torch.load("pretrained.pth"))
+    orig_state = original.state_dict()
+
+    # Create reimpl with pretrained loading ENABLED
+    reimpl = model_class(
+        init_with_pretrained=True,  # ← CRITICAL: Must enable loading
+    )
+    reimpl.setup("fit")
+    reimpl_state = reimpl.state_dict()
+    translation = reimpl.translate_pretrained_layer_names()
+
+    # Compare ACTUAL VALUES for each translated parameter
+    perfect_matches = 0
+    mismatches = []
+
+    for orig_base_key, reimpl_base_pattern in translation.items():
+        # Find all original keys (handles weight_norm variations)
+        orig_keys = [k for k in orig_state.keys() if k.startswith(orig_base_key)]
+
+        for orig_key in orig_keys:
+            # Build expected reimpl key via translation
+            expected_reimpl_key = orig_key.replace(orig_base_key, reimpl_base_pattern)
+
+            if expected_reimpl_key not in reimpl_state:
+                mismatches.append({
+                    'orig_key': orig_key,
+                    'expected_key': expected_reimpl_key,
+                    'issue': 'Key not found in reimpl state dict'
+                })
+                continue
+
+            # Compare VALUES
+            orig_val = orig_state[orig_key]
+            reimpl_val = reimpl_state[expected_reimpl_key]
+
+            max_diff = (orig_val - reimpl_val).abs().max().item()
+
+            if max_diff < 1e-6:
+                perfect_matches += 1
+            else:
+                mismatches.append({
+                    'orig_key': orig_key,
+                    'reimpl_key': expected_reimpl_key,
+                    'orig_mean': orig_val.mean().item(),
+                    'orig_std': orig_val.std().item(),
+                    'reimpl_mean': reimpl_val.mean().item(),
+                    'reimpl_std': reimpl_val.std().item(),
+                    'max_diff': max_diff,
+                })
+
+    total = perfect_matches + len(mismatches)
+    print(f"\nWeight Value Comparison:")
+    print(f"  ✓ Perfect matches: {perfect_matches}/{total}")
+    print(f"  ✗ Mismatches:      {len(mismatches)}/{total}")
+
+    if mismatches:
+        print(f"\n❌ Weight values don't match! First 5 issues:")
+        for i, m in enumerate(mismatches[:5], 1):
+            print(f"\n{i}. {m['orig_key']}")
+            if 'issue' in m:
+                print(f"   {m['issue']}")
+            else:
+                print(f"   Original:  mean={m['orig_mean']:+.6f}, std={m['orig_std']:.6f}")
+                print(f"   Reimpl:    mean={m['reimpl_mean']:+.6f}, std={m['reimpl_std']:.6f}")
+                print(f"   Max diff:  {m['max_diff']:.2e}")
+
+        print("\n🔍 Diagnosis: Weights not loaded correctly!")
+        print("   Check:")
+        print("   1. Is init_with_pretrained=True?")
+        print("   2. Does _init_parameters() call load_pretrained_state_dict()?")
+        print("   3. Does translation mapping handle parametrizations?")
+        print("   4. Are there extra keys preventing strict loading?")
+        return False
+    else:
+        print(f"✅ All {total} parameter values match - weights loaded correctly!")
+        return True
+```
+
+**Why this matters**:
+
+In CordsNet integration, we found that despite:
+- Translation mapping being correct ✓
+- Weight structure matching ✓
+- No errors during loading ✓
+
+ALL 53 parameters had wrong values! The weights weren't actually being loaded. This was because:
+1. Reimpl had extra parameters (tau_layer*, addskip_*.source.*)
+2. These extra keys were handled by `_add_missing_parameters_to_state_dict()`
+3. But we needed to verify the CORE weights actually transferred
+
+**When to use this check**:
+- After implementing pretrained weight loading
+- When outputs don't match despite weights "loading successfully"
+- When activations are much smaller than expected
+- When predictions are random despite using pretrained model
 
 #### Level 2: Compare Layer Activations
 
@@ -1230,7 +1513,7 @@ def test_complete_equivalence():
 
 4. **Document operation sequences**: Write out the exact sequence for both implementations. Count operations. Verify they match.
 
-5. **Check parameter scope**: Verify which parameters go where (e.g., dt and t_recurrence to RConv2d, but NOT t_feedforward).
+5. **Check parameter scope**: Verify which parameters go where (e.g., dt and t_recurrence to RConv2d).
 
 6. **State semantics matter**: Check if original uses scalar 0 vs None vs torch.zeros for uninitialized states.
 
@@ -1240,21 +1523,9 @@ def test_complete_equivalence():
 
 ### 5.1 Data Preprocessing Requirements
 
-If the model was trained with specific preprocessing, document and configure it:
-
-```python
-# In config_data.yaml, add model requirements:
-model_requirements:
-    MyModel:
-        normalize: null  # If model expects raw pixels (like CorNet)
-        # OR
-        normalize: [[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]  # ImageNet stats
-        note: "Model trained without normalization"
-```
-
-Then users can override normalization:
+If the model was trained with specific preprocessing, document and configure it by overriding normalization:
 ```bash
-snakemake test_model --config normalize=null model_name=MyModel
+snakemake <output_file_path> --config normalize=null
 ```
 
 See the normalization override system implemented in:
@@ -1731,6 +2002,87 @@ def debug_temporal_params(self):
 - Buffer overflow errors (history_length too small)
 
 ---
+
+### Mistake 7: Bias Module None-Handling and Combined Layer Timing
+
+**What Happened**: During final CordsNet debugging, two subtle bugs remained:
+
+1. **Bias modules returning None**: When input was None (during idle timesteps before layer activation), bias modules propagated None instead of returning bias values
+2. **Combined layer timing**: When combining layer7+layer8 outputs for the classifier, used wrong delay indices
+
+**The User's Discovery**: "I fixed the final bugs. One was that the bias modules returned none when input was none, but in the original the layer output is just the biases if there is yet no input. The second was that although the last two layers were combined before the classifier, they also needed the right delay indices, layer8 needed a t_feedforward=0 and the fetching of layer7 output an index of 1, because layer7's output was already written into its hidden state after layer8 is processed."
+
+**What Was Actually True**:
+
+1. **Original CordsNet bias behavior**:
+```python
+# Original code:
+def forward(self, inp=None):
+    if inp is None:
+        # Return bias even without input!
+        return self.bias.view(1, -1, *self.bias.shape[1:])
+    return inp + self.bias
+```
+
+2. **Combined layer timing**: When multiple layers are processed in the same forward pass and their outputs combined:
+   - Layer processed LATER (layer8): Needs `t_feedforward=0` (immediate)
+   - Layer processed EARLIER (layer7): Needs `delay_index=1` (from hidden state)
+
+**Why This Matters**:
+
+Without correct None handling, idle timesteps produce None cascades instead of bias-only activations. This breaks the temporal buildup before actual input arrives.
+
+Without correct delay indices, combined outputs come from wrong timesteps, causing subtle activation mismatches.
+
+**Lesson Learned**:
+> **Check edge cases in temporal flow**: None-handling during idle timesteps, and relative timing when combining outputs from layers processed in the same iteration.
+
+**How to Check**:
+
+1. **Bias None-handling**: Test model with idle_timesteps > 0 and verify early layers output bias values, not None
+
+```python
+# Test None propagation
+model.reset()
+x = None
+for layer_name in model.layer_names:
+    layer = getattr(model, layer_name)
+    x = layer(x)
+    if hasattr(model, f"addbias_{layer_name}"):
+        bias_module = getattr(model, f"addbias_{layer_name}")
+        x = bias_module(x)
+        assert x is not None, f"Bias module returned None for layer {layer_name}"
+```
+
+2. **Combined layer timing**: When combining multiple layer outputs, trace WHEN each writes to hidden state:
+
+```python
+# Combined output example (layer7 + layer8 → classifier)
+# Forward pass order: ... → layer7 → layer8 → classifier
+
+# After layer7 completes:
+layer7.set_hidden_state(layer7_out)  # ← Written to hidden state at end of layer7
+
+# Layer8 begins and completes:
+layer8_out = layer8(...)  # ← Still in current variable, not yet stored
+
+# Classifier combines:
+def combine_for_classifier(self):
+    # layer8: Just computed, use immediate (delay=0)
+    layer8_out = self.layer8.get_hidden_state(delay=0)  # or use direct variable
+
+    # layer7: Already written to hidden state before layer8 started
+    # Need delay=1 to retrieve it
+    layer7_out = self.layer7.get_hidden_state(delay=1)
+
+    return layer8_out + layer7_out
+```
+
+**Symptoms of this bug**:
+- Activations much smaller than expected (None → 0 in some operations)
+- Top-5 predictions close but not identical (4/5 match)
+- Small numerical differences in final output logits
+- Issues appear only with idle_timesteps > 0 or multi-layer combinations
 
 ### Meta-Lesson: The Investigation-First Mindset
 
