@@ -886,7 +886,13 @@ def plot_training_losses(
 
 
 def plot_test_accuracy_confidence(
-    test_data, ax, colors, dt=None, category_col="model_type"
+    test_data,
+    ax,
+    colors,
+    dt=None,
+    category_col="model_type",
+    model_order: Optional[Sequence[str]] = None,
+    display_names: Optional[Dict[str, str]] = None,
 ):
     """
     Create the test accuracy and confidence plot for the top-right panel
@@ -908,11 +914,19 @@ def plot_test_accuracy_confidence(
     else:
         xlabel = "Time Step"
 
-    # Get unique model types
-    model_types = sorted(test_data[category_col].unique())
+    display_lookup = display_names or {}
 
-    # Plot accuracy for each model type
-    for model_type in model_types:
+    available_models = test_data[category_col].unique()
+    ordered_models: List[str] = []
+    if model_order:
+        ordered_models.extend([m for m in model_order if m in available_models])
+    extra_models = [m for m in available_models if m not in ordered_models]
+    ordered_models.extend(sorted(extra_models))
+
+    for model_type in ordered_models:
+        logger.debug(
+            "Plotting test accuracy for %s", display_lookup.get(model_type, model_type)
+        )
         model_data = test_data[test_data[category_col] == model_type]
         if len(model_data) == 0 or "accuracy" not in model_data.columns:
             continue
@@ -924,7 +938,7 @@ def plot_test_accuracy_confidence(
         ax.plot(
             time_avg_data[time_col],
             time_avg_data["accuracy"],
-            color=colors.get(model_type, "gray"),
+            color=colors.get(model_type, DEFAULT_COLOR),
             linewidth=2,
             alpha=0.8,
         )
@@ -937,52 +951,32 @@ def plot_test_accuracy_confidence(
             ax.plot(
                 time_conf_data[time_col],
                 time_conf_data["confidence_avg"],
-                color=colors.get(model_type, "gray"),
+                color=colors.get(model_type, DEFAULT_COLOR),
                 linewidth=2,
                 linestyle=":",
                 alpha=0.8,
             )
 
-    # Add label indicator
     if (
         len(test_data) > 0
         and "label_index" in test_data.columns
-        and time_col in test_data.columns
+        and "times_index" in test_data.columns
     ):
         y_min, y_max = ax.get_ylim()
-
-        # Get unique combinations of time and label
-        label_times = (
-            test_data.groupby([time_col, "label_index"])
-            .size()
-            .reset_index()[[time_col, "label_index"]]
+        indicator_df = calculate_label_indicator(
+            df=test_data,
+            category=category_col,
+            y_range=(y_min, y_max),
+            step_height=0.05,
         )
 
-        # Calculate label indicator (black line at bottom when stimulus is present)
-        indicator_height = (y_max - y_min) * 0.05
-        indicator_base = y_min
-
-        # Create indicator series
-        unique_times = sorted(test_data[time_col].unique())
-        label_indicator = np.zeros(len(unique_times))
-
-        # Create a mapping from time values to indices
-        time_to_idx = {t: i for i, t in enumerate(unique_times)}
-
-        # Mark time points where label is not -1 (indicating presence of stimulus)
-        for _, row in label_times.iterrows():
-            if row["label_index"] != -1:  # Assuming -1 means no stimulus
-                time_val = row[time_col]
-                time_idx = time_to_idx.get(time_val)
-                if time_idx is not None:
-                    label_indicator[time_idx] = indicator_height
-
-        # Plot indicator
-        indicator_values = indicator_base + label_indicator
+        x_values = indicator_df["times_index"].to_numpy()
+        if time_col == "time_ms" and dt is not None:
+            x_values = x_values * dt
 
         ax.plot(
-            unique_times,
-            indicator_values,
+            x_values,
+            indicator_df["label_indicator"].to_numpy(),
             color="black",
             linewidth=2,
             drawstyle="steps-pre",
