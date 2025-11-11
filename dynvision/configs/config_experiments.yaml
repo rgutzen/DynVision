@@ -19,6 +19,7 @@ experiment_config:
     dloader: ['ffcv', 'torch']
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
+    energyloss: [0, 0.1, 0.2, 0.5, 1.0, 2.0, 4.0] # 0.2,
     
   response:
     status: trained
@@ -39,6 +40,16 @@ experiment_config:
       intro: 0
       stim: 2
       ffonly: ['true', 'false']
+
+  responseintermediate:
+    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=249]
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      dsteps: 60
+      intro: 1
+      stim: [30]
+      idle: [20]
 
   stability:
     status: trained

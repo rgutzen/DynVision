@@ -7,7 +7,7 @@ import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 import sys
 
 import numpy as np
@@ -51,6 +51,13 @@ class MeasureConfig:
     confidence_measures: List[str]
     accuracy_topk: List[int]
     classifier_topk: List[int]
+
+
+@dataclass
+class FileMetadata:
+    parameter_value: str
+    category_value: str
+    extra_values: Dict[str, Optional[str]]
 
 
 def build_measure_config(measures: List[str]) -> MeasureConfig:
@@ -314,6 +321,347 @@ def process_test_performance(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _extract_metadata(
+    pt_file: Path,
+    csv_file: Path,
+    data_arg_key: str,
+    category: str,
+    extra_parameters: Sequence[str],
+) -> FileMetadata:
+    """Extract and validate metadata from PT and CSV paths."""
+
+    arg_value = extract_param_from_string(
+        pt_file.parent.name, key=data_arg_key, value_type=None
+    )
+    cat_value = extract_param_from_string(
+        pt_file.parent.name, key=category, value_type=None
+    )
+
+    extra_values: Dict[str, Optional[str]] = {}
+    for param_name in extra_parameters:
+        try:
+            extra_values[param_name] = extract_param_from_string(
+                pt_file.parent.name, key=param_name, value_type=None
+            )
+        except ValueError:
+            extra_values[param_name] = None
+            logger.debug(
+                "    Parameter '%s' not found in '%s'",
+                param_name,
+                pt_file.parent.name,
+            )
+
+    csv_arg = extract_param_from_string(
+        csv_file.parent.name, key=data_arg_key, value_type=None
+    )
+    csv_cat = extract_param_from_string(
+        csv_file.parent.name, key=category, value_type=None
+    )
+
+    for param_name in extra_parameters:
+        try:
+            csv_value = extract_param_from_string(
+                csv_file.parent.name, key=param_name, value_type=None
+            )
+        except ValueError:
+            csv_value = None
+            logger.debug(
+                "    Parameter '%s' not found in CSV path '%s'",
+                param_name,
+                csv_file.parent.name,
+            )
+        pt_value = extra_values.get(param_name)
+        if pt_value is not None and csv_value is not None and pt_value != csv_value:
+            raise ValueError(
+                f"Metadata mismatch for parameter '{param_name}' between PT and CSV files"
+            )
+
+    if arg_value != csv_arg or cat_value != csv_cat:
+        raise ValueError("Metadata mismatch between PT and CSV files")
+
+    return FileMetadata(
+        parameter_value=arg_value,
+        category_value=cat_value,
+        extra_values=extra_values,
+    )
+
+
+def _load_responses(
+    pt_file: Path,
+) -> Tuple[Optional[Dict[str, torch.Tensor]], bool]:
+    """Load response tensors from disk, returning (responses, has_responses)."""
+
+    try:
+        responses = torch.load(pt_file, map_location="cpu", weights_only=True)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning(f"Failed to load responses: {exc}")
+        return None, False
+
+    if not responses or len(responses) == 0:
+        logger.warning("  Empty response file, skipping response metrics")
+        return None, False
+
+    return responses, True
+
+
+def _append_classifier_metrics(
+    sample_df: pd.DataFrame,
+    responses: Optional[Dict[str, torch.Tensor]],
+    confidence_measures: Sequence[str],
+    accuracy_topk_values: Sequence[int],
+    classifier_topk_values: Sequence[int],
+) -> pd.DataFrame:
+    """Augment the sample-level dataframe with classifier-derived metrics."""
+
+    if (
+        responses is None
+        or "classifier" not in responses
+        or not (confidence_measures or accuracy_topk_values or classifier_topk_values)
+    ):
+        return sample_df
+
+    logger.info("  Calculating classifier metrics...")
+
+    classifier_tensor = responses["classifier"]
+    n_samples_csv = sample_df["sample_index"].nunique()
+    n_timesteps = sample_df["times_index"].nunique()
+    n_samples_pt = classifier_tensor.shape[0]
+    n_units = classifier_tensor.shape[-1]
+
+    if n_samples_pt > n_samples_csv:
+        raise ValueError(
+            f"PT file has MORE samples ({n_samples_pt}) than CSV ({n_samples_csv}). "
+            "This should not happen!"
+        )
+
+    if n_samples_pt < n_samples_csv:
+        logger.warning("⚠️  SAMPLE SIZE MISMATCH detected!")
+        logger.warning(f"    CSV file: {n_samples_csv} samples")
+        logger.warning(f"    PT file:  {n_samples_pt} samples")
+        logger.warning(
+            "    Confidence metrics will be NaN for %d samples (sample_index >= %d).",
+            n_samples_csv - n_samples_pt,
+            n_samples_pt,
+        )
+        logger.warning(
+            "    Top-k accuracies will be calculated from available samples only."
+        )
+
+    confidence_measures_needed = [
+        m for m in confidence_measures if m not in sample_df.columns
+    ]
+
+    valid_accuracy_topk = [k for k in accuracy_topk_values if k <= n_units]
+    invalid_accuracy_topk = sorted(
+        set(accuracy_topk_values) - set(valid_accuracy_topk)
+    )
+    if invalid_accuracy_topk:
+        logger.warning(
+            "    Requested accuracy_topk values %s exceed available classifier units (%d)",
+            invalid_accuracy_topk,
+            n_units,
+        )
+
+    valid_classifier_topk = [k for k in classifier_topk_values if k <= n_units]
+    invalid_classifier_topk = sorted(
+        set(classifier_topk_values) - set(valid_classifier_topk)
+    )
+    if invalid_classifier_topk:
+        logger.warning(
+            "    Requested classifier_topk values %s exceed available classifier units (%d)",
+            invalid_classifier_topk,
+            n_units,
+        )
+
+    if n_samples_pt <= 0:
+        logger.warning("    PT file has no samples, skipping classifier metrics")
+        return sample_df
+
+    sorted_df = sample_df.sort_values(["sample_index", "times_index"])
+    sorted_df_available = sorted_df[sorted_df["sample_index"] < n_samples_pt]
+
+    if len(sorted_df_available) == 0:
+        logger.warning("    No valid samples to process for classifier metrics")
+        return sample_df
+
+    guess_tensor = torch.tensor(
+        sorted_df_available["guess_index"].values.reshape(n_samples_pt, n_timesteps),
+        dtype=torch.int,
+    )
+    label_tensor = torch.tensor(
+        sorted_df_available["label_index"].values.reshape(n_samples_pt, n_timesteps),
+        dtype=torch.int,
+    )
+    first_label_tensor = torch.tensor(
+        sorted_df_available["first_label_index"].values.reshape(
+            n_samples_pt, n_timesteps
+        ),
+        dtype=torch.int,
+    )
+
+    classifier_df = calculate_confidence_and_topk_from_classifier(
+        classifier_tensor,
+        label_index=label_tensor,
+        guess_index=guess_tensor,
+        first_label_index=first_label_tensor,
+        topk_values=valid_accuracy_topk,
+        confidence_measures=confidence_measures_needed,
+    )
+
+    sample_df = sample_df.merge(
+        classifier_df,
+        on=["sample_index", "times_index"],
+        how="left",
+    )
+
+    logger.info(f"    Added {len(classifier_df.columns) - 2} classifier metrics")
+
+    if valid_classifier_topk:
+        max_classifier_top = max(valid_classifier_topk)
+        overall_activity = classifier_tensor.sum(dim=(0, 1))
+        ranked_units = torch.argsort(overall_activity, descending=True)[
+            :max_classifier_top
+        ]
+
+        if ranked_units.numel() < max_classifier_top:
+            logger.warning(
+                "    Fewer classifier units (%d) than requested top-k (%d)",
+                ranked_units.numel(),
+                max_classifier_top,
+            )
+
+        reordered_responses = classifier_tensor[:, :, ranked_units]
+        flattened_responses = reordered_responses.reshape(-1, ranked_units.numel())
+
+        if flattened_responses.shape[0] != len(sorted_df_available):
+            logger.warning(
+                "    Classifier activations shape mismatch (expected %d rows, got %d)",
+                len(sorted_df_available),
+                flattened_responses.shape[0],
+            )
+        else:
+            classifier_top_data: Dict[str, np.ndarray] = {
+                "sample_index": sorted_df_available["sample_index"].values,
+                "times_index": sorted_df_available["times_index"].values,
+            }
+            np_responses = flattened_responses.cpu().numpy()
+            for idx in range(ranked_units.numel()):
+                classifier_top_label = f"classifier_top{idx + 1}"
+                unit_index = int(ranked_units[idx].item())
+                classifier_top_data[classifier_top_label] = np_responses[:, idx]
+                classifier_top_data[f"{classifier_top_label}_id"] = np.full(
+                    np_responses.shape[0], unit_index, dtype=np.int64
+                )
+
+            classifier_top_df = pd.DataFrame(classifier_top_data)
+            sample_df = sample_df.merge(
+                classifier_top_df,
+                on=["sample_index", "times_index"],
+                how="left",
+            )
+
+            logger.info(
+                "    Added classifier top-k activations up to k=%d",
+                max_classifier_top,
+            )
+
+    return sample_df
+
+
+def _apply_resolution(sample_df: pd.DataFrame, resolution: str) -> pd.DataFrame:
+    """Convert sample-level dataframe to requested resolution."""
+
+    if resolution == "class":
+        logger.info("  Compressing sample-level data to presentation-level...")
+        return compress_to_presentation_level(
+            sample_df,
+            id_cols=["first_label_index", "times_index"],
+            drop_cols=["sample_index", "image_index"],
+        )
+
+    logger.info("  Keeping data at sample-level (no compression)...")
+    return sample_df.copy()
+
+
+def _append_layer_metrics(
+    result_df: pd.DataFrame,
+    pt_file: Path,
+    has_responses: bool,
+    layer_measures: Sequence[str],
+    memory_monitor: MemoryMonitor,
+    test_df_with_first_label: pd.DataFrame,
+    resolution: str,
+) -> pd.DataFrame:
+    """Attach layer-level metrics to the result dataframe when available."""
+
+    if not (has_responses and layer_measures):
+        return result_df
+
+    logger.info(f"  Calculating layer metrics at '{resolution}' resolution...")
+
+    try:
+        sample_to_presentation = (
+            test_df_with_first_label.groupby("sample_index")["first_label_index"]
+            .first()
+            .to_dict()
+        )
+        presented_classes = sorted(result_df["first_label_index"].unique())
+        unique_times = sorted(result_df["times_index"].unique())
+
+        n_samples_expected = None
+        if resolution == "sample":
+            n_samples_expected = len(sample_to_presentation)
+            logger.info(
+                f"    Expected samples for layer metrics: {n_samples_expected}"
+            )
+
+        layer_metrics = process_layer_responses_incremental(
+            pt_file=pt_file,
+            measures=layer_measures,
+            sample_to_presentation=sample_to_presentation,
+            presented_classes=presented_classes,
+            unique_times=unique_times,
+            memory_monitor=memory_monitor,
+            max_retries=3,
+            resolution=resolution,
+            n_samples_expected=n_samples_expected,
+        )
+
+    except Exception as exc:
+        logger.error(f"Failed to calculate layer metrics: {exc}")
+        raise
+
+    if resolution == "class":
+        layer_data = {
+            "first_label_index": np.repeat(presented_classes, len(unique_times)),
+            "times_index": np.tile(unique_times, len(presented_classes)),
+        }
+        layer_data.update(layer_metrics)
+        layer_df = pd.DataFrame(layer_data)
+        merged_df = result_df.merge(
+            layer_df,
+            on=["first_label_index", "times_index"],
+            how="left",
+        )
+    else:
+        n_samples = result_df["sample_index"].nunique()
+        n_times = len(unique_times)
+        layer_data = {
+            "sample_index": np.repeat(np.arange(n_samples), n_times),
+            "times_index": np.tile(unique_times, n_samples),
+        }
+        layer_data.update(layer_metrics)
+        layer_df = pd.DataFrame(layer_data)
+        merged_df = result_df.merge(
+            layer_df,
+            on=["sample_index", "times_index"],
+            how="left",
+        )
+
+    logger.info(f"    Added {len(layer_metrics)} layer metrics")
+    return merged_df
+
+
 def process_single_batch_optimized(
     response_files: List[Path],
     test_output_files: List[Path],
@@ -322,6 +670,7 @@ def process_single_batch_optimized(
     category: str,
     memory_monitor: MemoryMonitor,
     resolution: str = "sample",
+    extra_parameters: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Process a single batch of files.
@@ -341,370 +690,50 @@ def process_single_batch_optimized(
     confidence_measures = measure_config.confidence_measures
     accuracy_topk_values = measure_config.accuracy_topk
     classifier_topk_values = measure_config.classifier_topk
+    extra_parameters = extra_parameters or []
 
     for pt_file, csv_file in zip(response_files, test_output_files):
         logger.info(f"  Processing: {pt_file.name} + {csv_file.name}")
 
         try:
-            # Extract metadata from filenames
-            try:
-                arg_value = extract_param_from_string(
-                    pt_file.name, key=data_arg_key, value_type=None
-                )
-                cat_value = extract_param_from_string(
-                    pt_file.name, key=category, value_type=None
-                )
-            except ValueError:
-                arg_value = extract_param_from_string(
-                    pt_file.parent.name, key=data_arg_key, value_type=None
-                )
-                cat_value = extract_param_from_string(
-                    pt_file.parent.name, key=category, value_type=None
-                )
+            metadata = _extract_metadata(
+                pt_file,
+                csv_file,
+                data_arg_key=data_arg_key,
+                category=category,
+                extra_parameters=extra_parameters,
+            )
 
-            # Verify CSV has matching metadata
-            try:
-                csv_arg = extract_param_from_string(
-                    csv_file.name, key=data_arg_key, value_type=None
-                )
-                csv_cat = extract_param_from_string(
-                    csv_file.name, key=category, value_type=None
-                )
-            except ValueError:
-                csv_arg = extract_param_from_string(
-                    csv_file.parent.name, key=data_arg_key, value_type=None
-                )
-                csv_cat = extract_param_from_string(
-                    csv_file.parent.name, key=category, value_type=None
-                )
-
-            if arg_value != csv_arg or cat_value != csv_cat:
-                raise ValueError(f"Metadata mismatch between PT and CSV files")
-
-            # ===== STEP 1: Load and process test CSV =====
             test_df = load_df(csv_file)
             test_df_with_first_label = process_test_performance(test_df)
 
-            # ===== STEP 2: Load responses and calculate classifier metrics =====
-            try:
-                responses = torch.load(pt_file, map_location="cpu", weights_only=True)
-                has_responses = bool(responses) and len(responses) > 0
-            except Exception as e:
-                logger.warning(f"Failed to load responses: {e}")
-                has_responses = False
+            responses, has_responses = _load_responses(pt_file)
 
-            # Work at sample level first, then compress
             sample_level_df = test_df_with_first_label.copy()
+            sample_level_df = _append_classifier_metrics(
+                sample_level_df,
+                responses=responses,
+                confidence_measures=confidence_measures,
+                accuracy_topk_values=accuracy_topk_values,
+                classifier_topk_values=classifier_topk_values,
+            )
 
-            if not has_responses:
-                logger.warning(f"  Empty response file, skipping response metrics")
-            elif "classifier" in responses and (
-                confidence_measures or accuracy_topk_values or classifier_topk_values
-            ):
-                logger.info(f"  Calculating classifier metrics...")
+            result_df = _apply_resolution(sample_level_df, resolution=resolution)
+            result_df = _append_layer_metrics(
+                result_df,
+                pt_file=pt_file,
+                has_responses=has_responses,
+                layer_measures=layer_measures,
+                memory_monitor=memory_monitor,
+                test_df_with_first_label=test_df_with_first_label,
+                resolution=resolution,
+            )
 
-                try:
-                    # Get dimensions
-                    n_samples_csv = test_df_with_first_label["sample_index"].nunique()
-                    n_timesteps = test_df_with_first_label["times_index"].nunique()
-                    classifier_tensor = responses["classifier"]
-                    n_samples_pt = classifier_tensor.shape[0]
-                    n_units = classifier_tensor.shape[-1]
-
-                    # Validate sample sizes
-                    if n_samples_pt > n_samples_csv:
-                        raise ValueError(
-                            f"PT file has MORE samples ({n_samples_pt}) than CSV ({n_samples_csv}). "
-                            f"This should not happen!"
-                        )
-
-                    # Log warning if mismatch
-                    if n_samples_pt < n_samples_csv:
-                        logger.warning(f"⚠️  SAMPLE SIZE MISMATCH detected!")
-                        logger.warning(f"    CSV file: {n_samples_csv} samples")
-                        logger.warning(f"    PT file:  {n_samples_pt} samples")
-                        logger.warning(
-                            f"    Confidence metrics will be NaN for {n_samples_csv - n_samples_pt} samples "
-                            f"(sample_index >= {n_samples_pt})."
-                        )
-                        logger.warning(
-                            f"    Top-k accuracies will be calculated from available samples only."
-                        )
-
-                    # Filter confidence measures that are already in CSV
-                    confidence_measures_needed = [
-                        m
-                        for m in confidence_measures
-                        if m not in test_df_with_first_label.columns
-                    ]
-
-                    # Filter accuracy top-k requests that exceed classifier dimensionality
-                    valid_accuracy_topk: List[int] = []
-                    if accuracy_topk_values:
-                        valid_accuracy_topk = [
-                            k for k in accuracy_topk_values if k <= n_units
-                        ]
-                        invalid_accuracy_topk = sorted(
-                            set(accuracy_topk_values) - set(valid_accuracy_topk)
-                        )
-                        if invalid_accuracy_topk:
-                            logger.warning(
-                                "    Requested accuracy_topk values %s exceed available classifier units (%d)",
-                                invalid_accuracy_topk,
-                                n_units,
-                            )
-
-                    # Filter classifier top-k requests similarly
-                    valid_classifier_topk: List[int] = []
-                    if classifier_topk_values:
-                        valid_classifier_topk = [
-                            k for k in classifier_topk_values if k <= n_units
-                        ]
-                        invalid_classifier_topk = sorted(
-                            set(classifier_topk_values) - set(valid_classifier_topk)
-                        )
-                        if invalid_classifier_topk:
-                            logger.warning(
-                                "    Requested classifier_topk values %s exceed available classifier units (%d)",
-                                invalid_classifier_topk,
-                                n_units,
-                            )
-
-                    # Prepare tensors for available samples only
-                    if n_samples_pt > 0:
-                        sorted_df = test_df_with_first_label.sort_values(
-                            ["sample_index", "times_index"]
-                        )
-                        sorted_df_available = sorted_df[
-                            sorted_df["sample_index"] < n_samples_pt
-                        ]
-
-                        if len(sorted_df_available) > 0:
-                            guess_tensor = torch.tensor(
-                                sorted_df_available["guess_index"].values.reshape(
-                                    n_samples_pt, n_timesteps
-                                ),
-                                dtype=torch.int,
-                            )
-                            label_tensor = torch.tensor(
-                                sorted_df_available["label_index"].values.reshape(
-                                    n_samples_pt, n_timesteps
-                                ),
-                                dtype=torch.int,
-                            )
-                            first_label_tensor = torch.tensor(
-                                sorted_df_available[
-                                    "first_label_index"
-                                ].values.reshape(n_samples_pt, n_timesteps),
-                                dtype=torch.int,
-                            )
-
-                            # Calculate classifier metrics at sample level
-                            classifier_df = (
-                                calculate_confidence_and_topk_from_classifier(
-                                    classifier_tensor,
-                                    label_index=label_tensor,
-                                    guess_index=guess_tensor,
-                                    first_label_index=first_label_tensor,
-                                    topk_values=valid_accuracy_topk,
-                                    confidence_measures=confidence_measures_needed,
-                                )
-                            )
-
-                            # Merge back to full sample_level_df (creates NaN for missing samples)
-                            sample_level_df = sample_level_df.merge(
-                                classifier_df,
-                                on=["sample_index", "times_index"],
-                                how="left",
-                            )
-
-                            logger.info(
-                                f"    Added {len(classifier_df.columns)-2} classifier metrics"
-                            )
-
-                            # Add classifier top-k activation columns
-                            if valid_classifier_topk:
-                                max_classifier_top = max(valid_classifier_topk)
-                                overall_activity = classifier_tensor.sum(dim=(0, 1))
-                                ranked_units = torch.argsort(
-                                    overall_activity, descending=True
-                                )
-                                ranked_units = ranked_units[:max_classifier_top]
-
-                                if ranked_units.numel() < max_classifier_top:
-                                    logger.warning(
-                                        "    Fewer classifier units (%d) than requested top-k (%d)",
-                                        ranked_units.numel(),
-                                        max_classifier_top,
-                                    )
-
-                                reordered_responses = classifier_tensor[
-                                    :, :, ranked_units
-                                ]
-                                flattened_responses = reordered_responses.reshape(
-                                    -1, ranked_units.numel()
-                                )
-
-                                if flattened_responses.shape[0] != len(
-                                    sorted_df_available
-                                ):
-                                    logger.warning(
-                                        "    Classifier activations shape mismatch (expected %d rows, got %d)",
-                                        len(sorted_df_available),
-                                        flattened_responses.shape[0],
-                                    )
-                                else:
-                                    classifier_top_data = {
-                                        "sample_index": sorted_df_available[
-                                            "sample_index"
-                                        ].values,
-                                        "times_index": sorted_df_available[
-                                            "times_index"
-                                        ].values,
-                                    }
-                                    np_responses = flattened_responses.cpu().numpy()
-                                    for idx in range(ranked_units.numel()):
-                                        classifier_top_label = (
-                                            f"classifier_top{idx + 1}"
-                                        )
-                                        unit_index = int(ranked_units[idx].item())
-                                        classifier_top_data[classifier_top_label] = (
-                                            np_responses[:, idx]
-                                        )
-                                        classifier_top_data[
-                                            f"{classifier_top_label}_id"
-                                        ] = np.full(
-                                            np_responses.shape[0],
-                                            unit_index,
-                                            dtype=np.int64,
-                                        )
-
-                                    classifier_top_df = pd.DataFrame(
-                                        classifier_top_data
-                                    )
-                                    sample_level_df = sample_level_df.merge(
-                                        classifier_top_df,
-                                        on=["sample_index", "times_index"],
-                                        how="left",
-                                    )
-
-                                    logger.info(
-                                        "    Added classifier top-k activations up to k=%d",
-                                        max_classifier_top,
-                                    )
-                        else:
-                            logger.warning(
-                                f"    No valid samples to process for classifier metrics"
-                            )
-                    else:
-                        logger.warning(
-                            f"    PT file has no samples, skipping classifier metrics"
-                        )
-
-                except Exception as e:
-                    logger.error(f"Failed to calculate classifier metrics: {e}")
-                    raise
-
-            # ===== STEP 3: Conditionally compress based on resolution =====
-            if resolution == "class":
-                logger.info(
-                    f"  Compressing sample-level data to presentation-level..."
-                )
-                result_df = compress_to_presentation_level(
-                    sample_level_df,
-                    id_cols=["first_label_index", "times_index"],
-                    drop_cols=["sample_index", "image_index"],
-                )
-            else:  # resolution == "sample"
-                logger.info(f"  Keeping data at sample-level (no compression)...")
-                result_df = sample_level_df.copy()
-
-            # ===== STEP 4: Calculate layer response metrics =====
-            if has_responses and layer_measures:
-                logger.info(
-                    f"  Calculating layer metrics at '{resolution}' resolution..."
-                )
-
-                try:
-                    # Build sample-to-presentation mapping
-                    sample_to_presentation = (
-                        test_df_with_first_label.groupby("sample_index")[
-                            "first_label_index"
-                        ]
-                        .first()
-                        .to_dict()
-                    )
-
-                    presented_classes = sorted(result_df["first_label_index"].unique())
-                    unique_times = sorted(result_df["times_index"].unique())
-
-                    # Calculate expected sample count for sample resolution mode
-                    n_samples_expected = None
-                    if resolution == "sample":
-                        n_samples_expected = len(sample_to_presentation)
-                        logger.info(
-                            f"    Expected samples for layer metrics: {n_samples_expected}"
-                        )
-
-                    # Use incremental layer processing with resolution parameter
-                    layer_metrics = process_layer_responses_incremental(
-                        pt_file=pt_file,
-                        measures=layer_measures,
-                        sample_to_presentation=sample_to_presentation,
-                        presented_classes=presented_classes,
-                        unique_times=unique_times,
-                        memory_monitor=memory_monitor,
-                        max_retries=3,
-                        resolution=resolution,
-                        n_samples_expected=n_samples_expected,
-                    )
-
-                    # Convert layer metrics to DataFrame based on resolution
-                    if resolution == "class":
-                        # Class resolution: (first_label_index, times_index)
-                        n_rows = len(presented_classes) * len(unique_times)
-                        layer_data = {
-                            "first_label_index": np.repeat(
-                                presented_classes, len(unique_times)
-                            ),
-                            "times_index": np.tile(
-                                unique_times, len(presented_classes)
-                            ),
-                        }
-                        layer_data.update(layer_metrics)
-                        layer_df = pd.DataFrame(layer_data)
-
-                        # Merge on (first_label_index, times_index)
-                        result_df = result_df.merge(
-                            layer_df,
-                            on=["first_label_index", "times_index"],
-                            how="left",
-                        )
-                    else:  # resolution == "sample"
-                        # Sample resolution: (sample_index, times_index)
-                        n_samples = result_df["sample_index"].nunique()
-                        n_times = len(unique_times)
-                        layer_data = {
-                            "sample_index": np.repeat(np.arange(n_samples), n_times),
-                            "times_index": np.tile(unique_times, n_samples),
-                        }
-                        layer_data.update(layer_metrics)
-                        layer_df = pd.DataFrame(layer_data)
-
-                        # Merge on (sample_index, times_index)
-                        result_df = result_df.merge(
-                            layer_df, on=["sample_index", "times_index"], how="left"
-                        )
-
-                    logger.info(f"    Added {len(layer_metrics)} layer metrics")
-
-                except Exception as e:
-                    logger.error(f"Failed to calculate layer metrics: {e}")
-                    raise
-
-            # ===== STEP 5: Add metadata columns =====
-            result_df[data_arg_key] = arg_value
-            result_df[category] = cat_value
+            result_df[data_arg_key] = metadata.parameter_value
+            result_df[category] = metadata.category_value
+            for param_name, param_value in metadata.extra_values.items():
+                if param_value is not None:
+                    result_df[param_name] = param_value
 
             batch_dfs.append(result_df)
             logger.info(
@@ -712,7 +741,7 @@ def process_single_batch_optimized(
             )
 
             # Cleanup
-            if has_responses:
+            if responses is not None:
                 del responses
             memory_monitor.cleanup()
 
@@ -765,6 +794,12 @@ parser.add_argument(
     help="Category to extract from filenames",
 )
 parser.add_argument(
+    "--additional_parameters",
+    nargs="*",
+    default=None,
+    help="Optional additional parameter names to extract from response directory names",
+)
+parser.add_argument(
     "--measures",
     nargs="+",
     type=str,
@@ -796,17 +831,19 @@ parser.add_argument(
     help="If 'True', remove input response files after SUCCESSFUL processing",
 )
 parser.add_argument(
-    "--validate",
-    action="store_true",
-    help="Run validation against original implementation (requires both implementations)",
-)
-parser.add_argument(
     "--sample_resolution",
     type=str,
     default="sample",
     choices=["sample", "class"],
     help="Resolution for output data: 'sample' for (sample_index, times_index), "
     "'class' for (first_label_index, times_index) with aggregation",
+)
+parser.add_argument(
+    "--fail_on_missing_inputs",
+    type=str_to_bool,
+    default="True",
+    help="If 'True', raise an error when input files are missing or a batch fails; "
+    "if 'False', skip problematic inputs and continue processing",
 )
 
 
@@ -819,6 +856,7 @@ if __name__ == "__main__":
     # Initialize measure configuration and memory monitor
     measure_config = build_measure_config(args.measures)
     memory_monitor = MemoryMonitor(memory_limit_gb=args.memory_limit_gb)
+    additional_parameters = args.additional_parameters or []
 
     # Log configuration
     logger.info("=" * 80)
@@ -833,6 +871,9 @@ if __name__ == "__main__":
     logger.info(f"Memory limit: {args.memory_limit_gb}GB")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Files to process: {len(args.responses)}")
+    logger.info(f"Fail on missing inputs: {args.fail_on_missing_inputs}")
+    if additional_parameters:
+        logger.info(f"Additional parameters: {additional_parameters}")
     if args.sample_resolution == "sample":
         logger.info("NOTE: Output at sample-level (no compression)")
     else:
@@ -842,109 +883,132 @@ if __name__ == "__main__":
 
     processing_successful = False
     df = None
-    df_validation = None  # For validation mode
 
     try:
         # Process data
-        logger.info(f"\nProcessing {len(args.responses)} file pairs...")
-        memory_monitor.log_memory("start")
-
-        # Process in batches
-        all_dataframes = []
-        all_dataframes_validation = [] if args.validate else None
-        batch_count = 0
-
-        for response_batch, output_batch in chunk_lists(
-            args.responses, args.test_outputs, args.batch_size
-        ):
-            batch_count += 1
-            logger.info(
-                f"\nBatch {batch_count}/{(len(args.responses) + args.batch_size - 1) // args.batch_size}"
+        if len(args.responses) != len(args.test_outputs):
+            mismatch_msg = (
+                "Response file count (%d) does not match test output file count (%d)."
+                % (len(args.responses), len(args.test_outputs))
             )
+            if args.fail_on_missing_inputs:
+                logger.error(mismatch_msg)
+                sys.exit(1)
+            logger.warning(mismatch_msg + " Extra files will be ignored.")
 
-            try:
-                # STEP 2: Use incremental extraction
-                batch_df = process_single_batch_optimized(
-                    response_batch,
-                    output_batch,
-                    data_arg_key=args.parameter,
-                    measure_config=measure_config,
-                    category=args.category,
-                    memory_monitor=memory_monitor,
-                    resolution=args.sample_resolution,
+        paired_inputs: List[Tuple[Path, Path]] = []
+        max_pairs = min(len(args.responses), len(args.test_outputs))
+        for idx in range(max_pairs):
+            response_path = args.responses[idx]
+            output_path = args.test_outputs[idx]
+            missing_paths = [
+                str(path) for path in (response_path, output_path) if not path.exists()
+            ]
+            if missing_paths:
+                missing_msg = f"Missing input file(s) for pair {idx + 1}: {', '.join(missing_paths)}"
+                if args.fail_on_missing_inputs:
+                    logger.error(missing_msg)
+                    sys.exit(1)
+                logger.warning(missing_msg + " Skipping pair.")
+                continue
+            paired_inputs.append((response_path, output_path))
+
+        if not paired_inputs:
+            logger_msg = "No valid response/test output pairs to process."
+            if args.fail_on_missing_inputs:
+                logger.error(logger_msg)
+                sys.exit(1)
+            logger.warning(logger_msg)
+            df = pd.DataFrame()
+            logger.info(f"\nSaving processed data to: {args.output}")
+            df.to_csv(args.output, index=False)
+            logger.info(f"✅ Successfully saved {len(df)} rows")
+        else:
+            valid_responses = [pair[0] for pair in paired_inputs]
+            valid_test_outputs = [pair[1] for pair in paired_inputs]
+
+            logger.info(f"\nProcessing {len(paired_inputs)} file pairs...")
+            memory_monitor.log_memory("start")
+
+            # Process in batches
+            all_dataframes = []
+            batch_count = 0
+
+            for response_batch, output_batch in chunk_lists(
+                valid_responses, valid_test_outputs, args.batch_size
+            ):
+                batch_count += 1
+                logger.info(
+                    f"\nBatch {batch_count}/{(len(valid_responses) + args.batch_size - 1) // args.batch_size}"
                 )
 
-                if not batch_df.empty:
-                    all_dataframes.append(batch_df)
-                    logger.info(
-                        f"  Batch {batch_count} processed: {len(batch_df)} rows"
+                try:
+                    # STEP 2: Use incremental extraction
+                    batch_df = process_single_batch_optimized(
+                        response_batch,
+                        output_batch,
+                        data_arg_key=args.parameter,
+                        measure_config=measure_config,
+                        category=args.category,
+                        memory_monitor=memory_monitor,
+                        resolution=args.sample_resolution,
+                        extra_parameters=additional_parameters,
                     )
-                else:
-                    raise RuntimeError(f"Batch {batch_count} produced empty dataframe")
 
-                # Validation mode: also run old implementation
-                if args.validate:
-                    logger.info(f"  Running validation for batch {batch_count}...")
-                    try:
-                        # Import and keep old function for validation
-                        from dynvision.utils.memory_efficient_loading import (
-                            process_layer_responses_sequential,
-                        )
-
-                        # Process with old method (keeping tensors)
-                        # Note: This would need the old create_layer_dataframe_from_metrics
-                        # For now, just log that validation is attempted
+                    if not batch_df.empty:
+                        all_dataframes.append(batch_df)
                         logger.info(
-                            "    Validation: Old implementation would run here"
+                            f"  Batch {batch_count} processed: {len(batch_df)} rows"
                         )
-                        # batch_df_old = process_single_batch_optimized(...)
-                        # all_dataframes_validation.append(batch_df_old)
-                    except Exception as e:
-                        logger.warning(f"    Validation failed: {e}")
+                    else:
+                        raise RuntimeError(
+                            f"Batch {batch_count} produced empty dataframe"
+                        )
 
-                # Cleanup between batches
-                del batch_df
+                    # Cleanup between batches
+                    del batch_df
+                    memory_monitor.cleanup()
+
+                except Exception as e:
+                    logger.error(f"Failed to process batch {batch_count}")
+                    logger.error(
+                        f"  Response files: {[f.name for f in response_batch]}"
+                    )
+                    logger.error(f"  Output files: {[f.name for f in output_batch]}")
+                    memory_monitor.cleanup()
+                    if args.fail_on_missing_inputs:
+                        raise RuntimeError(f"Batch {batch_count} failed: {e}") from e
+                    logger.warning(
+                        "Batch %s skipped due to error and fail_on_missing_inputs=False",
+                        batch_count,
+                    )
+                    continue
+
+            if not all_dataframes:
+                message = "No data was successfully processed from any batch"
+                if args.fail_on_missing_inputs:
+                    raise RuntimeError(message)
+                logger.warning(message)
+                df = pd.DataFrame()
+                logger.info(f"\nSaving processed data to: {args.output}")
+                df.to_csv(args.output, index=False)
+                logger.info(f"✅ Successfully saved {len(df)} rows")
+            else:
+                # Combine all dataframes
+                logger.info(f"\nCombining {len(all_dataframes)} batches...")
+                df = pd.concat(all_dataframes, ignore_index=True)
+                del all_dataframes
                 memory_monitor.cleanup()
 
-            except Exception as e:
-                logger.error(f"Failed to process batch {batch_count}")
-                logger.error(f"  Response files: {[f.name for f in response_batch]}")
-                logger.error(f"  Output files: {[f.name for f in output_batch]}")
-                raise RuntimeError(f"Batch {batch_count} failed: {e}") from e
+                logger.info(f"Total combined data: {len(df)} rows")
+                memory_monitor.log_memory("after combining")
 
-        if not all_dataframes:
-            raise RuntimeError("No data was successfully processed from any batch")
+                # Save processed data
+                logger.info(f"\nSaving processed data to: {args.output}")
+                df.to_csv(args.output, index=False)
+                logger.info(f"✅ Successfully saved {len(df)} rows")
 
-        # Combine all dataframes
-        logger.info(f"\nCombining {len(all_dataframes)} batches...")
-        df = pd.concat(all_dataframes, ignore_index=True)
-        del all_dataframes
-        memory_monitor.cleanup()
-
-        logger.info(f"Total combined data: {len(df)} rows")
-        memory_monitor.log_memory("after combining")
-
-        # Validation mode comparison
-        if args.validate and all_dataframes_validation:
-            logger.info("\n" + "=" * 80)
-            logger.info("VALIDATION MODE")
-            logger.info("=" * 80)
-            df_validation = pd.concat(all_dataframes_validation, ignore_index=True)
-            del all_dataframes_validation
-
-            # Compare outputs
-            validation_passed = validate_outputs(df, df_validation)
-            if not validation_passed:
-                logger.warning(
-                    "⚠️  Validation found differences between implementations"
-                )
-
-        # Save processed data
-        logger.info(f"\nSaving processed data to: {args.output}")
-        df.to_csv(args.output, index=False)
-        logger.info(f"✅ Successfully saved {len(df)} rows")
-
-        processing_successful = True
+                processing_successful = len(df) > 0
 
     except Exception as e:
         logger.error("\n" + "=" * 80)
@@ -992,58 +1056,71 @@ if __name__ == "__main__":
         logger.info("=" * 80)
         logger.info(f"Resolution: {args.sample_resolution}")
         logger.info(f"Shape: {df.shape}")
-        logger.info(f"Unique {args.category} values: {df[args.category].unique()}")
-        logger.info(f"Unique {args.parameter} values: {df[args.parameter].unique()}")
-        logger.info(f"Time steps: {sorted(df['times_index'].unique())}")
+        if df.empty:
+            logger.info("Dataset is empty; skipping detailed summary.")
+        else:
+            if args.category in df.columns:
+                logger.info(
+                    f"Unique {args.category} values: {df[args.category].unique()}"
+                )
+            if args.parameter in df.columns:
+                logger.info(
+                    f"Unique {args.parameter} values: {df[args.parameter].unique()}"
+                )
+            if "times_index" in df.columns:
+                logger.info(f"Time steps: {sorted(df['times_index'].unique())}")
 
-        if args.sample_resolution == "sample" and "sample_index" in df.columns:
-            logger.info(f"Samples: {df['sample_index'].nunique()}")
+            if args.sample_resolution == "sample" and "sample_index" in df.columns:
+                logger.info(f"Samples: {df['sample_index'].nunique()}")
 
-        logger.info(f"Presentation labels: {sorted(df['first_label_index'].unique())}")
+            if "first_label_index" in df.columns:
+                logger.info(
+                    f"Presentation labels: {sorted(df['first_label_index'].unique())}"
+                )
 
-        # Layer metrics summary
-        layer_cols = [
-            col
-            for col in df.columns
-            if any(pattern in col for pattern in measure_config.layer_measures)
-        ]
-        if measure_config.classifier_topk:
-            layer_cols.extend(
-                [col for col in df.columns if col.startswith("classifier_top")]
-            )
-        layer_cols = sorted(set(layer_cols))
-        logger.info(f"Layer metric columns: {len(layer_cols)}")
+            # Layer metrics summary
+            layer_cols = [
+                col
+                for col in df.columns
+                if any(pattern in col for pattern in measure_config.layer_measures)
+            ]
+            if measure_config.classifier_topk:
+                layer_cols.extend(
+                    [col for col in df.columns if col.startswith("classifier_top")]
+                )
+            layer_cols = sorted(set(layer_cols))
+            logger.info(f"Layer metric columns: {len(layer_cols)}")
 
-        # Performance metrics summary
-        if "accuracy" in df.columns:
-            logger.info(
-                f"Accuracy range: {df['accuracy'].min():.3f} to {df['accuracy'].max():.3f}"
-            )
+            # Performance metrics summary
+            if "accuracy" in df.columns and not df["accuracy"].empty:
+                logger.info(
+                    f"Accuracy range: {df['accuracy'].min():.3f} to {df['accuracy'].max():.3f}"
+                )
 
-        accuracy_columns = []
-        for col in df.columns:
-            if col.startswith("accuracy_top"):
-                suffix = col.replace("accuracy_top", "", 1)
-                if suffix.isdigit():
-                    accuracy_columns.append((int(suffix), col))
-        accuracy_columns.sort()
-        for k, topk_col in accuracy_columns:
-            min_val = df[topk_col].min(skipna=True)
-            max_val = df[topk_col].max(skipna=True)
-            logger.info(f"Top-{k} accuracy range: {min_val:.3f} to {max_val:.3f}")
+            accuracy_columns = []
+            for col in df.columns:
+                if col.startswith("accuracy_top"):
+                    suffix = col.replace("accuracy_top", "", 1)
+                    if suffix.isdigit():
+                        accuracy_columns.append((int(suffix), col))
+            accuracy_columns.sort()
+            for k, topk_col in accuracy_columns:
+                min_val = df[topk_col].min(skipna=True)
+                max_val = df[topk_col].max(skipna=True)
+                logger.info(f"Top-{k} accuracy range: {min_val:.3f} to {max_val:.3f}")
 
-        classifier_columns = []
-        for col in df.columns:
-            if col.startswith("classifier_top"):
-                suffix = col.replace("classifier_top", "", 1)
-                if suffix.isdigit():
-                    classifier_columns.append((int(suffix), col))
-        classifier_columns.sort()
-        for rank, classifier_col in classifier_columns:
-            min_val = df[classifier_col].min(skipna=True)
-            max_val = df[classifier_col].max(skipna=True)
-            logger.info(
-                f"Classifier top{rank} activation range: {min_val:.3f} to {max_val:.3f}"
-            )
+            classifier_columns = []
+            for col in df.columns:
+                if col.startswith("classifier_top"):
+                    suffix = col.replace("classifier_top", "", 1)
+                    if suffix.isdigit():
+                        classifier_columns.append((int(suffix), col))
+            classifier_columns.sort()
+            for rank, classifier_col in classifier_columns:
+                min_val = df[classifier_col].min(skipna=True)
+                max_val = df[classifier_col].max(skipna=True)
+                logger.info(
+                    f"Classifier top{rank} activation range: {min_val:.3f} to {max_val:.3f}"
+                )
 
-        logger.info("\n✅ Processing completed successfully!")
+            logger.info("\n✅ Processing completed successfully!")

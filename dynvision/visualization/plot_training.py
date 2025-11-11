@@ -22,7 +22,6 @@ from dynvision.utils.visualization_utils import (
     get_display_name,
     get_color,
     calculate_label_indicator,
-    get_category_plotting_settings,
 )
 
 
@@ -64,13 +63,13 @@ def _coerce_to_json_string(value: Optional[str]) -> Optional[str]:
         try:
             return json.dumps(literal_value)
         except (TypeError, ValueError):
-            logger.warning(
-                "Unable to convert configuration literal to JSON: %s", text
-            )
+            logger.warning("Unable to convert configuration literal to JSON: %s", text)
             return None
 
 
-def parse_palette(palette_input: Optional[Union[str, Dict[str, str]]]) -> Dict[str, str]:
+def parse_palette(
+    palette_input: Optional[Union[str, Dict[str, str]]]
+) -> Dict[str, str]:
     """Parse palette input from CLI/config into a dictionary."""
 
     if palette_input is None:
@@ -119,7 +118,13 @@ def _determine_model_order(
 
     if config:
         ordering = config.get("ordering", {})
-        for key in ("model_type", "model_types", "recurrence_type", "recurrence", "rctype"):
+        for key in (
+            "model_type",
+            "model_types",
+            "recurrence_type",
+            "recurrence",
+            "rctype",
+        ):
             values = ordering.get(key) or ordering.get(key.lower())
             if values:
                 candidate_order = list(values)
@@ -136,7 +141,9 @@ def _determine_model_order(
 
 
 def _get_model_color(
-    model_type: str, colors: Dict[str, str], config: Optional[Dict[str, Dict[str, str]]]
+    model_type: str,
+    colors: Dict[str, str],
+    config: Optional[Dict[str, Dict[str, str]]],
 ) -> str:
     """Resolve color for a model based on config overrides and palette."""
 
@@ -156,7 +163,9 @@ def _get_model_color(
     return DEFAULT_COLOR
 
 
-def _format_model_label(model_type: str, config: Optional[Dict[str, Dict[str, str]]]) -> str:
+def _format_model_label(
+    model_type: str, config: Optional[Dict[str, Dict[str, str]]]
+) -> str:
     """Format model label using config naming overrides when available."""
 
     if config:
@@ -175,7 +184,9 @@ def _load_test_data(test_data_paths: Sequence[Path]) -> pd.DataFrame:
 
     dataframes = []
     for idx, path in enumerate(test_data_paths, start=1):
-        logger.info("Loading test data file %s/%s: %s", idx, len(test_data_paths), path)
+        logger.info(
+            "Loading test data file %s/%s: %s", idx, len(test_data_paths), path
+        )
         df = pd.read_csv(path)
         logger.debug("Loaded test data shape %s from %s", df.shape, path)
         dataframes.append(df)
@@ -187,6 +198,7 @@ def _load_test_data(test_data_paths: Sequence[Path]) -> pd.DataFrame:
         concatenated.shape[1],
     )
     return concatenated
+
 
 # Global model order for consistent plotting across all subplots
 MODEL_ORDER = [
@@ -216,6 +228,8 @@ def parse_model_identifier_from_column(column_name: str) -> str:
         return result
     else:
         return "unknown"
+
+
 def load_accuracy_data(accuracy_csv_path: Path) -> pd.DataFrame:
     """
     Load and process training and validation accuracy data from W&B export.
@@ -609,7 +623,7 @@ def plot_training_losses(
         cross_entropy_loss_df: Processed cross entropy loss data
         memory_df: Processed memory data
         epoch_df: Processed epoch timing data
-    palette: Color palette override (string or dict)
+        palette: Color palette override (string or dict)
         test_data: Optional DataFrame with test performance and layer responses
         dt: Optional time step duration in milliseconds for x-axis in test plots
         category_col: Column name containing model categories in test data
@@ -637,7 +651,13 @@ def plot_training_losses(
         ax4 = ax5 = None
 
     all_models: set = set()
-    for df in [accuracy_df, energy_loss_df, cross_entropy_loss_df, memory_df, epoch_df]:
+    for df in [
+        accuracy_df,
+        energy_loss_df,
+        cross_entropy_loss_df,
+        memory_df,
+        epoch_df,
+    ]:
         if df is not None and not df.empty and "model_type" in df.columns:
             all_models.update(df["model_type"].dropna().unique())
 
@@ -653,11 +673,16 @@ def plot_training_losses(
         model: _format_model_label(model, config) for model in available_model_order
     }
     color_lookup = {
-        model: _get_model_color(model, colors, config) for model in available_model_order
+        model: _get_model_color(model, colors, config)
+        for model in available_model_order
     }
 
     # Plot training and validation accuracy curves
-    if accuracy_df is not None and not accuracy_df.empty and "model_type" in accuracy_df.columns:
+    if (
+        accuracy_df is not None
+        and not accuracy_df.empty
+        and "model_type" in accuracy_df.columns
+    ):
         for model_type in available_model_order:
             model_slice = accuracy_df[accuracy_df.model_type == model_type].copy()
             if model_slice.empty:
@@ -701,7 +726,9 @@ def plot_training_losses(
 
     train_val_legend = [
         Line2D([0], [0], color="black", linewidth=2, linestyle="-", label="Training"),
-        Line2D([0], [0], color="black", linewidth=2, linestyle=":", label="Validation"),
+        Line2D(
+            [0], [0], color="black", linewidth=2, linestyle=":", label="Validation"
+        ),
     ]
     ax1.legend(handles=train_val_legend, loc="lower right", frameon=False)
 
@@ -740,7 +767,9 @@ def plot_training_losses(
         and "model_type" in energy_loss_df.columns
     ):
         for model_type in available_model_order:
-            model_slice = energy_loss_df[energy_loss_df.model_type == model_type].copy()
+            model_slice = energy_loss_df[
+                energy_loss_df.model_type == model_type
+            ].copy()
             if model_slice.empty:
                 continue
 
@@ -766,7 +795,9 @@ def plot_training_losses(
     ax2.grid(True, alpha=0.3)
 
     loss_legend = [
-        Line2D([0], [0], color="black", linewidth=2, linestyle="-", label="Cross Entropy"),
+        Line2D(
+            [0], [0], color="black", linewidth=2, linestyle="-", label="Cross Entropy"
+        ),
         Line2D([0], [0], color="black", linewidth=2, linestyle="--", label="Energy"),
     ]
     ax2.legend(handles=loss_legend, loc="upper right", frameon=False)
@@ -1000,7 +1031,15 @@ def plot_test_accuracy_confidence(
     ax.set_ylabel("Performance")
 
 
-def plot_v1_response(test_data, ax, colors, dt=None, category_col="model_type"):
+def plot_v1_response(
+    test_data,
+    ax,
+    colors,
+    dt=None,
+    category_col="model_type",
+    model_order: Optional[Sequence[str]] = None,
+    display_names: Optional[Dict[str, str]] = None,
+):
     """
     Create the V1 response plot for the bottom-right panel
 
@@ -1041,11 +1080,19 @@ def plot_v1_response(test_data, ax, colors, dt=None, category_col="model_type"):
     else:
         xlabel = "Time Step"
 
-    # Get unique model types
-    model_types = sorted(test_data[category_col].unique())
+    display_lookup = display_names or {}
 
-    # Plot V1 response for each model type
-    for model_type in model_types:
+    available_models = test_data[category_col].unique()
+    ordered_models: List[str] = []
+    if model_order:
+        ordered_models.extend([m for m in model_order if m in available_models])
+    extra_models = [m for m in available_models if m not in ordered_models]
+    ordered_models.extend(sorted(extra_models))
+
+    for model_type in ordered_models:
+        logger.debug(
+            "Plotting V1 response for %s", display_lookup.get(model_type, model_type)
+        )
         model_data = test_data[test_data[category_col] == model_type]
         if len(model_data) == 0 or v1_col not in model_data.columns:
             continue
@@ -1057,7 +1104,7 @@ def plot_v1_response(test_data, ax, colors, dt=None, category_col="model_type"):
         ax.plot(
             time_avg_data[time_col],
             time_avg_data[v1_col],
-            color=colors.get(model_type, "gray"),
+            color=colors.get(model_type, DEFAULT_COLOR),
             linewidth=2,
             alpha=0.8,
         )
@@ -1066,42 +1113,23 @@ def plot_v1_response(test_data, ax, colors, dt=None, category_col="model_type"):
     if (
         len(test_data) > 0
         and "label_index" in test_data.columns
-        and time_col in test_data.columns
+        and "times_index" in test_data.columns
     ):
         y_min, y_max = ax.get_ylim()
-
-        # Get unique combinations of time and label
-        label_times = (
-            test_data.groupby([time_col, "label_index"])
-            .size()
-            .reset_index()[[time_col, "label_index"]]
+        indicator_df = calculate_label_indicator(
+            df=test_data,
+            category=category_col,
+            y_range=(y_min, y_max),
+            step_height=0.05,
         )
 
-        # Calculate label indicator
-        indicator_height = (y_max - y_min) * 0.05
-        indicator_base = y_min
-
-        # Create indicator series
-        unique_times = sorted(test_data[time_col].unique())
-        label_indicator = np.zeros(len(unique_times))
-
-        # Create a mapping from time values to indices
-        time_to_idx = {t: i for i, t in enumerate(unique_times)}
-
-        # Mark time points where label is not -1
-        for _, row in label_times.iterrows():
-            if row["label_index"] != -1:  # Assuming -1 means no stimulus
-                time_val = row[time_col]
-                time_idx = time_to_idx.get(time_val)
-                if time_idx is not None:
-                    label_indicator[time_idx] = indicator_height
-
-        # Plot indicator
-        indicator_values = indicator_base + label_indicator
+        x_values = indicator_df["times_index"].to_numpy()
+        if time_col == "time_ms" and dt is not None:
+            x_values = x_values * dt
 
         ax.plot(
-            unique_times,
-            indicator_values,
+            x_values,
+            indicator_df["label_indicator"].to_numpy(),
             color="black",
             linewidth=2,
             drawstyle="steps-pre",
@@ -1113,6 +1141,8 @@ def plot_v1_response(test_data, ax, colors, dt=None, category_col="model_type"):
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Avg V1 Response")  # Changed as requested
     # Remove title as requested
+
+
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(
@@ -1151,14 +1181,15 @@ def main():
     parser.add_argument(
         "--test_data",
         type=Path,
+        nargs="+",
         required=False,
-        help="Path to test performance data CSV for third column plots",
+        help="Path(s) to test performance data CSV for third column plots",
     )
     parser.add_argument(
         "--palette",
         type=str,
-        default="{'full': '#1f77b4', 'self': '#ff7f0e', 'depthpointwise': '#2ca02c', 'pointdepthwise': '#d62728', 'local': '#9467bd', 'localdepthwise': '#8c564b'}",
-        help="Color palette dictionary mapping model types to hex colors",
+        default=None,
+        help="Color palette overrides as JSON or Python dict string",
     )
     parser.add_argument(
         "--ordering",
@@ -1187,8 +1218,25 @@ def main():
         default=None,
         help="Time step duration in milliseconds for x-axis in test plots",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging verbosity",
+    )
 
     args, unknown = parser.parse_known_args()
+
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format="%(levelname)s:%(name)s:%(message)s",
+    )
+    logger.setLevel(log_level)
+
+    if unknown:
+        logger.warning("Ignoring unknown arguments: %s", unknown)
 
     # Validate input files
     required_files = [
@@ -1201,69 +1249,113 @@ def main():
 
     # Only validate test_data if provided
     if args.test_data:
-        required_files.append((args.test_data, "Test performance data CSV"))
+        for path in args.test_data:
+            required_files.append((path, "Test performance data CSV"))
 
     for file_path, file_name in required_files:
         if not file_path.exists():
+            logger.error("%s not found: %s", file_name, file_path)
             raise FileNotFoundError(f"{file_name} not found: {file_path}")
 
     # Create output directory if needed
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     # Load configuration from command line arguments
+    palette_json = _coerce_to_json_string(args.palette)
+    naming_json = _coerce_to_json_string(args.naming)
+    ordering_json = _coerce_to_json_string(args.ordering)
+
     config = load_config_from_args(
-        palette_str=args.palette, naming_str=args.naming, ordering_str=args.ordering
+        palette_str=palette_json,
+        naming_str=naming_json,
+        ordering_str=ordering_json,
     )
+
+    # Ensure palette has defaults while keeping overrides
+    palette_config = config.get("palette", {}) or {}
+    config["palette"] = {**DEFAULT_PALETTE, **palette_config}
 
     # Load and process data
-    print("Loading accuracy data...")
+    logger.info("Loading accuracy data from %s", args.accuracy_csv)
     accuracy_df = load_accuracy_data(args.accuracy_csv)
-    print(
-        f"Found {len(accuracy_df.model_type.unique())} model types in accuracy data: {sorted(accuracy_df.model_type.unique())}"
+    unique_accuracy_models = (
+        sorted(accuracy_df.model_type.unique())
+        if not accuracy_df.empty and "model_type" in accuracy_df.columns
+        else []
+    )
+    logger.info(
+        "Found %s model types in accuracy data: %s",
+        len(unique_accuracy_models),
+        unique_accuracy_models,
     )
 
-    print("Loading memory data...")
+    logger.info("Loading memory data from %s", args.memory_csv)
     memory_df = load_memory_data(args.memory_csv)
     if not memory_df.empty and "model_type" in memory_df.columns:
-        print(
-            f"Found {len(memory_df.model_type.unique())} model types in memory data: {sorted(memory_df.model_type.unique())}"
+        memory_models = sorted(memory_df.model_type.unique())
+        logger.info(
+            "Found %s model types in memory data: %s",
+            len(memory_models),
+            memory_models,
         )
     else:
-        print("No memory data processed")
+        logger.warning("No memory data processed")
 
-    print("Loading epoch timing data...")
+    logger.info("Loading epoch timing data from %s", args.epoch_csv)
     epoch_df = load_epoch_data(args.epoch_csv)
     if not epoch_df.empty and "model_type" in epoch_df.columns:
-        print(
-            f"Found {len(epoch_df.model_type.unique())} model types in epoch data: {sorted(epoch_df.model_type.unique())}"
+        epoch_models = sorted(epoch_df.model_type.unique())
+        logger.info(
+            "Found %s model types in epoch data: %s",
+            len(epoch_models),
+            epoch_models,
         )
     else:
-        print("No epoch data processed")
+        logger.warning("No epoch data processed")
 
-    print("Loading energy loss data...")
+    logger.info("Loading energy loss data from %s", args.energy_csv)
     energy_loss_df = load_loss_data(args.energy_csv, "energy")
-    print(
-        f"Found {len(energy_loss_df.model_type.unique())} model types in energy loss data: {sorted(energy_loss_df.model_type.unique())}"
+    energy_models = (
+        sorted(energy_loss_df.model_type.unique())
+        if not energy_loss_df.empty and "model_type" in energy_loss_df.columns
+        else []
+    )
+    logger.info(
+        "Found %s model types in energy loss data: %s",
+        len(energy_models),
+        energy_models,
     )
 
-    print("Loading cross entropy loss data...")
+    logger.info("Loading cross entropy loss data from %s", args.cross_entropy_csv)
     cross_entropy_loss_df = load_loss_data(args.cross_entropy_csv, "cross_entropy")
-    print(
-        f"Found {len(cross_entropy_loss_df.model_type.unique())} model types in cross entropy loss data: {sorted(cross_entropy_loss_df.model_type.unique())}"
+    ce_models = (
+        sorted(cross_entropy_loss_df.model_type.unique())
+        if not cross_entropy_loss_df.empty
+        and "model_type" in cross_entropy_loss_df.columns
+        else []
+    )
+    logger.info(
+        "Found %s model types in cross entropy loss data: %s",
+        len(ce_models),
+        ce_models,
     )
 
     # Load test performance data if provided
     test_data_df = None
     if args.test_data:
-        print(f"Loading test performance data from: {args.test_data}")
-        test_data_df = pd.read_csv(args.test_data)
-        print(f"Test data shape: {test_data_df.shape}")
+        test_data_df = _load_test_data(args.test_data)
+        logger.info("Test data shape: %s", test_data_df.shape)
         if args.category in test_data_df.columns:
-            print(
-                f"Found {len(test_data_df[args.category].unique())} model types in test data: {sorted(test_data_df[args.category].unique())}"
+            test_models = sorted(test_data_df[args.category].unique())
+            logger.info(
+                "Found %s model types in test data: %s",
+                len(test_models),
+                test_models,
             )
         else:
-            print(f"Warning: Category column '{args.category}' not found in test data")
+            logger.warning(
+                "Category column '%s' not found in test data", args.category
+            )
 
     # Generate plot
     fig = plot_training_losses(
@@ -1272,7 +1364,7 @@ def main():
         cross_entropy_loss_df,
         memory_df,
         epoch_df,
-        args.palette,
+        config.get("palette"),
         test_data=test_data_df,
         dt=args.dt,
         category_col=args.category,
@@ -1280,10 +1372,9 @@ def main():
     )
 
     # Save plot
-    fig.savefig(args.output, bbox_inches="tight", dpi=300)
-    print(f"Plot saved to: {args.output}")
-
-    plt.close(fig)
+    plt.figure(fig.number)
+    save_plot(args.output)
+    logger.info("Plot saved to: %s", args.output)
 
 
 if __name__ == "__main__":

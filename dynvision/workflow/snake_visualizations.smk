@@ -148,15 +148,17 @@ rule process_test_data:
     input:
         responses = expand(project_paths.reports \
             / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
+            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
             category_value = lambda w: config.experiment_config['categories'][w.category],
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
         ),
         test_outputs = expand(project_paths.reports \
             / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
+            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
             category_value = lambda w: config.experiment_config['categories'][w.category],
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
         ),
@@ -164,6 +166,7 @@ rule process_test_data:
     params:
         measures = ['response_avg', 'response_std', 'label_confidence', 'guess_confidence', 'first_label_confidence', 'classifier_top10', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        additional_parameters = 'epoch',
         batch_size = 1,
         remove_input_responses = True,
         sample_resolution = 'sample',  # 'sample' or 'class'
@@ -186,6 +189,7 @@ rule process_test_data:
             --measures {params.measures} \
             --batch_size {params.batch_size} \
             --sample_resolution {params.sample_resolution} \
+            --additional_parameters {params.additional_parameters} \
             --remove_input_responses {params.remove_input_responses}
         """
 
@@ -261,26 +265,26 @@ rule plot_performance:
 
 rule plot_training:
     input:
-        test_data = expand(project_paths.reports / '{experiment}' / '{experiment}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+        test_data = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
             seeds = lambda w: w.seeds.split('.'),
             ),
         script = SCRIPTS / 'visualization' / 'plot_training.py'
     params:
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
         memory_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
         epoch_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
         energy_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
         cross_entropy_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,

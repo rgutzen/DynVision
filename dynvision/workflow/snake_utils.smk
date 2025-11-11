@@ -48,7 +48,7 @@ wildcard_constraints:
     data_subset = r'[a-z]+',
     data_group = r'[a-z0-9]+',
     data_loader = r'[a-zA-Z]+',
-    status = r'[a-z\#]+',
+    status = r'(init|trained|trained-[a-z0-9\.=]+)',
     seed = r'\d+',
     seeds = r'[\d\.]+',
     category = r'(?!folder)[a-z0-9]+',
@@ -359,7 +359,7 @@ def get_conda_env() -> tuple[Optional[str], str]:
 env_name, env_status = get_conda_env()
 pylogger.info(f"Conda environment: {env_name or 'None'}")
 
-rule checkpoint_to_statedict:
+rule best_checkpoint_to_statedict:
     """Convert Lightning checkpoints to state dictionaries."""
     input:
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
@@ -371,7 +371,7 @@ rule checkpoint_to_statedict:
             use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        project_paths.models / '{model_name}' / '{model_identifier}#minval.pt'
+        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-best.pt'
     shell:
         """
         {params.execution_cmd} \
@@ -379,6 +379,29 @@ rule checkpoint_to_statedict:
             --output {output:q}
         """
 
+checkpoint intermediate_checkpoint_to_statedict:
+    """Convert Lightning checkpoints to state dictionaries."""
+    input:
+        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
+    params:
+        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
+        checkpoint_globs = lambda w: f"{w.model_name}{w.model_args}_{w.seed}_{w.data_name}_trained*.ckpt",
+        output_dir = project_paths.models / '{model_name}',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-epoch={epoch}.pt'
+    shell:
+        """
+        {params.execution_cmd} \
+            --checkpoint_dir {params.checkpoint_dir:q} \
+            --output_dir {params.output_dir:q}
+            --checkpoint_globs {params.checkpoint_globs:q}
+        """
 
 def build_execution_command(script_path, use_distributed=False, use_executor=False):
     """
