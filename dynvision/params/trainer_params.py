@@ -127,7 +127,7 @@ class TrainerParams(BaseParams):
     )
     save_last: bool = Field(default=True, description="Save the last checkpoint")
     every_n_epochs: int = Field(
-        default=20, description="Save a checkpoint every n epochs"
+        default=50, description="Save a checkpoint every n epochs"
     )
 
     model_config = ConfigDict(
