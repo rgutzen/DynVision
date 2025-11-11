@@ -92,7 +92,7 @@ set-resources:
 
   process_test_data:
     mem: 120G # use 64GB of memory
-    runtime: 120 * attempt # run for 2 hours
+    runtime: 150 * attempt # run for 2 hours
     cpus_per_task: 16
     
   checkpoint_to_statedict:
