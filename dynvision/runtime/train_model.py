@@ -13,6 +13,8 @@ Features:
 """
 
 import logging
+import math
+import numbers
 import wandb
 import os
 import sys
@@ -240,6 +242,78 @@ class DataModule(pl.LightningDataModule):
         return self.val_loader
 
 
+class SaveLastCheckpointCallback(pl.Callback):
+    """Save the final checkpoint with DynVision's naming convention."""
+
+    def __init__(
+        self,
+        dirpath: Path,
+        base_stem: str,
+        monitor: str,
+        metric_precision: int = 2,
+    ) -> None:
+        super().__init__()
+        self.dirpath = Path(dirpath)
+        self.base_stem = base_stem
+        self.monitor = monitor
+        self.metric_precision = metric_precision
+        self._latest_metric: Optional[float] = None
+
+    def on_validation_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        """Track the most recent monitor metric after validation."""
+        metric = trainer.callback_metrics.get(self.monitor)
+        numeric = self._to_float(metric)
+        if numeric is not None:
+            self._latest_metric = numeric
+
+    def on_train_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        """Persist the final model checkpoint on rank zero."""
+        if not trainer.is_global_zero:
+            return
+
+        epoch_index = max(trainer.current_epoch - 1, 0)
+        metric_value = self._latest_metric
+        if metric_value is None:
+            metric_value = self._to_float(trainer.callback_metrics.get(self.monitor))
+
+        filename = self._build_filename(epoch_index, metric_value)
+        checkpoint_path = self.dirpath / filename
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
+        trainer.save_checkpoint(str(checkpoint_path))
+        logging.getLogger(__name__).info(
+            "Final checkpoint saved to %s", checkpoint_path
+        )
+
+    def _build_filename(self, epoch_index: int, metric_value: Optional[float]) -> str:
+        metric_str = self._format_metric(metric_value)
+        return f"{self.base_stem}-last-{epoch_index:02d}-{metric_str}.ckpt"
+
+    def _format_metric(self, metric_value: Optional[float]) -> str:
+        if metric_value is None or not math.isfinite(metric_value):
+            return "nan"
+        return f"{metric_value:.{self.metric_precision}f}"
+
+    def _to_float(self, metric: Any) -> Optional[float]:
+        if metric is None:
+            return None
+        if isinstance(metric, torch.Tensor):
+            if metric.numel() == 0:
+                return None
+            metric = metric.detach().float().cpu()
+            if metric.numel() == 1:
+                return float(metric.item())
+            return float(metric.mean().item())
+        if isinstance(metric, numbers.Number):
+            return float(metric)
+        try:
+            return float(metric)
+        except (TypeError, ValueError):
+            return None
+
+
 class CallbackManager:
     """Enhanced callback management with configuration integration."""
 
@@ -295,22 +369,64 @@ class CallbackManager:
         checkpoint_kwargs = self.config.trainer.get_checkpoint_callback_kwargs()
 
         # Extract monitor metric from config for flexible filename formatting
-        monitor_metric = checkpoint_kwargs.get("monitor", "val_loss")
+        monitor_metric = checkpoint_kwargs.get("monitor") or "val_loss"
+        metric_precision = 2
+        metric_format = f":.{metric_precision}f"
+        metric_suffix = "{epoch:02d}-{" + monitor_metric + metric_format + "}"
+        dirpath = checkpoint_path.parent
+        base_stem = checkpoint_path.stem
 
-        # Create flexible filename template based on monitored metric
-        filename_template = (
-            f"{checkpoint_path.name}-{{epoch:02d}}-{{{monitor_metric}:.2f}}"
-        )
+        # Handle save_last separately (custom callback ensures consistent naming)
+        save_last = checkpoint_kwargs.pop("save_last", False)
+        every_n_epochs = checkpoint_kwargs.get("every_n_epochs")
 
-        checkpoint_kwargs.update(
+        # Primary checkpoint: track top-k best models
+        topk_kwargs = checkpoint_kwargs.copy()
+        topk_kwargs.pop("every_n_epochs", None)
+        topk_kwargs.update(
             {
-                "dirpath": checkpoint_path.parent,
-                "filename": filename_template,
+                "dirpath": str(dirpath),
+                "filename": f"{base_stem}-best-{metric_suffix}",
+                "monitor": monitor_metric,
+                "save_last": False,
             }
         )
+        callbacks.append(pl.callbacks.ModelCheckpoint(**topk_kwargs))
 
-        checkpoint_callback = pl.callbacks.ModelCheckpoint(**checkpoint_kwargs)
-        callbacks.append(checkpoint_callback)
+        # Periodic checkpoint: save every n epochs with unified naming
+        if every_n_epochs and every_n_epochs > 0:
+            periodic_kwargs = checkpoint_kwargs.copy()
+            periodic_kwargs.update(
+                {
+                    "dirpath": str(dirpath),
+                    "filename": f"{base_stem}-epoch-{metric_suffix}",
+                    "monitor": monitor_metric,
+                    "save_top_k": -1,
+                    "save_last": False,
+                    "every_n_epochs": every_n_epochs,
+                }
+            )
+            callbacks.append(pl.callbacks.ModelCheckpoint(**periodic_kwargs))
+
+        # Final checkpoint: always persist the last state with shared pattern
+        if save_last:
+            callbacks.append(
+                SaveLastCheckpointCallback(
+                    dirpath=dirpath,
+                    base_stem=base_stem,
+                    monitor=monitor_metric,
+                    metric_precision=metric_precision,
+                )
+            )
+
+        logger.debug(
+            "Configured checkpoint callbacks: dir=%s, monitor=%s, top_k=%s, every_n_epochs=%s, save_last=%s",
+            str(dirpath),
+            monitor_metric,
+            checkpoint_kwargs.get("save_top_k"),
+            every_n_epochs,
+            save_last,
+        )
 
         return checkpoint_path
 
