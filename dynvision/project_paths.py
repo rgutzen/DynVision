@@ -71,7 +71,7 @@ class project_paths_class:
         self.notebooks = working_dir / "notebooks"
         self.references = working_dir / "references"
         self.reports = working_dir / "reports"
-        self.figures = working_dir / "reports" / "figures"
+        self.figures = working_dir / "figures"
         self.logs = working_dir / "logs"
         self.large_logs = working_dir / "logs"
         self.benchmarks = self.logs / "benchmarks"
