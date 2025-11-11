@@ -1019,14 +1019,13 @@ class StimulusNoiseDataLoader(StandardDataLoader):
             raise
 
 
-# Update DATALOADER_CLASSES to include StimulusNoiseDataLoader
 DATALOADER_CLASSES = {
     "StandardDataLoader": StandardDataLoader,
     "StimulusRepetitionDataLoader": StimulusRepetitionDataLoader,
     "StimulusDurationDataLoader": StimulusDurationDataLoader,
     "StimulusIntervalDataLoader": StimulusIntervalDataLoader,
     "StimulusContrastDataLoader": StimulusContrastDataLoader,
-    "StimulusNoiseDataLoader": StimulusNoiseDataLoader,  # Added missing entry
+    "StimulusNoiseDataLoader": StimulusNoiseDataLoader,
 }
 
 
