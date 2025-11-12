@@ -30,7 +30,7 @@ from dynvision.data.dataloader import (
     _adjust_data_dimensions,
     _adjust_label_dimensions,
 )
-from dynvision.data.dataloader import get_data_loader
+from dynvision.data.dataloader import get_data_loader, get_data_loader_class
 from dynvision.data.datasets import get_dataset
 from dynvision.data import sampler
 from dynvision.project_paths import project_paths
@@ -62,16 +62,29 @@ class TestingDataModule:
         if self.dataset is not None:
             return self.dataset
 
-        logger.info(f"Loading test dataset from {self.config.dataset}")
+        logger.info(f"Loading test dataset from {self.config.dataset_path}")
 
         # Get dataset configuration from TestingParams (all optimizations already applied)
         dataset_kwargs = self.config.data.get_dataset_kwargs()
 
-        self.dataset = get_dataset(self.config.dataset, **dataset_kwargs)
+        self.dataset = get_dataset(self.config.dataset_path, **dataset_kwargs)
 
-        if self.config.data.sampler is not None:
-            sampler_class = getattr(sampler, self.config.data.sampler)
-            self.sampler = sampler_class(self.dataset, seed=42)
+        # Instantiate sampler if specified in config
+        sampler_name = self.config.data.sampler
+        if sampler_name is not None and sampler_name != "":
+            try:
+                logger.info(f"Instantiating sampler: {sampler_name}")
+                sampler_class = getattr(sampler, sampler_name)
+                self.sampler = sampler_class(self.dataset, seed=42)
+                logger.info(f"Sampler instantiated: {type(self.sampler).__name__}")
+            except AttributeError as e:
+                logger.error(
+                    f"Sampler '{sampler_name}' not found in dynvision.data.sampler: {e}"
+                )
+                logger.warning("Continuing without sampler")
+            except Exception as e:
+                logger.error(f"Failed to instantiate sampler '{sampler_name}': {e}")
+                logger.warning("Continuing without sampler")
 
         total_samples = len(self.dataset)
         logger.info(f"Test dataset loaded with {total_samples} samples")
@@ -88,13 +101,45 @@ class TestingDataModule:
 
         # Get dataloader configuration (already optimized by TestingParams)
         dataloader_name = self.config.data.data_loader
-        dataloader_config = self.config.get_dataloader_kwargs() | {
-            "sampler": self.sampler
-        }
+        dataloader_class = get_data_loader_class(dataloader_name)
+        dataloader_config = self.config.get_dataloader_kwargs(
+            dataloader_class=dataloader_class
+        )
+
+        # Replace sampler string name with actual sampler instance if available
+        if self.sampler is not None:
+            dataloader_config["sampler"] = self.sampler
+            logger.info(f"Using sampler instance: {type(self.sampler).__name__}")
+        else:
+            sampler_name = dataloader_config.get("sampler")
+            if sampler_name and isinstance(sampler_name, str):
+                logger.info(
+                    f"Sampler '{sampler_name}' specified in config but not instantiated in setup_dataset()"
+                )
+
+        # Adjust batch_size if it exceeds dataset size to prevent empty dataloader
+        dataset_size = len(self.dataset)
+        original_batch_size = dataloader_config.get("batch_size", 1)
+        if original_batch_size > dataset_size:
+            dataloader_config["batch_size"] = dataset_size
+            logger.warning(
+                f"Adjusted batch_size from {original_batch_size} to {dataset_size} "
+                f"(dataset size) to ensure dataloader produces batches. "
+                f"Original batch_size > dataset_size with drop_last={dataloader_config.get('drop_last', False)} "
+                f"would result in empty dataloader."
+            )
+
+        logger.info(f"Creating {dataloader_name} dataloader with config:")
+        logger.info(f"  - batch_size: {dataloader_config.get('batch_size')}")
+        logger.info(f"  - num_workers: {dataloader_config.get('num_workers')}")
+        logger.info(f"  - drop_last: {dataloader_config.get('drop_last')}")
+        logger.info(f"  - sampler: {dataloader_config.get('sampler')}")
 
         self.dataloader = get_data_loader(
-            dataset=self.dataset, dataloader=dataloader_name, **dataloader_config
+            dataset=self.dataset, dataloader=dataloader_class, **dataloader_config
         )
+
+        logger.info(f"Dataloader created: {len(self.dataloader)} batches expected")
 
         return self.dataloader
 
@@ -103,7 +148,21 @@ class TestingDataModule:
         if self.dataloader is None:
             self.setup_dataloader()
 
-        inputs, labels, *_ = next(iter(self.dataloader))
+        # Check if dataloader is empty
+        try:
+            batch = next(iter(self.dataloader))
+        except StopIteration:
+            raise RuntimeError(
+                f"Dataloader is empty! Dataset has {len(self.dataset)} samples, "
+                f"but dataloader produced no batches. Common causes:\n"
+                f"  - batch_size ({self.config.data.batch_size}) > dataset size ({len(self.dataset)})\n"
+                f"  - drop_last=True with small dataset\n"
+                f"  - sampler: {self.config.data.sampler}\n"
+                f"  - Data filtering excluding all samples\n"
+                f"Fix: Reduce batch_size or set drop_last=False in configuration"
+            )
+
+        inputs, labels, *_ = batch
         inputs = _adjust_data_dimensions(inputs)
         labels = _adjust_label_dimensions(labels)
 
@@ -270,9 +329,17 @@ class TestingOrchestrator:
                 verbose=True,
             )
 
+        except RuntimeError as e:
+            # RuntimeError from get_sample_batch indicates critical dataloader issue
+            logger.error(f"Critical error during parameter inference: {e}")
+            raise  # Re-raise to stop execution
         except Exception as e:
-            logger.error(f"Failed to infer parameters from data: {e}")
+            logger.error(f"Failed to infer parameters from data: {e}", exc_info=True)
             logger.warning("Continuing with configuration defaults")
+            if self.config.verbose:
+                import traceback
+
+                traceback.print_exc()
 
     def setup_trainer(self) -> pl.Trainer:
         """Setup PyTorch Lightning trainer for testing using TestingParams configuration."""

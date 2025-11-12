@@ -4,20 +4,19 @@ import math
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
 
 # Import the Pydantic parameter classes
 from dynvision.params import (
-    BaseParams,
     DynVisionValidationError,
-    DynVisionConfigError,
     ModelParams,
     TrainerParams,
     DataParams,
 )
+from dynvision.params.composite_params import CompositeParams
 
 from pydantic import (
     Field,
@@ -33,7 +32,7 @@ logger = logging.getLogger(__name__)
 REFERENCE_BATCH_SIZE = 64
 
 
-class TrainingParams(BaseParams):
+class TrainingParams(CompositeParams):
     """
     Composite configuration for model training with comprehensive validation.
 
@@ -41,6 +40,17 @@ class TrainingParams(BaseParams):
     properties for training optimization, consistency checking, and automatic
     parameter scaling based on effective batch size and distributed setup.
     """
+
+    mode_name: ClassVar[str] = "train"
+    component_classes: ClassVar[Dict[str, type]] = {
+        "model": ModelParams,
+        "trainer": TrainerParams,
+        "data": DataParams,
+    }
+
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
 
     # === CORE COMPONENT COMPOSITION ===
     model: ModelParams = Field(
@@ -379,93 +389,21 @@ class TrainingParams(BaseParams):
         override_kwargs: Optional[Dict[str, Any]] = None,
         args: Optional[List[str]] = None,
     ) -> "TrainingParams":
-        """
-        Create TrainingParams instance from CLI and config with proper component separation.
-        """
-        # Get raw parameters using BaseParams method
-        params = cls.get_params_from_cli_and_config(
+        instance = super().from_cli_and_config(
             config_path=config_path,
             override_kwargs=override_kwargs,
             args=args,
         )
-
-        # Separate into component configurations
-        separated_params = cls._separate_component_configs(params)
-
-        print("Training Params:\n", separated_params)
-
-        # Create the TrainingParams instance
-        try:
-            instance = cls(**separated_params)
-            # Apply scaling after successful creation to avoid recursion
-            instance.apply_parameter_scaling()
-            return instance
-        except Exception as e:
-            raise DynVisionValidationError(f"TrainingParams creation failed: {e}")
+        instance.apply_parameter_scaling()
+        return instance
 
     @classmethod
-    def _separate_component_configs(cls, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Separate flat parameter dict into component configurations."""
-        model_params = {}
-        trainer_params = {}
-        data_params = {}
-        base_params = {}
-
-        # Get field names for each component
-        model_fields = set(ModelParams.model_fields.keys())
-        trainer_fields = set(TrainerParams.model_fields.keys())
-        data_fields = set(DataParams.model_fields.keys())
-        base_fields = set(cls.model_fields.keys()) - {"model", "trainer", "data"}
-
-        for key, value in params.items():
-            # Handle dotted notation (e.g., "model.learning_rate")
-            if "." in key:
-                component, field = key.split(".", 1)
-                if component == "model":
-                    model_params[field] = value
-                elif component == "trainer":
-                    trainer_params[field] = value
-                elif component == "data":
-                    data_params[field] = value
-                else:
-                    base_params[key] = value
-            else:
-                # Assign to ALL component classes that have this field
-                assigned_to = []
-
-                if key in model_fields:
-                    model_params[key] = value
-                    assigned_to.append("model")
-                if key in trainer_fields:
-                    trainer_params[key] = value
-                    assigned_to.append("trainer")
-                if key in data_fields:
-                    data_params[key] = value
-                    assigned_to.append("data")
-                if key in base_fields:
-                    base_params[key] = value
-                    assigned_to.append("base")
-
-                if assigned_to:
-                    # Log when parameters are shared across components
-                    if len(assigned_to) > 1:
-                        logger.debug(
-                            f"Parameter '{key}' assigned to multiple components: {assigned_to}"
-                        )
-                else:
-                    # Unknown parameters go to model_params as fallback
-                    model_params[key] = value
-                    logger.debug(
-                        f"Assigning unknown parameter '{key}' to model_params"
-                    )
-        # Create component instances
-        try:
-            components = {
-                "model": ModelParams(**model_params),
-                "trainer": TrainerParams(**trainer_params),
-                "data": DataParams(**data_params),
-                **base_params,
-            }
-            return components
-        except Exception as e:
-            raise DynVisionValidationError(f"Component configuration failed: {e}")
+    def _handle_unscoped_param(
+        cls,
+        key: str,
+        value: Any,
+        component_data: Dict[str, Dict[str, Any]],
+        base_params: Dict[str, Any],
+    ) -> None:
+        logger.debug("Assigning unscoped parameter '%s' to model component", key)
+        component_data.setdefault("model", {})[key] = value

@@ -79,7 +79,7 @@ def infer_dimensions_from_dataset(config: InitParams) -> None:
     Args:
         config: InitParams instance to update
     """
-    if not config.dataset or not config.dataset.exists():
+    if not config.dataset_path or not config.dataset_path.exists():
         logger.warning(
             "No dataset provided or dataset not found. Using config defaults."
         )
@@ -88,11 +88,13 @@ def infer_dimensions_from_dataset(config: InitParams) -> None:
     try:
         # Load dataset for dimension inference
         dataset_kwargs = config.get_dataset_kwargs()
-        dataset = get_dataset(config.dataset, **dataset_kwargs)
+        dataset = get_dataset(config.dataset_path, **dataset_kwargs)
 
-        # Create simple dataloader
-        dataloader_kwargs = config.get_dataloader_kwargs()
-        dataloader = StandardDataLoader(dataset, **dataloader_kwargs)
+        # Create simple dataloader with filtered kwargs
+        dataloader_kwargs = config.get_dataloader_kwargs(
+            dataloader_class=StandardDataLoader
+        )
+        dataloader = StandardDataLoader(dataset=dataset, **dataloader_kwargs)
 
         # Get sample batch
         inputs, labels, *paths = next(iter(dataloader))

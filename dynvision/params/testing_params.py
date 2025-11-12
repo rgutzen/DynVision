@@ -8,7 +8,7 @@ including response storage configuration and memory-optimized settings.
 import logging
 import math
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any, Callable, ClassVar, Dict, Iterable, Optional, Tuple, List
 
 from pydantic import (
     Field,
@@ -18,7 +18,8 @@ from pydantic import (
     field_validator,
 )
 
-from dynvision.params.base_params import BaseParams, DynVisionValidationError
+from dynvision.params.base_params import DynVisionValidationError
+from dynvision.params.composite_params import CompositeParams
 from dynvision.params.model_params import ModelParams
 from dynvision.params.trainer_params import TrainerParams
 from dynvision.params.data_params import DataParams
@@ -26,13 +27,24 @@ from dynvision.params.data_params import DataParams
 logger = logging.getLogger(__name__)
 
 
-class TestingParams(BaseParams):
+class TestingParams(CompositeParams):
     """
     Composite configuration for model testing with comprehensive validation.
 
     Combines ModelParams, TrainerParams, and DataParams with testing-specific configuration
     for model evaluation, response storage, and result analysis.
     """
+
+    mode_name: ClassVar[str] = "test"
+    component_classes: ClassVar[Dict[str, type]] = {
+        "model": ModelParams,
+        "trainer": TrainerParams,
+        "data": DataParams,
+    }
+
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
 
     # === CORE COMPONENT COMPOSITION ===
     model: ModelParams = Field(
@@ -47,7 +59,7 @@ class TestingParams(BaseParams):
     input_model_state: Path = Field(
         description="Path to trained model state for evaluation"
     )
-    dataset: Path = Field(description="Path to test dataset")
+    dataset_path: Path = Field(description="Path to test dataset")
     output_results: Path = Field(description="Path to save test results (CSV)")
     output_responses: Path = Field(
         description="Path to save model responses (PT tensors)"
@@ -55,7 +67,7 @@ class TestingParams(BaseParams):
 
     # Testing behavior configuration
     verbose: bool = Field(
-        default=False, description="Enable verbose logging and error reporting"
+        ..., description="Enable verbose logging and error reporting"
     )
 
     model_config = ConfigDict(
@@ -88,6 +100,34 @@ class TestingParams(BaseParams):
 
         return self
 
+    @classmethod
+    def get_component_assignment_order(cls) -> Iterable[str]:
+        return ("model", "data", "trainer")
+
+    @classmethod
+    def get_component_preprocessors(
+        cls,
+    ) -> Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]:
+        return {
+            "data": cls.validate_data_config,
+            "trainer": cls.validate_trainer_config,
+            "model": cls.validate_model_config,
+        }
+
+    @classmethod
+    def _handle_unscoped_param(
+        cls,
+        key: str,
+        value: Any,
+        component_data: Dict[str, Dict[str, Any]],
+        base_params: Dict[str, Any],
+    ) -> None:
+        component_data.setdefault("model", {})[key] = value
+        component_data.setdefault("data", {})[key] = value
+        logger.debug(
+            "Assigning unscoped parameter '%s' to model and data components", key
+        )
+
     def _validate_required_paths(self) -> None:
         """Validate that required paths exist."""
         if not self.input_model_state.exists():
@@ -95,8 +135,10 @@ class TestingParams(BaseParams):
                 f"Input model state not found: {self.input_model_state}"
             )
 
-        if not self.dataset.exists():
-            raise DynVisionValidationError(f"Test dataset not found: {self.dataset}")
+        if not self.dataset_path.exists():
+            raise DynVisionValidationError(
+                f"Test dataset not found: {self.dataset_path}"
+            )
 
         # Ensure output directories exist
         self.output_results.parent.mkdir(parents=True, exist_ok=True)
@@ -104,43 +146,34 @@ class TestingParams(BaseParams):
 
     @classmethod
     def validate_data_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply testing-specific optimizations to the data configuration."""
-        updates = {
-            "train": False,
-            "shuffle": False,
-            "sampler": "RoundRobinSampler",  # for representative input sampling
-            "use_distributed": False,
-            "use_ffcv": False,
-            "pin_memory": True,
-            "drop_last": True,
-            "prefetch_factor": None,
-            "max_workers": min(4, config.get("data", {}).get("num_workers", 0)),
-        }
-        config = cls.update_kwargs(config, updates, verbose=True)
+        """Validate testing data config (warnings only)."""
+        # Check for unusual configurations
+        if config.get("train", False):
+            logger.warning(
+                "Testing with train=True is unusual - data augmentation may be active"
+            )
+        if config.get("shuffle", False):
+            logger.warning("Testing with shuffle=True may affect reproducibility")
+
+        # Dynamic value: max_workers based on num_workers
+        # This is kept as dynamic logic since it depends on another parameter
+        if "max_workers" not in config and "num_workers" in config:
+            config["max_workers"] = min(4, config["num_workers"])
+
         return config
 
     @classmethod
     def validate_trainer_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply testing-specific optimizations to the trainer configuration."""
-        updates = {
-            "devices": 1,
-            "num_nodes": 1,
-            "strategy": "auto",
-            "accelerator": "auto",
-            "logger": None,
-            "enable_checkpointing": False,
-            "enable_progress_bar": True,
-        }
-        config = cls.update_kwargs(config, updates, verbose=True)
+        """Validate testing trainer config (warnings only)."""
+        # Check for unusual configurations
+        if config.get("devices", 1) > 1:
+            logger.warning("Testing with multiple devices may affect determinism")
         return config
 
     @classmethod
     def validate_model_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply testing-specific optimizations to the model configuration."""
-        updates = {
-            "store_responses_on_cpu": True,
-        }
-        config = cls.update_kwargs(config, updates, verbose=True)
+        """Validate testing model config (warnings only)."""
+        # No forced updates - values come from config files under test.model.*
         return config
 
     def _optimize_memory_usage(self) -> None:
@@ -221,8 +254,8 @@ class TestingParams(BaseParams):
     def get_model_kwargs(self, model_class=None) -> Dict[str, Any]:
         return self.model.get_model_kwargs(model_class)
 
-    def get_dataloader_kwargs(self) -> Dict[str, Any]:
-        return self.data.get_dataloader_kwargs()
+    def get_dataloader_kwargs(self, dataloader_class=None) -> Dict[str, Any]:
+        return self.data.get_dataloader_kwargs(dataloader_class=dataloader_class)
 
     def get_trainer_kwargs(self) -> Dict[str, Any]:
         return self.trainer.get_trainer_kwargs()
@@ -235,6 +268,8 @@ class TestingParams(BaseParams):
         # Add testing-specific aliases
         aliases.update(
             {
+                # Testing-specific aliases
+                "dataset": "dataset_path",  # CLI convenience alias
                 # Model aliases (routed to model component)
                 "model_name": "model.model_name",
                 "classes": "model.n_classes",
@@ -251,95 +286,10 @@ class TestingParams(BaseParams):
                 "resolution": "data.resolution",
                 "data_loader": "data.data_loader",
                 "data_group": "data.data_group",
-                # Testing-specific aliases
+                # Storage aliases
                 "responses": "store_responses",
                 "cache": "cache_size",
             }
         )
 
         return aliases
-
-    @classmethod
-    def from_cli_and_config(
-        cls,
-        config_path: Optional[Path] = None,
-        override_kwargs: Optional[Dict[str, Any]] = None,
-        args: Optional[List[str]] = None,
-    ) -> "TestingParams":
-        """
-        Create TestingParams instance from CLI and config with proper component separation.
-        """
-        # Get raw parameters using BaseParams method
-        params = cls.get_params_from_cli_and_config(
-            config_path=config_path,
-            override_kwargs=override_kwargs,
-            args=args,
-        )
-        # Separate into component configurations
-        separated_params = cls._separate_component_configs(params)
-
-        # Create the TestingParams instance
-        try:
-            return cls(**separated_params)
-        except Exception as e:
-            raise DynVisionValidationError(f"TestingParams creation failed: {e}")
-
-    @classmethod
-    def _separate_component_configs(cls, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Separate flat parameter dict into component configurations."""
-        model_params = {}
-        trainer_params = {}
-        data_params = {}
-        base_params = {}
-
-        # Get field names for each component
-        model_fields = set(ModelParams.model_fields.keys())
-        trainer_fields = set(TrainerParams.model_fields.keys())
-        data_fields = set(DataParams.model_fields.keys())
-        base_fields = set(cls.model_fields.keys()) - {"model", "trainer", "data"}
-
-        for key, value in params.items():
-            # Handle dotted notation (e.g., "model.learning_rate")
-            if "." in key:
-                component, field = key.split(".", 1)
-                if component == "model":
-                    model_params[field] = value
-                elif component == "trainer":
-                    trainer_params[field] = value
-                elif component == "data":
-                    data_params[field] = value
-                else:
-                    base_params[key] = value
-            else:
-                # Use mutually exclusive assignment logic
-                if key in model_fields:
-                    model_params[key] = value
-                elif key in data_fields:
-                    data_params[key] = value
-                elif key in trainer_fields:
-                    trainer_params[key] = value
-                elif key in base_fields:
-                    base_params[key] = value
-                else:
-                    # Unknown parameters go to both model and data params for flexibility
-                    model_params[key] = value
-                    data_params[key] = value
-                    logger.debug(
-                        f"Assigning unknown parameter '{key}' to both model_params and data_params"
-                    )
-
-        # Validate component configurations
-        cls.validate_data_config(data_params)
-        cls.validate_model_config(model_params)
-        cls.validate_trainer_config(trainer_params)
-
-        try:
-            components = {
-                "model": ModelParams(**model_params),
-                "trainer": TrainerParams(**trainer_params),
-                "data": DataParams(**data_params),
-                **base_params,
-            }
-            return components
-        except Exception as e:
-            raise DynVisionValidationError(f"Component configuration failed: {e}")

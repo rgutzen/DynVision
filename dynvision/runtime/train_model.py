@@ -166,6 +166,7 @@ class DataModule(pl.LightningDataModule):
 
     def _create_preview_config(self) -> Dict[str, Any]:
         """Create minimal configuration for preview loader."""
+        # Get base config - no filtering needed here as get_data_loader will filter
         base_config = self.config.data.get_dataloader_kwargs()
         return base_config | {
             "distributed": False,
@@ -178,6 +179,8 @@ class DataModule(pl.LightningDataModule):
         if stage not in ["fit", None]:
             return
 
+        # Get dataloader config - None values already filtered by get_dataloader_kwargs()
+        # Additional filtering happens in get_data_loader() and get_train_val_loaders()
         dataloader_config = self.config.data.get_dataloader_kwargs()
 
         if self.config.data.use_ffcv:

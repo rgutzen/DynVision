@@ -1,47 +1,135 @@
 # Parameter Handling
 
-DynVision uses a sophisticated parameter management system that ensures type safety, validation, and consistency across all experimental workflows. This system integrates configuration files, command-line interfaces, and runtime validation to provide a robust foundation for reproducible research.
+DynVision uses a sophisticated parameter management system that ensures type safety, validation, and consistency across all experimental workflows. This system integrates configuration files, command-line interfaces, and runtime validation with a hierarchical precedence system to provide a robust foundation for reproducible research.
 
 ## Overview
 
-The parameter handling system follows a four-layer architecture that progressively refines and validates neural network parameters:
+The parameter handling system follows a five-layer architecture that progressively refines and validates neural network parameters:
 
-1. **Configuration Layer**: YAML configuration files with operational mode management
-2. **Validation Layer**: Pydantic-based type checking and constraint enforcement  
-3. **Composition Layer**: Script-specific parameter combinations with computed properties
-4. **Runtime Layer**: Model, trainer, and dataloader instantiation with validated parameters
+1. **Configuration Layer**: YAML configuration files loaded hierarchically
+2. **Mode Application Layer**: Operational mode management and overrides
+3. **CLI Integration Layer**: Command-line argument parsing and precedence
+4. **Validation Layer**: Pydantic-based type checking and constraint enforcement  
+5. **Runtime Layer**: Model, trainer, and dataloader instantiation with validated parameters
 
 This architecture separates configuration management from model implementation, ensuring flexibility and maintainability while providing comprehensive validation and automatic parameter derivation.
 
 ## Parameter Flow Architecture
 
-### Complete Parameter Flow with Precedence
+### Complete Parameter Flow with Three-Level Precedence
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Config Files  │    │ Snakemake CLI    │    │ ConfigMode      │
-│   (Priority 1)  │───▶│ --config param=X │───▶│ Manager         │
-│                 │    │ (Priority 2)     │    │ (Mode Override) │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                        │
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Python Script   │    │ Pydantic Classes │    │ Model/Trainer   │
-│ CLI Arguments   │◀───│ Validation &     │◀───│ Component       │
-│ (Priority 3)    │    │ Derivation       │    │ Instantiation   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                       ┌─────────────────┐
-                       │ Direct Override │
-                       │ kwargs          │
-                       │ (Priority 4)    │
-                       └─────────────────┘
+┌──────────────────┐
+│  Config Files    │  Loaded hierarchically, later overrides earlier
+│  (Base Layer)    │  config_defaults.yaml → config_data.yaml → config_experiments.yaml
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  ConfigHandler   │  process_configs(config, wildcards) → runtime_config.yaml
+│  + Mode System   │  Applies mode-specific overrides (debug, large_dataset, etc.)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Runtime Config  │  Passed to script via --config_path runtime_config.yaml
+│  (Per-Rule File) │  Contains: config values + mode overrides + wildcards
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Script CLI Args │  --model_name X --seed Y (from Snakemake shell command)
+│  (Override Layer)│  ALL CLI args beat ALL config values
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Pydantic        │  from_cli_and_config(config_path, override_kwargs)
+│  Parameter       │  • Separates config and CLI sources
+│  Classes         │  • Applies scope-aware precedence within each
+│                  │  • Merges with CLI taking priority
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Instantiated    │  Model, Trainer, DataLoader components
+│  Components      │  with validated and derived parameters
+└──────────────────┘
 ```
 
-**Parameter Precedence (lowest to highest priority):**
-1. **YAML Configuration Files**: Base parameter values from multiple config files
-2. **Snakemake CLI Arguments**: `snakemake --config param=value` overrides config files
-3. **Python Script CLI Arguments**: Arguments passed to individual scripts (e.g., `train_model.py --learning_rate 0.002`)
-4. **Direct Override kwargs**: Programmatic parameter overrides (highest priority)
+## Three-Level Precedence Hierarchy
+
+Parameters are resolved using a three-level precedence system:
+
+### 1. Source Precedence (Primary)
+**CLI arguments always beat config values**
+
+- Any parameter provided via CLI (e.g., `--seed 42`) overrides the same parameter from config
+- This applies whether the CLI parameter is scoped or unscoped
+- Examples:
+  - CLI `--seed 42` beats config `seed: 100`
+  - CLI `--model_name X` beats config `model.model_name: Y`
+
+### 2. Scope Precedence (Secondary)
+**Within each source, scoped beats unscoped**
+
+Scoped parameters use dot notation to target specific components:
+- `model.model_name`: Scoped to model component
+- `data.batch_size`: Scoped to data component
+- `init.model.store_responses`: Mode-scoped to model in init mode
+
+Unscoped parameters apply to all matching components:
+- `seed`: Shared by all components that accept seed
+- `log_level`: Propagates to all components
+
+**Within CLI args:**
+- `--model.model_name X` beats `--model_name Y`
+
+**Within config files:**
+- `model.model_name: X` beats `model_name: Y`
+
+**Across sources (source wins):**
+- `--model_name X` (CLI unscoped) beats `model.model_name: Y` (config scoped)
+
+### 3. Alias Precedence (Tertiary)
+**Within same source and scope, aliases beat long forms**
+
+Short-form aliases override their long-form equivalents when at the same scope level:
+- `tff` beats `t_feedforward` (both unscoped)
+- `model.tff` beats `model.t_feedforward` (both scoped to model)
+
+But scope precedence still applies across levels:
+- `model.t_feedforward` beats `tff` (scoped beats unscoped)
+
+> **Key Insight**: The precedence system uses **source → scope → alias** ordering, where each level is only consulted within ties at the previous level.
+
+## Shared Fields Across Components
+
+Some parameters like `seed` and `log_level` are defined in multiple classes (e.g., both `InitParams` and `ModelParams`). The system intelligently propagates these shared fields:
+
+**Single value, multiple targets:**
+```bash
+# CLI provides one seed value
+python init_model.py --config config.yaml --seed 42
+
+# Result: seed=42 propagates to:
+# - InitParams.seed
+# - ModelParams.seed  
+# - DataParams.seed
+```
+
+**Component-specific overrides:**
+```bash
+# Different seeds for different components
+python script.py --seed 1 --model.seed 42 --data.seed 99
+
+# Result:
+# - InitParams.seed = 1 (default)
+# - ModelParams.seed = 42 (component-specific)
+# - DataParams.seed = 99 (component-specific)
+```
+
+> **Note:** Pydantic classes intentionally avoid hard-coded defaults so that configuration files remain the single source of truth. Optional fields may still default to `None`, but any operational default must be expressed in `dynvision/configs/*.yaml`.
 
 ### Key Distinction: Snakemake CLI vs Python Script CLI
 
@@ -99,7 +187,7 @@ DynVision organizes parameters into a hierarchical structure:
   - **ModelParams**: Neural architecture, biological parameters, optimizer configuration
   - **TrainerParams**: PyTorch Lightning trainer settings, system configuration
   - **DataParams**: Dataset specification, data loading, preprocessing options
-- **Composite Classes**: Script-specific combinations
+- **Composite Classes**: Script-specific combinations built on the shared `CompositeParams` base for automatic component routing
   - **TrainingParams**: ModelParams + TrainerParams + DataParams + training-specific paths
   - **InitParams**: ModelParams + minimal DataParams for model initialization
   - **TestingParams**: ModelParams + DataParams for evaluation
@@ -141,13 +229,21 @@ Parameters can also be passed directly to Python scripts through Snakemake rule 
 class ModelParams(BaseParams):
     # Add your new parameter
     custom_parameter: float = Field(
-        default=1.0, 
+        ...,  # Defaults live in YAML configs
         description="Description of the parameter",
         gt=0.0  # Validation constraint
     )
 ```
 
-**Step 2: Add Validation (if needed)**
+**Step 2: Define a Config Default**
+Add an entry in `dynvision/configs/config_defaults.yaml` (or a more specific config) so that workflows pick up a baseline value.
+
+```yaml
+# config_defaults.yaml
+custom_parameter: 1.0
+```
+
+**Step 3: Add Validation (if needed)**
 ```python
 @field_validator("custom_parameter")
 def validate_custom_parameter(cls, v):
@@ -156,7 +252,7 @@ def validate_custom_parameter(cls, v):
     return v
 ```
 
-**Step 3: Use in Model Classes**
+**Step 4: Use in Model Classes**
 The parameter becomes automatically available in model kwargs through `get_model_kwargs()`.
 
 ### How to Add a Parameter Alias
@@ -316,5 +412,3 @@ Existing model classes continue to work through the `@alias_kwargs` decorator sy
 - **Complete configuration export**: All parameters (base, derived, and computed) are saved for reproducibility
 - **Parameter precedence tracking**: Clear hierarchy shows which source provided each parameter value
 - **Extensible architecture**: New parameters, validations, and modes can be added without breaking existing code
-
-This parameter handling system provides a robust foundation for managing the complexity of neural network research while maintaining the flexibility needed for experimental workflows.
