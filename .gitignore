@@ -1,3 +1,13 @@
+# manuscript files
+# /manuscript/
+# /manuscript/*
+*.sty
+*.bib
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+
 # user files
 Makefile
 
