@@ -127,10 +127,10 @@ class CordsNet(BaseModel):
     def _init_parameters(self) -> None:
         """Initialize model parameters, optionally loading pretrained weights."""
         if self.init_with_pretrained:
-            self.load_pretrained_state_dict(check_mismatch_layer=["out_fc"])
+            self.load_pretrained_state_dict(check_mismatch_layer=["classifier.3"])
             # Make only the classifier trainable
             self.trainable_parameter_names = [
-                p for p in list(self.state_dict().keys()) if "out_fc" in p
+                p for p in list(self.state_dict().keys()) if "classifier.3" in p
             ]
 
         else:
@@ -167,7 +167,7 @@ class CordsNet(BaseModel):
         else:
             logger.info(f"Using cached pretrained model from {save_path}")
 
-        state_dict = torch.load(save_path, map_location=self.device)
+        state_dict = torch.load(save_path, map_location=self.device, weights_only=True)
         return state_dict
 
     def translate_pretrained_layer_names(self) -> dict:

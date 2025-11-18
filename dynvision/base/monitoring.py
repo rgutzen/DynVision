@@ -8,7 +8,9 @@ import torch.nn as nn
 from typing import Any, Dict, List, Optional, Tuple
 from pytorch_lightning import LightningModule
 import wandb
+
 from dynvision.data.operations import _adjust_data_dimensions, _adjust_label_dimensions
+from dynvision.utils import log_section, format_value
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +42,7 @@ class Monitoring:
         nonfinite_detected = False
         model_dtype = next(self.parameters()).dtype
         dtype_mismatches = []
-
-        logger.info(f"\nChecking {generator_name} {data_attr}:")
-        logger.info("-" * 100)
-        logger.info(
-            f"{'Module Name':<30} {'Shape':<20} {'Type':<16} {'Device':<8} {'Min':>8} {'Max':>8} {'Norm':>8}"
-        )
-        logger.info("-" * 100)
+        tensor_rows: List[Tuple[str, str, Optional[str]]] = []
 
         for name, tensor in iterator:
             if data_attr and self.hasattr(tensor, data_attr):
@@ -62,21 +58,30 @@ class Monitoring:
                 dtype_mismatches.append((name, tensor.dtype, model_dtype))
 
             if len(tensor.size()):
-                valid_data = tensor[torch.isfinite(tensor)]
+                valid_mask = torch.isfinite(tensor)
+                valid_data = tensor[valid_mask]
                 if valid_data.numel() > 0:
                     shape_str = str(tensor.size()).replace("torch.Size", "")
-                    logger.info(
-                        f"{name:<30} {shape_str:<20} {str(tensor.dtype):<16} {str(tensor.device):<8} "
-                        f"{valid_data.min().item():>8.3f} {valid_data.max().item():>8.3f} {valid_data.norm().item():>8.3f}"
+                    value = (
+                        f"shape={shape_str} | dtype={tensor.dtype} | device={tensor.device} | "
+                        f"min={valid_data.min().item():.3f} | max={valid_data.max().item():.3f} | "
+                        f"norm={valid_data.norm().item():.3f}"
                     )
                 else:
+                    value = (
+                        f"shape={tensor.size()} | dtype={tensor.dtype} | device={tensor.device} | "
+                        "min=NaN | max=NaN | norm=NaN"
+                    )
                     logger.warning(
-                        f"{name:<30} {'[NaN/Inf]':<20} {str(tensor.dtype):<16} {str(tensor.device):<8} {'---':>8} {'---':>8} {'---':>8}"
+                        f"{name}: tensor contains only non-finite values when checking {generator_name}"
                     )
             else:
-                logger.info(
-                    f"{name:<30} {'[scalar]':<20} {str(tensor.dtype):<16} {str(tensor.device):<8} {tensor:>8.3f} {tensor:>8.3f} {tensor:>8.3f}"
+                value = (
+                    f"scalar | dtype={tensor.dtype} | device={tensor.device} | "
+                    f"value={tensor.item() if hasattr(tensor, 'item') else tensor}"
                 )
+
+            tensor_rows.append((name, value, None))
 
             if (torch.isnan(tensor)).any():
                 logger.warning(f"\t NaN detected in {name}: ")
@@ -99,6 +104,31 @@ class Monitoring:
 
         if raise_error and (nonfinite_detected or dtype_mismatches):
             raise ValueError("NaN/Inf values or dtype mismatches detected!")
+
+        summary_entries = [
+            ("generator", generator_name, None),
+            ("data_attr", data_attr or "none", None),
+            ("checked", str(len(tensor_rows)), None),
+            ("dtype_mismatches", str(len(dtype_mismatches)), None),
+            ("nonfinite_detected", str(nonfinite_detected), None),
+        ]
+        log_section(logger, "tensor_check", summary_entries)
+
+        if tensor_rows:
+            detail_limit = 10
+            log_section(
+                logger,
+                f"tensor_check.details.{generator_name}",
+                tensor_rows[:detail_limit],
+                level=logging.DEBUG,
+            )
+            if len(tensor_rows) > detail_limit and logger.isEnabledFor(logging.DEBUG):
+                log_section(
+                    logger,
+                    f"tensor_check.details.{generator_name}_continued",
+                    tensor_rows[detail_limit:],
+                    level=logging.DEBUG,
+                )
 
         return None
 
@@ -237,24 +267,27 @@ class Monitoring:
     ###################
     def _log_system_info(self) -> None:
         """Log essential system information at training start."""
-        logger.info("=" * 60)
-        logger.info("🚀 TRAINING STARTED")
-        logger.info("=" * 60)
 
-        # Model basics
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        logger.info(
-            f"Model: {self.__class__.__name__} | Params: {total_params:,} ({trainable_params:,} trainable)"
-        )
-        logger.info(
-            f"Config: {self.n_classes} classes | {self.n_timesteps} timesteps | non_label_idx: {self.non_label_index}"
-        )
 
-        # System info
+        entries = [
+            ("model_name", format_value(self.__class__.__name__), None),
+            ("total_params", f"{total_params:,}", None),
+            ("trainable_params", f"{trainable_params:,}", None),
+            ("n_classes", format_value(getattr(self, "n_classes", "unset")), None),
+            ("n_timesteps", format_value(getattr(self, "n_timesteps", "unset")), None),
+            (
+                "non_label_index",
+                format_value(getattr(self, "non_label_index", "unset")),
+                None,
+            ),
+        ]
+
         if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name()
-            logger.info(f"Device: {device_name}")
+            entries.append(("device", torch.cuda.get_device_name(), None))
+
+        log_section(logger, "training_start", entries)
 
     def _log_memory_usage(self) -> None:
         """Log detailed and consistent memory and CPU usage statistics."""
@@ -265,29 +298,45 @@ class Monitoring:
         cpu_percent = psutil.cpu_percent(interval=0.1)
         process_mem_gb = process.memory_info().rss / (1024**3)
 
-        logger.info(
-            f"\t{'System RAM':<18}: {ram_used_gb:6.2f} GB / {ram_total_gb:.2f} GB ({ram.percent:.1f}%)"
-        )
-        logger.info(f"\t{'CPU Usage':<18}: {cpu_percent:6.1f}%")
-        logger.info(f"\t{'Process Memory':<18}: {process_mem_gb:6.2f} GB")
+        entries = [
+            (
+                "system_ram",
+                f"{ram_used_gb:6.2f} GB / {ram_total_gb:.2f} GB ({ram.percent:.1f}%)",
+                None,
+            ),
+            ("cpu_usage", f"{cpu_percent:6.1f}%", None),
+            ("process_memory", f"{process_mem_gb:6.2f} GB", None),
+        ]
 
         if torch.cuda.is_available():
             gpu_mem_gb = torch.cuda.memory_allocated() / (1024**3)
             gpu_mem_reserved_gb = torch.cuda.memory_reserved() / (1024**3)
             gpu_total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            logger.info(
-                f"\t{'GPU Memory Used':<18}: {gpu_mem_gb:6.2f} GB / {gpu_total_gb:.2f} GB"
+            entries.extend(
+                [
+                    (
+                        "gpu_memory_used",
+                        f"{gpu_mem_gb:6.2f} GB / {gpu_total_gb:.2f} GB",
+                        None,
+                    ),
+                    (
+                        "gpu_memory_reserved",
+                        f"{gpu_mem_reserved_gb:6.2f} GB / {gpu_total_gb:.2f} GB",
+                        None,
+                    ),
+                ]
             )
-            logger.info(
-                f"\t{'GPU Memory Reserved':<18}: {gpu_mem_reserved_gb:6.2f} GB / {gpu_total_gb:.2f} GB"
-            )
+
+        log_section(logger, "system_resources", entries)
 
     def _log_training_summary(self) -> None:
         """Log training completion summary."""
         try:
-            logger.info(
-                f"✅ Training completed: {self.trainer.current_epoch} epochs | {self.trainer.global_step} steps"
-            )
+            entries = [
+                ("epochs", format_value(self.trainer.current_epoch), None),
+                ("global_steps", format_value(self.trainer.global_step), None),
+            ]
+            log_section(logger, "training_complete", entries)
         except RuntimeError:
             return
 
@@ -419,8 +468,15 @@ class MonitoringMixin(Monitoring, LightningModule):
 
         # Log first batch info
         if batch_idx == 0:
-            logger.info(
-                f"📦 [{stage.upper()}] First batch: {inputs.shape} | Labels: [{label_min}, {label_max}] | Device: {inputs.device}"
+            entries = [
+                ("batch_shape", format_value(tuple(inputs.shape)), None),
+                ("labels", f"[{label_min}, {label_max}]", None),
+                ("device", format_value(str(inputs.device)), None),
+            ]
+            log_section(
+                logger,
+                f"{stage}_batch_preview",
+                entries,
             )
 
     def _check_training_health(self, loss: torch.Tensor, batch_idx: int) -> None:
@@ -434,9 +490,15 @@ class MonitoringMixin(Monitoring, LightningModule):
                 f"⚠️  Batch {batch_idx}: Loss is {'NaN' if torch.isnan(loss) else 'Inf'}"
             )
         elif batch_idx == 0:
-            logger.info(
-                f"\t Batch {batch_idx}: Loss {loss.item() if hasattr(loss, 'item') else loss}"
-            )
+            entries = [
+                ("batch_idx", format_value(batch_idx), None),
+                (
+                    "loss",
+                    format_value(loss.item() if hasattr(loss, "item") else loss),
+                    None,
+                ),
+            ]
+            log_section(logger, "training_loss", entries)
 
         # Check for extremely high loss
         loss_val = loss.item() if hasattr(loss, "item") else float(loss)

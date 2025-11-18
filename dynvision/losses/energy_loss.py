@@ -15,6 +15,8 @@ class EnergyLoss(BaseLoss):
         self.hooks = []
         self.norm_factors = {}
         self.p = p
+        self._last_device: Optional[torch.device] = None
+        self._last_dtype: Optional[torch.dtype] = None
 
     def register_hooks(self, model: nn.Module) -> None:
         """Register forward hooks on model modules to capture energy statistics."""
@@ -50,6 +52,8 @@ class EnergyLoss(BaseLoss):
             self.norm_factors[module_name] = n_units ** (1 / self.p)
 
         self.batch_energy[module_name] = batch_energy
+        self._last_device = batch_energy.device
+        self._last_dtype = batch_energy.dtype
 
     def forward(
         self,
@@ -71,9 +75,12 @@ class EnergyLoss(BaseLoss):
     ) -> torch.Tensor:
         """Compute energy loss from current batch statistics only."""
         if not self.batch_energy:
-            return torch.tensor(0.0, requires_grad=True)
+            device = self._last_device if self._last_device is not None else None
+            dtype = self._last_dtype if self._last_dtype is not None else torch.float32
+            zero = torch.zeros(1, device=device, dtype=dtype)
+            return zero
 
-        total_energy = torch.tensor(0.0, requires_grad=True)
+        total_energy: Optional[torch.Tensor] = None
         module_count = 0
 
         for module_name, batch_energy in self.batch_energy.items():
@@ -82,20 +89,24 @@ class EnergyLoss(BaseLoss):
 
             # Ensure gradients flow through
             if batch_energy.requires_grad:
-                with torch.no_grad():  # todo: double check why this is working
-                    normalized_energy = batch_energy / norm_factor
+                normalized_energy = batch_energy / norm_factor
 
-                total_energy = total_energy + normalized_energy
+                if total_energy is None:
+                    total_energy = normalized_energy
+                else:
+                    total_energy = total_energy + normalized_energy
                 module_count += 1
 
         # Clear current batch energy immediately after use to free memory
         del self.batch_energy
         self.batch_energy = {}
 
-        if module_count > 0:
+        if module_count > 0 and total_energy is not None:
             return total_energy / module_count
-        else:
-            return torch.tensor(0.0, requires_grad=True)
+
+        device = self._last_device if self._last_device is not None else None
+        dtype = self._last_dtype if self._last_dtype is not None else torch.float32
+        return torch.zeros(1, device=device, dtype=dtype)
 
     def remove_hooks(self) -> None:
         """Clean up registered hooks."""

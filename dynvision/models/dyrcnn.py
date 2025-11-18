@@ -84,8 +84,8 @@ class DyRCNN(BaseModel):
         tau: float = 5,  # ms
         t_feedforward: float = 0,  # ms
         t_recurrence: float = 6,  # ms
-        t_feedback: float = 40,
-        t_skip: float = 0,
+        t_feedback: float = 30,  # ms
+        t_skip: float = 0,  # ms
         recurrence_type: str = "full",
         recurrence_target: str = "output",  # Target for recurrent connections
         feedback_mode: str = "additive",
