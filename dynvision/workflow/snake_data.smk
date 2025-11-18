@@ -77,8 +77,9 @@ rule symlink_data_subsets:
         Symlink flag file
     """
     input:
-        get_data_location
+        subset_folder = project_paths.data.raw / '{data_name}' / '{data_subset}',
     params:
+        category_folder = lambda wildcards: get_data_location(wildcards),
         parent = lambda wildcards, output: Path(output.flag).parent,
         source = lambda wildcards, output: Path(output.flag).with_suffix(''),
     output:
@@ -90,7 +91,7 @@ rule symlink_data_subsets:
     shell:
         """
         (mkdir -p {params.parent:q} && \
-        ln -sf {input:q} {params.source:q} && \
+        ln -sf {params.category_folder:q} {params.source:q} && \
         touch {output.flag:q}) 
         """
 
@@ -148,6 +149,7 @@ rule build_ffcv_datasets:
     params:
         train_ratio = get_param('train_ratio'),
         max_resolution = lambda w: config.data_resolution[w.data_name],
+        config_path = lambda w: process_configs(config, wildcards=w),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -161,6 +163,7 @@ rule build_ffcv_datasets:
     shell:
         """
         {params.execution_cmd} \
+            --config_path {params.config_path:q} \
             --input {input.data:q} \
             --output_train {output.train:q} \
             --output_val {output.val:q} \
