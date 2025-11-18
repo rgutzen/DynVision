@@ -7,6 +7,69 @@ classifier_name: classifier
 # ===== MODEL STATUS =====
 status: trained
 
+# ===== INIT MODE OVERRIDES =====
+# Parameters specific to model initialization
+init:
+  # Data configuration for initialization
+  data:
+    use_ffcv: false              # Don't require FFCV dataset for init
+    use_distributed: false       # Single-process initialization
+    num_workers: 0               # Single-threaded data loading
+    pin_memory: false            # No need for pinned memory
+  
+  model:
+    store_responses: 0           # Don't store responses during init
+
+# ===== TRAINING MODE OVERRIDES =====
+# Parameters specific to model training
+train:
+  # Data configuration for training
+  data:
+    train: true                  # Enable training mode (augmentation, etc.)
+    shuffle: true                # Shuffle training data
+    drop_last: true              # Drop incomplete batches
+    use_distributed: false       # Override in distributed mode if needed
+  
+  # Trainer configuration for training
+  trainer:
+    enable_progress_bar: false    # Show training progress
+    enable_checkpointing: true   # Save model checkpoints
+
+# ===== TESTING MODE OVERRIDES =====
+# Parameters specific to model testing and evaluation
+test:
+  # Base test overrides (apply to any component)
+  verbose: true                  # Enable detailed logging
+
+  model:
+    init_with_pretrained: false
+  
+  # Data configuration for testing
+  data:
+    train: false                 # Evaluation mode (no augmentation)
+    shuffle: false               # Sequential sampling
+    sampler: "RoundRobinSampler" # Representative sampling across dataset
+    use_distributed: false       # Single-process testing
+    use_ffcv: false              # Use standard PyTorch for compatibility
+    pin_memory: true             # Pin memory for faster GPU transfer
+    drop_last: true              # Consistent batch sizes
+    prefetch_factor: null        # Disable prefetching
+    num_workers: 4               # Moderate parallelism
+  
+  # Trainer configuration for testing
+  trainer:
+    devices: 1                   # Single device for determinism
+    num_nodes: 1                 # Single node
+    strategy: "auto"             # Automatic strategy selection
+    accelerator: "auto"          # Automatic accelerator selection
+    logger: null                 # No training logger
+    enable_checkpointing: false  # No checkpoints during testing
+    enable_progress_bar: true    # Show testing progress
+  
+  # Model configuration for testing
+  model:
+    store_responses_on_cpu: true # Store responses on CPU to save GPU memory
+
 # ===== CORE ARCHITECTURE =====
 # # Framework defaults - models can override in their __init__
 # n_classes: 10  # Number of output classes
@@ -14,6 +77,7 @@ status: trained
 # n_timesteps: 20  # Number of temporal timesteps
 # data_presentation_pattern: [1]  # 1 = present input, 0 = blank
 # input_adaption_weight: 0.0  # Weight for consecutive timestep inputs
+# init_with_pretrained: false
 
 # # ===== BIOLOGICAL PARAMETERS =====
 # dt: 2  # ms - integration time step
@@ -56,12 +120,25 @@ retain_graph: False  # Retain computational graph for repeated backprop
 # Data
 data_name: mnist
 data_group: all
+train: true
+use_distributed: false
 data_timesteps: 1
+pixel_range: "0-1"
+encoding: image
+writer_mode: proportion
+max_resolution: 224
+compress_probability: 0.25
+jpeg_quality: 60
+chunksize: 1000
+page_size: 4194304  # 4 MiB
+batches_ahead: 3
+shuffle: true
+cache_size: 1000
 
 # Training run
-seed: "0000"
+seed: 0
 train_ratio: 0.9
-epochs: 150
+epochs: 200
 check_val_every_n_epoch: 10
 log_every_n_steps: 20
 accumulate_grad_batches: 4
@@ -78,6 +155,17 @@ gradient_clip_algorithm: "norm"  # "norm" or "value"
 gradient_clip_val: 1.0  # global clip value
 deterministic: False  # Consider setting to true if unstable
 devices: 1
+num_nodes: 1
+accelerator: auto
+strategy_kwargs: {}  # Strategy-specific keyword arguments (see config_modes.yaml for examples)
+early_stopping_min_delta: 0.0
+early_stopping_monitor: val_loss
+early_stopping_mode: min
+save_top_k: 2
+monitor_checkpoint: val_loss
+checkpoint_mode: min
+save_last: true
+every_n_epochs: 50
 
 # DataLoader
 batch_size: 256
@@ -91,9 +179,11 @@ num_workers: 4
 persistent_workers: True
 pin_memory: False
 prefetch_factor: 1
+dataloader_kwargs: {}  # Additional custom arguments for dataloader functions
 
 # Test run
 logger: False
+verbose: false
 
 # ===== LOSS CONFIGURATION (DETAILED) =====
 loss:
@@ -128,14 +218,14 @@ lr_parameter_groups:
 learning_rate: 0.0002
 scheduler: CosineAnnealingLR
 scheduler_kwargs:
-  T_max: 250
+  T_max: 300
 scheduler_configs:
   interval: epoch
   frequency: 1
   monitor: train_loss
   name: lr_scheduled
 lr_scaling:
-  enabled: False  # whether to scale learning rate with batch size
+  enabled: True  # whether to scale learning rate with batch size
   ref_batch_size: 64  # reference batch size for scaling
   threshold_factor: 8  # maximum scaling threshold
 

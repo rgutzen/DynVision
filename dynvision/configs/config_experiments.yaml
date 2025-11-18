@@ -19,10 +19,9 @@ experiment_config:
     dloader: ['ffcv', 'torch']
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
-    energyloss: [0, 0.1, 0.2, 0.5, 1.0, 2.0, 4.0] # 0.2,
+    energyloss: [0, 0.01, 0.1, 0.2, 0.5, 1.0, 2.0]
     
   response:
-    status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -32,7 +31,6 @@ experiment_config:
       idle: [20]
 
   responseffonly:
-    status: trained
     parameter: ffonly
     data_loader: StimulusDuration
     data_args:
@@ -42,7 +40,7 @@ experiment_config:
       ffonly: ['true', 'false']
 
   responseintermediate:
-    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=249]
+    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=249, trained-epoch=299, trained-epoch=349]
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -52,7 +50,6 @@ experiment_config:
       idle: [20]
 
   stability:
-    status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -62,7 +59,6 @@ experiment_config:
       idle: [20]
 
   adaption:
-    status: trained
     parameter: inadapt
     data_loader: StimulusDuration
     data_args:
@@ -73,7 +69,6 @@ experiment_config:
       inadapt: [0, 0.95, 0.9, 0.8, 0.7]
 
   nullcondition:
-    status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -82,7 +77,6 @@ experiment_config:
       stim: [10]
 
   idleresponse:
-    status: trained
     parameter: idle
     data_loader: StimulusDuration
     data_args:
@@ -93,7 +87,6 @@ experiment_config:
       idle: [100]
 
   duration:
-    status: trained
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -103,7 +96,6 @@ experiment_config:
       idle: 20
 
   contrast:
-    status: trained
     parameter: contrast
     data_loader: StimulusContrast
     data_args:
@@ -114,7 +106,6 @@ experiment_config:
       idle: 20
 
   interval:
-    status: trained
     parameter: interval
     data_loader: StimulusInterval
     data_args:
@@ -125,7 +116,6 @@ experiment_config:
       idle: 20
 
   uniformnoise:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -136,7 +126,6 @@ experiment_config:
       idle: 20
 
   uniformnoiseffonly:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -148,7 +137,6 @@ experiment_config:
       ffonly: 'true'
 
   uniformnoiseiid:
-    status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
@@ -159,7 +147,6 @@ experiment_config:
       idle: 20
 
   saltpeppernoise:
-    status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
@@ -170,7 +157,6 @@ experiment_config:
       idle: 20
 
   saltpeppernoiseiid:
-    status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
@@ -181,7 +167,6 @@ experiment_config:
       idle: 20
 
   poissonnoise:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -192,7 +177,6 @@ experiment_config:
       idle: 20
 
   poissonnoiseffonly:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -204,7 +188,6 @@ experiment_config:
       ffonly: 'true'
 
   poissonnoiseiid:
-    status: trained
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
@@ -215,7 +198,6 @@ experiment_config:
       idle: 20
 
   poissonnoiseiidffonly:
-    status: trained
     parameter: ffonly
     data_loader: StimulusNoise
     data_args:
@@ -227,7 +209,6 @@ experiment_config:
       ffonly: ['true', 'false']
 
   gaussiannoise:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -238,7 +219,6 @@ experiment_config:
       idle: 20
 
   gaussiancorrnoise:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -250,7 +230,6 @@ experiment_config:
       idle: 20
 
   phasescramblednoise:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -261,7 +240,6 @@ experiment_config:
       idle: 20
 
   gaussiannoiseffonly:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -273,7 +251,6 @@ experiment_config:
       ffonly: 'true'
 
   gaussiancorrnoiseffonly:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:
@@ -286,7 +263,6 @@ experiment_config:
       ffonly: 'true'
 
   phasescramblednoiseffonly:
-    status: trained
     parameter: ssnr
     data_loader: StimulusNoise
     data_args:

@@ -14,6 +14,7 @@ data_resolution:
     snakenet: 224
     imagenette: 224
 
+# data statistics for normalization
 data_statistics:
     mnist:
         mean: [0.1307]
@@ -34,6 +35,8 @@ data_statistics:
         mean: [0.485, 0.456, 0.406]
         std: [0.229, 0.224, 0.225]
 
+# predefined data subgroups for testing
+# selected via wildcards in filenames "*_{data_name}_{status}_{data_group}"
 data_groups:
     mnist:
         '01':

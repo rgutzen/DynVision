@@ -37,7 +37,7 @@ set-resources:
 
   init_model:
     mem: 16G # use 32GB of memory
-    runtime: 30 # run for 30 minutes
+    runtime: 60 # run for 60 minutes
     cpus_per_task: 16
     cpu: 16
 
@@ -52,7 +52,7 @@ set-resources:
 
   train_model:
     mem: 80G * attempt # use 80GB of memory
-    runtime: 300 # run for 5 hours
+    runtime: 600 # run for 10 hours
     # mem_mb_per_cpu: 8000  # 80GB total process memory
     ntasks: 1 # use one GPU
     # cpu: 32
@@ -95,7 +95,12 @@ set-resources:
     runtime: 150 * attempt # run for 2 hours
     cpus_per_task: 16
     
-  checkpoint_to_statedict:
+  best_checkpoint_to_statedict:
+    mem: 16G # use 16GB of memory
+    runtime: 5 # run for 30 minutes
+    cpus_per_task: 4
+
+  intermediate_checkpoint_to_statedict:
     mem: 16G # use 16GB of memory
     runtime: 5 # run for 30 minutes
     cpus_per_task: 4
