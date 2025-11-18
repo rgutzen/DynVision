@@ -318,6 +318,21 @@ A sophisticated Pydantic-based validation system with four layers:
 ### Data Pipeline
 
 **Data Flow**:
+
+### Shared DataModule + Logging Workflow
+
+DynVision now routes every runtime entrypoint (init/train/test) through the shared helpers in `dynvision/data/datamodule.py`:
+
+- `DataInterface` captures dataset/dataloader provenance (preview vs active) and pipes every log line through `DataParams.log_dataset_creation` / `BaseParams.log_dataloader_creation`. Always reuse this interface instead of ad-hoc logging to keep provenance tags consistent.
+- `DataModule` (Lightning-ready) backs `runtime/train_model.py`. It expects a full `TrainingParams` object with FFCV/PyTorch paths and exposes `create_preview_loader()` before Lightning `setup()` runs. When editing training data flows, wire new arguments through `DataParams` helper methods so both preview and fit/val logs stay in sync.
+- `SimpleDataModule` serves single-dataset workflows (currently `runtime/init_model.py`). Use it whenever you just need a preview batch for dimension inference; all kwargs should come from `DataParams.get_preview_dataloader_kwargs()` to avoid runtime mutation.
+- `TestingDataModule` extends `SimpleDataModule` with sampler instantiation, batch-size guards, and additional debug logging for `runtime/test_model.py`. Any future testing scripts should import this class rather than rebuilding loaders manually.
+
+When adjusting logging verbosity:
+
+1. Prefer `log_section()` calls inside the appropriate Params or DataModule helper so INFO-level output stays structured.
+2. Use the `context` argument (`preview`, `train`, `val`, `active`) to highlight diffs; preview-only noise should generally be demoted to DEBUG unless you are actively debugging dataset wiring.
+3. If new parameters must be inferred at runtime, call `BaseParams.update_field(..., provenance="runtime")` so provenance tags reflect the adjustment across init/train/test logs.
 1. Raw data downloaded to `data/raw/` (automatic on first use)
 2. Preprocessed to `data/interim/` (train/val splits via symlinks, no data duplication)
 3. FFCV `.beton` files created in `data/processed/` for fast loading

@@ -75,22 +75,6 @@ model = AlexNet(
 
 ### 3. Research Models
 
-Specialized architectures for specific research questions:
-
-#### BLT (Biological Local Training)
-
-```python
-from dynvision.models import BLT
-
-model = BLT(
-    n_classes=1000,
-    input_dims=(20, 3, 224, 224),
-    local_learning=True,        # Enable biologically-plausible local learning
-    dt=2.0,
-    tau=10.0
-)
-```
-
 #### CordsNet
 
 ```python

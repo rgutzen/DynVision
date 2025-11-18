@@ -40,6 +40,12 @@ duration:
 ```
 Snakemake expands `data_args` and `status` to enumerate concrete runs. Category lists in `experiment_config.categories` (e.g., `rctype`, `trc`) provide wildcard values for comparisons.
 
+### Extending Experiment Types
+To introduce a novel stimulus protocol:
+1. Implement a DataLoader subclass in `dynvision/data/dataloader.py` (use `StandardDataLoader` or the temporal loaders as templates). Provide aliases via `@alias_kwargs` so configuration keys (for example `stim`, `intro`) map cleanly onto constructor arguments.
+2. Register the class name in the `DATALOADER_CLASSES` dictionary so `get_data_loader` can resolve it during workflow execution.
+3. Reference the new loader in `config_experiments.yaml` by setting `data_loader` and supplying the required `data_args`. Snakemake will automatically expand the experiment combinations and pass them into the `test_model` rule.
+
 ## Step 2: Run the `test_model` Rule
 From `dynvision/workflow/` execute:
 ```bash
