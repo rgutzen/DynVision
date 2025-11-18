@@ -25,29 +25,25 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pytorch_lightning as pl
 import torch
-from torch.utils.data import DataLoader, Dataset
-import ffcv
-
 from dynvision import models
 from dynvision.data.dataloader import (
     _adjust_data_dimensions,
     _adjust_label_dimensions,
-    get_train_val_loaders,
-    get_data_loader,
 )
-from dynvision.data.ffcv_dataloader import get_ffcv_dataloader
-from dynvision.data.datasets import get_dataset
+from dynvision.data.datamodule import DataModule
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
     filter_kwargs,
     str_to_bool,
     handle_errors,
+    log_section,
+    format_value,
 )
 from dynvision.visualization import callbacks as custom_callbacks
 from dynvision.utils.checkpoint_to_statedict import get_best_checkpoint
 
 # Import the Pydantic parameter classes
-from dynvision.params import TrainingParams, DynVisionConfigError
+from dynvision.params import TrainingParams
 from pytorch_lightning.loggers import Logger
 
 logger = logging.getLogger(__name__)
@@ -120,129 +116,6 @@ class EarlyStoppingWithMin(pl.callbacks.EarlyStopping):
                 trainer.logger.log_text(
                     f"Early stopping threshold of {self.min_val_accuracy} not met yet. Current value: {current_value}"
                 )
-
-
-class DataModule(pl.LightningDataModule):
-    """Enhanced DataModule with unified dataloader creation and distributed handling."""
-
-    def __init__(self, config: TrainingParams):
-        super().__init__()
-        self.config = config
-        self.train_loader = None
-        self.val_loader = None
-        self._preview_loader = None
-
-        # Validate required parameters early
-        self._validate_config()
-
-    def _validate_config(self) -> None:
-        """Validate configuration parameters."""
-        if self.config.data.use_ffcv:
-            required_paths = ["dataset_train", "dataset_val"]
-            missing = [p for p in required_paths if not getattr(self.config, p, None)]
-            if missing:
-                raise DynVisionConfigError(f"FFCV mode requires: {missing}")
-        else:
-            if not getattr(self.config, "dataset_link", None):
-                raise DynVisionConfigError("PyTorch mode requires dataset_link")
-
-    def create_preview_loader(self) -> DataLoader:
-        """Create a minimal loader for dimension inference before trainer setup."""
-        if self._preview_loader is not None:
-            return self._preview_loader
-
-        # Create minimal config for preview
-        preview_config = self._create_preview_config()
-
-        if self.config.data.use_ffcv:
-            self._preview_loader = self._create_ffcv_loader(
-                self.config.dataset_train,
-                preview_config | {"train": False, "distributed": False},
-            )
-        else:
-            self._preview_loader = self._create_pytorch_loader(preview_config)
-
-        return self._preview_loader
-
-    def _create_preview_config(self) -> Dict[str, Any]:
-        """Create minimal configuration for preview loader."""
-        # Get base config - no filtering needed here as get_data_loader will filter
-        base_config = self.config.data.get_dataloader_kwargs()
-        return base_config | {
-            "distributed": False,
-            "num_workers": min(base_config.get("num_workers", 4), 1),
-            "shuffle": False,  # No need to shuffle for preview
-        }
-
-    def setup(self, stage: Optional[str] = None) -> None:
-        """Set up data loaders with proper distributed configuration."""
-        if stage not in ["fit", None]:
-            return
-
-        # Get dataloader config - None values already filtered by get_dataloader_kwargs()
-        # Additional filtering happens in get_data_loader() and get_train_val_loaders()
-        dataloader_config = self.config.data.get_dataloader_kwargs()
-
-        if self.config.data.use_ffcv:
-            self._setup_ffcv_loaders(dataloader_config)
-        else:
-            self._setup_pytorch_loaders(dataloader_config)
-
-    def _setup_ffcv_loaders(self, config: Dict[str, Any]) -> None:
-        """Set up FFCV data loaders."""
-        self.train_loader = self._create_ffcv_loader(
-            self.config.dataset_train,
-            config | {"train": True},
-        )
-        self.val_loader = self._create_ffcv_loader(
-            self.config.dataset_val,
-            config
-            | {
-                "train": False,
-                "num_workers": max(config["num_workers"] // 4, 1),
-                "batch_size": max(config["batch_size"] // 4, 32),
-            },
-        )
-
-    def _create_ffcv_loader(
-        self, path: Path, config: Dict[str, Any]
-    ) -> ffcv.loader.Loader:
-        """Create a single FFCV data loader."""
-        return get_ffcv_dataloader(path=path, **config)
-
-    def _setup_pytorch_loaders(self, config: Dict[str, Any]) -> None:
-        """Set up standard PyTorch data loaders."""
-        # Create dataset once and split
-        dataset = self._create_pytorch_dataset(**config)
-
-        self.train_loader, self.val_loader = get_train_val_loaders(
-            dataset=dataset, **config
-        )
-
-    def _create_pytorch_loader(self, config: Dict[str, Any]) -> DataLoader:
-        """Create a single PyTorch loader for preview."""
-        dataset = self._create_pytorch_dataset(**config)
-        return get_data_loader(dataset, **config)
-
-    def _create_pytorch_dataset(self, **kwargs) -> Dataset:
-        """Create PyTorch dataset with consistent configuration."""
-        return get_dataset(
-            data_path=self.config.dataset_link,
-            data_name=self.config.data.data_name,
-            **kwargs,
-        )
-
-    def train_dataloader(self) -> DataLoader:
-        """Return training data loader."""
-        if self.train_loader is None:
-            raise RuntimeError("DataModule not set up. Call setup() first.")
-        return self.train_loader
-
-    def val_dataloader(self) -> DataLoader:
-        """Return validation data loader."""
-        if self.val_loader is None:
-            raise RuntimeError("DataModule not set up. Call setup() first.")
-        return self.val_loader
 
 
 class SaveLastCheckpointCallback(pl.Callback):
@@ -327,9 +200,9 @@ class CallbackManager:
         """Set up training callbacks based on configuration."""
         callbacks = []
 
-        # Add model-specific callbacks
-        print(f"timesteps: {self.config.model.n_timesteps}")
-        if self.config.model.n_timesteps > 1:
+        # Add model-specific callbacks when temporal depth is active
+        n_timesteps = self.config.model.n_timesteps
+        if n_timesteps is not None and n_timesteps > 1:
             callbacks.append(custom_callbacks.MonitorClassifierResponses())
 
         callbacks.append(custom_callbacks.MonitorWeightDistributions())
@@ -459,14 +332,17 @@ class ModelManager:
         """Load and initialize model with current configuration."""
         # Load state dict
         state_dict = torch.load(
-            self.config.input_model_state, map_location=self.device
+            self.config.input_model_state, map_location=self.device, weights_only=True
         )
 
         # Create model with current configuration
         model_class = getattr(models, self.config.model.model_name)
         model_kwargs = self.config.model.get_model_kwargs(model_class)
 
-        self.config.model.log_configuration(model_kwargs)
+        self.config.model.log_model_creation(
+            model_class=model_class,
+            model_kwargs=model_kwargs,
+        )
 
         model = model_class(**model_kwargs).to(self.device)
 
@@ -528,29 +404,13 @@ class TrainingOrchestrator:
 
     def _log_training_configuration(self) -> None:
         """Log key training configuration information."""
-        logger.info("=" * 60)
-        logger.info("TRAINING CONFIGURATION")
-        logger.info("=" * 60)
-        logger.info(f"Model: {self.config.model.model_name}")
-        logger.info(f"Dataset: {self.config.data.data_name}")
-        logger.info(f"Data batch size: {self.config.data.batch_size}")
-        logger.info(f"Global batch size: {self.config.global_batch_size}")
-        logger.info(f"Effective batch size: {self.config.effective_batch_size}")
-        logger.info(
-            f"Effective Learning rate: {self.config.effective_learning_rate:.6f}"
+        self.config.log_training_overview(logger=logger)
+
+    def _preview_log_level(self) -> int:
+        """Return INFO for verbose runs, otherwise DEBUG for preview noise."""
+        return (
+            logging.INFO if getattr(self.config, "verbose", False) else logging.DEBUG
         )
-        logger.info(f"Epochs: {self.config.trainer.epochs}")
-        logger.info(f"Precision: {self.config.trainer.precision}")
-        logger.info(f"Optimizer: {self.config.model.optimizer}")
-
-        if self.config.trainer.is_distributed:
-            logger.info("Distributed training enabled")
-            logger.info(f"World size: {self.config.trainer.world_size}")
-            logger.info(f"Distributed strategy: {self.config.trainer.strategy}")
-            logger.info(f"Number of nodes: {self.config.trainer.num_nodes}")
-            logger.info(f"Devices: {self.config.trainer.devices}")
-
-        logger.info("=" * 60)
 
     def _setup_trainer(
         self, callbacks: List[pl.Callback], pl_logger: Logger
@@ -570,7 +430,12 @@ class TrainingOrchestrator:
         # Filter valid arguments for Trainer
         trainer_kwargs, unknown = filter_kwargs(pl.Trainer, trainer_kwargs)
         if unknown:
-            logger.info(f"Trainer kwargs set: {trainer_kwargs}")
+            logger.debug("Trainer kwargs set: %s", trainer_kwargs)
+
+        self.config.log_trainer_creation(
+            trainer_kwargs=trainer_kwargs,
+            logger=logger,
+        )
 
         return pl.Trainer(**trainer_kwargs)
 
@@ -593,10 +458,18 @@ class TrainingOrchestrator:
         batch_size, actual_n_timesteps, *spatial_dims = inputs.shape
         actual_input_dims = (actual_n_timesteps, *spatial_dims)
 
-        logger.info(f"Extracted from training data:")
-        logger.info(f"  - Input shape: {inputs.size()}")
-        logger.info(f"  - Input dims: {actual_input_dims}")
-        logger.info(f"  - Pixel stats: {inputs.mean():.3f} ± {inputs.std():.3f}")
+        pixel_mean = inputs.mean().item()
+        pixel_std = inputs.std().item()
+        log_section(
+            logger,
+            "Preview batch",
+            [
+                ("Batch shape", format_value(tuple(inputs.size())), None),
+                ("Input dims", format_value(actual_input_dims), None),
+                ("Pixel stats", f"{pixel_mean:.3f} ± {pixel_std:.3f}", None),
+            ],
+            level=self._preview_log_level(),
+        )
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -699,21 +572,34 @@ class TrainingOrchestrator:
                     load_state_dict=existing_checkpoint is None
                 )
 
-                # Determine checkpoint path for training
+                checkpoint_entries = []
                 if existing_checkpoint:
-                    logger.info("=" * 60)
-                    logger.info(
-                        f"RESUMING from Lightning checkpoint: {existing_checkpoint}"
-                    )
-                    logger.info("Model weights will be overridden by checkpoint")
-                    logger.info("=" * 60)
                     ckpt_path = existing_checkpoint
+                    checkpoint_entries.extend(
+                        [
+                            ("mode", "resume", None),
+                            ("checkpoint", format_value(existing_checkpoint), None),
+                            (
+                                "weight_source",
+                                "lightning_checkpoint",
+                                "overrides state dict",
+                            ),
+                        ]
+                    )
                 else:
-                    logger.info("=" * 60)
-                    logger.info("STARTING FRESH from state dict")
-                    logger.info(f"Loaded from: {self.config.input_model_state}")
-                    logger.info("=" * 60)
                     ckpt_path = None
+                    checkpoint_entries.extend(
+                        [
+                            ("mode", "state_dict", None),
+                            ("checkpoint", "–", "missing"),
+                            (
+                                "weight_source",
+                                format_value(self.config.input_model_state),
+                                None,
+                            ),
+                        ]
+                    )
+                log_section(logger, "checkpoint_selection", checkpoint_entries)
 
                 # Synchronize after model loading in distributed mode
                 if trainer.strategy and hasattr(trainer.strategy, "barrier"):

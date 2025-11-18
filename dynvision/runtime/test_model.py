@@ -21,22 +21,20 @@ from typing import Any, Dict, Optional, Tuple
 
 import pytorch_lightning as pl
 import torch
-from torch.utils.data import DataLoader, Dataset
 import wandb
 
 from dynvision import models
 from dynvision.data.dataloader import (
-    StandardDataLoader,
     _adjust_data_dimensions,
     _adjust_label_dimensions,
 )
-from dynvision.data.dataloader import get_data_loader, get_data_loader_class
-from dynvision.data.datasets import get_dataset
-from dynvision.data import sampler
+from dynvision.data.datamodule import TestingDataModule
 from dynvision.project_paths import project_paths
 from dynvision.utils import (
     filter_kwargs,
     handle_errors,
+    log_section,
+    format_value,
 )
 
 # Import the Pydantic parameter classes
@@ -46,127 +44,6 @@ from dynvision.params.testing_params import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class TestingDataModule:
-    """Simplified data module optimized for testing workflows."""
-
-    def __init__(self, config: TestingParams):
-        self.config = config
-        self.dataset = None
-        self.dataloader = None
-        self.sampler = None
-
-    def setup_dataset(self) -> Dataset:
-        """Set up the test dataset with configuration from TestingParams."""
-        if self.dataset is not None:
-            return self.dataset
-
-        logger.info(f"Loading test dataset from {self.config.dataset_path}")
-
-        # Get dataset configuration from TestingParams (all optimizations already applied)
-        dataset_kwargs = self.config.data.get_dataset_kwargs()
-
-        self.dataset = get_dataset(self.config.dataset_path, **dataset_kwargs)
-
-        # Instantiate sampler if specified in config
-        sampler_name = self.config.data.sampler
-        if sampler_name is not None and sampler_name != "":
-            try:
-                logger.info(f"Instantiating sampler: {sampler_name}")
-                sampler_class = getattr(sampler, sampler_name)
-                self.sampler = sampler_class(self.dataset, seed=42)
-                logger.info(f"Sampler instantiated: {type(self.sampler).__name__}")
-            except AttributeError as e:
-                logger.error(
-                    f"Sampler '{sampler_name}' not found in dynvision.data.sampler: {e}"
-                )
-                logger.warning("Continuing without sampler")
-            except Exception as e:
-                logger.error(f"Failed to instantiate sampler '{sampler_name}': {e}")
-                logger.warning("Continuing without sampler")
-
-        total_samples = len(self.dataset)
-        logger.info(f"Test dataset loaded with {total_samples} samples")
-
-        return self.dataset
-
-    def setup_dataloader(self) -> DataLoader:
-        """Set up the test data loader using configuration from TestingParams."""
-        if self.dataloader is not None:
-            return self.dataloader
-
-        if self.dataset is None:
-            self.setup_dataset()
-
-        # Get dataloader configuration (already optimized by TestingParams)
-        dataloader_name = self.config.data.data_loader
-        dataloader_class = get_data_loader_class(dataloader_name)
-        dataloader_config = self.config.get_dataloader_kwargs(
-            dataloader_class=dataloader_class
-        )
-
-        # Replace sampler string name with actual sampler instance if available
-        if self.sampler is not None:
-            dataloader_config["sampler"] = self.sampler
-            logger.info(f"Using sampler instance: {type(self.sampler).__name__}")
-        else:
-            sampler_name = dataloader_config.get("sampler")
-            if sampler_name and isinstance(sampler_name, str):
-                logger.info(
-                    f"Sampler '{sampler_name}' specified in config but not instantiated in setup_dataset()"
-                )
-
-        # Adjust batch_size if it exceeds dataset size to prevent empty dataloader
-        dataset_size = len(self.dataset)
-        original_batch_size = dataloader_config.get("batch_size", 1)
-        if original_batch_size > dataset_size:
-            dataloader_config["batch_size"] = dataset_size
-            logger.warning(
-                f"Adjusted batch_size from {original_batch_size} to {dataset_size} "
-                f"(dataset size) to ensure dataloader produces batches. "
-                f"Original batch_size > dataset_size with drop_last={dataloader_config.get('drop_last', False)} "
-                f"would result in empty dataloader."
-            )
-
-        logger.info(f"Creating {dataloader_name} dataloader with config:")
-        logger.info(f"  - batch_size: {dataloader_config.get('batch_size')}")
-        logger.info(f"  - num_workers: {dataloader_config.get('num_workers')}")
-        logger.info(f"  - drop_last: {dataloader_config.get('drop_last')}")
-        logger.info(f"  - sampler: {dataloader_config.get('sampler')}")
-
-        self.dataloader = get_data_loader(
-            dataset=self.dataset, dataloader=dataloader_class, **dataloader_config
-        )
-
-        logger.info(f"Dataloader created: {len(self.dataloader)} batches expected")
-
-        return self.dataloader
-
-    def get_sample_batch(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Get a sample batch for dimension inference."""
-        if self.dataloader is None:
-            self.setup_dataloader()
-
-        # Check if dataloader is empty
-        try:
-            batch = next(iter(self.dataloader))
-        except StopIteration:
-            raise RuntimeError(
-                f"Dataloader is empty! Dataset has {len(self.dataset)} samples, "
-                f"but dataloader produced no batches. Common causes:\n"
-                f"  - batch_size ({self.config.data.batch_size}) > dataset size ({len(self.dataset)})\n"
-                f"  - drop_last=True with small dataset\n"
-                f"  - sampler: {self.config.data.sampler}\n"
-                f"  - Data filtering excluding all samples\n"
-                f"Fix: Reduce batch_size or set drop_last=False in configuration"
-            )
-
-        inputs, labels, *_ = batch
-        inputs = _adjust_data_dimensions(inputs)
-        labels = _adjust_label_dimensions(labels)
-
-        return inputs, labels
 
 
 class TestingModelManager:
@@ -197,10 +74,9 @@ class TestingModelManager:
         if hasattr(model, "_initialize_connections"):
             model._initialize_connections()
 
-        # Hack for debug!
-        print(model_kwargs)
-        print("MODEL:", model.state_dict().keys())
-        print("STATE:", state_dict.keys())
+        logger.debug("Model kwargs: %s", model_kwargs)
+        logger.debug("State dict keys: %s", list(model.state_dict().keys()))
+        logger.debug("Checkpoint keys: %s", list(state_dict.keys()))
 
         # Load state dict with error handling
         try:
@@ -228,7 +104,7 @@ class TestingModelManager:
         """Extract number of classes from model state dict."""
         # Look for classifier layer first
         for key in state_dict.keys():
-            if "classifier" in key and "weight" in key:
+            if "classifier" in key and "weight" in key and "source" not in key:
                 n_classes = state_dict[key].shape[0]
                 logger.info(f"Found n_classes={n_classes} from {key}")
                 return n_classes
@@ -250,7 +126,10 @@ class TestingOrchestrator:
 
     def __init__(self, config: TestingParams):
         self.config = config
-        self.datamodule = TestingDataModule(config)
+        self.datamodule = TestingDataModule(
+            config=config,
+            dataset_path=config.dataset_path,
+        )
         self.model_manager = TestingModelManager(config)
 
     @contextmanager
@@ -274,22 +153,33 @@ class TestingOrchestrator:
 
     def _log_testing_configuration(self) -> None:
         """Log key testing configuration information."""
-        logger.info("=" * 60)
-        logger.info("TESTING CONFIGURATION")
-        logger.info("=" * 60)
-        logger.info(f"Data classes: {len(self.datamodule.dataset.classes)}")
-        logger.info(f"Precision: {self.config.trainer.precision}")
-        logger.info(
-            f"Device: {torch.device('cuda' if torch.cuda.is_available() else 'cpu')}"
-        )
+        self.config.log_testing_overview(logger=logger)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        entries = [
+            ("n_classes", format_value(len(self.datamodule.dataset.classes)), None),
+            ("device", format_value(str(device)), None),
+        ]
 
         if torch.cuda.is_available():
-            logger.info(f"GPU: {torch.cuda.get_device_name()}")
-            logger.info(
-                f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB"
+            entries.extend(
+                [
+                    ("gpu_name", format_value(torch.cuda.get_device_name()), None),
+                    (
+                        "gpu_memory_gb",
+                        f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}",
+                        None,
+                    ),
+                ]
             )
 
-        logger.info("=" * 60)
+        log_section(logger, "testing_environment", entries)
+
+    def _preview_log_level(self) -> int:
+        """Use INFO for verbose testing runs, else keep preview noise at DEBUG."""
+        return (
+            logging.INFO if getattr(self.config, "verbose", False) else logging.DEBUG
+        )
 
     def infer_and_update_from_data(self) -> None:
         """
@@ -306,12 +196,21 @@ class TestingOrchestrator:
             batch_size, actual_n_timesteps, *spatial_dims = inputs.shape
             actual_input_dims = (actual_n_timesteps, *spatial_dims)
 
-            logger.info(f"Extracted from test data:")
-            logger.info(f"  - Input shape: {inputs.size()}")
-            logger.info(f"  - Input dims: {actual_input_dims}")
-            logger.info(f"  - Pixel stats: {inputs.mean():.3f} ± {inputs.std():.3f}")
+            preview_level = self._preview_log_level()
             label_str = " ".join(str(int(x)) for x in labels[0])
-            logger.info(f"  - Label Presentation: {label_str}")
+            pixel_mean = inputs.mean().item()
+            pixel_std = inputs.std().item()
+            log_section(
+                logger,
+                "Preview batch",
+                [
+                    ("Batch shape", format_value(tuple(inputs.size())), None),
+                    ("Input dims", format_value(actual_input_dims), None),
+                    ("Pixel stats", f"{pixel_mean:.3f} ± {pixel_std:.3f}", None),
+                    ("Label presentation", label_str, None),
+                ],
+                level=preview_level,
+            )
 
             # Extract n_classes from state dict
             state_dict = torch.load(
@@ -364,6 +263,11 @@ class TestingOrchestrator:
         trainer_kwargs, unknown = filter_kwargs(pl.Trainer, trainer_kwargs)
         if unknown:
             logger.debug(f"Filtered unknown trainer kwargs: {list(unknown.keys())}")
+
+        self.config.log_trainer_creation(
+            trainer_kwargs=trainer_kwargs,
+            logger=logger,
+        )
 
         # wandb.init(settings=wandb.Settings(init_timeout=120))  # hack to log histograms, but testing is not logged
         return pl.Trainer(**trainer_kwargs)
@@ -449,9 +353,13 @@ class TestingOrchestrator:
                 self.infer_and_update_from_data()
 
                 # Load and configure model
+                model_class = getattr(models, self.config.model.model_name)
+                model_kwargs = self.config.model.get_model_kwargs(model_class)
+                self.config.model.log_model_creation(
+                    model_class=model_class,
+                    model_kwargs=model_kwargs,
+                )
                 model = self.model_manager.load_and_configure_model()
-                model_kwargs = self.config.model.get_model_kwargs()
-                self.config.model.log_configuration(model_kwargs)
 
                 # Setup trainer
                 trainer = self.setup_trainer()
