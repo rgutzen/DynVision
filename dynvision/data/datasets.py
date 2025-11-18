@@ -223,29 +223,6 @@ class PathFolder(datasets.DatasetFolder):
             return sample, target
 
 
-def insert_a_before_b(
-    transform_list: List[Any],
-    a: Callable = transforms.ToTensor(),
-    b: transforms.Normalize = transforms.Normalize,
-) -> List[Any]:
-    """Insert transform before another in list.
-
-    Args:
-        transform_list: List of transforms
-        a: Transform to insert
-        b: Transform to insert before
-
-    Returns:
-        Modified transform list
-    """
-    if isinstance(transform_list, list):
-        for i, transform in enumerate(transform_list):
-            if isinstance(transform, b):
-                transform_list.insert(i, a)
-                break
-    return transform_list
-
-
 def get_dataset(
     data_path: Path,
     data_name: Optional[str] = None,

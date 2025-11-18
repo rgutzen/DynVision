@@ -1056,12 +1056,7 @@ def get_data_loader(
 
     # Validate and resolve the dataloader
     if isinstance(dataloader, str):
-        if "DataLoader" not in dataloader:
-            dataloader += "DataLoader"
-        if dataloader in DATALOADER_CLASSES:
-            dataloader_class = DATALOADER_CLASSES.get(dataloader)
-        else:
-            raise ValueError(f"Unknown DataLoader class: '{dataloader}'")
+        dataloader_class = get_data_loader_class(dataloader)
     elif issubclass(dataloader, DataLoader):
         dataloader_class = dataloader
     else:
@@ -1075,16 +1070,16 @@ def get_data_loader(
     return dataloader_class(dataset, **filtered_kwargs)
 
 
-def get_data_loader_class(dataloader=None) -> torch.utils.data.DataLoader:
+def get_data_loader_class(dataloader_name: str) -> torch.utils.data.DataLoader:
 
-    dataloader = dataloader or StandardDataLoader
+    if "DataLoader" not in dataloader_name:
+        dataloader_name += "DataLoader"
+    if dataloader_name in DATALOADER_CLASSES:
+        dataloader_class = DATALOADER_CLASSES.get(dataloader_name)
+    else:
+        raise ValueError(f"Unknown DataLoader class: '{dataloader_name}'")
 
-    if isinstance(dataloader, str):
-        if "DataLoader" not in dataloader:
-            dataloader += "DataLoader"
-        dataloader = globals().get(dataloader)
-
-    return dataloader
+    return dataloader_class
 
 
 def get_train_val_loaders(
