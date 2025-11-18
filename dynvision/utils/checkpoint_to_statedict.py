@@ -20,16 +20,23 @@ import logging
 import re
 import glob
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 import argparse
+
+from dynvision.utils.torch_utils import _torch_load_with_retries
+import time
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+BEST_EPOCH_LOSS_PATTERN = re.compile(
+    r"-(\d+)-(\d+(?:\.\d+)?)(?:-v\d+)?\.ckpt$", re.IGNORECASE
+)
 
 parser = argparse.ArgumentParser(
     description="Convert PyTorch Lightning checkpoint to state_dict .pt file",
@@ -92,22 +99,24 @@ def get_best_checkpoint(
     if not checkpoint_dir.exists():
         raise ValueError(f"Checkpoint directory does not exist: {checkpoint_dir}")
 
-    logger.info(f"Searching for checkpoints in: {checkpoint_dir}")
-    logger.info(f"Model identifier: {model_identifier}")
+    logger.debug(f"Searching for checkpoints in: {checkpoint_dir}")
+    logger.debug(f"Model identifier: {model_identifier}")
 
     # Updated pattern: model_identifier-best-<epch>-<loss>.ckpt
     # Example: mymodel-best-12-0.34.ckpt
-    regex = (
-        pattern or rf"{re.escape(model_identifier)}-best-(\d+)-(\d+\.\d{{2}})\.ckpt"
+    regex = pattern or (
+        rf"{re.escape(model_identifier)}-best-(\d+)-(\d+(?:\.\d+)?)"
+        rf"(?:-v\d+)?\.ckpt"
     )
 
     compiled_pattern = re.compile(regex)
     best_loss = float("inf")
     best_checkpoint = None
+    best_epoch = -1
 
     # List all .ckpt files for debugging
     ckpt_files = list(checkpoint_dir.glob("*.ckpt"))
-    logger.info(f"Found {len(ckpt_files)} .ckpt files")
+    logger.debug(f"Found {len(ckpt_files)} .ckpt files")
 
     for checkpoint_path in ckpt_files:
         logger.debug(f"Checking: {checkpoint_path.name}")
@@ -115,13 +124,14 @@ def get_best_checkpoint(
         if match:
             epch = int(match.group(1))
             loss = float(match.group(2))
-            logger.info(
+            logger.debug(
                 f"Matched checkpoint: {checkpoint_path.name} (epoch {epch}, loss {loss:.4f})"
             )
-            if loss < best_loss:
+            if loss < best_loss or (loss == best_loss and epch > best_epoch):
                 best_loss = loss
                 best_checkpoint = checkpoint_path
-                logger.info(f"New best checkpoint found with loss {loss:.4f}")
+                best_epoch = epch
+                logger.debug(f"New best checkpoint found with loss {loss:.4f}")
         else:
             logger.debug(f"No match for: {checkpoint_path.name}")
 
@@ -159,6 +169,18 @@ def extract_epoch_from_filename(filename: str) -> Optional[int]:
     return None
 
 
+def extract_epoch_and_loss_from_filename(filename: str) -> Optional[Tuple[int, float]]:
+    """Return epoch and loss when filename encodes both near the suffix."""
+
+    match = BEST_EPOCH_LOSS_PATTERN.search(filename)
+    if match:
+        try:
+            return int(match.group(1)), float(match.group(2))
+        except ValueError:
+            return None
+    return None
+
+
 def derive_output_basename(stem: str) -> str:
     """Derive a clean base name for the exported state dict."""
 
@@ -193,9 +215,23 @@ def resolve_checkpoint_paths(
     seen = set()
     base_dir = checkpoint_dir if checkpoint_dir is not None else Path.cwd()
 
+    if not base_dir.exists():
+        logger.warning(f"Checkpoint directory does not exist: {base_dir}")
+
     if patterns:
-        for pattern in patterns:
-            for candidate in _expand_pattern(base_dir, pattern):
+        for raw_pattern in patterns:
+            pattern = raw_pattern.strip()
+            if not pattern:
+                logger.debug("Skipping empty checkpoint glob pattern")
+                continue
+
+            matches = _expand_pattern(base_dir, pattern)
+            if not matches:
+                logger.warning(
+                    f"Glob pattern matched no files (pattern={pattern}, base_dir={base_dir})"
+                )
+
+            for candidate in matches:
                 if candidate.exists() and candidate.suffix == ".ckpt":
                     key = candidate.resolve()
                     if key not in seen:
@@ -214,7 +250,7 @@ def resolve_checkpoint_paths(
                     seen.add(key)
             else:
                 logger.warning(
-                    "Checkpoint file not found or invalid suffix: %s", candidate
+                    f"Checkpoint file not found or invalid suffix: {candidate}"
                 )
 
     return sorted(resolved)
@@ -239,13 +275,13 @@ def validate_checkpoint_file(checkpoint_path: Path) -> bool:
 
     try:
         # Try to load just the keys to verify file integrity
-        checkpoint = torch.load(
+        checkpoint = _torch_load_with_retries(
             checkpoint_path, map_location="cpu", weights_only=False
         )
         if not isinstance(checkpoint, dict):
             logger.error(f"Checkpoint is not a dictionary: {type(checkpoint)}")
             return False
-        logger.info(f"Checkpoint keys: {list(checkpoint.keys())}")
+        logger.debug(f"Checkpoint keys: {list(checkpoint.keys())}")
         return True
     except Exception as e:
         logger.error(f"Failed to validate checkpoint file: {e}")
@@ -271,8 +307,8 @@ def save_state_dict(
         raise RuntimeError(f"Checkpoint validation failed: {checkpoint_path}")
 
     try:
-        logger.info(f"Loading checkpoint from: {checkpoint_path}")
-        checkpoint = torch.load(
+        logger.debug(f"Loading checkpoint from: {checkpoint_path}")
+        checkpoint = _torch_load_with_retries(
             checkpoint_path, map_location=device, weights_only=False
         )
     except Exception as e:
@@ -285,7 +321,7 @@ def save_state_dict(
         )
 
     state_dict = checkpoint["state_dict"]
-    logger.info(f"State dict contains {len(state_dict)} parameters")
+    logger.debug(f"State dict contains {len(state_dict)} parameters")
 
     # Validate state dict is not empty
     if not state_dict:
@@ -296,15 +332,15 @@ def save_state_dict(
     # Save with error handling
     try:
         torch.save(state_dict, output_path)
-        logger.info(f"Model state saved to {output_path}")
+        logger.debug(f"Model state saved to {output_path}")
 
         # Verify the saved file
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise RuntimeError(f"Output file was not created properly: {output_path}")
 
         # Try to load it back to verify integrity
-        torch.load(output_path, map_location="cpu", weights_only=True)
-        logger.info(f"Verified saved file integrity: {output_path}")
+        _torch_load_with_retries(output_path, map_location="cpu", weights_only=True)
+        logger.debug(f"Verified saved file integrity: {output_path}")
 
     except Exception as e:
         # Clean up failed output
@@ -325,32 +361,70 @@ def convert_checkpoints_to_directory(
     failures: List[Tuple[Path, Exception]] = []
     converted = 0
 
+    epoch_loss_map: Dict[Path, Tuple[int, float]] = {}
+    best_per_epoch: Dict[int, Tuple[float, float, Path]] = {}
+
     for checkpoint_path in checkpoints:
+        epoch_loss = extract_epoch_and_loss_from_filename(checkpoint_path.name)
+        if epoch_loss is None:
+            continue
+        epoch, loss = epoch_loss
+        epoch_loss_map[checkpoint_path] = epoch_loss
+
+        try:
+            mtime = checkpoint_path.stat().st_mtime
+        except FileNotFoundError:
+            logger.warning(f"Checkpoint vanished during selection: {checkpoint_path}")
+            mtime = 0.0
+
+        best_entry = best_per_epoch.get(epoch)
+        if best_entry is None:
+            best_per_epoch[epoch] = (loss, mtime, checkpoint_path)
+            continue
+
+        best_loss, best_mtime, _ = best_entry
+        if loss < best_loss or (loss == best_loss and mtime > best_mtime):
+            best_per_epoch[epoch] = (loss, mtime, checkpoint_path)
+
+    for checkpoint_path in checkpoints:
+        epoch_loss = epoch_loss_map.get(checkpoint_path)
+        if epoch_loss:
+            epoch, loss = epoch_loss
+            best_loss, _, best_path = best_per_epoch.get(
+                epoch, (loss, 0.0, checkpoint_path)
+            )
+            if best_path != checkpoint_path:
+                logger.debug(
+                    f"Skipping checkpoint {checkpoint_path.name} for epoch {epoch} "
+                    f"(loss {loss:.4f}) because {best_loss:.4f} is lower"
+                )
+                continue
+
         epoch = extract_epoch_from_filename(checkpoint_path.name)
 
         if epoch == 0:
-            logger.info(
-                "Skipping checkpoint with epoch 0 (likely incomplete): %s",
-                checkpoint_path,
+            logger.debug(
+                f"Skipping checkpoint with epoch 0 (likely incomplete): {checkpoint_path}"
             )
             continue
 
         epoch_str = str(epoch) if epoch is not None else "unknown"
-        base_name = derive_output_basename(checkpoint_path.stem)
+        base_name = derive_output_basename(checkpoint_path.name)
         output_path = output_dir / f"{base_name}-epoch={epoch_str}.pt"
 
         if output_path.exists():
             try:
-                torch.load(output_path, map_location="cpu", weights_only=True)
-                logger.info(
-                    "Existing state dict is valid, skipping conversion: %s",
-                    output_path,
+                _torch_load_with_retries(
+                    output_path, map_location="cpu", weights_only=True
+                )
+                logger.debug(
+                    f"Existing state dict is valid, skipping conversion: {output_path}"
                 )
                 converted += 1
                 continue
             except Exception:
                 logger.warning(
-                    "Existing state dict is invalid, regenerating: %s", output_path
+                    f"Existing state dict is invalid, regenerating: {output_path}"
                 )
                 output_path.unlink(missing_ok=True)
 
@@ -358,7 +432,7 @@ def convert_checkpoints_to_directory(
             save_state_dict(checkpoint_path, output_path, device=device)
             converted += 1
         except Exception as exc:  # noqa: BLE001
-            logger.error("Failed to convert %s: %s", checkpoint_path, exc)
+            logger.error(f"Failed to convert {checkpoint_path}: {exc}")
             failures.append((checkpoint_path, exc))
             if not continue_on_error:
                 raise
@@ -370,7 +444,7 @@ if __name__ == "__main__":
     args, unknown = parser.parse_known_args()
 
     if unknown:
-        logger.warning("Ignoring unknown arguments: %s", unknown)
+        logger.warning(f"Ignoring unknown arguments: {unknown}")
 
     is_multi_mode = any(
         [args.checkpoint_globs, args.checkpoint_files, args.output_dir]
@@ -394,10 +468,13 @@ if __name__ == "__main__":
 
         if not checkpoints:
             raise FileNotFoundError(
-                "No checkpoints matched the provided patterns/files"
+                "No checkpoints matched the provided patterns/files. "
+                f"Checked directory: {args.checkpoint_dir}; "
+                f"patterns: {args.checkpoint_globs or []}; "
+                f"files: {args.checkpoint_files or []}"
             )
 
-        logger.info("Found %d checkpoints to convert", len(checkpoints))
+        logger.debug("Found %d checkpoints to convert", len(checkpoints))
         converted, failures = convert_checkpoints_to_directory(
             checkpoints,
             args.output_dir,
@@ -431,23 +508,25 @@ if __name__ == "__main__":
             )
 
         try:
-            logger.info("Converting best checkpoint to state dict")
-            logger.info("Checkpoint dir: %s", checkpoint_dir)
-            logger.info("Model identifier: %s", model_identifier)
-            logger.info("Output path: %s", output_path)
+            logger.debug("Converting best checkpoint to state dict")
+            logger.debug(f"Checkpoint dir: {checkpoint_dir}")
+            logger.debug(f"Model identifier: {model_identifier}")
+            logger.debug(f"Output path: {output_path}")
 
             best_checkpoint = get_best_checkpoint(
                 checkpoint_dir, model_identifier=model_identifier
             )
 
             if output_path.exists():
-                logger.warning("Output file already exists: %s", output_path)
+                logger.warning(f"Output file already exists: {output_path}")
                 try:
-                    torch.load(output_path, map_location="cpu", weights_only=True)
-                    logger.info("Existing output file is valid, skipping conversion")
+                    _torch_load_with_retries(
+                        output_path, map_location="cpu", weights_only=True
+                    )
+                    logger.debug("Existing output file is valid, skipping conversion")
                 except Exception as e:  # noqa: BLE001
                     logger.warning(
-                        "Existing output file is invalid (%s), recreating...", e
+                        f"Existing output file is invalid ({e}), recreating..."
                     )
                     output_path.unlink()
                     save_state_dict(best_checkpoint, output_path)
@@ -459,10 +538,10 @@ if __name__ == "__main__":
                     "Conversion failed - output file is missing or empty"
                 )
 
-            logger.info("Conversion completed successfully")
+            logger.debug("Conversion completed successfully")
 
         except Exception as e:  # noqa: BLE001
-            logger.error("Failed to convert checkpoint: %s", e)
+            logger.error(f"Failed to convert checkpoint: {e}")
             if "output_path" in locals() and output_path.exists():
                 output_path.unlink()
             raise
