@@ -27,6 +27,7 @@
 """
 
 from .base_params import BaseParams, DynVisionValidationError, DynVisionConfigError
+from .composite_params import CompositeParams
 from .model_params import ModelParams
 from .data_params import DataParams
 from .trainer_params import TrainerParams

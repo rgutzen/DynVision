@@ -42,6 +42,15 @@ from .config_utils import (
     alias_kwargs,
 )
 
+from .logging_utils import (
+    configure_logging,
+    log_section,
+    format_value,
+    SummaryItem,
+    build_section,
+    resolve_signature_defaults,
+)
+
 from .data_utils import (
     load_df,
     identity,
@@ -57,6 +66,7 @@ from .torch_utils import (
     get_effective_dtype_from_precision,
     determine_target_dtype,
     calculate_conv_out_dim,
+    _torch_load_with_retries,
 )
 
 from .model_utils import (
@@ -101,6 +111,13 @@ __all__ = [
     "filter_kwargs",
     "update_config_with_kwargs",
     "alias_kwargs",
+    # Logging utilities
+    "configure_logging",
+    "log_section",
+    "format_value",
+    "SummaryItem",
+    "build_section",
+    "resolve_signature_defaults",
     # Data utilities
     "load_df",
     "identity",
@@ -114,6 +131,7 @@ __all__ = [
     "get_effective_dtype_from_precision",
     "determine_target_dtype",
     "calculate_conv_out_dim",
+    "_torch_load_with_retries",
     # Model utilities
     "check_stability",
     "check_weights",

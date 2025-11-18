@@ -7,14 +7,19 @@ and callback settings.
 """
 
 from pydantic import Field, field_validator, model_validator, ConfigDict
-from typing import Dict, Any, Optional, List, Union, Tuple
+from typing import Dict, Any, Optional, List, Union, Tuple, ClassVar, Sequence
 import logging
-from pathlib import Path
+import pytorch_lightning as pl
 from datetime import timedelta
 import torch
-import os
 from dynvision.params.base_params import BaseParams, DynVisionValidationError
-from dynvision.utils import get_effective_dtype_from_precision
+from dynvision.utils import (
+    SummaryItem,
+    get_effective_dtype_from_precision,
+    log_section,
+    format_value,
+    resolve_signature_defaults,
+)
 
 
 class TrainerParams(BaseParams):
@@ -27,64 +32,59 @@ class TrainerParams(BaseParams):
     Distributed training is automatically enabled when world_size > 1 (devices x num_nodes).
     """
 
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
+
     # Core Training Parameters
-    epochs: int = Field(default=100, description="Number of training epochs", ge=1)
+    epochs: int = Field(..., ge=1, description="Number of training epochs")
     check_val_every_n_epoch: int = Field(
-        default=1, description="Validation frequency (epochs)", ge=1
+        ..., ge=1, description="Validation frequency (epochs)"
     )
-    log_every_n_steps: int = Field(
-        default=50, description="Logging frequency (steps)", ge=1
-    )
+    log_every_n_steps: int = Field(..., ge=1, description="Logging frequency (steps)")
     num_sanity_val_steps: int = Field(
-        default=2, description="Number of sanity steps before training", ge=0
+        ..., ge=0, description="Number of sanity steps before training"
     )
 
     # Training Behavior
     accumulate_grad_batches: int = Field(
-        default=1, description="Number of batches to accumulate gradients", ge=1
+        ..., ge=1, description="Number of batches to accumulate gradients"
     )
     precision: Union[int, str] = Field(
-        default=32,
-        description="Training precision (16, 32, 64, 'bf16', 'bf16-mixed', etc.)",
+        ..., description="Training precision (16, 32, 64, 'bf16', 'bf16-mixed', etc.)"
     )
     deterministic: Union[bool, str] = Field(
-        default=False,
-        description="Enable deterministic training (True, False, 'warn')",
+        ..., description="Enable deterministic training (True, False, 'warn')"
     )
 
     # Distributed Training Parameters
     strategy: Optional[str] = Field(
-        default="auto",
+        default=None,
         description="Distributed strategy (None=auto-detect, ddp, ddp_spawn, fsdp, deepspeed, etc.)",
     )
     devices: Union[int, str, None] = Field(
-        default="auto",
+        ...,
         description="Number of devices (GPUs) per node or device specification (None=auto-detect)",
     )
-    num_nodes: int = Field(default=1, description="Number of compute nodes", ge=1)
-    accelerator: str = Field(
-        default="auto", description="Accelerator type (gpu, cpu, tpu, auto)"
-    )
+    num_nodes: int = Field(..., ge=1, description="Number of compute nodes")
+    accelerator: str = Field(..., description="Accelerator type (gpu, cpu, tpu, auto)")
     sync_batchnorm: Optional[bool] = Field(
         default=None,
         description="Synchronize batch normalization across devices (None=auto-set based on strategy)",
     )
 
     # Strategy-Specific Configuration
-    strategy_kwargs: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Strategy-specific keyword arguments",
+    strategy_kwargs: Optional[Dict[str, Any]] = Field(
+        default=None, description="Strategy-specific keyword arguments"
     )
 
     # System Performance
-    enable_progress_bar: bool = Field(
-        default=True, description="Enable training progress bar"
-    )
+    enable_progress_bar: bool = Field(..., description="Enable training progress bar")
     profiler: Optional[str] = Field(
         default=None, description="Profiler type (simple, advanced, pytorch, None)"
     )
     benchmark: bool = Field(
-        default=False, description="Enable PyTorch cudnn benchmark for performance"
+        ..., description="Enable PyTorch cudnn benchmark for performance"
     )
 
     # Advanced Training Options
@@ -92,13 +92,13 @@ class TrainerParams(BaseParams):
         default=None, description="Gradient clipping value (None = disabled)"
     )
     gradient_clip_algorithm: str = Field(
-        default="norm", description="Gradient clipping algorithm (norm, value)"
+        ..., description="Gradient clipping algorithm (norm, value)"
     )
     limit_val_batches: float = Field(
-        default=0.25, description="Fraction of validation batches to use"
+        ..., description="Fraction of validation batches to use"
     )
     reload_dataloaders_every_n_epochs: int = Field(
-        default=0, description="Number of epochs to reload dataloaders"
+        ..., description="Number of epochs to reload dataloaders"
     )
 
     # Early Stopping
@@ -106,29 +106,21 @@ class TrainerParams(BaseParams):
         default=None, description="Early stopping patience (None = disabled)"
     )
     early_stopping_min_delta: float = Field(
-        default=0.0, description="Minimum change for early stopping"
+        ..., description="Minimum change for early stopping"
     )
     early_stopping_monitor: str = Field(
-        default="val_loss", description="Metric to monitor for early stopping"
+        ..., description="Metric to monitor for early stopping"
     )
-    early_stopping_mode: str = Field(
-        default="min", description="Early stopping mode (min, max)"
-    )
+    early_stopping_mode: str = Field(..., description="Early stopping mode (min, max)")
 
     # Checkpoint Configuration
-    save_top_k: int = Field(
-        default=2, description="Number of best checkpoints to save"
-    )
+    save_top_k: int = Field(..., description="Number of best checkpoints to save")
     monitor_checkpoint: str = Field(
-        default="val_loss", description="Metric to monitor for checkpoint saving"
+        ..., description="Metric to monitor for checkpoint saving"
     )
-    checkpoint_mode: str = Field(
-        default="min", description="Checkpoint mode (min, max)"
-    )
-    save_last: bool = Field(default=True, description="Save the last checkpoint")
-    every_n_epochs: int = Field(
-        default=50, description="Save a checkpoint every n epochs"
-    )
+    checkpoint_mode: str = Field(..., description="Checkpoint mode (min, max)")
+    save_last: bool = Field(..., description="Save the last checkpoint")
+    every_n_epochs: int = Field(..., description="Save a checkpoint every n epochs")
 
     model_config = ConfigDict(
         extra="allow",
@@ -136,6 +128,51 @@ class TrainerParams(BaseParams):
         use_enum_values=True,
         validate_by_name=True,
     )
+
+    summary_sections: ClassVar[Dict[str, Sequence[SummaryItem]]] = {
+        "Schedule": (
+            SummaryItem("epochs", always=True),
+            SummaryItem("check_val_every_n_epoch"),
+            SummaryItem("log_every_n_steps"),
+            SummaryItem("accumulate_grad_batches"),
+            SummaryItem("num_sanity_val_steps"),
+            SummaryItem("reload_dataloaders_every_n_epochs"),
+        ),
+        "Precision": (
+            SummaryItem("precision", always=True),
+            SummaryItem("deterministic"),
+            SummaryItem("benchmark"),
+            SummaryItem("profiler"),
+        ),
+        "Distributed": (
+            SummaryItem("strategy"),
+            SummaryItem("devices"),
+            SummaryItem("num_nodes"),
+            SummaryItem("accelerator"),
+            SummaryItem("sync_batchnorm"),
+            SummaryItem("strategy_kwargs"),
+        ),
+        "Controls": (
+            SummaryItem("enable_progress_bar"),
+            SummaryItem("limit_val_batches"),
+        ),
+        "Gradient": (
+            SummaryItem("gradient_clip_val"),
+            SummaryItem("gradient_clip_algorithm"),
+        ),
+        "Checkpointing": (
+            SummaryItem("monitor_checkpoint"),
+            SummaryItem("save_top_k"),
+            SummaryItem("save_last"),
+            SummaryItem("every_n_epochs"),
+        ),
+        "Early stopping": (
+            SummaryItem("early_stopping_monitor"),
+            SummaryItem("early_stopping_mode"),
+            SummaryItem("early_stopping_min_delta"),
+            SummaryItem("early_stopping_patience"),
+        ),
+    }
 
     @classmethod
     def get_aliases(cls) -> Dict[str, str]:
@@ -161,6 +198,24 @@ class TrainerParams(BaseParams):
             }
         )
         return aliases
+
+    def log_trainer_creation(
+        self,
+        *,
+        trainer_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        run_logger = logger or logging.getLogger(__name__)
+        resolved_kwargs, default_flags = resolve_signature_defaults(
+            pl.Trainer, trainer_kwargs
+        )
+
+        entries = []
+        for name, value in resolved_kwargs.items():
+            marker = "default" if default_flags.get(name, False) else None
+            entries.append((name, format_value(value), marker))
+
+        log_section(run_logger, "creating_trainer", entries)
 
     @property
     def world_size(self) -> int:
@@ -190,6 +245,15 @@ class TrainerParams(BaseParams):
     def is_distributed(self) -> bool:
         """Check if distributed training is enabled based on world size."""
         return self.world_size > 1
+
+    @field_validator("log_level")
+    def validate_log_level(cls, v):
+        """Ensure log_level is valid."""
+        if isinstance(v, str):
+            v = v.upper()
+            if v not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+                raise ValueError(f"Invalid log level: {v}")
+        return v
 
     @field_validator("strategy")
     def validate_strategy(cls, v):
@@ -303,7 +367,7 @@ class TrainerParams(BaseParams):
         expected_dtype_str = get_effective_dtype_from_precision(str(self.precision))
 
         # Log what dtype this precision will actually use
-        logging.info(
+        logging.debug(
             f"Trainer precision '{self.precision}' will use dtype '{expected_dtype_str}'"
         )
 
@@ -326,18 +390,34 @@ class TrainerParams(BaseParams):
                     f"but no strategy specified. Consider setting --strategy ddp"
                 )
                 # Auto-set strategy for convenience
-                self.update_field("strategy", "ddp", verbose=True, validate=False)
+                self.update_field(
+                    "strategy",
+                    "ddp",
+                    verbose=True,
+                    validate=False,
+                    mutation_tag="derived",
+                )
                 logger.info("Auto-set strategy to 'ddp'")
 
             # Auto-set sync_batchnorm if not specified
             if self.sync_batchnorm is None:
                 if self.strategy in ["ddp", "ddp_spawn", "fsdp"]:
-                    self.update_field("sync_batchnorm", True, validate=False)
+                    self.update_field(
+                        "sync_batchnorm",
+                        True,
+                        validate=False,
+                        mutation_tag="derived",
+                    )
                     logger.debug(
                         "Auto-enabled sync_batchnorm for distributed training"
                     )
                 else:
-                    self.update_field("sync_batchnorm", False, validate=False)
+                    self.update_field(
+                        "sync_batchnorm",
+                        False,
+                        validate=False,
+                        mutation_tag="derived",
+                    )
 
             # Strategy-specific validations
             self._validate_strategy_specific_config()
@@ -395,6 +475,9 @@ class TrainerParams(BaseParams):
 
     def _validate_ddp_kwargs(self):
         """Validate DDP-specific kwargs."""
+        if not self.strategy_kwargs:
+            return
+
         valid_ddp_kwargs = [
             "find_unused_parameters",
             "gradient_as_bucket_view",
@@ -420,6 +503,9 @@ class TrainerParams(BaseParams):
 
     def _validate_fsdp_kwargs(self):
         """Validate FSDP-specific kwargs."""
+        if not self.strategy_kwargs:
+            return
+
         valid_fsdp_kwargs = [
             "state_dict_type",
             "sharding_strategy",
@@ -438,6 +524,9 @@ class TrainerParams(BaseParams):
 
     def _validate_deepspeed_kwargs(self):
         """Validate DeepSpeed-specific kwargs."""
+        if not self.strategy_kwargs:
+            return
+
         valid_deepspeed_kwargs = [
             "config",
             "stage",
@@ -470,7 +559,7 @@ class TrainerParams(BaseParams):
             raise ImportError("PyTorch Lightning is required for strategy creation")
 
         strategy_name = self.strategy.lower()
-        strategy_kwargs = self.strategy_kwargs.copy()
+        strategy_kwargs = (self.strategy_kwargs or {}).copy()
 
         if strategy_name in ["ddp", "ddp_spawn"]:
             if strategy_name == "ddp":
@@ -549,6 +638,9 @@ class TrainerParams(BaseParams):
             if self.devices is not None:
                 trainer_kwargs["devices"] = self.devices
 
+        # Filter out None values to allow Trainer class defaults
+        trainer_kwargs = {k: v for k, v in trainer_kwargs.items() if v is not None}
+
         return trainer_kwargs
 
     def get_effective_dtype(self) -> torch.dtype:
@@ -572,17 +664,19 @@ class TrainerParams(BaseParams):
         if self.early_stopping_patience is None:
             return None
 
-        return {
+        kwargs = {
             "monitor": self.early_stopping_monitor,
             "patience": self.early_stopping_patience,
             "min_delta": self.early_stopping_min_delta,
             "mode": self.early_stopping_mode,
             "verbose": True,
         }
+        # Filter out None values to allow callback class defaults
+        return {k: v for k, v in kwargs.items() if v is not None}
 
     def get_checkpoint_callback_kwargs(self) -> Dict[str, Any]:
         """Get model checkpoint callback configuration."""
-        return {
+        kwargs = {
             "monitor": self.monitor_checkpoint,
             "save_top_k": self.save_top_k,
             "mode": self.checkpoint_mode,
@@ -591,6 +685,8 @@ class TrainerParams(BaseParams):
             "save_on_train_epoch_end": True,
             "every_n_epochs": self.every_n_epochs,
         }
+        # Filter out None values to allow callback class defaults
+        return {k: v for k, v in kwargs.items() if v is not None}
 
 
 # Example usage and testing

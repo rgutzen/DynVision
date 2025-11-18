@@ -8,7 +8,17 @@ including response storage configuration and memory-optimized settings.
 import logging
 import math
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Dict, Iterable, Optional, Tuple, List
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterable,
+    Optional,
+    Tuple,
+    List,
+    Sequence,
+)
 
 from pydantic import (
     Field,
@@ -23,6 +33,7 @@ from dynvision.params.composite_params import CompositeParams
 from dynvision.params.model_params import ModelParams
 from dynvision.params.trainer_params import TrainerParams
 from dynvision.params.data_params import DataParams
+from dynvision.utils import SummaryItem, log_section, format_value
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +51,21 @@ class TestingParams(CompositeParams):
         "model": ModelParams,
         "trainer": TrainerParams,
         "data": DataParams,
+    }
+
+    summary_sections: ClassVar[Dict[str, Sequence[SummaryItem]]] = {
+        "Run": (
+            SummaryItem("mode_name", always=True),
+            SummaryItem("seed", always=True),
+            SummaryItem("log_level", always=True),
+            SummaryItem("verbose", always=True),
+        ),
+        "Paths": (
+            SummaryItem("dataset_path", always=True),
+            SummaryItem("input_model_state", always=True),
+            SummaryItem("output_results", always=True),
+            SummaryItem("output_responses", always=True),
+        ),
     }
 
     # ===== COMMON PARAMETERS =====
@@ -259,6 +285,63 @@ class TestingParams(CompositeParams):
 
     def get_trainer_kwargs(self) -> Dict[str, Any]:
         return self.trainer.get_trainer_kwargs()
+
+    def log_dataloader_creation(
+        self,
+        *,
+        dataloader_class,
+        dataloader_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+        context: str = "active",
+        previous_kwargs: Optional[Dict[str, Any]] = None,
+        level: int = logging.INFO,
+    ) -> None:
+        self.data.log_dataloader_creation(
+            dataloader_class=dataloader_class,
+            dataloader_kwargs=dataloader_kwargs,
+            logger=logger,
+            context=context,
+            previous_kwargs=previous_kwargs,
+            level=level,
+        )
+
+    def log_trainer_creation(
+        self,
+        *,
+        trainer_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        self.trainer.log_trainer_creation(
+            trainer_kwargs=trainer_kwargs,
+            logger=logger,
+        )
+
+    def log_testing_overview(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Log a structured overview of the testing run."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        entries = [
+            ("seed", format_value(self.seed), None),
+            ("input_model_state", format_value(self.input_model_state), None),
+            ("dataset_path", format_value(self.dataset_path), None),
+            ("output_results", format_value(self.output_results), None),
+            ("output_responses", format_value(self.output_responses), None),
+            ("data_name", format_value(self.data.data_name), None),
+            ("batch_size", format_value(self.data.batch_size), None),
+            ("precision", format_value(self.trainer.precision), None),
+            ("verbose", format_value(self.verbose), None),
+        ]
+
+        log_section(run_logger, "testing_run", entries)
+        self.log_overview(
+            logger=run_logger.getChild("params"),
+            include_components=True,
+            include_defaults=False,
+        )
 
     @classmethod
     def get_aliases(cls) -> Dict[str, str]:

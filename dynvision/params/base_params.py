@@ -6,15 +6,81 @@ across all DynVision scripts with support for CLI parsing, config file loading,
 and alias resolution.
 """
 
+from dataclasses import dataclass
 from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
-from typing import Dict, Any, Optional, List, Union, Type
+from typing import (
+    Dict,
+    Any,
+    Optional,
+    List,
+    Union,
+    Type,
+    Iterable,
+    Sequence,
+    ClassVar,
+    Tuple,
+)
 from pathlib import Path
 import argparse
 import yaml
 import json
 import logging
 import sys
-from dynvision.utils import str_to_bool
+from dynvision.utils import (
+    str_to_bool,
+    configure_logging,
+    log_section,
+    SummaryItem,
+    build_section,
+)
+
+
+@dataclass(frozen=True)
+class ProvenanceRecord:
+    """Track where a value originated and how it was mutated."""
+
+    source: str
+    scope: Optional[str] = None
+    mutations: Tuple[str, ...] = ()
+
+    def with_scope(self, scope: Optional[str]) -> "ProvenanceRecord":
+        if not scope or scope == self.scope:
+            return self
+        return ProvenanceRecord(self.source, scope, self.mutations)
+
+    def add_mutation(self, tag: str) -> "ProvenanceRecord":
+        if tag in self.mutations:
+            return self
+        return ProvenanceRecord(
+            self.source,
+            self.scope,
+            self.mutations + (tag,),
+        )
+
+    def is_default(self) -> bool:
+        return self.source == "default" and not self.mutations and not self.scope
+
+    def format(self) -> Optional[str]:
+        if self.is_default():
+            return None
+        base = self.source if not self.scope else f"{self.source}:{self.scope}"
+        segments = [base] if base else []
+        segments.extend(self.mutations)
+        return "; ".join(segments) if segments else None
+
+
+class ParamsDict(dict):
+    """Dictionary that carries provenance metadata for each key."""
+
+    def __init__(
+        self, *args, provenance: Optional[Dict[str, ProvenanceRecord]] = None, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.provenance: Dict[str, ProvenanceRecord] = provenance or {}
+
+    def copy(self) -> "ParamsDict":
+        return ParamsDict(super().copy(), provenance=self.provenance.copy())
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,25 +106,32 @@ class BaseParams(BaseModel):
     Base parameter class providing common functionality for all DynVision configs.
 
     Parameter Precedence Hierarchy (lowest to highest priority):
-    1. Pydantic field defaults
-    2. Configuration file values
-    3. Command line arguments
-    4. Direct override kwargs (programmatic use)
+    1. Configuration file values
+    2. Command line arguments
+    3. Direct override kwargs (programmatic use)
     """
-
-    # Common parameters that appear across scripts
-    seed: int = Field(default=42, description="Random seed for reproducibility")
-    log_level: str = Field(
-        default="INFO",
-        description="Logging level",
-    )
 
     model_config = ConfigDict(
         extra="allow",  # Allow additional fields
         validate_assignment=True,  # Validate fields when assigned after creation
         use_enum_values=True,  # Use enum values in serialization
         validate_by_name=True,  # Allow validation using field names and aliases
+        strict=False,  # Allow type coercion (e.g., string "42" → int 42) for CLI args
     )
+
+    summary_sections: ClassVar[Dict[str, Sequence[SummaryItem]]] = {}
+    show_provenance_legend: bool = Field(
+        default=False,
+        description="Show provenance legend when logging parameter summaries",
+        exclude=True,
+    )
+
+    def model_post_init(
+        self, __context: Any
+    ) -> None:  # pragma: no cover - lifecycle hook
+        object.__setattr__(self, "_dynamic_updates", set())
+        if not hasattr(self, "_value_provenance"):
+            object.__setattr__(self, "_value_provenance", {})
 
     @classmethod
     def get_aliases(cls) -> Dict[str, str]:
@@ -80,15 +153,14 @@ class BaseParams(BaseModel):
         config_path: Optional[Union[str, Path]] = None,
         override_kwargs: Optional[Dict[str, Any]] = None,
         args: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+    ) -> ParamsDict:
         """
         Create config instance with explicit precedence hierarchy.
 
         Precedence (lowest to highest priority):
-        1. Pydantic field defaults
-        2. Configuration file values
-        3. Command line arguments
-        4. Direct override kwargs
+        1. Configuration file values
+        2. Command line arguments
+        3. Direct override kwargs
 
         Config path can be provided either as function argument or via CLI --config_path.
         Function argument takes precedence over CLI argument.
@@ -105,8 +177,9 @@ class BaseParams(BaseModel):
             DynVisionValidationError: If parameter validation fails
             DynVisionConfigError: If config file loading fails
         """
-        # Start with empty dict - Pydantic will provide field defaults
-        params = {}
+        # Start with empty dict; defaults are injected from configuration sources
+        params: Dict[str, Any] = {}
+        provenance: Dict[str, ProvenanceRecord] = {}
 
         # Determine config path: explicit argument takes precedence over CLI
         final_config_path = config_path
@@ -119,7 +192,9 @@ class BaseParams(BaseModel):
         if final_config_path:
             try:
                 config_data = cls._load_config_file(final_config_path)
-                params.update(config_data)
+                for key, value in (config_data or {}).items():
+                    params[key] = value
+                    provenance[key] = ProvenanceRecord(source="config")
                 source = "explicit argument" if config_path else "CLI argument"
                 logger.debug(
                     f"Loaded {len(config_data)} parameters from config file ({source}): {final_config_path}"
@@ -135,7 +210,9 @@ class BaseParams(BaseModel):
             cli_data = cls._parse_cli_args(args)
             # Remove config_path from CLI data since it's not a model parameter
             cli_data.pop("config_path", None)
-            params.update(cli_data)
+            for key, value in cli_data.items():
+                params[key] = value
+                provenance[key] = ProvenanceRecord(source="cli")
             logger.debug(f"Parsed {len(cli_data)} parameters from CLI")
         except Exception as e:
             raise DynVisionConfigError(
@@ -144,11 +221,13 @@ class BaseParams(BaseModel):
 
         # Priority 3: Apply direct overrides (highest priority)
         if override_kwargs:
-            params.update(override_kwargs)
+            for key, value in override_kwargs.items():
+                params[key] = value
+                provenance[key] = ProvenanceRecord(source="override")
             logger.debug(f"Applied {len(override_kwargs)} direct parameter overrides")
 
         # Resolve aliases after all sources are merged
-        params = cls._resolve_aliases(params)
+        params, provenance = cls._resolve_aliases(params, provenance)
 
         # Log final parameter summary
         config_source_info = (
@@ -157,7 +236,7 @@ class BaseParams(BaseModel):
         logger.debug(
             f"Creating {cls.__name__} with {len(params)} total parameters{config_source_info}"
         )
-        return params
+        return ParamsDict(params, provenance=provenance)
 
     @classmethod
     def from_cli_and_config(
@@ -174,7 +253,7 @@ class BaseParams(BaseModel):
         )
 
         try:
-            return cls(**params)
+            instance = cls(**params)
         except Exception as e:
             # Provide detailed validation error with parameter context
             error_context = {
@@ -186,6 +265,10 @@ class BaseParams(BaseModel):
             raise DynVisionValidationError(
                 f"Parameter validation failed: {e}", "validation"
             )
+
+        provenance_map = getattr(params, "provenance", {})
+        object.__setattr__(instance, "_value_provenance", provenance_map)
+        return instance
 
     @classmethod
     def _extract_config_path_from_cli(
@@ -429,7 +512,11 @@ class BaseParams(BaseModel):
             return values  # Multiple values as list
 
     @classmethod
-    def _resolve_aliases(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _resolve_aliases(
+        cls,
+        params: Dict[str, Any],
+        provenance: Optional[Dict[str, ProvenanceRecord]] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, ProvenanceRecord]]:
         """
         Resolve parameter aliases to full parameter names.
 
@@ -450,17 +537,24 @@ class BaseParams(BaseModel):
         """
         aliases = cls.get_aliases()
         resolved = {}
+        resolved_provenance: Dict[str, ProvenanceRecord] = {}
+        provenance = provenance or {}
 
         # First, add all non-alias parameters
         for key, value in params.items():
             if key not in aliases:
                 resolved[key] = value
+                if key in provenance:
+                    resolved_provenance[key] = provenance[key]
 
         # Then, resolve aliases (potentially overriding full names)
         for key, value in params.items():
             if key in aliases:
                 full_name = aliases[key]
                 resolved[full_name] = value
+                source_record = provenance.get(key) or provenance.get(full_name)
+                if source_record:
+                    resolved_provenance[full_name] = source_record
                 logging.debug(f"Resolved alias '{key}' -> '{full_name}' = {value}")
 
         # Remove less specific keys if a more specific one exists
@@ -474,8 +568,9 @@ class BaseParams(BaseModel):
                     f"Removing less specific parameter '{base}' because '{spec_key}' exists"
                 )
                 resolved.pop(base)
+                resolved_provenance.pop(base, None)
 
-        return resolved
+        return resolved, resolved_provenance
 
     @classmethod
     def update_kwargs(cls, config: dict, updates: dict, verbose: bool = True) -> dict:
@@ -508,6 +603,8 @@ class BaseParams(BaseModel):
         new_value: Any,
         verbose: bool = False,
         validate: bool = False,
+        *,
+        mutation_tag: Optional[str] = "runtime",
     ) -> None:
         """
         Update a single field in-place with automatic validation.
@@ -521,7 +618,13 @@ class BaseParams(BaseModel):
             # Handle nested fields like "model.n_classes"
             parts = field_name.split(".", 1)
             obj = getattr(self, parts[0])
-            obj.update_field(parts[1], new_value, verbose)
+            obj.update_field(
+                parts[1],
+                new_value,
+                verbose=verbose,
+                validate=validate,
+                mutation_tag=mutation_tag,
+            )
             return
 
         if verbose:
@@ -532,6 +635,16 @@ class BaseParams(BaseModel):
             setattr(self, field_name, new_value)
         else:
             object.__setattr__(self, field_name, new_value)
+
+        if hasattr(self, "_dynamic_updates"):
+            self._dynamic_updates.add(field_name)
+        if mutation_tag:
+            if not hasattr(self, "_value_provenance"):
+                object.__setattr__(self, "_value_provenance", {})
+            current = self._value_provenance.get(
+                field_name, ProvenanceRecord("default")
+            )
+            self._value_provenance[field_name] = current.add_mutation(mutation_tag)
 
     @model_validator(mode="before")
     @classmethod
@@ -590,14 +703,123 @@ class BaseParams(BaseModel):
 
     def setup_logging(self) -> None:
         """Configure logging based on log_level parameter."""
-        logging.basicConfig(
-            level=getattr(logging, self.log_level.upper()),
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            force=True,  # Override existing configuration
+        logger = configure_logging(self.log_level, logger_name=__name__)
+        logger.info("Logging configured at %s level", self.log_level)
+
+    # ------------------------------------------------------------------
+    # Summary logging helpers
+    # ------------------------------------------------------------------
+
+    def log_summary(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+        title: Optional[str] = None,
+        level: int = logging.INFO,
+        include_defaults: bool = False,
+        force_provenance_legend: bool = False,
+    ) -> None:
+        """Log a structured summary of parameter values."""
+
+        if not self.summary_sections:
+            return
+
+        logger = logger or logging.getLogger(
+            f"{self.__class__.__module__}.{self.__class__.__name__}"
         )
 
-        logger = logging.getLogger(__name__)
-        logger.info(f"Logging configured at {self.log_level} level")
+        override_keys = list(self._collect_override_keys())
+        dynamic_updates = getattr(self, "_dynamic_updates", set())
+
+        pending_title = title
+        verbose_flag = bool(getattr(self, "verbose", False))
+        should_show_legend = (
+            force_provenance_legend
+            or self.show_provenance_legend
+            or verbose_flag
+            or logger.isEnabledFor(logging.DEBUG)
+        )
+        if should_show_legend and not getattr(
+            logger, "_dynvision_provenance_legend", False
+        ):
+            self._log_provenance_legend(logger, level)
+            setattr(logger, "_dynvision_provenance_legend", True)
+
+        for section_name, items in self.summary_sections.items():
+            section_entries = build_section(
+                self,
+                items,
+                include_defaults=include_defaults,
+                override_keys=override_keys,
+                dynamic_updates=dynamic_updates,
+            )
+
+            if section_entries:
+                section_title = pending_title or section_name
+                pending_title = None
+                log_section(logger, section_title, section_entries, level=level)
+
+    @staticmethod
+    def _log_provenance_legend(logger: logging.Logger, level: int) -> None:
+        legend_entries = [
+            ("config", "Value from generated configuration file", None),
+            ("cli", "Provided via CLI", None),
+            ("override", "Explicit override in code", None),
+            ("runtime", "Mutated during runtime adaptation", None),
+            ("derived", "Derived by validators or preprocessors", None),
+        ]
+        log_section(logger, "Provenance legend", legend_entries, level=level)
+
+    def mark_field_mutation(
+        self,
+        field_name: str,
+        *,
+        tag: str,
+    ) -> None:
+        """Register a provenance mutation for a field without changing its value."""
+
+        if "." in field_name:
+            head, tail = field_name.split(".", 1)
+            nested = getattr(self, head, None)
+            if isinstance(nested, BaseParams):
+                nested.mark_field_mutation(tail, tag=tag)
+            return
+
+        if hasattr(self, "_dynamic_updates"):
+            self._dynamic_updates.add(field_name)
+
+        if not hasattr(self, "_value_provenance"):
+            object.__setattr__(self, "_value_provenance", {})
+        current = self._value_provenance.get(
+            field_name, ProvenanceRecord(source="default")
+        )
+        self._value_provenance[field_name] = current.add_mutation(tag)
+
+    def _collect_override_keys(self) -> Iterable[str]:
+        """Return flattened keys for fields differing from defaults."""
+
+        try:
+            overrides = self.model_dump(exclude_defaults=True, exclude_unset=True)
+        except TypeError:  # pragma: no cover - defensive fallback
+            overrides = self.model_dump()
+
+        return self._flatten_keys(overrides)
+
+    def get_provenance(self, key: str) -> ProvenanceRecord:
+        mapping = getattr(self, "_value_provenance", {})
+        record = mapping.get(key)
+        if record is None:
+            return ProvenanceRecord(source="default")
+        return record
+
+    def _flatten_keys(self, data: Any, prefix: str = "") -> Iterable[str]:
+        keys: set[str] = set()
+        if isinstance(data, dict):
+            for key, value in data.items():
+                composed = f"{prefix}.{key}" if prefix else key
+                keys.add(composed)
+                keys.update(self._flatten_keys(value, composed))
+        return keys
 
     @classmethod
     def get_script_context(cls) -> Optional[str]:
@@ -616,15 +838,6 @@ class BaseParams(BaseModel):
             elif "test" in script_name:
                 return "test_model"
         return None
-
-    @field_validator("log_level")
-    def validate_log_level(cls, v):
-        """Ensure log_level is valid."""
-        if isinstance(v, str):
-            v = v.upper()
-            if v not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
-                raise ValueError(f"Invalid log level: {v}")
-        return v
 
     def validate_consistency_with(
         self, other: "BaseParams", fields_to_check: Optional[List[str]] = None

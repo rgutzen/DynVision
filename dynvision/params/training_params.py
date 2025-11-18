@@ -17,6 +17,11 @@ from dynvision.params import (
     DataParams,
 )
 from dynvision.params.composite_params import CompositeParams
+from dynvision.utils import (
+    SummaryItem,
+    log_section,
+    format_value,
+)
 
 from pydantic import (
     Field,
@@ -80,6 +85,26 @@ class TrainingParams(CompositeParams):
         use_enum_values=True,
         validate_by_name=True,
     )
+
+    summary_sections: ClassVar[Dict[str, Tuple[SummaryItem, ...]]] = {
+        "Run": (
+            SummaryItem("seed", always=True),
+            SummaryItem("log_level"),
+            SummaryItem(
+                lambda cfg: cfg.global_batch_size,
+                "global_batch_size",
+            ),
+            SummaryItem(
+                lambda cfg: cfg.effective_batch_size,
+                "effective_batch_size",
+            ),
+            SummaryItem(
+                lambda cfg: cfg.effective_learning_rate,
+                "effective_learning_rate",
+                formatter=lambda value: f"{value:.6f}",
+            ),
+        ),
+    }
 
     def update_model_parameters_from_data(
         self,
@@ -186,7 +211,7 @@ class TrainingParams(CompositeParams):
                 f"Data dtype ({self.data.dtype}) differs from trainer dtype ({trainer_dtype}). "
                 f"Aligning data dtype to trainer."
             )
-            self.data.dtype = trainer_dtype
+            self.data.update_field("dtype", trainer_dtype, mutation_tag="derived")
 
         # Store for model initialization
         self._coordinated_dtype = trainer_dtype
@@ -209,7 +234,13 @@ class TrainingParams(CompositeParams):
                 "was not set to 'all'! Updating config to train on full "
                 "dataset. Build a separate dataset if you want to train on a subset."
             )
-            self.data.update_field("data_group", "all", verbose=True, validate=False)
+            self.data.update_field(
+                "data_group",
+                "all",
+                verbose=True,
+                validate=False,
+                mutation_tag="derived",
+            )
 
     def apply_parameter_scaling(self) -> None:
         """
@@ -236,7 +267,93 @@ class TrainingParams(CompositeParams):
                 f"effective_learning_rate ({self.effective_learning_rate}) "
                 f"according to effective_effective_size ({self.effective_batch_size})"
             )
-            self.model.update_field("learning_rate", self.effective_learning_rate)
+            self.model.update_field(
+                "learning_rate",
+                self.effective_learning_rate,
+                mutation_tag="derived",
+            )
+
+    def log_training_overview(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Log a structured overview of the training run."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        entries = [
+            ("seed", format_value(self.seed), None),
+            ("input_model_state", format_value(self.input_model_state), None),
+            ("output_model_state", format_value(self.output_model_state), None),
+            ("data_name", format_value(self.data.data_name), None),
+            ("dataset_link", format_value(self.dataset_link), None),
+            ("dataset_train", format_value(self.dataset_train), None),
+            ("dataset_val", format_value(self.dataset_val), None),
+            ("batch_size", format_value(self.data.batch_size), None),
+            ("global_batch_size", format_value(self.global_batch_size), None),
+            ("effective_batch_size", format_value(self.effective_batch_size), None),
+            (
+                "effective_learning_rate",
+                f"{self.effective_learning_rate:.6f}",
+                None,
+            ),
+            ("epochs", format_value(self.trainer.epochs), None),
+            ("precision", format_value(self.trainer.precision), None),
+            ("optimizer", format_value(self.model.optimizer), None),
+            ("use_ffcv", format_value(self.data.use_ffcv), None),
+            (
+                "is_distributed",
+                format_value(self.trainer.is_distributed),
+                None,
+            ),
+        ]
+
+        if self.trainer.is_distributed:
+            entries.extend(
+                [
+                    ("world_size", format_value(self.trainer.world_size), None),
+                    ("strategy", format_value(self.trainer.strategy), None),
+                    ("num_nodes", format_value(self.trainer.num_nodes), None),
+                    ("devices", format_value(self.trainer.devices), None),
+                ]
+            )
+
+        log_section(run_logger, "training_run", entries)
+        self.log_overview(
+            logger=run_logger.getChild("params"),
+            include_components=True,
+            include_defaults=False,
+        )
+
+    def log_dataloader_creation(
+        self,
+        *,
+        dataloader_class,
+        dataloader_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+        context: str = "active",
+        previous_kwargs: Optional[Dict[str, Any]] = None,
+        level: int = logging.INFO,
+    ) -> None:
+        self.data.log_dataloader_creation(
+            dataloader_class=dataloader_class,
+            dataloader_kwargs=dataloader_kwargs,
+            logger=logger,
+            context=context,
+            previous_kwargs=previous_kwargs,
+            level=level,
+        )
+
+    def log_trainer_creation(
+        self,
+        *,
+        trainer_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        self.trainer.log_trainer_creation(
+            trainer_kwargs=trainer_kwargs,
+            logger=logger,
+        )
 
     def _validate_required_paths(self) -> None:
         """Validate that required paths exist."""
@@ -246,9 +363,17 @@ class TrainingParams(CompositeParams):
                 f"Input model state not found: {self.input_model_state}"
             )
 
-        print(
-            f"use ffcv {self.data.use_ffcv}, {self.dataset_train}, {self.dataset_val}, {self.dataset_link}"
-        )  # debugging
+        log_section(
+            logger,
+            "training_dataset_paths",
+            [
+                ("use_ffcv", format_value(self.data.use_ffcv), None),
+                ("dataset_train", format_value(self.dataset_train), None),
+                ("dataset_val", format_value(self.dataset_val), None),
+                ("dataset_link", format_value(self.dataset_link), None),
+            ],
+            level=logging.DEBUG,
+        )
 
         if not self.dataset_train.exists():
             raise DynVisionValidationError(
@@ -280,8 +405,12 @@ class TrainingParams(CompositeParams):
                 f"data={self.data.data_timesteps}, resolved_to={resolved_timesteps}"
             )
             # Update both to the larger value
-            self.model.update_field("n_timesteps", resolved_timesteps)
-            self.data.update_field("data_timesteps", resolved_timesteps)
+            self.model.update_field(
+                "n_timesteps", resolved_timesteps, mutation_tag="derived"
+            )
+            self.data.update_field(
+                "data_timesteps", resolved_timesteps, mutation_tag="derived"
+            )
 
     # === CONFIGURATION EXPORT ===
 

@@ -6,12 +6,21 @@ including biological parameters, architecture settings, optimizer/scheduler
 configuration, and loss functions.
 """
 
+from collections import OrderedDict
+
 from pydantic import Field, field_validator, model_validator, ConfigDict
-from typing import Dict, Any, Optional, List, Union, Tuple, Literal
+from typing import Dict, Any, Optional, List, Union, Tuple, Literal, Sequence, ClassVar
 import logging
 from pathlib import Path
 
 from dynvision.params.base_params import BaseParams, DynVisionValidationError
+from dynvision.utils import (
+    SummaryItem,
+    log_section,
+    format_value,
+    filter_kwargs,
+    resolve_signature_defaults,
+)
 
 
 class ModelParams(BaseParams):
@@ -21,6 +30,10 @@ class ModelParams(BaseParams):
     Handles biological parameters, architecture settings, optimizer/scheduler
     configuration, loss functions, and model-specific parameters.
     """
+
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
 
     # ===== CORE ARCHITECTURE =====
     # All defaults moved to config_defaults.yaml
@@ -219,6 +232,47 @@ class ModelParams(BaseParams):
         validate_by_name=True,  # Allow validation using field names and aliases
     )
 
+    summary_sections: ClassVar[Dict[str, Sequence[SummaryItem]]] = {
+        "Architecture": (
+            SummaryItem("model_name", always=True),
+            SummaryItem("input_dims"),
+            SummaryItem("n_classes"),
+            SummaryItem("n_timesteps"),
+            SummaryItem("data_presentation_pattern"),
+        ),
+        "Temporal": (
+            SummaryItem("dt"),
+            SummaryItem("tau"),
+            SummaryItem("dynamics_solver"),
+            SummaryItem("t_feedforward"),
+            SummaryItem("t_recurrence"),
+            SummaryItem("t_feedback"),
+            SummaryItem("t_skip"),
+            SummaryItem("idle_timesteps"),
+        ),
+        "Connectivity": (
+            SummaryItem("recurrence_type"),
+            SummaryItem("recurrence_target"),
+            SummaryItem("skip"),
+            SummaryItem("feedback"),
+            SummaryItem("feedforward_only"),
+            SummaryItem("supralinearity"),
+        ),
+        "Training": (
+            SummaryItem("learning_rate"),
+            SummaryItem("optimizer"),
+            SummaryItem("scheduler"),
+            SummaryItem("loss_reaction_time"),
+        ),
+        "Storage": (
+            SummaryItem("store_train_responses"),
+            SummaryItem("store_val_responses"),
+            SummaryItem("store_test_responses"),
+            SummaryItem("store_responses_on_cpu"),
+            SummaryItem("early_test_stop"),
+        ),
+    }
+
     @classmethod
     def get_aliases(cls) -> Dict[str, str]:
         """Return mapping of aliases to full parameter names."""
@@ -255,6 +309,15 @@ class ModelParams(BaseParams):
             }
         )
         return aliases
+
+    @field_validator("log_level")
+    def validate_log_level(cls, v):
+        """Ensure log_level is valid."""
+        if isinstance(v, str):
+            v = v.upper()
+            if v not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+                raise ValueError(f"Invalid log level: {v}")
+        return v
 
     @field_validator("store_responses")
     def convert_store_responses(cls, v) -> Optional[int]:
@@ -382,13 +445,13 @@ class ModelParams(BaseParams):
         """
         # Set up loss_configs default only if loss is set but configs aren't
         if self.loss is not None and not self.loss_configs:
-            object.__setattr__(
-                self,
+            self.update_field(
                 "loss_configs",
                 {
                     "CrossEntropyLoss": {"weight": 1.0, "ignore_index": -1},
                     "EnergyLoss": {"weight": 100},
                 },
+                mutation_tag="derived",
             )
 
         # Validate loss configs if both loss and loss_configs are set
@@ -399,14 +462,14 @@ class ModelParams(BaseParams):
 
         # Provide default lr_parameter_groups if empty (but not if None)
         if self.lr_parameter_groups is not None and not self.lr_parameter_groups:
-            object.__setattr__(
-                self,
+            self.update_field(
                 "lr_parameter_groups",
                 {
                     "regular": {"lr_factor": 1.0},
                     "recurrent": {"lr_factor": 1.0},
                     "feedback": {"lr_factor": 1.0},
                 },
+                mutation_tag="derived",
             )
             logging.info("Using default lr_parameter_groups")
 
@@ -418,6 +481,7 @@ class ModelParams(BaseParams):
                     logging.info(
                         f"Added missing lr_factor=1.0 to group '{group_name}'"
                     )
+                    self.mark_field_mutation("lr_parameter_groups", tag="derived")
 
         # Provide default scheduler configs if scheduler is set but configs aren't
         if self.scheduler is not None and not self.scheduler_configs:
@@ -428,18 +492,28 @@ class ModelParams(BaseParams):
                 "strict": True,
                 "name": "learning_rate",
             }
-            object.__setattr__(self, "scheduler_configs", default_configs)
+            self.update_field(
+                "scheduler_configs",
+                default_configs,
+                mutation_tag="derived",
+            )
             logging.info("Using default scheduler_configs")
 
         # Provide default scheduler kwargs based on scheduler type
         if self.scheduler is not None and not self.scheduler_kwargs:
             if self.scheduler == "StepLR":
-                object.__setattr__(
-                    self, "scheduler_kwargs", {"step_size": 30, "gamma": 0.1}
+                self.update_field(
+                    "scheduler_kwargs",
+                    {"step_size": 30, "gamma": 0.1},
+                    mutation_tag="derived",
                 )
                 logging.info("Using default StepLR scheduler_kwargs")
             elif self.scheduler == "CosineAnnealingLR":
-                object.__setattr__(self, "scheduler_kwargs", {"T_max": 100})
+                self.update_field(
+                    "scheduler_kwargs",
+                    {"T_max": 100},
+                    mutation_tag="derived",
+                )
                 logging.info("Using default CosineAnnealingLR scheduler_kwargs")
 
         # Scheduler configuration consistency
@@ -449,6 +523,7 @@ class ModelParams(BaseParams):
         ):
             if "monitor" not in self.scheduler_configs:
                 self.scheduler_configs["monitor"] = "val_loss"
+                self.mark_field_mutation("scheduler_configs", tag="derived")
 
         # Biological timing constraints (only validate if both dt and tau are set)
         if self.dt is not None and self.tau is not None:
@@ -519,7 +594,11 @@ class ModelParams(BaseParams):
                 f"'store_responses' is deprecated. Setting 'store_test_responses={self.store_responses}' instead. "
                 "Please use store_test_responses, store_val_responses, store_train_responses explicitly."
             )
-            object.__setattr__(self, "store_test_responses", self.store_responses)
+            self.update_field(
+                "store_test_responses",
+                self.store_responses,
+                mutation_tag="derived",
+            )
 
         # Validate storage configuration consistency
         storage_params = [
@@ -701,172 +780,166 @@ class ModelParams(BaseParams):
 
         # Filter kwargs if model_class is provided
         if model_class is not None:
-            try:
-                from dynvision.utils import filter_kwargs
+            known, unknown = filter_kwargs(model_class, model_kwargs)
 
-                known, unknown = filter_kwargs(model_class, model_kwargs)
+            if known:
+                logging.info(
+                    f"Filtered known model kwargs for {model_class.__name__}: {list(known.keys())}"
+                )
 
-                if known:
-                    logging.info(
-                        f"Filtered known model kwargs for {model_class.__name__}: {list(known.keys())}"
-                    )
+            if unknown:
+                logging.debug(
+                    f"Unknown kwargs for {model_class.__name__}: {list(unknown.keys())}"
+                )
 
-                return known
-
-            except ImportError:
-                logging.warning("filter_kwargs not available, returning all kwargs")
-                return model_kwargs
+            return known
 
         self.cached_model_kwargs[model_class] = model_kwargs
 
         return model_kwargs
 
-    def log_configuration(self, model_kwargs: Dict[str, Any]) -> None:
-        """
-        Log model configuration parameters in a structured, readable format.
+    def get_model_kwargs_with_defaults(
+        self, model_class
+    ) -> Tuple[Dict[str, Any], OrderedDict[str, Any], Dict[str, bool]]:
+        """Return provided kwargs alongside resolved defaults for logging."""
 
-        Args:
-            model_kwargs: Dictionary of model parameters
-            model_class: Optional model class for naming
-        """
-        # Core Architecture
-        logging.info(f"  🏗️  Core Architecture:")
-        logging.info(f"     • Model name: {getattr(self, 'model_name', 'unset')}")
-        logging.info(f"     • Input dims: {model_kwargs.get('input_dims', 'unset')}")
-        logging.info(f"     • N classes: {model_kwargs.get('n_classes', 'unset')}")
-        logging.info(f"     • N timesteps: {model_kwargs.get('n_timesteps', 'unset')}")
-        logging.info(
-            f"     • Data presentation: {model_kwargs.get('data_presentation_pattern', 'unset')}"
+        provided_kwargs = self.get_model_kwargs(model_class)
+        resolved_kwargs, default_flags = resolve_signature_defaults(
+            model_class, provided_kwargs
         )
+        return provided_kwargs, resolved_kwargs, default_flags
 
-        # Temporal Dynamics
-        logging.info(f"  ⏱️  Temporal Dynamics:")
-        dt_val = model_kwargs.get("dt", "unset")
-        tau_val = model_kwargs.get("tau", "unset")
-        t_ff_val = model_kwargs.get("t_feedforward", "unset")
-        t_rc_val = model_kwargs.get("t_recurrence", "unset")
-        t_fb_val = model_kwargs.get("t_feedback", "unset")
-        t_sk_val = model_kwargs.get("t_skip", "unset")
+    def log_model_creation(
+        self,
+        *,
+        model_class,
+        logger: Optional[logging.Logger] = None,
+        model_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Emit a single structured summary describing how the model will be instantiated."""
 
-        logging.info(f"     • dt: {dt_val}{' ms' if dt_val != 'unset' else ''}")
-        logging.info(f"     • tau: {tau_val}{' ms' if tau_val != 'unset' else ''}")
-        logging.info(
-            f"     • Dynamics solver: {model_kwargs.get('dynamics_solver', 'unset')}"
-        )
-        logging.info(
-            f"     • t_feedforward: {t_ff_val}{' ms' if t_ff_val != 'unset' else ''}"
-        )
-        logging.info(
-            f"     • t_recurrence: {t_rc_val}{' ms' if t_rc_val != 'unset' else ''}"
-        )
-        logging.info(
-            f"     • t_feedback: {t_fb_val}{' ms' if t_fb_val != 'unset' else ''}"
-        )
-        logging.info(
-            f"     • t_skip: {t_sk_val}{' ms' if t_sk_val != 'unset' else ''}"
+        run_logger = logger or logging.getLogger(__name__)
+        provided_kwargs = model_kwargs or self.get_model_kwargs(model_class)
+        resolved_kwargs, default_flags = resolve_signature_defaults(
+            model_class, provided_kwargs
         )
 
-        # Network Connectivity
-        logging.info(f"  🔗 Network Connectivity:")
-        logging.info(
-            f"     • Recurrence type: {model_kwargs.get('recurrence_type', 'unset')}"
-        )
-        logging.info(f"     • Skip connections: {model_kwargs.get('skip', 'unset')}")
-        logging.info(
-            f"     • Feedback connections: {model_kwargs.get('feedback', 'unset')}"
-        )
-        logging.info(
-            f"     • Supralinearity: {model_kwargs.get('supralinearity', 'unset')}"
+        def build_entries(
+            field_names: Sequence[str],
+        ) -> List[Tuple[str, str, Optional[str]]]:
+            entries: List[Tuple[str, str, Optional[str]]] = []
+            for field in field_names:
+                if field == "model_name":
+                    entries.append(
+                        (
+                            "model_name",
+                            format_value(self.model_name or model_class.__name__),
+                            None,
+                        )
+                    )
+                    continue
+
+                if field == "model_class":
+                    entries.append(
+                        ("model_class", format_value(model_class.__name__), None)
+                    )
+                    continue
+
+                if field not in resolved_kwargs:
+                    continue
+
+                marker = "default" if default_flags.get(field, False) else None
+                entries.append((field, format_value(resolved_kwargs[field]), marker))
+            return entries
+
+        section_fields = OrderedDict(
+            [
+                ("creating_model", ("model_name", "model_class")),
+                (
+                    "creating_model.architecture",
+                    (
+                        "input_dims",
+                        "n_classes",
+                        "n_timesteps",
+                        "data_presentation_pattern",
+                        "feedforward_only",
+                        "idle_timesteps",
+                    ),
+                ),
+                (
+                    "creating_model.temporal",
+                    (
+                        "dt",
+                        "tau",
+                        "dynamics_solver",
+                        "t_feedforward",
+                        "t_recurrence",
+                        "t_feedback",
+                        "t_skip",
+                    ),
+                ),
+                (
+                    "creating_model.connectivity",
+                    (
+                        "recurrence_type",
+                        "recurrence_target",
+                        "skip",
+                        "feedback",
+                        "supralinearity",
+                        "feedforward_only",
+                    ),
+                ),
+                (
+                    "creating_model.training",
+                    (
+                        "learning_rate",
+                        "optimizer",
+                        "optimizer_kwargs",
+                        "optimizer_configs",
+                        "lr_parameter_groups",
+                        "scheduler",
+                        "scheduler_kwargs",
+                        "scheduler_configs",
+                        "loss_reaction_time",
+                        "retain_graph",
+                        "non_label_index",
+                    ),
+                ),
+                (
+                    "creating_model.storage",
+                    (
+                        "store_responses",
+                        "store_responses_on_cpu",
+                        "store_train_responses",
+                        "store_val_responses",
+                        "store_test_responses",
+                        "store_train_records",
+                        "store_val_records",
+                        "store_test_records",
+                        "early_test_stop",
+                    ),
+                ),
+            ]
         )
 
-        # Training Configuration
-        logging.info(f"  🎯 Training Configuration:")
-        logging.info(
-            f"     • Learning rate: {model_kwargs.get('learning_rate', 'unset')}"
-        )
-        logging.info(f"     • Optimizer: {model_kwargs.get('optimizer', 'unset')}")
-        logging.info(f"     • Scheduler: {model_kwargs.get('scheduler', 'unset')}")
-        loss_rt_val = model_kwargs.get("loss_reaction_time", "unset")
-        logging.info(
-            f"     • Loss reaction time: {loss_rt_val}{' ms' if loss_rt_val != 'unset' else ''}"
-        )
+        seen_fields = set()
+        for fields in section_fields.values():
+            seen_fields.update(fields)
 
-        # Storage & Monitoring
-        logging.info(f"  💾 Storage & Monitoring:")
-        logging.info(
-            f"     • Store responses (deprecated): {model_kwargs.get('store_responses', 'unset')}"
-        )
-        logging.info(
-            f"     • Store on CPU: {model_kwargs.get('store_responses_on_cpu', 'unset')}"
-        )
-        logging.info(
-            f"     • Classifier name: {model_kwargs.get('classifier_name', 'unset')}"
-        )
-        logging.info(
-            f"     • Train responses: {model_kwargs.get('store_train_responses', 'default')}"
-        )
-        logging.info(
-            f"     • Val responses: {model_kwargs.get('store_val_responses', 'default')}"
-        )
-        logging.info(
-            f"     • Test responses: {model_kwargs.get('store_test_responses', 'default')}"
-        )
-        logging.info(
-            f"     • Train records: {model_kwargs.get('store_train_records', 'default')}"
-        )
-        logging.info(
-            f"     • Val records: {model_kwargs.get('store_val_records', 'default')}"
-        )
-        logging.info(
-            f"     • Test records: {model_kwargs.get('store_test_records', 'default')}"
-        )
-        logging.info(
-            f"     • Early test stop: {model_kwargs.get('early_test_stop', 'unset')}"
-        )
+        for section_name, fields in section_fields.items():
+            entries = build_entries(fields)
+            if entries:
+                log_section(run_logger, section_name, entries)
 
-        # Define standard parameters to exclude from custom section
-        standard_params = {
-            "input_dims",
-            "n_classes",
-            "n_timesteps",
-            "data_presentation_pattern",
-            "dt",
-            "tau",
-            "dynamics_solver",
-            "t_feedforward",
-            "t_recurrence",
-            "t_feedback",
-            "t_skip",
-            "recurrence_type",
-            "skip",
-            "feedback",
-            "supralinearity",
-            "learning_rate",
-            "optimizer",
-            "scheduler",
-            "loss_reaction_time",
-            "store_responses",
-            "store_responses_on_cpu",
-            "classifier_name",
-            "criterion_params",
-            "optimizer_kwargs",
-            "optimizer_configs",
-            "lr_parameter_groups",
-            "scheduler_kwargs",
-            "scheduler_configs",
-            "retain_graph",
-            "non_label_index",
-        }
+        custom_entries = []
+        for key, value in resolved_kwargs.items():
+            if key in seen_fields:
+                continue
+            marker = "default" if default_flags.get(key, False) else None
+            custom_entries.append((key, format_value(value), marker))
 
-        # Additional custom parameters if present
-        custom_params = {
-            k: v for k, v in model_kwargs.items() if k not in standard_params
-        }
-
-        if custom_params:
-            logging.info(f"  ⚙️  Custom Parameters:")
-            for key, value in custom_params.items():
-                logging.info(f"     • {key}: {value}")
+        if custom_entries:
+            log_section(run_logger, "creating_model.custom", custom_entries)
 
     def get_optimizer_config(self) -> Dict[str, Any]:
         """
@@ -875,7 +948,7 @@ class ModelParams(BaseParams):
         Returns:
             Dictionary containing optimizer and scheduler configuration
         """
-        return {
+        config = {
             "optimizer": self.optimizer,
             "optimizer_kwargs": self.optimizer_kwargs,
             "optimizer_configs": self.optimizer_configs,
@@ -885,6 +958,8 @@ class ModelParams(BaseParams):
             "scheduler_kwargs": self.scheduler_kwargs,
             "scheduler_configs": self.scheduler_configs,
         }
+        # Filter out None values to allow optimizer/scheduler class defaults
+        return {k: v for k, v in config.items() if v is not None}
 
 
 # Example usage and testing

@@ -14,6 +14,7 @@ from pydantic import Field, model_validator, ConfigDict
 from dynvision.params.composite_params import CompositeParams
 from dynvision.params.model_params import ModelParams
 from dynvision.params.data_params import DataParams
+from dynvision.utils import log_section, format_value
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,6 @@ class InitParams(CompositeParams):
         default=None, description="Path to dataset for dimension inference"
     )
     output: Path = Field(description="Path to save initialized model")
-    init_with_pretrained: bool = Field(
-        ..., description="Initialize with pretrained weights if available"
-    )
 
     model_config = ConfigDict(
         extra="allow",  # Allow additional CLI arguments
@@ -128,6 +126,26 @@ class InitParams(CompositeParams):
         # No forced updates - values come from config files under init.model.*
         return config
 
+    def log_initialization_overview(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Log a structured overview of the initialization run."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        log_section(
+            run_logger,
+            "initialization_run",
+            [
+                ("seed", format_value(self.seed), None),
+                ("output", format_value(self.output), None),
+                ("dataset_path", format_value(self.dataset_path), None),
+            ],
+        )
+
+        self.log_overview(logger=run_logger, include_defaults=False)
+
     def update_model_parameters_from_dataset(
         self,
         input_dims: Tuple[int, ...],
@@ -164,3 +182,39 @@ class InitParams(CompositeParams):
 
     def get_dataloader_kwargs(self, dataloader_class=None) -> Dict[str, Any]:
         return self.data.get_dataloader_kwargs(dataloader_class=dataloader_class)
+
+    def log_model_creation(
+        self,
+        *,
+        model_class,
+        model_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Delegate model creation logging to the model params."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        self.model.log_model_creation(
+            model_class=model_class,
+            model_kwargs=model_kwargs,
+            logger=run_logger,
+        )
+
+    def log_dataloader_creation(
+        self,
+        *,
+        dataloader_class,
+        dataloader_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+        context: str = "active",
+        previous_kwargs: Optional[Dict[str, Any]] = None,
+        level: int = logging.INFO,
+    ) -> None:
+        run_logger = logger or logging.getLogger(__name__)
+        self.data.log_dataloader_creation(
+            dataloader_class=dataloader_class,
+            dataloader_kwargs=dataloader_kwargs,
+            logger=run_logger,
+            context=context,
+            previous_kwargs=previous_kwargs,
+            level=level,
+        )
