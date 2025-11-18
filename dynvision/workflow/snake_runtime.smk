@@ -50,7 +50,7 @@ rule init_model:
         {params.execution_cmd} \
             --config_path {output.model_state:q}.config.yaml \
             --model_name {wildcards.model_name} \
-            --dataset {input.dataset:q} \
+            --dataset_path {input.dataset:q} \
             --data_name {wildcards.data_name} \
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
@@ -70,21 +70,6 @@ rule train_model:
     
     Output:
         Trained model state dict
-
-    Parameters:
-        config_path: Path to configuration file with wildcards and modes applied
-        epochs: Number of training epochs
-        batch_size: Training batch size
-        model_arguments: Model-specific arguments
-        learning_rate: Training learning rate
-        loss: Loss function configuration
-        resolution: Input resolution 
-        check_val_every_n_epoch: Validation frequency
-        accumulate_grad_batches: Gradient accumulation steps
-        precision: Training precision
-        profiler: Training profiler configuration
-        enable_progress_bar: Whether to show progress bar
-        execution_cmd: Complete execution command with conditional wrappers
     """
     input:
         model_state = project_paths.models \
@@ -185,7 +170,7 @@ rule test_model:
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
         normalize = lambda w: (
-            # Allow override via --config normalize=null for models like CorNet
+            # Allow override via --config normalize=null
             config.normalize if hasattr(config, 'normalize') else json.dumps((
                 config.data_statistics[w.data_name]['mean'],
                 config.data_statistics[w.data_name]['std']
@@ -216,7 +201,7 @@ rule test_model:
             --output_responses {output.responses:q} \
             --model_name {wildcards.model_name} \
             --data_name {wildcards.data_name} \
-            --dataset {input.dataset:q} \
+            --dataset_path {input.dataset:q} \
             --data_loader {wildcards.data_loader} \
             --data_group {wildcards.data_group} \
             --seed {wildcards.seed} \
@@ -229,7 +214,47 @@ rule test_model:
         if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
 
+rule best_checkpoint_to_statedict:
+    """Convert Lightning checkpoints to state dictionaries."""
+    input:
+        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
+    params:
+        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-best.pt'
+    shell:
+        """
+        {params.execution_cmd} \
+            --checkpoint_dir {params.checkpoint_dir:q} \
+            --output {output:q}
+        """
 
-logger.info("Model workflow initialized")
-logger.info(f"Model directory: {project_paths.models}")
-logger.info(f"Reports directory: {project_paths.reports}")
+checkpoint intermediate_checkpoint_to_statedict:
+    """Convert Lightning checkpoints to state dictionaries."""
+    input:
+        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
+    params:
+        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
+        checkpoint_globs = lambda w: f"{w.model_name}{w.model_args}_{w.seed}_{w.data_name}_trained*.ckpt",
+        output_dir = lambda w: project_paths.models / f"{w.model_name}",
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+            use_executor=get_param('use_executor', False)(w)
+        ),
+    output:
+        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-epoch={epoch}.pt'
+    shell:
+        """
+        {params.execution_cmd} \
+            --checkpoint_dir {params.checkpoint_dir:q} \
+            --output_dir {params.output_dir:q} \
+            --checkpoint_globs {params.checkpoint_globs:q}
+        """

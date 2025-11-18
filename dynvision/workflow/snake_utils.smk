@@ -62,7 +62,7 @@ wildcard_constraints:
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)',
     model_identifier = r'([\w:+=,\*\#]+)'
 
-localrules: all, symlink_data_subsets, symlink_data_groups, experiment
+localrules: all, symlink_data_subsets, symlink_data_groups
 ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model > process_test_data > test_model
 
 def initialize_config_handler():
@@ -355,53 +355,7 @@ def get_conda_env() -> tuple[Optional[str], str]:
     except (KeyError, subprocess.CalledProcessError):
         return None, "No conda environment active"
 
-# Initialize environment information
-env_name, env_status = get_conda_env()
-pylogger.info(f"Conda environment: {env_name or 'None'}")
 
-rule best_checkpoint_to_statedict:
-    """Convert Lightning checkpoints to state dictionaries."""
-    input:
-        script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
-    params:
-        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
-        ),
-    output:
-        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-best.pt'
-    shell:
-        """
-        {params.execution_cmd} \
-            --checkpoint_dir {params.checkpoint_dir:q} \
-            --output {output:q}
-        """
-
-checkpoint intermediate_checkpoint_to_statedict:
-    """Convert Lightning checkpoints to state dictionaries."""
-    input:
-        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
-        script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
-    params:
-        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
-        checkpoint_globs = lambda w: f"{w.model_name}{w.model_args}_{w.seed}_{w.data_name}_trained*.ckpt",
-        output_dir = project_paths.models / '{model_name}',
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
-        ),
-    output:
-        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-epoch={epoch}.pt'
-    shell:
-        """
-        {params.execution_cmd} \
-            --checkpoint_dir {params.checkpoint_dir:q} \
-            --output_dir {params.output_dir:q}
-            --checkpoint_globs {params.checkpoint_globs:q}
-        """
 
 def build_execution_command(script_path, use_distributed=False, use_executor=False):
     """
@@ -440,6 +394,10 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
         cmd_parts.append(f"python {script_path}")
     
     return "\\\n        ".join(cmd_parts)
+
+# Initialize environment information
+env_name, env_status = get_conda_env()
+pylogger.info(f"Conda environment: {env_name or 'None'}")
 
 config = SimpleNamespace(**config)
 

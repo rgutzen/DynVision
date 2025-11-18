@@ -50,7 +50,7 @@ rule plot_confusion_matrix:
         {params.execution_cmd} \
             --input {input.test_results:q} \
             --output {output.plot:q} \
-            --dataset {input.dataset} \
+            --dataset_path {input.dataset} \
             --palette {params.palette} \
             --format {wildcards.format} \
         """
@@ -148,16 +148,18 @@ rule process_test_data:
     input:
         responses = expand(project_paths.reports \
             / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
-            category_value = lambda w: config.experiment_config['categories'][w.category],
+            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
+            category = lambda w: w.category_str.strip('*'),
+            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
         ),
         test_outputs = expand(project_paths.reports \
             / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
-            category_value = lambda w: config.experiment_config['categories'][w.category],
+            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
+            category = lambda w: w.category_str.strip('*'),
+            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
             data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
             data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
@@ -166,6 +168,7 @@ rule process_test_data:
     params:
         measures = ['response_avg', 'response_std', 'label_confidence', 'guess_confidence', 'first_label_confidence', 'classifier_top10', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category_str.strip('=*'),
         additional_parameters = 'epoch',
         batch_size = 1,
         remove_input_responses = True,
@@ -177,7 +180,7 @@ rule process_test_data:
         ),
     priority: 100,
     output:
-        test_data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        test_data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
     shell:
         """
         {params.execution_cmd} \
@@ -185,7 +188,7 @@ rule process_test_data:
             --test_outputs {input.test_outputs:q} \
             --output {output.test_data:q} \
             --parameter {params.parameter} \
-            --category {wildcards.category} \
+            --category {params.category} \
             --measures {params.measures} \
             --batch_size {params.batch_size} \
             --sample_resolution {params.sample_resolution} \
