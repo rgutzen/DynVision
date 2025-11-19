@@ -20,6 +20,7 @@ from dynvision.params.composite_params import CompositeParams
 from dynvision.utils import (
     SummaryItem,
     log_section,
+    log_section_table,
     format_value,
 )
 
@@ -318,7 +319,13 @@ class TrainingParams(CompositeParams):
                 ]
             )
 
-        log_section(run_logger, "training_run", entries)
+        table_rows = [(label, value) for label, value, _ in entries]
+        log_section_table(
+            run_logger,
+            "training_run",
+            columns=("field", "value"),
+            rows=table_rows,
+        )
         self.log_overview(
             logger=run_logger.getChild("params"),
             include_components=True,
@@ -375,20 +382,29 @@ class TrainingParams(CompositeParams):
             level=logging.DEBUG,
         )
 
-        if not self.dataset_train.exists():
-            raise DynVisionValidationError(
-                f"Training dataset not found: {self.dataset_train}"
-            )
+        def _ensure_path(path: Optional[Path], label: str, *, required: bool) -> None:
+            if path is None:
+                if required:
+                    raise DynVisionValidationError(
+                        f"{label} is required when use_ffcv={self.data.use_ffcv}"
+                    )
+                return
 
-        if not self.dataset_val.exists():
-            raise DynVisionValidationError(
-                f"Validation dataset not found: {self.dataset_val}"
-            )
+            if not path.exists():
+                raise DynVisionValidationError(f"{label} not found: {path}")
 
-        if not self.dataset_link.exists():
-            raise DynVisionValidationError(
-                f"dataset folder link not found: {self.dataset_link}"
-            )
+        # FFCV pipelines require explicit train/val dataset files, while
+        # PyTorch loaders only need the dataset symlink.
+        _ensure_path(
+            self.dataset_train, "Training dataset", required=self.data.use_ffcv
+        )
+        _ensure_path(
+            self.dataset_val, "Validation dataset", required=self.data.use_ffcv
+        )
+        _ensure_path(
+            self.dataset_link, "Dataset folder link", required=not self.data.use_ffcv
+        )
+
         # Ensure output directory exists
         self.output_model_state.parent.mkdir(parents=True, exist_ok=True)
 

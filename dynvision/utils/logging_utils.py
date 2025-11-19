@@ -127,6 +127,58 @@ def log_section(
         logger.log(level, "%s- %s: %s%s", indent, label, value, suffix)
 
 
+def log_section_table(
+    logger: logging.Logger,
+    title: str,
+    columns: Sequence[str],
+    rows: Sequence[Sequence[Any]],
+    *,
+    level: int = logging.INFO,
+    indent: str = "  ",
+) -> None:
+    """Log a lightweight table with aligned columns using plain text.
+
+    Args:
+        logger: Target logger.
+        title: Section title.
+        columns: Column headers.
+        rows: Row values matching the column length.
+        level: Logging level (defaults to INFO).
+        indent: Prefix for table lines.
+    """
+
+    if not rows or not logger.isEnabledFor(level):
+        return
+
+    col_count = len(columns)
+    if col_count == 0:
+        return
+
+    widths = [len(str(column)) for column in columns]
+    formatted_rows: List[List[str]] = []
+    for row in rows:
+        if len(row) != col_count:
+            raise ValueError(
+                "Row length does not match column count in log_section_table"
+            )
+        formatted_row = [format_value(cell) for cell in row]
+        formatted_rows.append(formatted_row)
+        for idx, cell in enumerate(formatted_row):
+            widths[idx] = max(widths[idx], len(cell))
+
+    def _render(values: Sequence[str]) -> str:
+        padded = [value.ljust(widths[idx]) for idx, value in enumerate(values)]
+        return f"{indent}| " + " | ".join(padded) + " |"
+
+    separator = f"{indent}| " + " | ".join("-" * width for width in widths) + " |"
+
+    logger.log(level, "%s:", title)
+    logger.log(level, "%s", _render(columns))
+    logger.log(level, "%s", separator)
+    for row in formatted_rows:
+        logger.log(level, "%s", _render(row))
+
+
 SummarySource = Union[str, Callable[[Any], Any]]
 
 

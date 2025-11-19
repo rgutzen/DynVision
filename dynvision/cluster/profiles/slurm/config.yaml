@@ -97,10 +97,10 @@ set-resources:
     
   best_checkpoint_to_statedict:
     mem: 16G # use 16GB of memory
-    runtime: 5 # run for 30 minutes
+    runtime: 15 # run for 30 minutes
     cpus_per_task: 4
 
   intermediate_checkpoint_to_statedict:
     mem: 16G # use 16GB of memory
-    runtime: 5 # run for 30 minutes
+    runtime: 15 # run for 30 minutes
     cpus_per_task: 4

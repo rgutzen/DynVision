@@ -70,7 +70,7 @@ Note: Makefile targets reference old project name `rhythmic_visual_attention` in
 Data is automatically downloaded and prepared on first use. Manual data preparation:
 ```bash
 # From workflow directory
-snakemake <project_paths.data.interim>/<dataset_name>/train_all/folder.link
+snakemake <project_paths.data.interim>/<dataset_name>/train_all.ready
 ```
 
 ## Working with DynVision: Key Principles

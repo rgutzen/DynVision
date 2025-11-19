@@ -45,6 +45,7 @@ from .config_utils import (
 from .logging_utils import (
     configure_logging,
     log_section,
+    log_section_table,
     format_value,
     SummaryItem,
     build_section,
@@ -114,6 +115,7 @@ __all__ = [
     # Logging utilities
     "configure_logging",
     "log_section",
+    "log_section_table",
     "format_value",
     "SummaryItem",
     "build_section",

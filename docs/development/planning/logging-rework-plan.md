@@ -102,6 +102,9 @@ We record both dimensions so a log entry can say `(config:init.model; runtime)` 
 7. Verify CLI/Snakemake workflows respect log levels after noise demotion; capture before/after log excerpts for documentation and the forthcoming developer guide update.
 8. Update `docs/development/guides/claude-guide.md` (or a new `data-processing.md` companion) with the new DataModule responsibilities so DynVision-specific logging expectations stay in the toolbox docs while the generic AI style guide remains framework-agnostic.
 9. Explore beautifying high-level summaries (tables, headers, minimal visual markers) to improve scanability while staying within plain-text logging constraints.
+	- Prototype a `log_section_table` helper (inspired by the weight-check tables inside `dynvision/base/monitoring.py`) that auto-aligns columns and keeps headers to 1–2 lines while still emitting plain text.
+	- Apply the helper to the heaviest INFO blocks first (`training_run`, `creating_trainer`, `checkpoint_selection`) so operators can skim the columns, keeping richer provenance data in the suffix markers.
+	- Gate the textual table rendering behind INFO, but emit a one-line summary and keep the detailed tables at DEBUG when `verbose` is off; document the convention alongside examples so Snakemake logs remain predictable.
 10. Add regression notes/tests (even simple scripts) to ensure `SimpleDataModule`/`TestingDataModule` continue logging provenance correctly when new params are introduced and that the preview→active diff remains obvious despite the DEBUG demotion.
 11. Review `dynvision/base/monitoring.py` and port the existing banners/memory diagnostics onto `log_section` helpers (e.g., `training_start`, `system_resources`) so model-internal instrumentation matches the Params-driven style.
 

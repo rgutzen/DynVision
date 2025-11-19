@@ -42,7 +42,13 @@ class Monitoring:
         nonfinite_detected = False
         model_dtype = next(self.parameters()).dtype
         dtype_mismatches = []
-        tensor_rows: List[Tuple[str, str, Optional[str]]] = []
+
+        logger.info(f"\nChecking {generator_name} {data_attr}:")
+        logger.info("-" * 100)
+        logger.info(
+            f"{'Module Name':<30} {'Shape':<20} {'Type':<16} {'Device':<8} {'Min':>8} {'Max':>8} {'Norm':>8}"
+        )
+        logger.info("-" * 100)
 
         for name, tensor in iterator:
             if data_attr and self.hasattr(tensor, data_attr):
@@ -58,30 +64,21 @@ class Monitoring:
                 dtype_mismatches.append((name, tensor.dtype, model_dtype))
 
             if len(tensor.size()):
-                valid_mask = torch.isfinite(tensor)
-                valid_data = tensor[valid_mask]
+                valid_data = tensor[torch.isfinite(tensor)]
                 if valid_data.numel() > 0:
                     shape_str = str(tensor.size()).replace("torch.Size", "")
-                    value = (
-                        f"shape={shape_str} | dtype={tensor.dtype} | device={tensor.device} | "
-                        f"min={valid_data.min().item():.3f} | max={valid_data.max().item():.3f} | "
-                        f"norm={valid_data.norm().item():.3f}"
+                    logger.info(
+                        f"{name:<30} {shape_str:<20} {str(tensor.dtype):<16} {str(tensor.device):<8} "
+                        f"{valid_data.min().item():>8.3f} {valid_data.max().item():>8.3f} {valid_data.norm().item():>8.3f}"
                     )
                 else:
-                    value = (
-                        f"shape={tensor.size()} | dtype={tensor.dtype} | device={tensor.device} | "
-                        "min=NaN | max=NaN | norm=NaN"
-                    )
                     logger.warning(
-                        f"{name}: tensor contains only non-finite values when checking {generator_name}"
+                        f"{name:<30} {'[NaN/Inf]':<20} {str(tensor.dtype):<16} {str(tensor.device):<8} {'---':>8} {'---':>8} {'---':>8}"
                     )
             else:
-                value = (
-                    f"scalar | dtype={tensor.dtype} | device={tensor.device} | "
-                    f"value={tensor.item() if hasattr(tensor, 'item') else tensor}"
+                logger.info(
+                    f"{name:<30} {'[scalar]':<20} {str(tensor.dtype):<16} {str(tensor.device):<8} {tensor:>8.3f} {tensor:>8.3f} {tensor:>8.3f}"
                 )
-
-            tensor_rows.append((name, value, None))
 
             if (torch.isnan(tensor)).any():
                 logger.warning(f"\t NaN detected in {name}: ")
@@ -104,31 +101,6 @@ class Monitoring:
 
         if raise_error and (nonfinite_detected or dtype_mismatches):
             raise ValueError("NaN/Inf values or dtype mismatches detected!")
-
-        summary_entries = [
-            ("generator", generator_name, None),
-            ("data_attr", data_attr or "none", None),
-            ("checked", str(len(tensor_rows)), None),
-            ("dtype_mismatches", str(len(dtype_mismatches)), None),
-            ("nonfinite_detected", str(nonfinite_detected), None),
-        ]
-        log_section(logger, "tensor_check", summary_entries)
-
-        if tensor_rows:
-            detail_limit = 10
-            log_section(
-                logger,
-                f"tensor_check.details.{generator_name}",
-                tensor_rows[:detail_limit],
-                level=logging.DEBUG,
-            )
-            if len(tensor_rows) > detail_limit and logger.isEnabledFor(logging.DEBUG):
-                log_section(
-                    logger,
-                    f"tensor_check.details.{generator_name}_continued",
-                    tensor_rows[detail_limit:],
-                    level=logging.DEBUG,
-                )
 
         return None
 
