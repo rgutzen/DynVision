@@ -31,7 +31,7 @@ rule init_model:
             / '{data_name}' \
             / 'train_all.ready'
     params:
-        config_path = lambda w: process_configs(config, wildcards=w),
+        base_config_path = WORKFLOW_CONFIG_PATH,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         dataset_path = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         execution_cmd = lambda w, input: build_execution_command(
@@ -45,18 +45,14 @@ rule init_model:
             / '{model_name}{model_args}_{seed}_{data_name}_init.pt'
     shell:
         """
-        cp {params.config_path:q} {output.model_state:q}.config.yaml
-
         {params.execution_cmd} \
-            --config_path {output.model_state:q}.config.yaml \
+            --config_path {params.base_config_path:q} \
             --model_name {wildcards.model_name} \
             --dataset_path {params.dataset_path:q} \
             --data_name {wildcards.data_name} \
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
             {params.model_arguments}
-        
-        if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
 
 rule train_model:
@@ -88,7 +84,7 @@ rule train_model:
             / 'val.beton' if config.use_ffcv else [],
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
-        config_path = lambda w: process_configs(config, wildcards=w),
+        base_config_path = WORKFLOW_CONFIG_PATH,
         data_group = "all",
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         dataset_link = lambda w: project_paths.data.interim / w.data_name / 'train_all',
@@ -108,10 +104,8 @@ rule train_model:
             / '{model_name}{model_args}_{seed}_{data_name}_trained.pt'
     shell:
         """
-        cp {params.config_path:q} {output.model_state:q}.config.yaml
-
         {params.execution_cmd} \
-            --config_path {output.model_state:q}.config.yaml \
+            --config_path {params.base_config_path:q} \
             --input_model_state {input.model_state:q} \
             --output_model_state {output.model_state:q} \
             --model_name {wildcards.model_name} \
@@ -124,8 +118,6 @@ rule train_model:
             --resolution {params.resolution} \
             --normalize {params.normalize:q} \
             {params.model_arguments}
-
-        if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
 
 use rule train_model as train_model_distributed with:
@@ -165,7 +157,7 @@ rule test_model:
             / 'test_{data_group}.ready',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
-        config_path = lambda w: process_configs(config, wildcards=w),
+        base_config_path = WORKFLOW_CONFIG_PATH,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
         dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
@@ -192,10 +184,8 @@ rule test_model:
             / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}' / 'test_outputs.csv'
     shell:
         """
-        cp {params.config_path:q} {output.results:q}.config.yaml
-
         {params.execution_cmd} \
-            --config_path {output.results:q}.config.yaml \
+            --config_path {params.base_config_path:q} \
             --input_model_state {input.model_state:q} \
             --output_results {output.results:q} \
             --output_responses {output.responses:q} \
@@ -210,8 +200,6 @@ rule test_model:
             {params.model_arguments} \
             {params.data_arguments} \
             --batch_size {params.batch_size} \
-
-        if [ -f {params.config_path:q} ]; then rm {params.config_path:q}; fi
         """
 
 rule best_checkpoint_to_statedict:

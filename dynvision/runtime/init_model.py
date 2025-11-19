@@ -248,6 +248,11 @@ def main() -> int:
     # Infer dimensions from dataset if provided
     infer_dimensions_from_dataset(config)
 
+    config.persist_resolved_config(
+        primary_output=config.output,
+        script_name=__file__,
+    )
+
     # Create and initialize model
     model = create_and_initialize_model(config)
 

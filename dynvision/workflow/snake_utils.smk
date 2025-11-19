@@ -21,13 +21,15 @@ import os
 import subprocess
 import re
 from typing import Dict, List, Optional, Union, Any
+from datetime import datetime
+
+import yaml
 
 # Add the parent directory to the system path
 package_dir = Path(inspect.getfile(lambda: None)).parents[2].resolve()
 sys.path.insert(0, str(package_dir))
 
 from dynvision.project_paths import project_paths
-from dynvision.workflow.config_handler import ConfigHandler
 
 pylogger = logging.getLogger('workflow.utils')
 
@@ -62,38 +64,23 @@ wildcard_constraints:
 localrules: all, symlink_data_subsets, symlink_data_groups
 ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model > process_test_data > test_model
 
-def initialize_config_handler():
-    """Initialize the global config handler after CLI config overrides."""
-    global config_handler, config
-    
-    working_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else config.copy()
-    
-    # Initialize config handler
-    config_handler = ConfigHandler(
-        base_config=working_config, 
-        project_paths=project_paths,
-        local=(not project_paths.iam_on_cluster())
-    )
-    
-    config_handler.log_available_modes()
+def _write_base_config_file(config_payload: Dict[str, Any]) -> Path:
+    """Persist the fully merged Snakemake config for reuse by runtime scripts."""
 
-def process_configs(config: Any, wildcards: Any = None) -> Path:
-    """Process configuration with modes and wildcards for a specific rule.
-    
-    This function should be used in rule params as:
-    config_path = lambda w: process_configs(config, wildcards=w)
-    
-    Args:
-        config: Current snakemake config (includes file + CLI settings)
-        wildcards: Snakemake wildcards object
-        
-    Returns:
-        Path to the generated config file that can be used in shell commands
-    """
-    if config_handler is None:
-        raise RuntimeError("ConfigHandler not initialized. Call initialize_config_handler() first.")
-    
-    return config_handler.process_configs(config, wildcards)
+    config_dir = project_paths.large_logs / "configs"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    base_config_path = config_dir / f"workflow_config_{timestamp}.yaml"
+
+    header = ["# DynVision workflow base configuration", f"# Generated at: {timestamp}"]
+
+    with base_config_path.open("w", encoding="utf-8") as handle:
+        handle.write("\n".join(header) + "\n\n")
+        yaml.safe_dump(config_payload, handle, default_flow_style=False, sort_keys=False)
+
+    pylogger.info(f"Persisted merged workflow config to {base_config_path}")
+    return base_config_path
 
 # Set up logging
 def setup_logger():
@@ -311,9 +298,12 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
 env_name, env_status = get_conda_env()
 pylogger.info(f"Conda environment: {env_name or 'None'}")
 
-config = SimpleNamespace(**config)
+_raw_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else dict(config)
+
+WORKFLOW_CONFIG_PATH = _write_base_config_file(_raw_config)
+
+config = SimpleNamespace(**_raw_config)
 
 SCRIPTS = project_paths.scripts_path
 
-initialize_config_handler()
 setup_logger()

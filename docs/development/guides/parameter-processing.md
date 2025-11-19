@@ -19,10 +19,10 @@ The DynVision parameter processing system handles the complex flow of configurat
                        │
                        ▼
 ┌────────────────────────────────────────────────────────────────┐
-│                  ConfigHandler (snake_utils.smk)                │
-│  • Applies mode overrides (debug, large_dataset, distributed)   │
-│  • Injects wildcards from Snakemake                             │
-│  • Generates per-rule runtime config files                      │
+│        Workflow Snapshot Writer (snake_utils.smk)               │
+│  • Dumps merged config stack to logs/configs/workflow_*.yaml    │
+│  • Exposes WORKFLOW_CONFIG_PATH to all Snakemake rules          │
+│  • Relies on CLI wildcards/overrides instead of mutating config │
 └──────────────────────┬─────────────────────────────────────────┘
                        │
                        ▼
@@ -290,29 +290,21 @@ class TestingParams(CompositeParams):
     mode_name: ClassVar[str] = "test"  # Enables test.* parameters
 ```
 
-### ConfigHandler Integration
+### Workflow Integration
 
-The `ConfigHandler` applies mode overrides during `process_configs()`:
+`snake_utils.smk` now snapshots the merged Snakemake configuration once per invocation:
 
 ```python
-def process_configs(self, config: Any, wildcards: Any = None) -> Path:
-    """Process configuration with modes and wildcards for a specific rule."""
-    
-    # Add wildcards to config
-    working_config = self._add_wildcards_to_config(config, wildcards)
-    
-    # Apply active modes
-    working_config = self._apply_modes(working_config)
-    
-    # Write runtime config file
-    config_path = self.config_dir / self._generate_unique_filename(wildcards)
-    with open(config_path, 'w') as f:
-        yaml.dump(working_config, f)
-    
-    return config_path
+_raw_config = dict(config)
+WORKFLOW_CONFIG_PATH = _write_base_config_file(_raw_config)
+config = SimpleNamespace(**_raw_config)
 ```
 
-Mode parameters are merged into the config before it's saved, so when the runtime script loads it, mode overrides are already applied.
+- The helper writes `logs/configs/workflow_config_<timestamp>.yaml` containing the stacked defaults/experiments/workflow files plus any CLI overrides passed to Snakemake.
+- Rules reference `WORKFLOW_CONFIG_PATH` directly instead of generating per-rule configs. Wildcards (model name, dataset, etc.) are passed strictly through CLI flags, so runtime scripts can treat them as highest-precedence overrides.
+- Mode activation happens inside `CompositeParams` using the shared `ModeRegistry`. No workflow-level mutation is required anymore.
+
+With this setup the runtime script loads a stable base config, applies mode patches derived from `config_modes.yaml`, merges CLI overrides, and finally persists the fully resolved payload next to its primary artifact.
 
 ## Implementation Details
 
@@ -477,56 +469,57 @@ This allows runtime scripts to work with both:
 
 ### Workflow Pattern
 
-1. **Rule Definition** (`snake_runtime.smk`):
+1. **Workflow Snapshot** (`snake_utils.smk`):
+```python
+_raw_config = config.__dict__.copy()
+WORKFLOW_CONFIG_PATH = _write_base_config_file(_raw_config)
+```
+   - Snakemake loads the YAML stack once, writes it to `logs/configs/workflow_config_<ts>.yaml`, and exposes `WORKFLOW_CONFIG_PATH` as a global so every rule references the exact same baseline.
+
+2. **Rule Definition** (`snake_runtime.smk`):
 ```python
 rule init_model:
     params:
-        config_path = lambda w: process_configs(config, wildcards=w),
+        base_config_path = WORKFLOW_CONFIG_PATH,
     shell:
         """
-        python {input.script} \\
-            --config_path {params.config_path} \\
-            --model_name {wildcards.model_name} \\
-            --seed {wildcards.seed} \\
-            --output {output.model_state}
+        {params.execution_cmd} \
+            --config_path {params.base_config_path:q} \
+            --model_name {wildcards.model_name} \
+            --seed {wildcards.seed} \
+            --output {output.model_state:q} \
+            {params.model_arguments}
         """
 ```
+   - Rules no longer emit per-job configs. Wildcards stay in the CLI surface (`--model_name`, `--seed`, parsed `model_args`, etc.), which means `CompositeParams` can treat them as first-class CLI overrides without extra plumbing.
 
-2. **Config Processing** (`process_configs`):
-   - Merges all YAML config files
-   - Applies mode overrides
-   - Injects wildcards
-   - Writes runtime config file
-
-3. **Script Execution** (`init_model.py`):
+3. **Script Execution & Persistence** (`init_model.py`):
 ```python
 def main():
-    # Loads runtime config + CLI args
-    params = InitParams.from_cli_and_config()
-    
-    # Use validated parameters
+    args = parse_args()
+    params = InitParams.from_cli_and_config(
+        config_path=args.config_path,
+        override_kwargs=vars(args)
+    )
+    params.persist_resolved_config(primary_output=Path(args.output))
     model = initialize_model(params.model)
 ```
+   - Runtime scripts receive the workflow snapshot plus the CLI overrides that originated from wildcards, activate modes, resolve precedence, and persist the fully materialized configuration next to the model artifact.
 
-### Wildcard Injection
+### Wildcard Handling
 
-Wildcards from Snakemake rules are added to the config by `ConfigHandler`:
+Wildcards now contribute purely through CLI flags. Snakemake keeps a helper to format structured wildcard strings into `--key value` pairs:
 
 ```python
-def _add_wildcards_to_config(self, config: Dict, wildcards: Any) -> Dict:
-    config["wildcards"] = {}
-    
-    for attr_name in dir(wildcards):
-        if not attr_name.startswith("_"):
-            attr_value = getattr(wildcards, attr_name)
-            if isinstance(attr_value, (str, int, float)):
-                config["wildcards"][attr_name] = attr_value
-                config[attr_name] = attr_value  # Also add to top level
-    
-    return config
+def parse_arguments(wildcards, args_key='model_args', delimiter='+', assigner='=', prefix=':'):
+    args = getattr(wildcards, args_key, '').lstrip(prefix).split(delimiter)
+    if len(args) == 1 and not args[0]:
+        return ""
+    args_dict = {arg.split(assigner)[0]: arg.split(assigner)[1] for arg in args}
+    return " ".join(f"--{key} {value}" for key, value in args_dict.items())
 ```
 
-This allows wildcards to participate in the precedence system as config values.
+Because `CompositeParams` receives those values as part of the CLI source, they automatically participate in the source → scope → alias precedence chain without mutating the base config snapshot.
 
 ## Testing and Validation
 
@@ -576,27 +569,36 @@ def test_shared_fields_propagate():
 Test the complete workflow:
 
 ```python
-def test_snakemake_workflow():
+from pathlib import Path
+
+def test_snakemake_workflow(tmp_path):
     """Test parameter flow through Snakemake workflow."""
-    # 1. Simulate ConfigHandler creating runtime config
-    config_handler = ConfigHandler(base_config, project_paths)
-    runtime_config_path = config_handler.process_configs(
-        config, wildcards={'seed': 123, 'model_name': 'DyRCNNx8'}
-    )
-    
-    # 2. Simulate script receiving config + CLI args
+    # 1. Simulate the workflow snapshot written by snake_utils.smk
+    base_config_path = tmp_path / "workflow_config.yaml"
+    base_config_path.write_text(yaml.safe_dump(base_config))
+
+    # 2. Simulate CLI overrides originating from wildcards
+    cli_args = {
+        'seed': 123,
+        'model_name': 'DyRCNNx8',
+        'output': str(tmp_path / 'model.pt'),
+    }
+
     params = InitParams.from_cli_and_config(
-        config_path=runtime_config_path,
-        override_kwargs={
-            'seed': 123,
-            'model_name': 'DyRCNNx8',
-            'output': '/tmp/model.pt',
-        }
+        config_path=base_config_path,
+        override_kwargs=cli_args,
     )
-    
-    # 3. Verify correct resolution
+
+    # 3. Persist the resolved config just like the runtime scripts do
+    persisted = params.persist_resolved_config(
+        primary_output=Path(cli_args['output']),
+        script_name="init_model.py",
+    )
+
+    # 4. Verify correct resolution
     assert params.model.model_name == 'DyRCNNx8'
     assert params.seed == 123
+    assert persisted.exists()
 ```
 
 ## Best Practices
@@ -721,6 +723,14 @@ if key in base_fields:
 level_5_base[key] = value
 ```
 
+
+## Mode-Aware Workflow Integration
+
+- `snake_utils.smk` now snapshots the merged YAML stack once per Snakemake invocation (`WORKFLOW_CONFIG_PATH`) and reuses that path everywhere, eliminating per-rule config generation and keeping the authoritative base config on disk under `logs/configs/`.
+- Runtime rules pass only this snapshot plus CLI arguments derived from wildcards or user-provided `--config` overrides. Wildcards remain CLI-only input, so `CompositeParams` treats them as part of the highest-precedence source without mutating the base snapshot.
+- Inside `CompositeParams.from_cli_and_config()`, mode toggles (debug, large_dataset, distributed, etc.) are activated after CLI parsing, turning each mode into an explicit source seated between config and CLI. Auto-detection hooks now run on validated data, and provenance is recorded (`mode:<name>` vs `config` vs `cli`).
+- After validation, runtime scripts call `params.persist_resolved_config(primary_output, script_name)` so every artifact gains a `<artifact>.config.yaml` file with metadata (`_active_modes`, `_provenance`, timestamp, script) alongside the resolved flat parameter map.
+- This flow preserves the `config < modes < CLI` ordering, maintains reproducibility through persisted configs, and removes the dependency on the old `ConfigHandler` wildcard injection layer.
 ## Summary
 
 The parameter processing system implements a **Source → Scope → Alias** precedence hierarchy:

@@ -25,30 +25,30 @@ This architecture separates configuration management from model implementation, 
 └────────┬─────────┘
          │
          ▼
-┌──────────────────┐
-│  ConfigHandler   │  process_configs(config, wildcards) → runtime_config.yaml
-│  + Mode System   │  Applies mode-specific overrides (debug, large_dataset, etc.)
-└────────┬─────────┘
+┌─────────────────────────────┐
+│  Workflow Snapshot          │  Snakemake writes WORKFLOW_CONFIG_PATH once per run
+│  (logs/configs/workflow_*.yaml) → reused by all rules
+└────────┬────────────────────┘
          │
          ▼
 ┌──────────────────┐
-│  Runtime Config  │  Passed to script via --config_path runtime_config.yaml
-│  (Per-Rule File) │  Contains: config values + mode overrides + wildcards
+│  Script CLI Args │  Wildcards + user overrides (`--config key=val`)
+│  (Override Layer)│  Remain strings until parsed by CompositeParams
 └────────┬─────────┘
          │
          ▼
-┌──────────────────┐
-│  Script CLI Args │  --model_name X --seed Y (from Snakemake shell command)
-│  (Override Layer)│  ALL CLI args beat ALL config values
-└────────┬─────────┘
+┌────────────────────────────────────────────┐
+│  CompositeParams + ModeRegistry            │
+│  • Loads snapshot via --config_path        │
+│  • Activates modes (config < modes < CLI)  │
+│  • Applies scope + alias precedence        │
+│  • Records provenance                      │
+└────────┬───────────────────────────────────┘
          │
          ▼
-┌──────────────────┐
-│  Pydantic        │  from_cli_and_config(config_path, override_kwargs)
-│  Parameter       │  • Separates config and CLI sources
-│  Classes         │  • Applies scope-aware precedence within each
-│                  │  • Merges with CLI taking priority
-└────────┬─────────┘
+┌─────────────────────────────┐
+│  Persisted Config Snapshot  │  `<primary_output>.config.yaml` + metadata
+└────────┬────────────────────┘
          │
          ▼
 ┌──────────────────┐
@@ -56,6 +56,8 @@ This architecture separates configuration management from model implementation, 
 │  Components      │  with validated and derived parameters
 └──────────────────┘
 ```
+
+Snakemake captures the merged YAML stack once (`WORKFLOW_CONFIG_PATH`) and hands that baseline to every runtime script alongside CLI overrides that may have originated from wildcards. `CompositeParams` then performs the source → scope → alias merge, activates modes through the shared `ModeRegistry`, and persists the resolved parameters so each artifact carries its own reproducibility record.
 
 ## Three-Level Precedence Hierarchy
 
@@ -137,11 +139,21 @@ python script.py --seed 1 --model.seed 42 --data.seed 99
 - **Python Script CLI**: Arguments passed to the actual Python script within a Snakemake rule via shell commands
 - The Snakemake config values become shell command arguments that are then parsed by Pydantic classes
 
+### Persisted Resolved Configs
+
+Each runtime script calls `CompositeParams.persist_resolved_config(primary_output, script_name)` after validation. This writes `<primary_output>.config.yaml` containing:
+
+- Metadata header (timestamp, runtime script, target artifact, `_active_modes`)
+- Flattened parameter map honoring scoped keys (`training.optimizer.lr`, `model.tff`)
+- Optional `_provenance` section explaining whether a value came from the snapshot, a mode payload (`mode:debug`), or CLI
+
+These files live alongside model checkpoints or response exports, making it trivial to reproduce an experiment or audit which mode produced a given override.
+
 ## Configuration Mode System
 
 ### How Config Modes Work
 
-The `ConfigModeManager` provides automatic parameter adjustment based on operational contexts. Modes are defined in `config_modes.yaml` and can be enabled explicitly or through auto-detection:
+`CompositeParams` uses the shared `ModeRegistry` (`dynvision/params/mode_registry.py`) to load `config_modes.yaml`, evaluate toggles, and inject mode payloads as an intermediate source between config and CLI. Modes can be enabled explicitly (`use_debug_mode: true`) or set to `auto` so detectors decide at runtime.
 
 ```yaml
 # config_modes.yaml
@@ -168,13 +180,13 @@ distributed:
 
 ### Mode Detection Logic
 
-The system automatically detects appropriate modes based on context:
+Detectors registered with `ModeRegistry.register_detector("mode_name", detector)` run whenever a toggle is `auto`. They receive the validated config snapshot plus CLI overrides, enabling contextual decisions such as:
 
-- **Debug Mode**: Triggered when `log_level="DEBUG"` or `epochs <= 5`
-- **Large Dataset Mode**: Activated for datasets like ImageNet, COCO, or OpenImages
-- **Distributed Mode**: Must be explicitly enabled (`use_distributed_mode: true`)
+- **Debug Mode**: Auto-activates when `log_level="DEBUG"` or `training.max_epochs` is single-digit
+- **Large Dataset Mode**: Detects datasets like ImageNet/COCO and tightens data loader settings
+- **Distributed Mode**: Typically manual (`use_distributed_mode: true`) but can be wired to cluster env vars if desired
 
-When a mode is active, its parameter overrides are applied before Pydantic validation, allowing for context-appropriate parameter adjustments.
+Active mode payloads are merged after the base config but before CLI overrides, maintaining the `config < modes < CLI` ordering. Provenance metadata in persisted configs records the winning source (e.g., `mode:debug`).
 
 ## Parameter Classes Architecture
 
@@ -295,16 +307,7 @@ class ModelParams(BaseParams):
 
 ### How to Add a Config Mode
 
-**Step 1: Define Mode Detection**
-```python
-# In dynvision/hyperparameters/config_mode_manager.py
-class ConfigModeManager:
-    def _detect_custom_mode(self) -> bool:
-        """Auto-detect if custom mode should be enabled."""
-        return self.config.get("model_name") == "CustomModel"
-```
-
-**Step 2: Add Mode Configuration**
+**Step 1: Add Mode Configuration**
 ```yaml
 # In config_modes.yaml
 use_custom_mode: auto
@@ -315,9 +318,22 @@ custom:
   precision: "16-mixed"
 ```
 
-**Step 3: Use Mode**
-The mode will be automatically applied when detection conditions are met, or can be explicitly enabled with `use_custom_mode: true`.
+**Step 2: (Optional) Register an Auto Detector**
+```python
+# In dynvision/params/mode_registry.py or a nearby initialization hook
+from dynvision.params.mode_registry import ModeRegistry
 
+def _detect_custom_mode(context: Mapping[str, Any]) -> bool:
+        return context.get("model_name") == "CustomModel"
+
+ModeRegistry.register_detector("custom", _detect_custom_mode)
+```
+
+**Step 3: Toggle the Mode**
+- Leave `use_custom_mode: auto` for detector-driven behavior
+- Force it on/off via CLI or Snakemake: `--config use_custom_mode=true`
+
+The payload merges after the base config but before CLI overrides, so CLI values always remain the final authority.
 ### How to Add Cross-Component Validation
 
 **Add to Composite Parameter Class**

@@ -13,80 +13,14 @@ Run with: pytest tests/params/test_params_mode_precedence.py -v
 """
 
 import pytest
-import tempfile
-import yaml
-from pathlib import Path
-from typing import Dict, Any
 
 from dynvision.params import InitParams, TrainingParams, TestingParams
-
-
-def create_temp_config(config_data: Dict[str, Any]) -> Path:
-    """Helper to create a temporary config file."""
-    # Add required base parameters if not present
-    defaults = {
-        # Base params
-        "seed": 0,
-        "log_level": "info",
-        # Data params
-        "data_name": "mnist",
-        "data_group": "all",
-        "train": True,
-        "use_ffcv": True,
-        "batch_size": 256,
-        "num_workers": 4,
-        "persistent_workers": True,
-        "drop_last": True,
-        "train_ratio": 0.9,
-        "pixel_range": "0-1",
-        "data_timesteps": 1,
-        "non_input_value": 0,
-        "non_label_index": -1,
-        "use_distributed": False,
-        "encoding": "image",
-        "writer_mode": "proportion",
-        "max_resolution": 224,
-        "compress_probability": 0.25,
-        "jpeg_quality": 60,
-        "chunksize": 1000,
-        "page_size": 4194304,
-        "batches_ahead": 3,
-        "order": "QUASI_RANDOM",
-        "pin_memory": False,
-        "shuffle": True,
-        "prefetch_factor": 1,
-        # Trainer params
-        "epochs": 200,
-        "check_val_every_n_epoch": 10,
-        "log_every_n_steps": 20,
-        "num_sanity_val_steps": 0,
-        "accumulate_grad_batches": 4,
-        "precision": "bf16-mixed",
-        "deterministic": False,
-        "devices": 1,
-        "num_nodes": 1,
-        "accelerator": "auto",
-        "enable_progress_bar": False,
-        "benchmark": True,
-        "gradient_clip_algorithm": "norm",
-        "limit_val_batches": 0.2,
-        "reload_dataloaders_every_n_epochs": 0,
-        "early_stopping_min_delta": 0.0,
-        "early_stopping_monitor": "val_loss",
-        "early_stopping_mode": "min",
-        "save_top_k": 2,
-        "monitor_checkpoint": "val_loss",
-        "checkpoint_mode": "min",
-        "save_last": True,
-        "every_n_epochs": 50,
-    }
-    # Merge with provided config (provided values override defaults)
-    full_config = {**defaults, **config_data}
-
-    temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
-    yaml.dump(full_config, temp_file)
-    temp_file.close()
-    return Path(temp_file.name)
+from tests.params.utils import (
+    create_temp_config,
+    temporary_init_paths,
+    temporary_training_paths,
+    temporary_testing_paths,
+)
 
 
 class TestInitModeOverrides:
@@ -102,14 +36,14 @@ class TestInitModeOverrides:
 
         config_file = create_temp_config(config_data)
         try:
-            params = InitParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "dataset": "/tmp/test_dataset",
-                    "output": "/tmp/test_output.pt",
-                    "init_with_pretrained": False,
-                },
-            )
+            with temporary_init_paths() as init_paths:
+                params = InitParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **init_paths,
+                        "init_with_pretrained": False,
+                    },
+                )
 
             assert (
                 params.data.use_ffcv is False
@@ -127,14 +61,14 @@ class TestInitModeOverrides:
 
         config_file = create_temp_config(config_data)
         try:
-            params = InitParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "dataset": "/tmp/test_dataset",
-                    "output": "/tmp/test_output.pt",
-                    "init_with_pretrained": False,
-                },
-            )
+            with temporary_init_paths() as init_paths:
+                params = InitParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **init_paths,
+                        "init_with_pretrained": False,
+                    },
+                )
 
             assert (
                 params.data.num_workers == 0
@@ -156,13 +90,11 @@ class TestTrainingModeOverrides:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TrainingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "output_model_state": "/tmp/output.pt",
-                },
-            )
+            with temporary_training_paths() as training_paths:
+                params = TrainingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs=dict(training_paths),
+                )
 
             assert params.data.shuffle is True, "train.shuffle should override base"
         finally:
@@ -183,16 +115,14 @@ class TestTestingModeOverrides:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                    },
+                )
 
             assert (
                 params.data.batch_size == 1024
@@ -211,16 +141,14 @@ class TestTestingModeOverrides:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                    },
+                )
 
             assert (
                 params.trainer.devices == 1
@@ -237,16 +165,14 @@ class TestTestingModeOverrides:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                    },
+                )
 
             assert (
                 params.data.use_ffcv is False
@@ -267,14 +193,14 @@ class TestWrongModeIgnored:
 
         config_file = create_temp_config(config_data)
         try:
-            params = InitParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "dataset": "/tmp/test_dataset",
-                    "output": "/tmp/test_output.pt",
-                    "init_with_pretrained": False,
-                },
-            )
+            with temporary_init_paths() as init_paths:
+                params = InitParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **init_paths,
+                        "init_with_pretrained": False,
+                    },
+                )
 
             # train.use_ffcv should be ignored since mode is "init"
             assert (
@@ -292,16 +218,14 @@ class TestWrongModeIgnored:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                    },
+                )
 
             # init.num_workers should be ignored since mode is "test"
             assert (
@@ -322,16 +246,14 @@ class TestUnscopedParameterRouting:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                    },
+                )
 
             assert (
                 params.model.n_classes == 100
@@ -353,17 +275,15 @@ class TestCLIOverride:
         config_file = create_temp_config(config_data)
         try:
             # CLI override should win
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                    "test.data.batch_size": 2048,  # CLI override (Level 1)
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                        "test.data.batch_size": 2048,  # CLI override (Level 1)
+                    },
+                )
 
             assert (
                 params.data.batch_size == 2048
@@ -385,20 +305,69 @@ class TestBackwardCompatibility:
 
         config_file = create_temp_config(config_data)
         try:
-            params = TestingParams.from_cli_and_config(
-                config_path=str(config_file),
-                override_kwargs={
-                    "input_model_state": "/tmp/input.pt",
-                    "dataset": "/tmp/dataset",
-                    "output_results": "/tmp/results.csv",
-                    "output_responses": "/tmp/responses.pt",
-                    "verbose": False,
-                },
-            )
+            with temporary_testing_paths() as testing_paths:
+                params = TestingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **testing_paths,
+                        "verbose": False,
+                    },
+                )
 
             assert params.data.batch_size == 256, "Unscoped batch_size should work"
             assert params.data.shuffle is False, "Unscoped shuffle should work"
             assert params.data.num_workers == 4, "Unscoped num_workers should work"
+        finally:
+            config_file.unlink()
+
+
+class TestModeShortcutActivation:
+    """Ensure short-form mode toggles (e.g., debug=True) activate modes."""
+
+    def test_debug_shortcut_from_config(self):
+        """Setting debug=True in config should enable the debug mode payload."""
+
+        config_data = {
+            "debug": True,
+        }
+
+        config_file = create_temp_config(config_data)
+        try:
+            with temporary_training_paths() as training_paths:
+                params = TrainingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs=dict(training_paths),
+                )
+
+            assert (
+                params.trainer.check_val_every_n_epoch == 1
+            ), "Debug mode payload should tighten validation cadence"
+            assert (
+                params.trainer.accumulate_grad_batches == 1
+            ), "Debug mode payload should override grad accumulation"
+        finally:
+            config_file.unlink()
+
+    def test_debug_shortcut_from_cli_override(self):
+        """Providing debug via CLI/override kwargs should also enable the mode."""
+
+        config_file = create_temp_config({})
+        try:
+            with temporary_training_paths() as training_paths:
+                params = TrainingParams.from_cli_and_config(
+                    config_path=str(config_file),
+                    override_kwargs={
+                        **training_paths,
+                        "debug": True,
+                    },
+                )
+
+            assert (
+                params.trainer.enable_progress_bar is True
+            ), "Debug mode payload should flip progress bar"
+            assert (
+                params.trainer.log_every_n_steps == 1
+            ), "Debug mode payload should tighten logging frequency"
         finally:
             config_file.unlink()
 

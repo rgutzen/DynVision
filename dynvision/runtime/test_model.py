@@ -352,6 +352,12 @@ class TestingOrchestrator:
                 # Infer and update model parameters from data
                 self.infer_and_update_from_data()
 
+                # Persist resolved configuration before long-running evaluation begins
+                self.config.persist_resolved_config(
+                    primary_output=self.config.output_results,
+                    script_name=__file__,
+                )
+
                 # Load and configure model
                 model_class = getattr(models, self.config.model.model_name)
                 model_kwargs = self.config.model.get_model_kwargs(model_class)

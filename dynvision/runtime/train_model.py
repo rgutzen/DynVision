@@ -555,6 +555,12 @@ class TrainingOrchestrator:
                 # Infer and update model parameters from preview data
                 self.infer_and_update_from_data(pl_logger)
 
+                # Persist resolved configuration before long-running training begins
+                self.config.persist_resolved_config(
+                    primary_output=self.config.output_model_state,
+                    script_name=__file__,
+                )
+
                 # Check for existing Lightning checkpoint FIRST (before loading anything)
                 existing_checkpoint = get_best_checkpoint(
                     checkpoint_path.parent, model_name, raise_error=False

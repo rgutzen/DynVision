@@ -23,6 +23,10 @@ def create_test_config(overrides: Dict[str, Any]) -> Path:
         # Base required params
         "seed": 0,
         "log_level": "info",
+        "use_local_mode": False,
+        "use_debug_mode": False,
+        "use_large_dataset_mode": False,
+        "use_distributed_mode": False,
         # Data params
         "data_name": "mnist",
         "data_group": "all",

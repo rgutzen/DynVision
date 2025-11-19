@@ -206,12 +206,18 @@ class TestingParams(CompositeParams):
         """Optimize memory usage based on model and data characteristics."""
 
         # Check for memory-intensive configurations
-        if self.model.store_responses > 10000:
+        store_responses = getattr(self.model, "store_responses", None)
+
+        # Nothing to validate when store_responses is unset/None
+        if store_responses is None:
+            return
+
+        if store_responses > 10000:
             logger.warning(
-                f"Large store_responses ({self.model.store_responses}) may cause memory issues. "
+                f"Large store_responses ({store_responses}) may cause memory issues. "
                 "Consider reducing or using store_responses=0 for no response storage."
             )
-        elif self.model.store_responses == -1:
+        elif store_responses == -1:
             logger.warning(
                 "store_responses=-1 (all responses) may cause memory issues with large datasets. "
                 "Consider using a specific number or store_responses=0 for no storage."

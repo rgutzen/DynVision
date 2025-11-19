@@ -2,8 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar, Dict, Iterable, List, Optional, Tuple, Type
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+)
 import logging
+from datetime import datetime
+from pathlib import Path
+from enum import Enum
+
+import yaml
+
+try:  # pragma: no cover - optional dependency guard
+    import torch
+except Exception:  # pragma: no cover - torch unavailable in some doc builds
+    torch = None
 
 from dynvision.params.base_params import (
     BaseParams,
@@ -11,6 +32,7 @@ from dynvision.params.base_params import (
     ParamsDict,
     ProvenanceRecord,
 )
+from dynvision.params.mode_registry import ModeRegistry, ModeResolution
 
 logger = logging.getLogger(__name__)
 
@@ -419,9 +441,19 @@ class CompositeParams(BaseParams):
             config_path=config_path, override_kwargs=override_kwargs, args=args
         )
 
+        # Resolve mode overrides after both sources are parsed
+        mode_params, mode_resolution = cls._resolve_mode_overrides(
+            config_params, cli_params
+        )
+
+        # Remove toggle keys so they do not leak into component configs
+        cls._strip_mode_toggle_keys(config_params, cli_params)
+
         # Separate each source independently, then merge with CLI taking precedence
         separated = cls._separate_component_configs_two_sources(
-            config_params=config_params, cli_params=cli_params
+            config_params=config_params,
+            cli_params=cli_params,
+            mode_params=mode_params,
         )
 
         try:
@@ -433,6 +465,7 @@ class CompositeParams(BaseParams):
 
         provenance_map = getattr(separated, "provenance", {})
         object.__setattr__(instance, "_value_provenance", provenance_map)
+        object.__setattr__(instance, "_mode_resolution", mode_resolution)
         return instance
 
     @classmethod
@@ -490,63 +523,300 @@ class CompositeParams(BaseParams):
         )
 
     @classmethod
-    def _separate_component_configs_two_sources(
+    def _resolve_mode_overrides(
         cls, config_params: ParamsDict, cli_params: ParamsDict
+    ) -> Tuple[Optional[ParamsDict], ModeResolution]:
+        """Resolve activated mode patches and return them as a ParamsDict."""
+
+        toggle_values = cls._gather_mode_toggle_values(config_params, cli_params)
+        context = cls._build_mode_context(config_params, cli_params)
+        resolution = ModeRegistry.resolve_modes(toggle_values, context)
+
+        flattened, provenance = cls._flatten_mode_patches(resolution)
+        if not flattened:
+            return None, resolution
+
+        return ParamsDict(flattened, provenance=provenance), resolution
+
+    @classmethod
+    def _strip_mode_toggle_keys(
+        cls,
+        config_params: ParamsDict,
+        cli_params: ParamsDict,
+    ) -> None:
+        """Remove canonical and shortcut mode toggles from raw parameter dicts."""
+
+        for mode_name in ModeRegistry.list_modes():
+            definition = ModeRegistry.get_definition(mode_name)
+            if not definition:
+                continue
+            shortcut_keys = (definition.toggle_key, mode_name)
+            for key in shortcut_keys:
+                if key in config_params:
+                    config_params.pop(key, None)
+                    config_params.provenance.pop(key, None)
+                if key in cli_params:
+                    cli_params.pop(key, None)
+                    cli_params.provenance.pop(key, None)
+
+    @classmethod
+    def _gather_mode_toggle_values(
+        cls, config_params: Mapping[str, Any], cli_params: Mapping[str, Any]
+    ) -> Dict[str, Any]:
+        """Collect toggle values with CLI taking precedence over config."""
+
+        toggle_values: Dict[str, Any] = {}
+        config_dict = dict(config_params)
+        cli_dict = dict(cli_params)
+        for mode_name in ModeRegistry.list_modes():
+            definition = ModeRegistry.get_definition(mode_name)
+            if not definition:
+                continue
+            value = definition.default_toggle
+            shortcut_keys = (definition.toggle_key, mode_name)
+            for key in shortcut_keys:
+                if key in config_dict:
+                    value = config_dict[key]
+            for key in shortcut_keys:
+                if key in cli_dict:
+                    value = cli_dict[key]
+            toggle_values[definition.toggle_key] = value
+        return toggle_values
+
+    @staticmethod
+    def _build_mode_context(
+        config_params: Mapping[str, Any], cli_params: Mapping[str, Any]
+    ) -> Dict[str, Any]:
+        """Build context dictionary combining config and CLI values."""
+
+        context = dict(config_params)
+        context.update(dict(cli_params))
+        return context
+
+    @classmethod
+    def _flatten_mode_patches(
+        cls, resolution: ModeResolution
+    ) -> Tuple[Dict[str, Any], Dict[str, ProvenanceRecord]]:
+        """Flatten active mode payloads into dotted keys with provenance."""
+
+        flattened: Dict[str, Any] = {}
+        provenance: Dict[str, ProvenanceRecord] = {}
+
+        for mode_name in resolution.active_modes:
+            payload = resolution.patches.get(mode_name, {})
+            flattened_payload = cls._flatten_nested_payload(payload)
+            for key, value in flattened_payload.items():
+                flattened[key] = value
+                provenance[key] = ProvenanceRecord(source=f"mode:{mode_name}")
+
+        return flattened, provenance
+
+    @staticmethod
+    def _flatten_nested_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Flatten arbitrarily nested dictionaries into dotted keys."""
+
+        flattened: Dict[str, Any] = {}
+
+        def _recurse(prefix: str, value: Any) -> None:
+            if isinstance(value, dict):
+                for subkey, subvalue in value.items():
+                    new_prefix = f"{prefix}.{subkey}" if prefix else subkey
+                    _recurse(new_prefix, subvalue)
+            else:
+                flattened[prefix] = value
+
+        for key, value in payload.items():
+            _recurse(key, value)
+
+        return flattened
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+
+    def persist_resolved_config(
+        self,
+        primary_output: Path | str,
+        script_name: str,
+        extra_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Path:
+        """Write the fully resolved parameter set alongside an output artifact."""
+
+        target = Path(f"{primary_output}.config.yaml")
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        mode_resolution = getattr(
+            self,
+            "_mode_resolution",
+            ModeResolution(
+                toggles={}, raw_values={}, active_modes=tuple(), patches={}
+            ),
+        )
+
+        flat_params = self._build_flat_parameter_map()
+        flat_params["_active_modes"] = list(mode_resolution.active_modes)
+
+        provenance_map = self._build_flat_provenance_map()
+        if provenance_map:
+            flat_params["_provenance"] = provenance_map
+
+        metadata = {
+            "generated_at": datetime.utcnow().isoformat(),
+            "script": script_name,
+            "primary_output": str(primary_output),
+            "source_precedence": "config -> modes -> cli",
+            "active_modes": ", ".join(mode_resolution.active_modes) or "none",
+        }
+        if mode_resolution.raw_values:
+            metadata["mode_toggles"] = mode_resolution.raw_values
+        if extra_metadata:
+            metadata.update(extra_metadata)
+
+        header_lines = ["# DynVision resolved configuration"] + [
+            f"# {key.replace('_', ' ').title()}: {value}"
+            for key, value in metadata.items()
+        ]
+        header = "\n".join(header_lines) + "\n\n"
+
+        serializable_params = {
+            key: self._prepare_yaml_value(value) for key, value in flat_params.items()
+        }
+
+        with target.open("w", encoding="utf-8") as handle:
+            handle.write(header)
+            yaml.safe_dump(
+                serializable_params,
+                handle,
+                default_flow_style=False,
+                sort_keys=False,
+            )
+
+        return target
+
+    def _build_flat_parameter_map(self) -> Dict[str, Any]:
+        """Flatten composite and component parameters into dotted keys."""
+
+        payload = self.model_dump()
+        component_names = set(self.get_component_classes().keys())
+        flattened: Dict[str, Any] = {}
+
+        for key, value in payload.items():
+            if key in component_names and isinstance(value, dict):
+                for subkey, subvalue in value.items():
+                    flattened[f"{key}.{subkey}"] = subvalue
+            else:
+                flattened[key] = value
+
+        return flattened
+
+    def _build_flat_provenance_map(self) -> Dict[str, str]:
+        """Create a dotted-key provenance map suitable for YAML serialization."""
+
+        flattened: Dict[str, str] = {}
+
+        base_provenance = getattr(self, "_value_provenance", {})
+        for key, record in base_provenance.items():
+            flattened[key] = record.format() or "default"
+
+        for comp_name, component in self.iter_components():
+            comp_provenance = getattr(component, "_value_provenance", {})
+            for key, record in comp_provenance.items():
+                flattened[f"{comp_name}.{key}"] = record.format() or "default"
+
+        return flattened
+
+    def _prepare_yaml_value(self, value: Any) -> Any:
+        """Recursively coerce values to YAML-safe primitives."""
+
+        if isinstance(value, dict):
+            return {k: self._prepare_yaml_value(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._prepare_yaml_value(v) for v in value]
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, Path):
+            return str(value)
+        if torch is not None:
+            if isinstance(value, torch.Tensor):  # Avoid device refs in YAML
+                tensor = value.detach().cpu()
+                if tensor.numel() == 1:
+                    return tensor.item()
+                return tensor.tolist()
+            if isinstance(value, (torch.dtype, torch.device, torch.Size)):
+                return str(value)
+        return value
+
+    @classmethod
+    def _separate_component_configs_two_sources(
+        cls,
+        config_params: ParamsDict,
+        cli_params: ParamsDict,
+        mode_params: Optional[ParamsDict] = None,
     ) -> ParamsDict:
         """
-        Split parameters from two sources with proper precedence.
+        Split parameters from multiple sources with proper precedence.
 
-        Within each source (config and CLI), apply scoped > unscoped precedence.
-        Then merge with ALL CLI values taking precedence over ALL config values.
+        Within each source, apply scoped > unscoped precedence. Then merge sources
+        in the order config → modes → CLI, with later sources overriding earlier ones.
 
         Args:
             config_params: Parameters from config files
             cli_params: Parameters from CLI arguments
+            mode_params: Parameters injected by active modes (optional)
 
         Returns:
             Dictionary with instantiated components and composite base fields
         """
-        config_source_map = getattr(config_params, "provenance", {})
-        cli_source_map = getattr(cli_params, "provenance", {})
+        source_specs = [
+            ("config", config_params),
+            ("modes", mode_params),
+            ("cli", cli_params),
+        ]
 
-        # Separate config params (scoped > unscoped within config)
-        config_components, config_provenance = cls._separate_single_source(
-            dict(config_params), config_source_map
-        )
+        separated_sources: List[
+            Tuple[
+                str, Dict[str, Dict[str, Any]], Dict[str, Dict[str, ProvenanceRecord]]
+            ]
+        ] = []
 
-        # Separate CLI params (scoped > unscoped within CLI)
-        cli_components, cli_provenance = cls._separate_single_source(
-            dict(cli_params), cli_source_map
-        )
+        for label, params in source_specs:
+            if not params:
+                continue
+            source_map = getattr(params, "provenance", {})
+            data = dict(params)
+            if not data:
+                continue
+            components, provenance = cls._separate_single_source(data, source_map)
+            separated_sources.append((label, components, provenance))
 
-        # Merge: CLI always wins over config
         component_classes = cls.get_component_classes()
         final_configs: Dict[str, Dict[str, Any]] = {}
         final_provenance: Dict[str, Dict[str, ProvenanceRecord]] = {}
 
-        # Merge composite base fields (CLI wins)
-        composite_base = config_components.get("_composite_base", {}).copy()
-        composite_base.update(cli_components.get("_composite_base", {}))
-
-        composite_base_provenance = dict(config_provenance.get("_composite_base", {}))
-        composite_base_provenance.update(cli_provenance.get("_composite_base", {}))
+        # Merge composite base fields honoring source order (last source wins)
+        composite_base: Dict[str, Any] = {}
+        composite_base_provenance: Dict[str, ProvenanceRecord] = {}
+        for _, components, provenance in separated_sources:
+            base_values = components.get("_composite_base", {})
+            composite_base.update(base_values)
+            composite_base_provenance.update(provenance.get("_composite_base", {}))
 
         for comp_name in component_classes:
-            # Start with composite base (lowest priority)
             final_configs[comp_name] = composite_base.copy()
             final_provenance[comp_name] = {
                 key: composite_base_provenance[key]
                 for key in composite_base
                 if key in composite_base_provenance
             }
-            # Add config values
-            config_values = config_components.get(comp_name, {})
-            final_configs[comp_name].update(config_values)
-            final_provenance[comp_name].update(config_provenance.get(comp_name, {}))
-            # Override with CLI values (all CLI beats all config)
-            cli_values = cli_components.get(comp_name, {})
-            final_configs[comp_name].update(cli_values)
-            final_provenance[comp_name].update(cli_provenance.get(comp_name, {}))
+
+        # Apply component overrides in source order
+        for _, components, provenance in separated_sources:
+            for comp_name in component_classes:
+                comp_values = components.get(comp_name, {})
+                if comp_values:
+                    final_configs[comp_name].update(comp_values)
+                if comp_name in provenance:
+                    final_provenance[comp_name].update(provenance[comp_name])
 
         # Apply preprocessors
         preprocessors = cls.get_component_preprocessors()
