@@ -27,13 +27,13 @@ rule init_model:
     """
     input:
         script = SCRIPTS / 'runtime' / 'init_model.py',
-        dataset = project_paths.data.interim \
+        dataset_ready = project_paths.data.interim \
             / '{data_name}' \
-            / 'train_all' \
-            / 'folder.link'
+            / 'train_all.ready'
     params:
         config_path = lambda w: process_configs(config, wildcards=w),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -50,7 +50,7 @@ rule init_model:
         {params.execution_cmd} \
             --config_path {output.model_state:q}.config.yaml \
             --model_name {wildcards.model_name} \
-            --dataset_path {input.dataset:q} \
+            --dataset_path {params.dataset_path:q} \
             --data_name {wildcards.data_name} \
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
@@ -75,23 +75,23 @@ rule train_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_init.pt',
-        dataset_link = project_paths.data.interim \
+        dataset_ready = project_paths.data.interim \
+            / '{data_name}' \
+            / 'train_all.ready',
+        dataset_train = lambda w: project_paths.data.processed \
             / '{data_name}' \
             / 'train_all' \
-            / 'folder.link',
-        dataset_train = project_paths.data.processed \
+            / 'train.beton' if config.use_ffcv else [],
+        dataset_val = lambda w: project_paths.data.processed \
             / '{data_name}' \
             / 'train_all' \
-            / 'train.beton',
-        dataset_val = project_paths.data.processed \
-            / '{data_name}' \
-            / 'train_all' \
-            / 'val.beton',
+            / 'val.beton' if config.use_ffcv else [],
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
         config_path = lambda w: process_configs(config, wildcards=w),
         data_group = "all",
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        dataset_link = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         resolution = lambda w: config.data_resolution[w.data_name],
         normalize = lambda w: json.dumps((
             config.data_statistics[w.data_name]['mean'],
@@ -115,7 +115,7 @@ rule train_model:
             --input_model_state {input.model_state:q} \
             --output_model_state {output.model_state:q} \
             --model_name {wildcards.model_name} \
-            --dataset_link {input.dataset_link:q} \
+            --dataset_link {params.dataset_link:q} \
             --dataset_train {input.dataset_train:q} \
             --dataset_val {input.dataset_val:q} \
             --data_name {wildcards.data_name} \
@@ -160,15 +160,15 @@ rule test_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}.pt',
-        dataset = project_paths.data.interim \
+        dataset_ready = project_paths.data.interim \
             / '{data_name}' \
-            / 'test_{data_group}' \
-            / 'folder.link',
+            / 'test_{data_group}.ready',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         config_path = lambda w: process_configs(config, wildcards=w),
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
         normalize = lambda w: (
             # Allow override via --config normalize=null
             config.normalize if hasattr(config, 'normalize') else json.dumps((
@@ -201,7 +201,7 @@ rule test_model:
             --output_responses {output.responses:q} \
             --model_name {wildcards.model_name} \
             --data_name {wildcards.data_name} \
-            --dataset_path {input.dataset:q} \
+            --dataset_path {params.dataset_path:q} \
             --data_loader {wildcards.data_loader} \
             --data_group {wildcards.data_group} \
             --seed {wildcards.seed} \
@@ -238,7 +238,7 @@ rule best_checkpoint_to_statedict:
 checkpoint intermediate_checkpoint_to_statedict:
     """Convert Lightning checkpoints to state dictionaries."""
     input:
-        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        # model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
         checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',

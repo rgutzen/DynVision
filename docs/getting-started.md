@@ -44,7 +44,7 @@ DynVision automatically handles dataset downloads and preparation. Standard data
 To trigger data preparation you can run:
 ```bash
 # Download and prepare CIFAR10 dataset
-snakemake <project_paths.data.interim>/cifar10/train_all/folder.link
+snakemake <project_paths.data.interim>/cifar10/train_all.ready
 ```
 
 For more information about data organization and custom datasets, see the [Data Processing Guide](user-guide/data-processing.md).

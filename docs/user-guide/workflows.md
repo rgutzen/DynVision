@@ -162,14 +162,14 @@ rule test_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}.pt',
-        dataset = project_paths.data.interim \
+        dataset_ready = project_paths.data.interim \
             / '{data_name}' \
-            / 'test_{data_group}' \
-            / 'folder.link',
+            / 'test_{data_group}.ready',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         # Additional parameters
         config_path = CONFIGS,
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
         batch_size = config.batch_size,
         store_responses = config.store_test_responses
     output:
@@ -186,6 +186,7 @@ rule test_model:
         python {input.script:q} \
             --input_model_state {input.model_state:q} \
             --output_results {output.results:q} \
+            --dataset_path {params.dataset_path:q} \
             --batch_size {params.batch_size}
         """
 ```

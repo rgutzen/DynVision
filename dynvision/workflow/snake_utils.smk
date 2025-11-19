@@ -15,15 +15,12 @@ import sys
 import inspect
 import logging
 from pathlib import Path
-from collections import defaultdict
 from types import SimpleNamespace
 from itertools import product
-import json
 import os
 import subprocess
 import re
 from typing import Dict, List, Optional, Union, Any
-from datetime import datetime
 
 # Add the parent directory to the system path
 package_dir = Path(inspect.getfile(lambda: None)).parents[2].resolve()
@@ -47,11 +44,11 @@ wildcard_constraints:
     data_name = r'[a-z0-9]+',
     data_subset = r'[a-z]+',
     data_group = r'[a-z0-9]+',
+    data_group_not_all = r'(?!all$)[a-z0-9]+',
     data_loader = r'[a-zA-Z]+',
-    status = r'(init|trained|trained-[a-z0-9\.=]+)',
+    status = r'(init|trained|trained-[a-z0-9\. =]+)',
     seed = r'\d+',
     seeds = r'[\d\.]+',
-    category = r'(?!folder)[a-z0-9]+',
     category_str = r'([a-z0-9]+=\*|\s?)',
     model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',
     data_args = r'(:[a-zTF,;:\+=\d\.]+|\s?)',
@@ -63,7 +60,7 @@ wildcard_constraints:
     model_identifier = r'([\w:+=,\*\#]+)'
 
 localrules: all, symlink_data_subsets, symlink_data_groups
-ruleorder: symlink_data_groups > symlink_data_subsets > train_model_distributed > train_model > process_test_data > test_model
+ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model > process_test_data > test_model
 
 def initialize_config_handler():
     """Initialize the global config handler after CLI config overrides."""
@@ -128,91 +125,6 @@ def get_param(key, default=None) -> callable:
     """
     return lambda w: getattr(config, key, default)
 
-def get_imagenet_classes(tiny: bool = False) -> tuple[list, dict]:
-    """Get ImageNet class information.
-
-    Args:
-        tiny: Whether to use TinyImageNet classes
-
-    Returns:
-        Tuple containing:
-            - List of class names
-            - Dictionary mapping indices to class information
-    """
-    index_file = "tinyimagenet_class_index" if tiny else "imagenet_class_index"
-    try:
-        with open(project_paths.references / f"{index_file}.json") as f:
-            class_dict = json.load(f)
-            imagenet_classes = [v[0] for k, v in class_dict.items()]
-        return imagenet_classes
-    except FileNotFoundError:
-        raise ValueError(f"Class index file not found: {project_paths.references / str(index_file + '.json')}")
-
-def get_category(data_name: str, data_group: str) -> List[str]:
-    """Get category information for a dataset.
-
-    Args:
-        data_name: Name of the dataset
-        data_group: Group within the dataset
-
-    Returns:
-        List of category names
-
-    Raises:
-        ValueError: If data_name is unknown
-    """
-    category_handlers = {
-        'imagenet': lambda: get_imagenet_classes(tiny=('tiny' in data_name)),
-        'imagenette': lambda: ['n01440764',  'n02979186',  'n03028079',  'n03417042',  'n03445777', 'n02102040',  'n03000684',  'n03394916',  'n03425413',  'n03888257'],
-        'cifar10': lambda: [str(i) for i in range(10)],
-        'cifar100': lambda: [str(i) for i in range(100)],
-        'mnist': lambda: [str(i) for i in range(10)],
-    }
-
-    if data_name not in category_handlers:
-        raise ValueError(f"Unknown dataset: {data_name}")
-
-    if data_group == 'all':
-        return category_handlers[data_name]()
-    
-    try:
-        group_indices = config.data_groups[data_name][data_group]
-        if 'imagenet' in data_name:
-            return [category_handlers['imagenet']()[i] for i in group_indices]
-        else:
-            return group_indices
-    except KeyError:
-        raise ValueError(f"Unknown data group '{data_group}' for {data_name}")
-
-def get_data_location(wildcards: Any) -> Path:
-    """Get the data directory for given wildcards.
-
-    Args:
-        wildcards: Snakemake wildcards object
-
-    Returns:
-        Path to data directory
-    """
-    data_name = wildcards.data_name
-    data_subset = 'val' if data_name == 'imagenet' and wildcards.data_subset == 'test' else wildcards.data_subset
-    category = wildcards.category
-
-    base_dir = get_data_base_dir(wildcards)
-    return base_dir / data_subset / category
-
-def get_data_base_dir(wildcards: Any) -> Path:
-    """Get the base directory for a dataset.
-
-    Args:
-        wildcards: Snakemake wildcards object
-
-    Returns:
-        Path to base directory
-    """
-    data_name = wildcards.data_name
-    if data_name in config.mounted_datasets and project_paths.iam_on_cluster():
-        return Path(f'/{data_name}')
-    return project_paths.data.raw / data_name
 
 def parse_arguments(
     wildcards: Any,

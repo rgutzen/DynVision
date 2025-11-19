@@ -4,6 +4,11 @@ data_presentation_pattern: [1]
 mounted_datasets:
     - imagenet
 
+class_index_files:
+    imagenet: imagenet_class_index.json
+    imagenette: imagenet_class_index.json
+    tinyimagenet: tinyimagenet_class_index.json
+
 # used for setup the ffcv dataloader
 data_resolution:
     mnist: 28

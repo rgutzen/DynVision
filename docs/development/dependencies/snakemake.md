@@ -210,8 +210,7 @@ rule get_data:
         raw_data_path = lambda w: project_paths.data.raw / f'{w.data_name}',
         output = lambda w: project_paths.data.raw \
             / f'{w.data_name}' \
-            / f'{w.data_subset}' \
-            / 'folder.link',
+            / f'{w.data_subset}',
         # Additional parameters
     output:
         flag = directory(project_paths.data.raw \
@@ -240,29 +239,40 @@ DynVision uses symbolic links to efficiently organize dataset subsets:
 
 ```python
 rule symlink_data_subsets:
-    """Create symlinks for dataset subsets."""
+    """Materialize canonical subset directories."""
     input:
-        get_data_location
-    params:
-        parent = lambda wildcards, output: Path(output.flag).parent,
-        source = lambda wildcards, output: Path(output.flag).with_suffix(''),
+        subset_folder = project_paths.data.raw / '{data_name}' / '{data_subset}'
     output:
-        flag = project_paths.data.interim \
-            / '{data_name}' \
-            / '{data_subset}_{data_group}' \
-            / '{category}.link'
-    shell:
-        """
-        (mkdir -p {params.parent:q} && \
-        ln -sf {input:q} {params.source:q} && \
-        touch {output.flag:q}) 
-        """
+        subset_dir = directory(project_paths.data.interim / '{data_name}' / '{data_subset}_all'),
+        ready = project_paths.data.interim / '{data_name}' / '{data_subset}_all.ready'
+    run:
+        for entry in Path(input.subset_folder).iterdir():
+            if entry.is_dir():
+                _safe_symlink(Path(output.subset_dir) / entry.name, entry.resolve())
+        Path(output.ready).write_text('ready\n')
+
+rule symlink_data_groups:
+    """Create per-group directories from canonical subsets."""
+    input:
+        subset_dir = project_paths.data.interim / '{data_name}' / '{data_subset}_all',
+        subset_ready = project_paths.data.interim / '{data_name}' / '{data_subset}_all.ready'
+    output:
+        group_dir = directory(project_paths.data.interim / '{data_name}' / '{data_subset}_{data_group}'),
+        ready = project_paths.data.interim / '{data_name}' / '{data_subset}_{data_group}.ready'
+    run:
+        class_names = config.data_groups[wildcards.data_name].get(wildcards.data_group, [])
+        if not class_names:
+            class_names = sorted(p.name for p in Path(input.subset_dir).iterdir())
+        for cls in class_names:
+            target = (Path(input.subset_dir) / cls).resolve()
+            _safe_symlink(Path(output.group_dir) / cls, target)
+        Path(output.ready).write_text('ready\n')
 ```
 
 This provides:
-- Storage efficiency (no data duplication)
-- Flexible dataset organization
-- Quick experiment reconfiguration
+- Storage efficiency (still no data duplication)
+- Deterministic folder layout `data/interim/<dataset>/<subset>_<group>/<class>`
+- `.ready` files for downstream dependencies without relying on ad-hoc sentinel filenames
 
 ### 3.3 FFCV Integration for Performance
 
@@ -273,17 +283,18 @@ rule build_ffcv_datasets:
     """Build FFCV datasets for faster data loading."""
     input:
         script = SCRIPTS / 'data' / 'ffcv_datasets.py',
-        data = project_paths.data.interim / '{data_name}' / 'train_all' / 'folder.link'
+        data_ready = project_paths.data.interim / '{data_name}' / 'train_all.ready'
     params:
         train_ratio = config.train_ratio,
         max_resolution = lambda w: config.data_resolution[w.data_name],
+        data_dir = lambda w: project_paths.data.interim / w.data_name / 'train_all',
     output:
         train = project_paths.data.processed / '{data_name}' / 'train_all' / 'train.beton',
         val = project_paths.data.processed / '{data_name}' / 'train_all' / 'val.beton'
     shell:
         """
         python {input.script:q} \
-            --input {input.data:q} \
+            --input {params.data_dir:q} \
             --output_train {output.train:q} \
             --output_val {output.val:q} \
             --train_ratio {params.train_ratio} \
@@ -309,13 +320,13 @@ rule init_model:
     """Initialize a model with specified configuration."""
     input:
         script = SCRIPTS / 'runtime' / 'init_model.py',
-        dataset = project_paths.data.interim \
+        dataset_ready = project_paths.data.interim \
             / '{data_name}' \
-            / 'train_all' \
-            / 'folder.link'
+            / 'train_all.ready'
     params:
         config_path = CONFIGS,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         init_with_pretrained = config.init_with_pretrained,
     output:
         model_state = project_paths.models \
@@ -326,7 +337,7 @@ rule init_model:
         python {input.script:q} \
             --config_path {params.config_path:q} \
             --model_name {wildcards.model_name} \
-            --dataset {input.dataset:q} \
+            --dataset_path {params.dataset_path:q} \
             --data_name {wildcards.data_name} \
             --seed {wildcards.seed} \
             --output {output.model_state:q} \
@@ -415,13 +426,13 @@ rule test_model:
         model_state = project_paths.models \
             / '{model_name}' \
             / '{model_name}{model_args}_{seed}_{data_name}_{status}.pt',
-        dataset = project_paths.data.interim \
+        dataset_ready = project_paths.data.interim \
             / '{data_name}' \
-            / 'test_{data_group}' \
-            / 'folder.link',
+            / 'test_{data_group}.ready',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         # Various parameters
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
     output:
         responses = project_paths.models \
             / '{model_name}' \
@@ -433,6 +444,7 @@ rule test_model:
         """
         python {input.script:q} \
             # Command-line parameters
+            --dataset_path {params.dataset_path:q}
         """
 ```
 

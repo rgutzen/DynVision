@@ -33,10 +33,11 @@ rule plot_confusion_matrix:
     """
     input:
         test_results = project_paths.reports / '{path}_{data_name}_testing_results.csv',
-        dataset = project_paths.data.interim / '{data_name}_test' / 'folder.link',
+        dataset_ready = project_paths.data.interim / '{data_name}' / 'test_all.ready',
         script = SCRIPTS / 'visualization' / 'plot_confusion_matrix.py'
     params:
         palette = 'cividis',
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / 'test_all',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -50,7 +51,7 @@ rule plot_confusion_matrix:
         {params.execution_cmd} \
             --input {input.test_results:q} \
             --output {output.plot:q} \
-            --dataset_path {input.dataset} \
+            --dataset_path {params.dataset_path:q} \
             --palette {params.palette} \
             --format {wildcards.format} \
         """

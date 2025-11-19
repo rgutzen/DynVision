@@ -116,22 +116,35 @@ data_groups:
             - 9
 ```
 
+### Class Index Files
+
+For datasets whose on-disk class folders do not match the numeric labels used in `data_groups` (e.g., ImageNet or TinyImageNet), map class indices to folder names via `class_index_files`:
+
+```yaml
+class_index_files:
+    imagenet: imagenet_class_index.json
+    imagenette: imagenet_class_index.json
+    tinyimagenet: tinyimagenet_class_index.json
+```
+
+The paths are resolved relative to `project_paths.references`. Each JSON entry should map a numeric index to the corresponding class identifier (e.g., WordNet ID). If a dataset is omitted from this section, DynVision assumes the folder names already match the class IDs you specify in `data_groups`.
+
 ### Creating Data Group Symlinks
 
 To create symlinks for a data group:
 
 ```bash
 # Create symlinks for CIFAR100 invertebrates group
-snakemake <project_paths.data.interim>/cifar100/test_invertebrates/folder.link
+snakemake <project_paths.data.interim>/cifar100/test_invertebrates.ready
 ```
 
 The default group containing all classes is called `all`:
 
 ```bash
-snakemake <project_paths.data.interim>/cifar100/train_all/folder.link
+snakemake <project_paths.data.interim>/cifar100/train_all.ready
 ```
 
-This command creates symbolic links to the specified categories, making them appear as a cohesive dataset.
+Each target builds the `<data_subset>_<data_group>` directory of per-class symlinks and then writes a `.ready` flag file. Downstream rules depend on the flag while consuming the actual directory (e.g., `.../train_all/`) for data loading.
 
 
 ### Converting to FFCV Format
@@ -195,7 +208,7 @@ from dynvision.data.datasets import get_dataset
 
 # get dataset
 dataset = get_dataset(
-    data_path="<project_paths.data.interim>/{data_name}/test_{data_group}/folder.link",
+    data_path="<project_paths.data.interim>/{data_name}/test_{data_group}",
     data_name="{data_name}",
     data_transform="test",
     target_transform="{data_group}",

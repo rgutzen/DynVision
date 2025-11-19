@@ -33,8 +33,8 @@ DynVision provides a Snakemake workflow for dataset preparation. For CIFAR-10:
 snakemake project_paths.data.raw/cifar10/train
 
 # Create symbolic links for the full dataset
-snakemake project_paths.data.interim/cifar10/train_all/folder.link
-snakemake project_paths.data.interim/cifar10/test_all/folder.link
+snakemake project_paths.data.interim/cifar10/train_all.ready
+snakemake project_paths.data.interim/cifar10/test_all.ready
 
 # Convert to FFCV format for faster loading
 snakemake project_paths.data.processed/cifar10/train_all/train.beton
