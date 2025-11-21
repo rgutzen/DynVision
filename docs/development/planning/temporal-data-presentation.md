@@ -69,4 +69,167 @@
 2. **User control:** Should we expose a flag to disable chunk-wise masking even when `loss_reaction_time>0`? (Not currently requested; document default.)
 3. **Docs:** Once implemented, integrate this plan into the temporal modeling guide and mention the warning semantics.
 
+---
+
+## Loss Calculation Review (2025-11-21)
+
+### Summary
+Reviewed the complete loss calculation pipeline including normalization, compression, and combination to ensure correct handling of valid vs. invalid timesteps across multiple loss types.
+
+### Loss Calculation Flow
+1. **LightningBase.model_step** (dynvision/base/lightning.py:85-167) → calls **compute_loss** (line 121-124)
+2. **LightningBase.compute_loss** (dynvision/base/lightning.py:261-304) → flattens outputs/labels, iterates through criteria
+3. Each criterion's **forward** method → calls **compute_loss** then **apply_reduction** from BaseLoss
+
+### CrossEntropyLoss: ✅ Correct Normalization
+**Location:** `dynvision/losses/cross_entropy_loss.py`, `dynvision/losses/base_loss.py`
+
+**Behavior:**
+- `CrossEntropyLoss.compute_loss` (lines 28-57):
+  - Computes element-wise cross-entropy with `reduction="none"` (line 41-47)
+  - Creates `valid_mask` excluding `ignore_index` entries (line 50)
+  - Zeros out invalid entries by multiplying loss by mask (line 54)
+  - Returns element-wise losses (no reduction)
+
+- `BaseLoss.forward` (lines 98-125):
+  - Infers `num_valid_timesteps` from targets if criterion has `ignore_index` (lines 117-122)
+  - Counts valid timesteps: `mask = (targets != ignore_index)`, `num_valid = mask.sum()` (lines 119-120)
+  - Passes `num_valid_timesteps` to `apply_reduction` (line 125)
+
+- `BaseLoss.apply_reduction` (lines 72-85):
+  - When `reduction="mean"` and `num_valid_timesteps` provided: `loss.sum() / num_valid_timesteps` (lines 76-81)
+  - This correctly normalizes **only by valid timesteps**, excluding masked-out timesteps
+
+**Result:** CrossEntropyLoss correctly normalizes by the count of valid (non-masked) timesteps only.
+
+### EnergyLoss: ⚠️ Issues Identified
+**Location:** `dynvision/losses/energy_loss.py`
+
+**Current Behavior:**
+- `EnergyLoss.forward` (lines 58-68):
+  - Directly calls `compute_loss()` then `apply_reduction(loss)` (lines 66-68)
+  - **Does NOT pass `num_valid_timesteps`** to `apply_reduction`
+  - BaseLoss.apply_reduction defaults to simple `loss.mean()` over batch dimension
+
+- `EnergyLoss.compute_loss` (lines 70-109):
+  - Hooks registered on monitored modules (Conv2d, Linear, etc.) capture activations during forward pass (lines 21-56)
+  - `_accumulate_energy` computes per-batch energy norm: `torch.norm(activation, p=self.p, dim=tuple(range(1, activation.ndim)))` (lines 45-46)
+  - Returns shape `[batch_size]` averaged over monitored modules (line 105)
+
+**Issues:**
+1. **Overwrites instead of accumulating:** Line 54 sets `self.batch_energy[module_name] = batch_energy`, which **overwrites** the previous value on each hook call. Since the temporal model calls layers once per timestep (temporal.py:399-407), hooks fire `n_timesteps` times but only the **last timestep's energy is captured**.
+
+2. **No timestep normalization:** Even if accumulation worked, there's no division by `n_timesteps` or distinction between valid/invalid timesteps.
+
+3. **No temporal awareness:** EnergyLoss doesn't account for presentation patterns, reaction time masking, or null inputs. It treats all timesteps equally.
+
+**Expected Behavior:**
+- EnergyLoss should accumulate energy across all timesteps during the forward pass
+- When `reduction="mean"`, it should normalize by the total number of timesteps (not just batch size)
+- Whether to exclude invalid timesteps is a design decision (typically energy should count all computational activity)
+
+### Loss Combination: ✅ Correct
+**Location:** `dynvision/base/lightning.py:261-304`
+
+**Behavior:**
+- Line 270-271: Flattens outputs `[batch, timesteps, classes]` → `[batch*timesteps, classes]` and labels
+- Line 280: Initializes loss accumulator
+- Lines 282-296: Iterates through each criterion:
+  - Extracts weight from tuple `(criterion_fn, weight)` (line 283-285)
+  - Computes weighted loss: `loss_value = weight * criterion_fn(outputs, label_index)` (line 288)
+  - Logs individual loss values (lines 291-296)
+- Line 298: Sums all weighted losses: `loss = loss_values.sum()`
+
+**Result:** Loss combination correctly weights and sums individual criterion losses.
+
+### Recommendations
+1. ✅ **EnergyLoss accumulation:** Modify `_accumulate_energy` to accumulate energy across timesteps rather than overwrite
+2. ✅ **EnergyLoss normalization:** Add proper normalization by total timesteps when reduction="mean"
+3. ✅ **Documentation:** Document that EnergyLoss computes total energy across all timesteps (including invalid ones) vs. CrossEntropyLoss which only considers valid timesteps
+4. ✅ **Testing:** Add unit tests to verify:
+   - CrossEntropyLoss normalization with masked timesteps
+   - EnergyLoss accumulation across timesteps
+   - Weighted loss combination
+
+---
+
+## Implementation Completed (2025-11-21)
+
+### Changes Made
+
+#### 1. EnergyLoss Accumulation (dynvision/losses/energy_loss.py:52-80)
+**Before:** Line 62 overwrote energy with `self.batch_energy[module_name] = batch_energy`
+
+**After:** Lines 71-77 accumulate energy across timesteps:
+```python
+if module_name not in self.batch_energy:
+    self.batch_energy[module_name] = batch_energy
+    self._hook_call_count[module_name] = 1
+else:
+    self.batch_energy[module_name] = self.batch_energy[module_name] + batch_energy
+    self._hook_call_count[module_name] += 1
+```
+
+**Rationale:** Hooks fire once per monitored layer per timestep during `TemporalBase.forward()`. By accumulating rather than overwriting, we capture the total energy across all timesteps.
+
+#### 2. EnergyLoss Timestep Normalization (dynvision/losses/energy_loss.py:94-153)
+**Added:** Lines 112-120 infer `n_timesteps` from hook call counts:
+```python
+n_timesteps = 1
+if self._hook_call_count:
+    call_counts = list(self._hook_call_count.values())
+    n_timesteps = max(call_counts) if call_counts else 1
+```
+
+**Modified:** Lines 140-143 normalize by both modules and timesteps:
+```python
+loss = total_energy / (module_count * n_timesteps)
+```
+
+**Rationale:** The accumulated energy represents the sum over all timesteps. Dividing by `n_timesteps` gives the average energy per timestep, which when combined with the existing normalization by `n_units` (spatial dimensions) and `module_count`, yields the **average activity per unit per timestep per module**.
+
+#### 3. Enhanced Documentation (dynvision/losses/energy_loss.py:8-20)
+Added comprehensive docstring explaining:
+- Energy accumulation across all timesteps
+- Normalization behavior when `reduction='mean'`
+- Contrast with CrossEntropyLoss (all timesteps vs. valid timesteps only)
+- Hook firing pattern and timing
+
+#### 4. Unit Tests (tests/losses/test_loss_normalization.py)
+Created comprehensive test suite with 6 tests:
+
+**TestCrossEntropyLossNormalization:**
+- `test_normalization_with_valid_timesteps_only`: Verifies normalization by valid timesteps only
+- `test_all_timesteps_masked`: Verifies behavior when all labels are masked
+
+**TestEnergyLossAccumulation:**
+- `test_accumulation_across_timesteps`: Verifies energy accumulates correctly over multiple timesteps
+- `test_hook_call_count_tracking`: Verifies hook call counts track timesteps correctly
+- `test_multiple_modules_averaging`: Verifies averaging across multiple monitored modules
+
+**TestLossCombination:**
+- `test_weighted_loss_combination`: Verifies weighted sum of multiple losses
+
+**All tests pass:** ✅ 6/6 passed
+
+### Verification of Normalization
+
+**For p=1 (L1 norm, default):**
+1. Hook computes: `||activation||_1` per timestep → shape `[batch_size]`
+2. Accumulated over timesteps: `Σ_t ||activation_t||_1`
+3. Normalized by `n_units`: `Σ_t ||activation_t||_1 / n_units` = `Σ_t (mean_units |a_t|)`
+4. Normalized by `n_timesteps`: `mean_t (mean_units |a_t|)` = **average absolute activity per unit per timestep**
+5. Averaged over modules: **average absolute activity per unit per timestep per module**
+6. Averaged over batch: **final scalar loss**
+
+**Result:** EnergyLoss correctly measures average absolute activity per unit, per timestep, per module, per sample.
+
+### Summary
+The loss calculation pipeline now correctly handles:
+- ✅ **CrossEntropyLoss:** Normalizes by valid (non-masked) timesteps only
+- ✅ **EnergyLoss:** Accumulates and normalizes across all timesteps
+- ✅ **Loss Combination:** Weights and sums losses correctly
+- ✅ **Documentation:** Clear explanation of normalization semantics
+- ✅ **Testing:** Comprehensive unit tests verify all behaviors
+
 _This document will be updated as implementation proceeds._
