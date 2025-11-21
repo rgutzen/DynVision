@@ -366,22 +366,34 @@ class MonitoringMixin(Monitoring, LightningModule):
         self._log_memory_usage()
 
     def on_train_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Check for critical data issues early in training."""
+        """Check for critical data issues early in training.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
         try:
-            super().on_train_batch_start(batch, batch_idx)
+            super().on_train_batch_start(batch, batch_idx, dataloader_idx)
         except AttributeError:
             pass
         if batch_idx < 2:  # Only check first few batches
             self._validate_batch_data(batch, batch_idx, "train")
 
     def on_validation_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Check for critical data issues in validation."""
+        """Check for critical data issues in validation.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
         try:
-            super().on_validation_batch_start(batch, batch_idx)
+            super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
         except AttributeError:
             pass
         if batch_idx == 0:  # Only check first validation batch
@@ -389,11 +401,18 @@ class MonitoringMixin(Monitoring, LightningModule):
             self._log_memory_usage()
 
     def on_train_batch_end(
-        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Monitor training progress and check for issues."""
+        """Monitor training progress and check for issues.
+
+        Args:
+            outputs: Outputs from training_step
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
         try:
-            super().on_train_batch_end(outputs, batch, batch_idx)
+            super().on_train_batch_end(outputs, batch, batch_idx, dataloader_idx)
         except AttributeError:
             pass
         loss = outputs if isinstance(outputs, torch.Tensor) else outputs.get("loss")
@@ -402,10 +421,15 @@ class MonitoringMixin(Monitoring, LightningModule):
         if batch_idx % self.log_every_n_steps == 0:
             self.log_param_stats()
 
-    def on_before_optimizer_step(self, optimizer: Any) -> None:
-        """Check gradients before optimizer step."""
+    def on_before_optimizer_step(self, optimizer: Any, optimizer_idx: int = 0) -> None:
+        """Check gradients before optimizer step.
+
+        Args:
+            optimizer: The optimizer being stepped
+            optimizer_idx: The optimizer index (for multiple optimizers)
+        """
         try:
-            super().on_before_optimizer_step(optimizer)
+            super().on_before_optimizer_step(optimizer, optimizer_idx)
         except AttributeError:
             pass
         if self.log_level.upper() == "DEBUG":

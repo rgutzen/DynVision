@@ -246,6 +246,18 @@ class CallbackManager:
 
         # Extract monitor metric from config for flexible filename formatting
         monitor_metric = checkpoint_kwargs.get("monitor") or "val_loss"
+
+        # If monitoring val metric but validation won't run initially, use train metric
+        # to avoid warnings about missing metrics
+        check_val_freq = self.config.trainer.check_val_every_n_epoch
+        if "val_" in monitor_metric and check_val_freq > 1:
+            # Use train metric for early epochs, will switch to val once available
+            initial_monitor = monitor_metric.replace("val_", "train_")
+            logger.info(
+                f"Validation runs every {check_val_freq} epochs. "
+                f"Using '{initial_monitor}' for checkpointing until validation metrics are available."
+            )
+            monitor_metric = initial_monitor
         metric_precision = 2
         metric_format = f":.{metric_precision}f"
         metric_suffix = "{epoch:02d}-{" + monitor_metric + metric_format + "}"

@@ -594,34 +594,44 @@ class LightningBase(pl.LightningModule):
         super().on_test_start() if hasattr(super(), "on_test_start") else None
 
     def on_train_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Called before each training batch."""
-        (
-            super().on_train_batch_start(batch, batch_idx)
-            if hasattr(super(), "on_train_batch_start")
-            else None
-        )
+        """Called before each training batch.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
+        if hasattr(super(), "on_train_batch_start"):
+            super().on_train_batch_start(batch, batch_idx, dataloader_idx)
 
     def on_validation_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Called before each validation batch."""
-        (
-            super().on_validation_batch_start(batch, batch_idx)
-            if hasattr(super(), "on_validation_batch_start")
-            else None
-        )
+        """Called before each validation batch.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
+        if hasattr(super(), "on_validation_batch_start"):
+            super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
 
     def on_train_batch_end(
-        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Called after each training batch."""
-        (
-            super().on_train_batch_end(outputs, batch, batch_idx)
-            if hasattr(super(), "on_train_batch_end")
-            else None
-        )
+        """Called after each training batch.
+
+        Args:
+            outputs: Outputs from training_step
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
+        if hasattr(super(), "on_train_batch_end"):
+            super().on_train_batch_end(outputs, batch, batch_idx, dataloader_idx)
 
     def on_before_optimizer_step(self, optimizer: Any, optimizer_idx: int = 0) -> None:
         """Called before optimizer step.
