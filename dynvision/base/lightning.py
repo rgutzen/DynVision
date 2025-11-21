@@ -5,9 +5,9 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytorch_lightning as pl
-import pl_bolts
 import torch
 import wandb
+from dynvision.losses import lr_scheduler
 from dynvision.utils import alias_kwargs
 from dynvision.utils.performance_measures import (
     calculate_accuracy,
@@ -318,7 +318,16 @@ class LightningBase(pl.LightningModule):
     ) -> float:
         return calculate_accuracy(label_index, guess_index)
 
-    def backward(self, loss: torch.Tensor) -> None:
+    def backward(self, loss: torch.Tensor, optimizer: Any = None, optimizer_idx: int = 0, *args: Any, **kwargs: Any) -> None:
+        """Perform backward pass with optional retain_graph.
+
+        Args:
+            loss: The loss tensor to backpropagate
+            optimizer: The optimizer (unused, for Lightning compatibility)
+            optimizer_idx: The optimizer index (unused, for Lightning compatibility)
+            *args: Additional positional arguments (unused, for Lightning compatibility)
+            **kwargs: Additional keyword arguments (unused, for Lightning compatibility)
+        """
         if self.retain_graph:
             loss.backward(retain_graph=True)
         else:
@@ -457,8 +466,8 @@ class LightningBase(pl.LightningModule):
         Returns:
             Dict[str, Any]: Scheduler configuration
         """
-        if hasattr(pl_bolts.optimizers.lr_scheduler, self.scheduler):
-            scheduler = getattr(pl_bolts.optimizers.lr_scheduler, self.scheduler)(
+        if hasattr(lr_scheduler, self.scheduler):
+            scheduler = getattr(lr_scheduler, self.scheduler)(
                 optimizer, **self.scheduler_kwargs
             )
             return {
