@@ -5,10 +5,9 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytorch_lightning as pl
+import pl_bolts
 import torch
 import wandb
-
-from dynvision import losses
 from dynvision.utils import alias_kwargs
 from dynvision.utils.performance_measures import (
     calculate_accuracy,
@@ -25,7 +24,6 @@ class LightningBase(pl.LightningModule):
     @alias_kwargs(
         lr="learning_rate",
         solver="dynamics_solver",
-        lossrt="loss_reaction_time",
         energyloss="energy_loss_weight",
     )
     def __init__(
@@ -37,7 +35,6 @@ class LightningBase(pl.LightningModule):
             ("CrossEntropyLoss", {"weight": 1.0})
         ],
         energy_loss_weight: Optional[float] = None,
-        loss_reaction_time: float = 4.0,  # ms
         non_label_index: int = -1,
         # Optimizer configuration
         optimizer: str = "Adam",
@@ -70,7 +67,6 @@ class LightningBase(pl.LightningModule):
         self.optimizer_configs = optimizer_configs
         self.learning_rate = float(learning_rate)
         self.lr_parameter_groups = lr_parameter_groups
-        self.loss_reaction_time = float(loss_reaction_time)
 
         # Scheduler attributes
         self.scheduler = scheduler
@@ -262,58 +258,6 @@ class LightningBase(pl.LightningModule):
         )
         return metrics
 
-    # Loss and accuracy
-    ###################
-    def _init_loss(self) -> None:
-        self.criterion = []
-
-        if hasattr(self, "loss_reaction_time") and self.loss_reaction_time:
-            self.ignore_initial_n_labels = self.n_residual_timesteps + int(
-                self.loss_reaction_time / self.dt
-            )
-            print("ignore initial n labels: ", self.ignore_initial_n_labels)  # debug
-        else:
-            self.ignore_initial_n_labels = 0
-
-        for criterion_name, criterion_config in self.criterion_params:
-
-            # Set criterion weight
-            if "weight" in criterion_config.keys():
-                criterion_weight = criterion_config.pop("weight")
-            else:
-                criterion_weight = 1
-
-            # Add ignore_index for cross entropy loss if not specified
-            if (
-                criterion_name.lower() in ["crossentropyloss", "cross_entropy_loss"]
-                and "ignore_index" not in criterion_config
-            ):
-                criterion_config["ignore_index"] = self.non_label_index
-                logger.info(
-                    f"Setting ignore_index={self.non_label_index} for {criterion_name}"
-                )
-
-            logger.info(
-                f"Criterion: {criterion_name} with weight: {criterion_weight} and config: {criterion_config}"
-            )
-
-            # Init loss
-            if hasattr(losses, criterion_name):
-                criterion_fn = getattr(losses, criterion_name)(**criterion_config)
-                self.criterion += [(criterion_fn, criterion_weight)]
-
-            else:
-                raise ValueError(f"Invalid loss function: {criterion_name}")
-
-            # Init hooks if required
-            try:
-                criterion_fn.register_hooks(self)
-                logger.debug(f"registered hook for {criterion_fn}")
-            except Exception as e:
-                pass
-
-        return None
-
     def compute_loss(
         self,
         outputs: torch.Tensor,
@@ -321,11 +265,6 @@ class LightningBase(pl.LightningModule):
     ) -> torch.Tensor:
 
         batch_size, *_, n_classes = outputs.shape
-
-        # Apply loss reaction time
-        if hasattr(self, "ignore_initial_n_labels") and self.ignore_initial_n_labels:
-            label_index = label_index.clone()
-            label_index[:, : self.ignore_initial_n_labels] = self.non_label_index
 
         # Flatten time dimension
         outputs = outputs.view(-1, n_classes)
@@ -518,17 +457,24 @@ class LightningBase(pl.LightningModule):
         Returns:
             Dict[str, Any]: Scheduler configuration
         """
-        if not hasattr(torch.optim.lr_scheduler, self.scheduler):
+        if hasattr(pl_bolts.optimizers.lr_scheduler, self.scheduler):
+            scheduler = getattr(pl_bolts.optimizers.lr_scheduler, self.scheduler)(
+                optimizer, **self.scheduler_kwargs
+            )
+            return {
+                "scheduler": scheduler,
+                **self.scheduler_configs,
+            }
+        elif hasattr(torch.optim.lr_scheduler, self.scheduler):
+            scheduler = getattr(torch.optim.lr_scheduler, self.scheduler)(
+                optimizer, **self.scheduler_kwargs
+            )
+            return {
+                "scheduler": scheduler,
+                **self.scheduler_configs,
+            }
+        else:
             raise ValueError(f"Unknown scheduler: {self.scheduler}")
-
-        scheduler = getattr(torch.optim.lr_scheduler, self.scheduler)(
-            optimizer, **self.scheduler_kwargs
-        )
-
-        return {
-            "scheduler": scheduler,
-            **self.scheduler_configs,
-        }
 
     def update_criterion_params(
         self, criterion_name: str, config: Optional[Dict[str, Any]] = None
@@ -606,13 +552,6 @@ class LightningBase(pl.LightningModule):
 
     # Hooks
     #######
-    def setup(self, stage: Optional[str] = None) -> None:
-        """Lightning setup hook."""
-        super().setup(stage) if hasattr(super(), "setup") else None
-
-        # Initialize loss functions
-        self._init_loss()
-
     def on_fit_start(self) -> None:
         """Called at the start of fit."""
         super().on_fit_start() if hasattr(super(), "on_fit_start") else None
