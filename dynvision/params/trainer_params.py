@@ -642,11 +642,19 @@ class TrainerParams(BaseParams):
                 }
             )
         else:
-            # For single device training, still set accelerator if specified
-            if self.accelerator != "auto":
+            # For single device training
+            if self.accelerator == "auto":
+                # Auto-detect: use GPU if available, otherwise let Lightning default to CPU
+                if self._detect_available_gpu_count() > 0:
+                    trainer_kwargs["accelerator"] = "gpu"
+                    # Use configured devices or default to 1 for single-device training
+                    trainer_kwargs["devices"] = self.devices if self.devices is not None else 1
+                # If no GPU available, let Lightning default to CPU (don't set accelerator)
+            else:
+                # User explicitly specified accelerator
                 trainer_kwargs["accelerator"] = self.accelerator
-            if self.devices is not None:
-                trainer_kwargs["devices"] = self.devices
+                if self.devices is not None:
+                    trainer_kwargs["devices"] = self.devices
 
         # Filter out None values to allow Trainer class defaults
         trainer_kwargs = {k: v for k, v in trainer_kwargs.items() if v is not None}
