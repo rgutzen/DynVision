@@ -157,13 +157,35 @@ Implementation detail: expose a reusable parser helper so other modules (e.g., m
   - DataParams automatic derivation
   - Integration workflows for all backends and contexts
 
-**Remaining tasks:**
-1. Update user documentation with YAML editing guide
-2. Consider adding CLI helper to list available presets
+### Phase 4 – Documentation Deliverables ✅ COMPLETED (2025-11-20)
+**Documentation completed:**
+1. ✅ **Developer Guide** (`docs/development/guides/transform-system.md`):
+   - Complete architecture overview with all components
+   - Data flow diagrams for PyTorch and FFCV pipelines
+   - Design decisions and rationale
+   - Implementation details for adding new datasets and presets
+   - Comprehensive logging and debugging guide
+   - Testing documentation with test organization
+   - Migration guide from legacy system
+   - Known issues and limitations
 
-### Phase 4 – Documentation Deliverables
-1. After implementation, write a user-facing reference page under `docs/reference/` explaining how to select and customize transform presets.
-2. Add a developer-focused guide under `docs/development/guides/` covering the parser, registry mechanics, and logging hooks (align with the documentation style guide before drafting).
+2. ✅ **User Reference** (`docs/reference/transform-configuration.md`):
+   - Quick start with common use cases
+   - Complete parameter reference table
+   - Available presets for all backends and contexts
+   - Transform string format syntax guide
+   - Step-by-step custom preset creation
+   - Transform pipeline explanations
+   - Troubleshooting section with common errors
+   - Best practices and configuration examples
+   - Cross-references to related documentation
+
+**Documentation follows Diátaxis framework:**
+- Developer guide: Explanation-oriented (understanding architecture)
+- User reference: Information-oriented (technical descriptions)
+
+**Remaining optional tasks:**
+1. Consider adding CLI helper to list available presets (enhancement, not required)
 
 ## 6. Open Questions
 1. Should the YAML schema be validated via Pydantic (early) or is `DataParams`-level validation sufficient?
