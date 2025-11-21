@@ -581,7 +581,6 @@ class TemporalBase(nn.Module):
                 and len(self.data_presentation_pattern) > 1
             ):
                 presentation_pattern = self._get_presentation_pattern()
-                print(presentation_pattern)
                 reaction_mask = self._compute_reaction_mask(presentation_pattern)
 
                 if presentation_pattern.device != inputs.device:
@@ -650,7 +649,11 @@ class TemporalBase(nn.Module):
         return pattern[indices]
 
     def _compute_reaction_mask(self, pattern: torch.Tensor) -> torch.Tensor:
-        """Return mask for timesteps ignored due to loss reaction time."""
+        """Return mask for timesteps ignored due to loss reaction time.
+
+        This method operates entirely on tensors to avoid GPU-CPU synchronization
+        which would cause severe performance degradation during training.
+        """
         if self.loss_reaction_time <= 0:
             return torch.zeros_like(pattern, dtype=torch.bool)
 
@@ -661,27 +664,28 @@ class TemporalBase(nn.Module):
         reaction_steps = max(1, math.ceil(self.loss_reaction_time / self.dt))
         mask = torch.zeros_like(pattern, dtype=torch.bool)
 
-        chunk_start: Optional[int] = None
-        chunk_length = 0
-        pattern_list = pattern.detach().cpu().tolist()
+        # Vectorized chunk detection: find rising edges (start of chunks)
+        # Pad with False at start to detect first chunk
+        padded = torch.cat([torch.zeros(1, dtype=torch.bool, device=pattern.device), pattern])
+        chunk_starts = torch.where(padded[1:] & ~padded[:-1])[0]
 
-        for idx, is_active in enumerate(pattern_list):
-            if is_active:
-                if chunk_start is None:
-                    chunk_start = idx
-                    chunk_length = 0
-                chunk_length += 1
-            elif chunk_start is not None:
-                self._apply_reaction_window(
-                    mask, chunk_start, chunk_length, reaction_steps
-                )
-                chunk_start = None
-                chunk_length = 0
+        # Find falling edges (end of chunks) or use end of sequence
+        padded_end = torch.cat([pattern, torch.zeros(1, dtype=torch.bool, device=pattern.device)])
+        chunk_ends = torch.where(~padded_end[1:] & padded_end[:-1])[0] + 1
 
-        if chunk_start is not None:
-            self._apply_reaction_window(
-                mask, chunk_start, chunk_length, reaction_steps
-            )
+        # If pattern ends with True, last chunk extends to end
+        if pattern[-1]:
+            chunk_ends = torch.cat([chunk_ends, torch.tensor([len(pattern)], device=pattern.device)])
+
+        # Apply reaction window to each chunk
+        for start_idx, end_idx in zip(chunk_starts.tolist(), chunk_ends.tolist()):
+            chunk_length = end_idx - start_idx
+            window_end = min(end_idx, start_idx + reaction_steps)
+            mask[start_idx:window_end] = True
+
+            # Warn if reaction window exceeds chunk duration
+            if reaction_steps > chunk_length:
+                self._warn_reaction_window_exceeds_chunk(chunk_length)
 
         return mask
 
