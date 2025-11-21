@@ -1,11 +1,14 @@
 """Core neural network functionality for biologically-inspired models."""
 
-import torch
-import torch.nn as nn
-from typing import Any, Dict, List, Optional, Tuple, Union
 from copy import copy
 import logging
+import math
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import torch
+import torch.nn as nn
+
+from dynvision import losses
 from dynvision.data.operations import _adjust_data_dimensions, _adjust_label_dimensions
 from dynvision.utils import alias_kwargs, str_to_bool
 from .storage import DataBuffer
@@ -36,6 +39,8 @@ class TemporalBase(nn.Module):
         tfb="t_feedback",
         tsk="t_skip",
         pattern="data_presentation_pattern",
+        lossrt="loss_reaction_time",
+        shufflepattern="shuffle_presentation_pattern",
         rctype="recurrence_type",
         rctarget="recurrence_target",
         solver="dynamics_solver",
@@ -58,9 +63,11 @@ class TemporalBase(nn.Module):
         skip: bool = False,
         feedback: bool = False,
         data_presentation_pattern: Union[List[int], str] = [1],
+        shuffle_presentation_pattern: bool = False,
         non_label_index: int = -1,
         non_input_value: float = 0.0,
         idle_timesteps: int = 0,
+        loss_reaction_time: float = 0.0,
         feedforward_only: bool = False,
         # Architecture configuration
         classifier_name: str = "classifier",
@@ -95,6 +102,8 @@ class TemporalBase(nn.Module):
         self.recurrence_type = str(recurrence_type)
         self.recurrence_target = str(recurrence_target)
         self.data_presentation_pattern = data_presentation_pattern
+        self.shuffle_presentation_pattern = str_to_bool(shuffle_presentation_pattern)
+        self.loss_reaction_time = float(loss_reaction_time)
         self.non_label_index = int(non_label_index)
         self.non_input_value = float(non_input_value)
         self.idle_timesteps = int(idle_timesteps)
@@ -571,49 +580,149 @@ class TemporalBase(nn.Module):
                 hasattr(self, "data_presentation_pattern")
                 and len(self.data_presentation_pattern) > 1
             ):
-                # Cache the processed presentation pattern
-                if not hasattr(self, "_cached_presentation_pattern"):
-                    self._cache_presentation_pattern()
+                presentation_pattern = self._get_presentation_pattern()
+                print(presentation_pattern)
+                reaction_mask = self._compute_reaction_mask(presentation_pattern)
 
-                presentation_pattern = self._cached_presentation_pattern
+                if presentation_pattern.device != inputs.device:
+                    presentation_pattern = presentation_pattern.to(inputs.device)
+                if reaction_mask.device != label_indices.device:
+                    reaction_mask = reaction_mask.to(label_indices.device)
+
                 zero_mask = ~presentation_pattern
+                labels_cloned = False
 
                 # Only modify if there are timesteps to zero out
                 if zero_mask.any():
+                    # Expanded tensors are views; clone before in-place mutation
+                    inputs = inputs.clone()
+                    label_indices = label_indices.clone()
+                    labels_cloned = True
                     inputs[:, zero_mask] = 0
                     label_indices[:, zero_mask] = self.non_label_index
+
+                if reaction_mask.any():
+                    if not labels_cloned:
+                        label_indices = label_indices.clone()
+                        labels_cloned = True
+                    label_indices[:, reaction_mask] = self.non_label_index
 
         return (inputs, label_indices, *extra)
 
     def _cache_presentation_pattern(self) -> None:
-        """Cache the processed presentation pattern to avoid recomputation."""
+        """Cache the base presentation pattern for reuse and shuffling."""
         if isinstance(self.data_presentation_pattern, (str, list)):
-            pattern = [int(i) for i in self.data_presentation_pattern]
+            raw_pattern = [int(i) for i in self.data_presentation_pattern]
         elif isinstance(self.data_presentation_pattern, int):
             logger.warning(
                 "presentation pattern given as int, this obscures leading 0s!"
             )
-            pattern = [int(i) for i in str(self.data_presentation_pattern)]
+            raw_pattern = [int(i) for i in str(self.data_presentation_pattern)]
         else:
             raise ValueError(
-                f"type of pattern is not str or list:", self.data_presentation_pattern
+                "type of pattern is not str or list:", self.data_presentation_pattern
             )
 
-        pattern = torch.tensor(pattern, dtype=torch.bool)
+        if not raw_pattern:
+            raise ValueError("data_presentation_pattern must not be empty")
 
-        # Resize pattern to match n_timesteps if needed
-        if len(pattern) != self.n_timesteps:
-            if len(pattern) == 1:
-                # Special case: single value repeated
-                pattern = pattern.expand(self.n_timesteps)
-            else:
-                # Efficient nearest neighbor resampling
-                old_len = len(pattern)
-                indices = torch.arange(self.n_timesteps) * old_len // self.n_timesteps
-                indices = torch.clamp(indices, 0, old_len - 1)
-                pattern = pattern[indices]
+        base_pattern = torch.tensor(raw_pattern, dtype=torch.bool)
+        self._base_presentation_pattern = base_pattern
+        self._cached_presentation_pattern = self._expand_pattern(base_pattern)
 
-        self._cached_presentation_pattern = pattern
+    def _expand_pattern(self, pattern: torch.Tensor) -> torch.Tensor:
+        """Expand a base pattern tensor to match self.n_timesteps."""
+        if pattern.numel() == 1:
+            return pattern.expand(self.n_timesteps)
+
+        if self.n_timesteps <= 0:
+            raise ValueError(
+                "n_timesteps must be positive to expand presentation pattern"
+            )
+
+        device = pattern.device
+        indices = (
+            torch.arange(self.n_timesteps, device=device)
+            * pattern.numel()
+            // self.n_timesteps
+        )
+        indices = torch.clamp(indices, 0, pattern.numel() - 1)
+        return pattern[indices]
+
+    def _compute_reaction_mask(self, pattern: torch.Tensor) -> torch.Tensor:
+        """Return mask for timesteps ignored due to loss reaction time."""
+        if self.loss_reaction_time <= 0:
+            return torch.zeros_like(pattern, dtype=torch.bool)
+
+        pattern = pattern.to(dtype=torch.bool)
+        if pattern.numel() == 0 or not pattern.any():
+            return torch.zeros_like(pattern, dtype=torch.bool)
+
+        reaction_steps = max(1, math.ceil(self.loss_reaction_time / self.dt))
+        mask = torch.zeros_like(pattern, dtype=torch.bool)
+
+        chunk_start: Optional[int] = None
+        chunk_length = 0
+        pattern_list = pattern.detach().cpu().tolist()
+
+        for idx, is_active in enumerate(pattern_list):
+            if is_active:
+                if chunk_start is None:
+                    chunk_start = idx
+                    chunk_length = 0
+                chunk_length += 1
+            elif chunk_start is not None:
+                self._apply_reaction_window(
+                    mask, chunk_start, chunk_length, reaction_steps
+                )
+                chunk_start = None
+                chunk_length = 0
+
+        if chunk_start is not None:
+            self._apply_reaction_window(
+                mask, chunk_start, chunk_length, reaction_steps
+            )
+
+        return mask
+
+    def _apply_reaction_window(
+        self,
+        mask: torch.Tensor,
+        chunk_start: int,
+        chunk_length: int,
+        reaction_steps: int,
+    ) -> None:
+        chunk_end = chunk_start + chunk_length
+        window_end = min(chunk_end, chunk_start + reaction_steps)
+        mask[chunk_start:window_end] = True
+
+        if reaction_steps > chunk_length:
+            self._warn_reaction_window_exceeds_chunk(chunk_length)
+
+    def _warn_reaction_window_exceeds_chunk(self, chunk_length: int) -> None:
+        chunk_duration = chunk_length * self.dt
+        logger.warning(
+            "loss_reaction_time (%sms) exceeds presentation chunk duration (%sms)."
+            " Entire chunk will be ignored for loss computations.",
+            self.loss_reaction_time,
+            chunk_duration,
+        )
+
+    def _get_presentation_pattern(self) -> torch.Tensor:
+        """Return the presentation pattern, shuffling when requested."""
+        if not hasattr(self, "_cached_presentation_pattern"):
+            self._cache_presentation_pattern()
+
+        if not self.shuffle_presentation_pattern:
+            return self._cached_presentation_pattern
+
+        base_pattern = getattr(self, "_base_presentation_pattern", None)
+        if base_pattern is None or base_pattern.numel() <= 1:
+            return self._cached_presentation_pattern
+
+        perm = torch.randperm(base_pattern.size(0), device=base_pattern.device)
+        shuffled_base = base_pattern[perm]
+        return self._expand_pattern(shuffled_base)
 
     def _extend_residual_timesteps(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -658,6 +767,59 @@ class TemporalBase(nn.Module):
             batch = (inputs, label_indices, *extra)
 
         return batch
+
+    # Loss management
+    ##################
+    def _init_loss(self) -> None:
+        if getattr(self, "_loss_initialized", False):
+            return
+
+        if not hasattr(self, "criterion_params") or self.criterion_params is None:
+            self.criterion_params = [("CrossEntropyLoss", {"weight": 1.0})]
+
+        self.criterion = []
+
+        for criterion_name, criterion_config in self.criterion_params:
+
+            if "weight" in criterion_config.keys():
+                criterion_weight = criterion_config.pop("weight")
+            else:
+                criterion_weight = 1
+
+            if (
+                criterion_name.lower() in ["crossentropyloss", "cross_entropy_loss"]
+                and "ignore_index" not in criterion_config
+            ):
+                criterion_config["ignore_index"] = self.non_label_index
+                logger.info(
+                    f"Setting ignore_index={self.non_label_index} for {criterion_name}"
+                )
+
+            logger.info(
+                f"Criterion: {criterion_name} with weight: {criterion_weight} and config: {criterion_config}"
+            )
+
+            if hasattr(losses, criterion_name):
+                criterion_fn = getattr(losses, criterion_name)(**criterion_config)
+                self.criterion += [(criterion_fn, criterion_weight)]
+            else:
+                raise ValueError(f"Invalid loss function: {criterion_name}")
+
+            try:
+                criterion_fn.register_hooks(self)
+                logger.debug(f"registered hook for {criterion_fn}")
+            except Exception:
+                pass
+
+        self._loss_initialized = True
+
+    def setup(self, stage: Optional[str] = None) -> None:
+        if not getattr(self, "_loss_initialized", False):
+            self._init_loss()
+
+        super_setup = getattr(super(), "setup", None)
+        if callable(super_setup):
+            super_setup(stage)
 
     # Parameter management
     ######################
