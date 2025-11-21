@@ -68,8 +68,11 @@ class DataParams(BaseParams):
         "Processing": (
             SummaryItem("data_timesteps", always=True),
             SummaryItem("resolution"),
-            SummaryItem("data_transform"),
-            SummaryItem("target_transform"),
+            SummaryItem("transform_backend", always=True),
+            SummaryItem("transform_context", always=True),
+            SummaryItem("transform_preset"),
+            SummaryItem("target_data_name"),
+            SummaryItem("target_data_group"),
             SummaryItem("normalize"),
             SummaryItem("pixel_range", always=True),
         ),
@@ -110,12 +113,27 @@ class DataParams(BaseParams):
     train_ratio: float = Field(
         ..., ge=0, le=1, description="Ratio of training data to total data"
     )
-    data_transform: Optional[Union[str, List[str]]] = Field(
+    # Transform backend/context/preset
+    transform_backend: Optional[Literal["torch", "ffcv"]] = Field(
         default=None,
-        description="Transform specification (e.g., 'ffcv_train', 'ffcv_test')",
+        description="Transform backend - derived from use_ffcv if not specified",
     )
-    target_transform: Optional[str] = Field(
-        default=None, description="Target transform specification"
+    transform_context: Optional[Literal["train", "test"]] = Field(
+        default=None,
+        description="Transform context - derived from train if not specified",
+    )
+    transform_preset: Optional[str] = Field(
+        default=None,
+        description="Transform preset name (e.g., 'imagenette', 'mnist', 'base') - derived from data_name if not specified",
+    )
+    # Target transform parameters
+    target_data_name: Optional[str] = Field(
+        default=None,
+        description="Dataset name for target transforms - derived from data_name if not specified",
+    )
+    target_data_group: Optional[str] = Field(
+        default=None,
+        description="Data group for target transforms - derived from data_group/train if not specified",
     )
     resolution: Optional[int] = Field(
         default=None, ge=1, description="Image resolution"
@@ -316,26 +334,33 @@ class DataParams(BaseParams):
     @field_validator("precision")
     @classmethod
     def validate_precision(cls, v: Optional[str]) -> Optional[str]:
-        """Validate precision matches PyTorch Lightning format."""
+        """Validate precision matches PyTorch Lightning format.
+
+        Note: This validator must match PyTorch Lightning's accepted precision values.
+        For Lightning 2.0+, the valid values are:
+        - String: '64', '32', '16', 'bf16', '16-mixed', 'bf16-mixed'
+        - Integer: 64, 32, 16
+        """
         if v is None:
             return None
 
         # Convert to string for consistent handling
         v_str = str(v).lower()
 
-        # Valid PyTorch Lightning precision values
+        # Valid PyTorch Lightning 2.0+ precision values
         valid_precisions = {
             "16",
-            "16-mixed",
-            "bf16",
-            "bf16-mixed",
-            "bfloat16",
             "32",
             "64",
+            "bf16",
+            "16-mixed",
+            "bf16-mixed",
         }
 
         if v_str not in valid_precisions:
-            raise ValueError(f"precision must be one of {valid_precisions}, got {v}")
+            raise ValueError(
+                f"Precision '{v}' is invalid. Allowed precision values: {valid_precisions}"
+            )
 
         return v_str
 
@@ -399,6 +424,15 @@ class DataParams(BaseParams):
 
     @model_validator(mode="after")
     def validate_transforms(self) -> "DataParams":
+        """Derive transform parameters from other configuration fields.
+
+        Derives:
+        - transform_backend from use_ffcv
+        - transform_context from train
+        - transform_preset from data_name
+        - target_data_name from data_name
+        - target_data_group based on train mode (all for training, specific group for testing)
+        """
         def _derive(field: str, value: Any) -> None:
             self.update_field(
                 field,
@@ -408,29 +442,31 @@ class DataParams(BaseParams):
             )
             logger.debug("Derived %s=%s", field, value)
 
-        if self.data_transform is None:
-            if self.use_ffcv:
-                if self.train:
-                    _derive("data_transform", f"ffcv_train_{self.data_name}")
-                else:
-                    _derive("data_transform", f"ffcv_test_{self.data_name}")
-            else:
-                if self.train:
-                    _derive("data_transform", f"train_{self.data_name}")
-                else:
-                    _derive("data_transform", f"test_{self.data_name}")
-        else:
-            if self.use_ffcv:
-                if not "ffcv" in self.data_transform:
-                    _derive("data_transform", f"ffcv_{self.data_transform}")
-            else:
-                if "ffcv" in self.data_transform:
-                    _derive("data_transform", self.data_transform.replace("ffcv_", ""))
-        if self.target_transform is None:
-            if self.train:
-                _derive("target_transform", f"{self.data_name}_all")
-            else:
-                _derive("target_transform", f"{self.data_name}_{self.data_group}")
+        # Derive transform_backend if not set
+        if self.transform_backend is None:
+            backend = "ffcv" if self.use_ffcv else "torch"
+            _derive("transform_backend", backend)
+
+        # Derive transform_context if not set
+        if self.transform_context is None:
+            context = "train" if self.train else "test"
+            _derive("transform_context", context)
+
+        # Derive transform_preset if not set
+        if self.transform_preset is None:
+            # Use data_name as the default preset
+            _derive("transform_preset", self.data_name)
+
+        # Derive target_data_name if not set
+        if self.target_data_name is None:
+            _derive("target_data_name", self.data_name)
+
+        # Derive target_data_group if not set
+        if self.target_data_group is None:
+            # Use "all" for training, specific group for testing
+            target_group = "all" if self.train else self.data_group
+            _derive("target_data_group", target_group)
+
         return self
 
     @model_validator(mode="after")
@@ -508,8 +544,14 @@ class DataParams(BaseParams):
                 "resolution": self.resolution,
                 "normalize": self.normalize,
                 "pixel_range": self.pixel_range,
-                "data_transform": self.data_transform,
-                "target_transform": self.target_transform,
+                # Transform interface
+                "transform_backend": self.transform_backend,
+                "transform_context": self.transform_context,
+                "transform_preset": self.transform_preset,
+                # Target transform interface
+                "target_data_name": self.target_data_name,
+                "target_data_group": self.target_data_group,
+                # Other parameters
                 "drop_last": self.drop_last,
                 "dtype": self.dtype,
                 "batches_ahead": self.batches_ahead,

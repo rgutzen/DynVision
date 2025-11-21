@@ -4,6 +4,63 @@ data_presentation_pattern: [1]
 mounted_datasets:
     - imagenet
 
+# Transform presets for data augmentation
+# Structure: backend → context → preset_name → list of transform strings
+# Strings support two formats:
+#   - Bare module name: "RandomHorizontalFlip"
+#   - With arguments: "RandomBrightness(0.2)"
+# Backend-specific modules:
+#   - torch: Uses torchvision.transforms.v2 (https://pytorch.org/vision/main/transforms.html)
+#   - ffcv: Uses ffcv.transforms (https://docs.ffcv.io/api/transforms.html)
+transform_presets:
+  torch:
+    train:
+      base:
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "RandomHorizontalFlip()"
+        - "ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)"
+      mnist:
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "Grayscale(num_output_channels=1)"
+      imagenet:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "RandomHorizontalFlip()"
+        - "ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)"
+      imagenette:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "RandomHorizontalFlip()"
+        - "ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)"
+    test:
+      base: []
+      imagenet:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+      imagenette:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+  ffcv:
+    train:
+      base:
+        - "RandomHorizontalFlip()"
+        - "RandomBrightness(0.2)"
+        - "RandomContrast(0.2)"
+        - "RandomSaturation(0.2)"
+        - "RandomTranslate(padding=22, fill=(0, 0, 0))"
+      mnist:
+        - "RandomBrightness(0.2)"
+        - "RandomContrast(0.2)"
+        - "RandomSaturation(0.2)"
+    test:
+      base: []
+
 class_index_files:
     imagenet: imagenet_class_index.json
     imagenette: imagenet_class_index.json

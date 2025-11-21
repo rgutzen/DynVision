@@ -103,8 +103,14 @@ def get_ffcv_dataloader(
     batch_size: int = 1,
     data_timesteps: int = 0,
     num_workers: int = 4,
-    data_transform: Optional[Union[str, List[str]]] = None,
-    target_transform: Optional[str] = None,
+    # Transform interface
+    transform_backend: str = "ffcv",
+    transform_context: str = "train",
+    transform_preset: Optional[str] = None,
+    # Target transform interface
+    target_data_name: Optional[str] = None,
+    target_data_group: str = "all",
+    # Other parameters
     normalize: Optional[Tuple[List, List]] = None,  # (mean, std)
     order: OrderOption = OrderOption.RANDOM,
     os_cache: Optional[bool] = None,
@@ -134,10 +140,22 @@ def get_ffcv_dataloader(
             )
             distributed = False
 
-    target_transform = get_target_transform(target_transform) or []
+    # Get target transforms
+    if target_data_name:
+        target_transform = get_target_transform(
+            data_name=target_data_name,
+            data_group=target_data_group,
+        ) or []
+    else:
+        target_transform = []
 
+    # Get data transforms
     if train:
-        data_transform = get_data_transform(data_transform) or []
+        data_transform = get_data_transform(
+            backend=transform_backend,
+            context=transform_context,
+            dataset_or_preset=transform_preset,
+        ) or []
     else:
         encoding = "image"
         data_transform = []

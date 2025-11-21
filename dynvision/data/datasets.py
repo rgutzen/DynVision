@@ -226,8 +226,14 @@ class PathFolder(datasets.DatasetFolder):
 def get_dataset(
     data_path: Path,
     data_name: Optional[str] = None,
-    data_transform: Optional[Union[str, Callable]] = None,
-    target_transform: Optional[Union[str, Callable]] = None,
+    # Transform interface
+    transform_backend: str = "torch",
+    transform_context: str = "train",
+    transform_preset: Optional[str] = None,
+    # Target transform interface
+    target_data_name: Optional[str] = None,
+    target_data_group: str = "all",
+    # Other parameters
     dataset_class: Callable[..., Dataset] = PathFolder,
     normalize: Optional[Tuple[List[float], List[float]]] = None,
     dtype: Optional[torch.dtype] = None,
@@ -275,17 +281,20 @@ def get_dataset(
 
     # image transforms
     transform = []
+
+    # Get data transforms
     additional_transforms = get_data_transform(
-        transform=data_transform, data_name=data_name
+        backend=transform_backend,
+        context=transform_context,
+        dataset_or_preset=transform_preset,
     )
+
     if additional_transforms is not None:
         transform.extend(additional_transforms)
 
     # image -> tensor
     if pil_to_tensor:
         transform.append(tv.transforms.PILToTensor())
-    # else:
-    #     transform.append(tv.transforms.ToTensor())
 
     # dtype transform with pixel range control
     if dtype is not None:
@@ -306,8 +315,13 @@ def get_dataset(
         )
 
     logger.info(f"Transform sequence: {transform}")
+
     # target transforms
-    target_transform = get_target_transform(target_transform)
+    target_name = target_data_name or data_name or "unknown"
+    target_transform = get_target_transform(
+        data_name=target_name,
+        data_group=target_data_group,
+    )
 
     if isinstance(transform, list):
         transform = transforms.Compose(transform)

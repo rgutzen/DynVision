@@ -12,6 +12,7 @@ import logging
 import pytorch_lightning as pl
 from datetime import timedelta
 import torch
+import os
 from dynvision.params.base_params import BaseParams, DynVisionValidationError
 from dynvision.utils import (
     SummaryItem,
@@ -51,7 +52,7 @@ class TrainerParams(BaseParams):
         ..., ge=1, description="Number of batches to accumulate gradients"
     )
     precision: Union[int, str] = Field(
-        ..., description="Training precision (16, 32, 64, 'bf16', 'bf16-mixed', etc.)"
+        ..., description="Training precision (16, 32, 64, '16', '32', '64', 'bf16', '16-mixed', 'bf16-mixed') - Lightning 2.0+"
     )
     deterministic: Union[bool, str] = Field(
         ..., description="Enable deterministic training (True, False, 'warn')"
@@ -302,11 +303,19 @@ class TrainerParams(BaseParams):
 
     @field_validator("precision")
     def validate_precision(cls, v):
-        """Validate precision setting."""
+        """Validate precision setting.
+
+        Note: This validator must match PyTorch Lightning's accepted precision values.
+        For Lightning 2.0+, the valid values are:
+        - String: '64', '32', '16', 'bf16', '16-mixed', 'bf16-mixed'
+        - Integer: 64, 32, 16
+        """
         valid_precisions = [
+            # Integer precisions
             16,
             32,
             64,
+            # String precisions (Lightning 2.0+)
             "16",
             "32",
             "64",
@@ -316,7 +325,7 @@ class TrainerParams(BaseParams):
         ]
         if v not in valid_precisions:
             raise ValueError(
-                f"Invalid precision: {v}. Valid options: {valid_precisions}"
+                f"Precision '{v}' is invalid. Allowed precision values: {tuple(valid_precisions)}"
             )
         return v
 
@@ -453,6 +462,7 @@ class TrainerParams(BaseParams):
         if self.gradient_clip_val is not None and self.gradient_clip_val <= 0:
             raise ValueError("gradient_clip_val must be positive")
 
+        self._enforce_device_limits()
         return self
 
     def _validate_strategy_specific_config(self):
@@ -642,6 +652,72 @@ class TrainerParams(BaseParams):
         trainer_kwargs = {k: v for k, v in trainer_kwargs.items() if v is not None}
 
         return trainer_kwargs
+
+    @staticmethod
+    def _detect_available_gpu_count() -> int:
+        """Return the number of GPUs visible to the current process."""
+
+        if not torch.cuda.is_available():
+            return 0
+
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible:
+            tokens = [tok.strip() for tok in visible.split(",") if tok.strip()]
+            if tokens:
+                return len(tokens)
+
+        try:
+            return torch.cuda.device_count()
+        except Exception:  # pragma: no cover - defensive guard
+            return 0
+
+    def _enforce_device_limits(self) -> None:
+        """Clamp requested devices so Lightning never asks for more GPUs than available."""
+
+        if self.devices is None:
+            return
+
+        # Only enforce when we're aiming for GPU acceleration (explicitly or implicitly)
+        if str(self.accelerator).lower() not in {"gpu", "auto"}:
+            return
+
+        available = self._detect_available_gpu_count()
+        if available <= 0:
+            return
+
+        logger = logging.getLogger(__name__)
+
+        if isinstance(self.devices, int):
+            if self.devices > available:
+                logger.warning(
+                    "Requested %s GPUs but only %s visible; clamping to hardware limits",
+                    self.devices,
+                    available,
+                )
+                self.update_field(
+                    "devices",
+                    available,
+                    verbose=True,
+                    validate=False,
+                    mutation_tag="derived",
+                )
+        elif isinstance(self.devices, str) and self.devices.lower() not in {"auto"}:
+            requested = [tok.strip() for tok in self.devices.split(",") if tok.strip()]
+            if len(requested) > available:
+                logger.warning(
+                    "Requested GPU list '%s' exceeds %s visible devices; trimming to first %s entries",
+                    self.devices,
+                    available,
+                    available,
+                )
+                trimmed = ",".join(requested[:available])
+                self.update_field(
+                    "devices",
+                    trimmed,
+                    verbose=True,
+                    validate=False,
+                    mutation_tag="derived",
+                )
 
     def get_effective_dtype(self) -> torch.dtype:
         """Get the actual torch.dtype that this trainer configuration will use."""
