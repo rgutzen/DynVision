@@ -623,10 +623,12 @@ class LightningBase(pl.LightningModule):
             else None
         )
 
-    def on_before_optimizer_step(self, optimizer: Any) -> None:
-        """Called before optimizer step."""
-        (
-            super().on_before_optimizer_step(optimizer)
-            if hasattr(super(), "on_before_optimizer_step")
-            else None
-        )
+    def on_before_optimizer_step(self, optimizer: Any, optimizer_idx: int = 0) -> None:
+        """Called before optimizer step.
+
+        Args:
+            optimizer: The optimizer being stepped
+            optimizer_idx: The optimizer index (for multiple optimizers)
+        """
+        if hasattr(super(), "on_before_optimizer_step"):
+            super().on_before_optimizer_step(optimizer, optimizer_idx)
