@@ -200,6 +200,40 @@ class TestEnergyLossAccumulation:
         assert loss > 0  # Verify loss is computed
         assert loss.requires_grad  # Verify gradients can flow
 
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_device_handling_cuda(self):
+        """Verify energy accumulation handles device transfers correctly."""
+
+        class SimpleModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.conv = nn.Conv2d(3, 4, kernel_size=3, padding=1)
+
+            def forward(self, x):
+                return self.conv(x)
+
+        device = torch.device("cuda:0")
+        model = SimpleModel().to(device)
+        loss_fn = EnergyLoss(reduction="mean", p=1)
+        loss_fn.register_hooks(model)
+
+        batch_size = 2
+        n_timesteps = 3
+
+        torch.manual_seed(42)
+
+        # Simulate forward pass over multiple timesteps on GPU
+        for t in range(n_timesteps):
+            x = torch.randn(batch_size, 3, 8, 8, device=device)
+            _ = model(x)
+
+        # Compute loss (should handle device correctly)
+        loss = loss_fn(outputs=None, targets=None)
+
+        # Verify loss is on the correct device
+        assert loss.device == device
+        assert loss > 0
+
 
 class TestLossCombination:
     """Test that multiple losses are correctly weighted and combined."""

@@ -73,7 +73,11 @@ class EnergyLoss(BaseLoss):
             self.batch_energy[module_name] = batch_energy
             self._hook_call_count[module_name] = 1
         else:
-            self.batch_energy[module_name] = self.batch_energy[module_name] + batch_energy
+            # Ensure both tensors are on the same device before accumulation
+            existing_energy = self.batch_energy[module_name]
+            if existing_energy.device != batch_energy.device:
+                existing_energy = existing_energy.to(batch_energy.device)
+            self.batch_energy[module_name] = existing_energy + batch_energy
             self._hook_call_count[module_name] += 1
 
         self._last_device = batch_energy.device
