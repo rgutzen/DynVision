@@ -580,31 +580,33 @@ class TemporalBase(nn.Module):
                 hasattr(self, "data_presentation_pattern")
                 and len(self.data_presentation_pattern) > 1
             ):
+                # Get patterns (already on correct device if cached)
                 presentation_pattern = self._get_presentation_pattern()
-                reaction_mask = self._compute_reaction_mask(presentation_pattern)
 
+                # Move patterns to correct device if needed (only on first call)
                 if presentation_pattern.device != inputs.device:
                     presentation_pattern = presentation_pattern.to(inputs.device)
-                if reaction_mask.device != label_indices.device:
-                    reaction_mask = reaction_mask.to(label_indices.device)
 
+                # Compute reaction mask (fully vectorized, no sync)
+                reaction_mask = self._compute_reaction_mask(presentation_pattern)
+
+                # Combine masks efficiently
                 zero_mask = ~presentation_pattern
-                labels_cloned = False
+                combined_mask = zero_mask | reaction_mask
 
-                # Only modify if there are timesteps to zero out
-                if zero_mask.any():
+                # Check if any masking needed (use count instead of any() to avoid sync)
+                # For patterns with nulls or reaction time, we always need to clone
+                needs_masking = (len(self.data_presentation_pattern) > 1 and
+                                '0' in str(self.data_presentation_pattern)) or self.loss_reaction_time > 0
+
+                if needs_masking:
                     # Expanded tensors are views; clone before in-place mutation
                     inputs = inputs.clone()
                     label_indices = label_indices.clone()
-                    labels_cloned = True
-                    inputs[:, zero_mask] = 0
-                    label_indices[:, zero_mask] = self.non_label_index
 
-                if reaction_mask.any():
-                    if not labels_cloned:
-                        label_indices = label_indices.clone()
-                        labels_cloned = True
-                    label_indices[:, reaction_mask] = self.non_label_index
+                    # Apply masks in single pass
+                    inputs[:, zero_mask] = 0
+                    label_indices[:, combined_mask] = self.non_label_index
 
         return (inputs, label_indices, *extra)
 
@@ -651,41 +653,41 @@ class TemporalBase(nn.Module):
     def _compute_reaction_mask(self, pattern: torch.Tensor) -> torch.Tensor:
         """Return mask for timesteps ignored due to loss reaction time.
 
-        This method operates entirely on tensors to avoid GPU-CPU synchronization
-        which would cause severe performance degradation during training.
+        Marks the first N timesteps after each stimulus onset (rising edge in pattern)
+        for exclusion from loss computation. Uses fully vectorized operations for
+        GPU efficiency with zero CPU-GPU synchronization.
         """
         if self.loss_reaction_time <= 0:
             return torch.zeros_like(pattern, dtype=torch.bool)
 
         pattern = pattern.to(dtype=torch.bool)
-        if pattern.numel() == 0 or not pattern.any():
+        if pattern.numel() == 0:
             return torch.zeros_like(pattern, dtype=torch.bool)
 
         reaction_steps = max(1, math.ceil(self.loss_reaction_time / self.dt))
-        mask = torch.zeros_like(pattern, dtype=torch.bool)
 
-        # Vectorized chunk detection: find rising edges (start of chunks)
-        # Pad with False at start to detect first chunk
+        # Detect rising edges (stimulus onsets) - where pattern goes from False to True
         padded = torch.cat([torch.zeros(1, dtype=torch.bool, device=pattern.device), pattern])
-        chunk_starts = torch.where(padded[1:] & ~padded[:-1])[0]
+        rising_edges = padded[1:] & ~padded[:-1]
 
-        # Find falling edges (end of chunks) or use end of sequence
-        padded_end = torch.cat([pattern, torch.zeros(1, dtype=torch.bool, device=pattern.device)])
-        chunk_ends = torch.where(~padded_end[1:] & padded_end[:-1])[0] + 1
+        # Get indices of rising edges
+        edge_indices = torch.where(rising_edges)[0]
 
-        # If pattern ends with True, last chunk extends to end
-        if pattern[-1]:
-            chunk_ends = torch.cat([chunk_ends, torch.tensor([len(pattern)], device=pattern.device)])
+        if edge_indices.numel() == 0:
+            return torch.zeros_like(pattern, dtype=torch.bool)
 
-        # Apply reaction window to each chunk
-        for start_idx, end_idx in zip(chunk_starts.tolist(), chunk_ends.tolist()):
-            chunk_length = end_idx - start_idx
-            window_end = min(end_idx, start_idx + reaction_steps)
-            mask[start_idx:window_end] = True
+        # Use broadcasting to create ranges: [edge, edge+1, ..., edge+reaction_steps-1]
+        offsets = torch.arange(reaction_steps, device=pattern.device)
+        # Shape: (num_edges, reaction_steps)
+        all_indices = edge_indices.unsqueeze(1) + offsets.unsqueeze(0)
 
-            # Warn if reaction window exceeds chunk duration
-            if reaction_steps > chunk_length:
-                self._warn_reaction_window_exceeds_chunk(chunk_length)
+        # Flatten and filter indices that are within bounds
+        all_indices = all_indices.flatten()
+        valid_indices = all_indices[all_indices < len(pattern)]
+
+        # Create mask
+        mask = torch.zeros_like(pattern, dtype=torch.bool)
+        mask[valid_indices] = True
 
         return mask
 
