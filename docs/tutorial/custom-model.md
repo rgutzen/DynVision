@@ -12,7 +12,7 @@ This guide shows you how to create a custom recurrent convolutional neural netwo
 
 Creating a custom model in DynVision involves these key steps:
 
-1. Subclassing `LightningBase`
+1. Subclassing `BaseModel` (or `TemporalBase` for more control)
 2. Defining the layer architecture
 3. Implementing recurrent connections
 4. Setting up dynamics
@@ -28,10 +28,11 @@ Here's the basic structure of our custom model:
 import torch
 import torch.nn as nn
 
-from dynvision.model_components import LightningBase, RecurrentConnectedConv2d, EulerStep
+from dynvision.base import BaseModel
+from dynvision.model_components import RecurrentConnectedConv2d, EulerStep
 from dynvision.utils import alias_kwargs, str_to_bool
 
-class CustomRCNN(LightningBase):
+class CustomRCNN(BaseModel):
     @alias_kwargs(
         tff="t_feedforward",
         trc="t_recurrence",
@@ -277,10 +278,11 @@ Here's the complete model implementation with all features:
 import torch
 import torch.nn as nn
 
-from dynvision.model_components import LightningBase, RecurrentConnectedConv2d, EulerStep
+from dynvision.base import BaseModel
+from dynvision.model_components import RecurrentConnectedConv2d, EulerStep
 from dynvision.utils import alias_kwargs, str_to_bool
 
-class CustomRCNN(LightningBase):
+class CustomRCNN(BaseModel):
     @alias_kwargs(
         tff="t_feedforward",
         trc="t_recurrence",
@@ -516,6 +518,8 @@ train_dataset = CIFAR10(root='./data', train=True, download=True, transform=ToTe
 test_dataset = CIFAR10(root='./data', train=False, download=True, transform=ToTensor())
 
 # Create temporal data loaders
+# StimulusDurationDataLoader expands static images temporally
+# See the Temporal Data Presentation guide for other options
 train_loader = StimulusDurationDataLoader(
     train_dataset,
     batch_size=32,

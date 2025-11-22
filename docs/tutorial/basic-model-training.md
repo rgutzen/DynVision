@@ -228,6 +228,25 @@ This example:
 - Uses a lower learning rate (0.0005)
 - Adds an energy loss term to promote stable activity
 
+You can also control temporal data presentation patterns:
+
+```bash
+# Train with stimulus/null presentation pattern and reaction time masking
+snakemake train_model --config \
+  model_name=DyRCNNx4 \
+  model_args="{rctype:full,pattern:1011,shufflepattern:true,lossrt:4}" \
+  data_name=cifar10 \
+  seed=0001 \
+  epochs=50
+```
+
+This example adds:
+- `pattern:1011`: Alternating stimulus (1) and null (0) presentation
+- `shufflepattern:true`: Randomly shuffle the pattern per batch
+- `lossrt:4`: Mask labels for 4ms after stimulus onset
+
+For details on temporal presentation options, see the [Temporal Data Presentation Guide](../user-guide/temporal-data-presentation.md).
+
 ## Conclusion
 
 Congratulations! You've successfully:
