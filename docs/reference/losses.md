@@ -103,6 +103,50 @@ loss = energy_loss(outputs=None, targets=None)
 - Hooks automatically handle device transfers (CPU/GPU)
 - Call `remove_hooks()` or rely on `__del__` for cleanup
 
+### Expected Training Behavior
+
+**Energy loss measures total network activity, not prediction quality.** During training, you should expect:
+
+**Early Training (epochs 1-10):**
+- Energy typically **increases** as the network learns stronger feature representations
+- Weak random weights → small activations → low energy (~0.05-0.08)
+- Learning requires stronger activations → energy rises (~0.10-0.15)
+
+**Mid Training (epochs 10-50):**
+- Energy **plateaus** at an operating point
+- Network balances prediction accuracy (minimize CrossEntropy) with activity level (energy regularization)
+- Energy stabilizes (~0.12-0.18) while CrossEntropy continues decreasing
+
+**Late Training (epochs 50+):**
+- Energy remains **stable** or slightly decreases
+- Network has found efficient representations
+- Energy may fluctuate slightly but should not grow unbounded
+
+**This is normal and expected.** The energy regularization is working if:
+- ✅ Energy stabilizes (doesn't continuously grow)
+- ✅ CrossEntropy decreases (network is learning)
+- ✅ Total loss decreases (energy weight is appropriate)
+- ✅ Energy contribution to total loss is small (typically <5%)
+
+**Warning Signs** (indicating actual problems):
+- ❌ Energy continuously growing without plateau (raw energy >1.0)
+- ❌ Energy dominating total loss (weighted_energy > CrossEntropy)
+- ❌ Both energy and CrossEntropy increasing together
+- ❌ Activation magnitudes >10 (check with monitoring)
+
+**Example Training Curve:**
+```
+Epoch | CrossEntropy | Energy | Weighted Energy (0.05) | Total Loss
+------|-------------|--------|------------------------|------------
+  1   |    2.30     |  0.05  |        0.0025          |   2.3025
+ 10   |    1.50     |  0.12  |        0.0060          |   1.5060
+ 20   |    1.00     |  0.15  |        0.0075          |   1.0075
+ 50   |    0.50     |  0.15  |        0.0075          |   0.5075
+100   |    0.30     |  0.14  |        0.0070          |   0.3070
+```
+
+**Key Insight**: Energy increasing from 0.05 to 0.15 while CrossEntropy decreases from 2.3 to 0.5 is **healthy training**. The regularization prevents unbounded growth while allowing the network to learn effective representations.
+
 ---
 
 ## Loss Combination
@@ -381,8 +425,9 @@ total_loss = ce_loss + 0.1 * energy_loss  # Try larger weight
 
 ### Related Documentation
 - [Base Model Classes](model-base.md) - Model architecture and training integration
-- [Configuration System](../user-guide/configuration.md) - Loss configuration syntax
-- [Temporal Dynamics](../explanation/temporal-dynamics.md) - Presentation patterns and reaction time
+- [Temporal Data Presentation](../user-guide/temporal-data-presentation.md) - Presentation patterns and reaction time
+- [Configuration System](configuration.md) - Loss configuration syntax
+- [Temporal Dynamics](../explanation/temporal_dynamics.md) - Conceptual understanding
 
 ### External Resources
 - [PyTorch Loss Functions](https://pytorch.org/docs/stable/nn.html#loss-functions)
