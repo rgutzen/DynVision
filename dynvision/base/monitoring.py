@@ -377,8 +377,12 @@ class MonitoringMixin(Monitoring, LightningModule):
         """
         try:
             super().on_train_batch_start(batch, batch_idx, dataloader_idx)
-        except AttributeError:
-            pass
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept dataloader_idx
+            try:
+                super().on_train_batch_start(batch, batch_idx)
+            except (AttributeError, TypeError):
+                pass
         if batch_idx < 2:  # Only check first few batches
             self._validate_batch_data(batch, batch_idx, "train")
 
@@ -394,8 +398,12 @@ class MonitoringMixin(Monitoring, LightningModule):
         """
         try:
             super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
-        except AttributeError:
-            pass
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept dataloader_idx
+            try:
+                super().on_validation_batch_start(batch, batch_idx)
+            except (AttributeError, TypeError):
+                pass
         if batch_idx == 0:  # Only check first validation batch
             self._validate_batch_data(batch, batch_idx, "val")
             self._log_memory_usage()
@@ -413,8 +421,12 @@ class MonitoringMixin(Monitoring, LightningModule):
         """
         try:
             super().on_train_batch_end(outputs, batch, batch_idx, dataloader_idx)
-        except AttributeError:
-            pass
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept dataloader_idx
+            try:
+                super().on_train_batch_end(outputs, batch, batch_idx)
+            except (AttributeError, TypeError):
+                pass
         loss = outputs if isinstance(outputs, torch.Tensor) else outputs.get("loss")
         self._check_training_health(loss, batch_idx)
 
@@ -430,8 +442,12 @@ class MonitoringMixin(Monitoring, LightningModule):
         """
         try:
             super().on_before_optimizer_step(optimizer, optimizer_idx)
-        except AttributeError:
-            pass
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept optimizer_idx
+            try:
+                super().on_before_optimizer_step(optimizer)
+            except (AttributeError, TypeError):
+                pass
         if self.log_level.upper() == "DEBUG":
             self._check_gradients()
 
