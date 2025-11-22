@@ -9,9 +9,11 @@ Welcome to the DynVision User Guide! This section provides task-oriented guides 
 - [**Installation**](installation.md): Detailed instructions for installing DynVision on different platforms
 - [**Custom Models**](custom-models.md): How to create your own neural network architectures
 - [**Data Processing**](data-processing.md): Working with datasets and data loaders
+- [**Temporal Data Presentation**](temporal-data-presentation.md): Controlling temporal dynamics and stimulus presentation patterns
 - [**Workflow Management**](workflows.md): Using Snakemake for experiment orchestration
 - [**Visualization**](visualization.md): Visualizing and analyzing results
 - [**Cluster Integration**](cluster-integration.md): Running DynVision on high-performance computing clusters
+- [**Troubleshooting**](troubleshooting.md): Common issues and solutions
 
 <!-- ### Advanced Topics
 
