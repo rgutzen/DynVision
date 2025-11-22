@@ -5,7 +5,7 @@ This section provides conceptual discussions and explanations of the ideas behin
 ## Core Concepts
 
 - [**Biological Plausibility**](biological-plausibility.md): How DynVision implements biologically plausible features
-- [**Temporal Dynamics**](temporal-dynamics.md): Understanding temporal processing in vision models
+- [**Temporal Dynamics**](temporal_dynamics.md): Understanding temporal processing in vision models
 - [**Design Philosophy**](design-philosophy.md): The guiding principles behind DynVision's architecture
 
 ## Recurrent Processing

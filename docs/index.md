@@ -17,15 +17,15 @@ Our documentation is organized into four main categories:
 
 1. **Tutorials**: Step-by-step guides for beginners to get started with DynVision
    - [Getting Started](getting-started.md): First steps with DynVision
-   - [Basic Model Training](tutorials/basic-model-training.md): Train your first model
-   - [Visualization Tutorial](tutorials/visualization-tutorial.md): Visualize model responses
+   - [Basic Model Training](tutorial/basic-model-training.md): Train your first model
+   - [Custom Model Creation](tutorial/custom-model.md): Build your own neural network architecture
 
 2. **How-to Guides**: Task-oriented guides for solving specific problems
    - [Installation](user-guide/installation.md): Detailed installation instructions
    - [Custom Models](user-guide/custom-models.md): Define your own neural network architectures
    - [Data Processing](user-guide/data-processing.md): Work with different datasets
    - [Workflow Management](user-guide/workflows.md): Use Snakemake for experiments
-   - [Model Evaluation](user-guide/evaluation.md): Evaluate model performance
+   - [Model Testing](user-guide/model-testing.md): Evaluate model performance
 
 3. **Reference**: Technical descriptions of DynVision's components
    - [Organization Overview](reference/organization.md): Structure of the toolbox
@@ -47,9 +47,8 @@ DynVision is an open-source project, and we welcome contributions! See our [Cont
 
 If you have questions or run into issues:
 
-1. Check the [FAQ](user-guide/faq.md) for common questions
-2. Search the [GitHub Issues](https://github.com/yourusername/dynvision/issues) to see if someone has encountered the same problem. Open a new issue if you can't find a solution.
-3. Reach out via [Email](mailto:robin.gutzen@nyu.edu).
+1. Search the [GitHub Issues](https://github.com/yourusername/dynvision/issues) to see if someone has encountered the same problem. Open a new issue if you can't find a solution.
+2. Reach out via [Email](mailto:robin.gutzen@nyu.edu).
 
 ## License
 
