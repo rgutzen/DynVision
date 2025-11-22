@@ -18,17 +18,18 @@ This file tracks inconsistencies between documentation and implementation, areas
   - Reconcile project naming in `project_paths.py`
   - Update documentation to reflect single canonical name
 
-### 2. Documentation References Non-Existent Files
+### 2. Documentation References Non-Existent Files ✅ PARTIALLY FIXED
 
 **Issue**: Documentation links to files that don't exist
 - **Location**: `docs/index.md`
-- **Missing Links**:
-  - `tutorials/visualization-tutorial.md` - Referenced but doesn't exist
-  - `user-guide/evaluation.md` - Referenced but doesn't exist
-  - `user-guide/faq.md` - Referenced in support section but doesn't exist
-  - `user-guide/training.md` - Referenced in model-base.md but doesn't exist
-- **Impact**: Broken documentation navigation
-- **Fix Required**: Either create these files or remove the references
+- **Status**: Fixed in docs/index.md (2025-11-22)
+  - ✅ Removed `tutorials/visualization-tutorial.md` reference
+  - ✅ Fixed `user-guide/evaluation.md` → `user-guide/model-testing.md`
+  - ✅ Removed `user-guide/faq.md` reference
+- **Remaining**:
+  - `user-guide/training.md` - Still referenced in model-base.md but doesn't exist
+- **Impact**: Mostly resolved, one broken link remains
+- **Fix Required**: Remove or create training.md reference in model-base.md
 
 ### 3. Base Class Documentation Mismatch
 
@@ -57,6 +58,24 @@ This file tracks inconsistencies between documentation and implementation, areas
   - Document integration points between systems
   - Show examples of both systems working together
   - Clarify when to use Pydantic params vs @alias_kwargs
+
+## Recent Updates (2025-11-22)
+
+### Completed Documentation Tasks
+1. ✅ **Created losses.md** - Comprehensive reference for CrossEntropyLoss and EnergyLoss
+2. ✅ **Created temporal-data-presentation.md** - Complete user guide for temporal features
+3. ✅ **Updated model-base.md** - Added temporal presentation and loss configuration sections
+4. ✅ **Updated configuration.md** - Added temporal parameters documentation
+5. ✅ **Fixed cross-references** - Corrected temporal_dynamics.md references (hyphen→underscore)
+6. ✅ **Updated tutorials** - Fixed BaseModel imports, added temporal examples
+7. ✅ **Updated user-guide/index.md** - Added temporal-data-presentation.md entry
+
+### New Documentation Gaps Identified
+- **Missing**: API reference for monitoring and storage systems
+- **Missing**: Comprehensive scheduler documentation (only mentioned briefly)
+- **Missing**: Performance benchmarking guide
+- **Missing**: Debugging guide for common errors
+- **Missing**: Migration guide for users of previous versions
 
 ## Documentation Gaps
 
@@ -288,6 +307,38 @@ This file tracks inconsistencies between documentation and implementation, areas
 10. Add code example style guide (Issue #23)
 11. Expand model zoo (Issue #21)
 12. Add comprehensive test suite (Issue #19)
+
+## Low-Hanging Fruits (Quick Wins)
+
+These are documentation tasks that can be completed quickly and provide immediate value:
+
+### Immediate Fixes (< 30 min each)
+1. **Fix training.md reference** in model-base.md - Remove or update broken link
+2. **Update GitHub URLs** in docs/index.md - Replace placeholder URLs
+3. **Fix config file naming** - Ensure all references use `config_visualization.yaml` (singular)
+4. **Standardize tutorial paths** - Ensure consistent use of `tutorial/` vs `tutorials/`
+
+### Quick Additions (30-60 min each)
+5. **Create scheduler quick reference** - Simple table of available schedulers and parameters
+6. **Create optimizer quick reference** - Simple table of available optimizers and defaults
+7. **Add common errors troubleshooting** - Top 5-10 errors and solutions
+8. **Create model naming conventions guide** - How to name models, variants, and checkpoints
+9. **Add performance tips cheat sheet** - Quick wins for faster training
+10. **Create data loader comparison table** - When to use which data loader type
+
+### Medium Additions (1-2 hours each)
+11. **Complete TODO sections in custom-models.md** - Training configurations and troubleshooting
+12. **Create visualization gallery** - Screenshot examples of available plots
+13. **Add inline LaTeX for dynamics equations** - Replace missing equation images
+14. **Create parameter override examples** - Show CLI, YAML, and Snakemake override patterns
+15. **Document monitoring callbacks** - What metrics are logged and when
+
+### Reference Completions (2-4 hours each)
+16. **Document StorageBuffer API** - Methods, usage patterns, memory considerations
+17. **Document Monitoring API** - Logging methods, custom metrics, integration
+18. **Create transforms reference** - Complete list of available transforms with parameters
+19. **Document visualization utilities** - All plot types, customization options
+20. **Create complete parameter reference** - Exhaustive list of all parameters by component
 
 ## Notes for Contributors
 
