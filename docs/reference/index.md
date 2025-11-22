@@ -49,6 +49,25 @@ Documentation of DynVision's code structure:
 - Development patterns
 - Best practices
 
+### [Loss Functions](losses.md)
+
+Reference for available loss functions:
+- CrossEntropyLoss with temporal masking
+- EnergyLoss for regularization
+- Temporal normalization behavior
+- Loss combination and weighting
+- Presentation pattern integration
+- Performance optimization
+
+### [Optimizers and Schedulers](optimizers-schedulers.md)
+
+Quick reference for training optimization:
+- Available optimizers (Adam, AdamW, SGD, etc.)
+- Learning rate schedulers (Cosine, StepLR, Warmup, etc.)
+- Common training patterns
+- Configuration examples
+- Troubleshooting guide
+
 ## Planned Extensions
 
 The following reference sections are planned for future documentation updates:
@@ -61,15 +80,6 @@ Detailed documentation of data handling components:
 - Transforms and augmentations
 - Processing operations
 - Data configuration
-
-### Loss Functions
-
-Reference for available loss functions:
-- Classification losses
-- Energy-based losses
-- Biological constraints
-- Custom loss creation
-- Loss configuration
 
 ### Visualization
 
