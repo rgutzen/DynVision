@@ -12,6 +12,19 @@ DynVision provides multiple mechanisms for creating and managing temporal sequen
 
 Each approach has different use cases and performance characteristics.
 
+## Quick Reference: DataLoader Comparison
+
+| DataLoader | Purpose | Use Case | Key Parameters | When to Use |
+|------------|---------|----------|----------------|-------------|
+| **StandardDataLoader** | Basic temporal expansion | Simple testing | `n_timesteps` | Default choice for basic temporal expansion |
+| **StimulusRepetitionDataLoader** | Repeat stimulus | Testing temporal integration | `n_timesteps` (alias: `repeat`) | Same stimulus shown for all timesteps |
+| **StimulusDurationDataLoader** | Vary stimulus duration | Reaction time experiments | `n_timesteps`, `stimulus_duration`, `intro_duration` | Stimulus shown for limited timesteps with intro/outro |
+| **StimulusIntervalDataLoader** | Blank intervals between stimuli | Sequential presentation | `n_timesteps`, `stimulus_duration`, `interval_duration` | Multiple stimuli with gaps |
+| **StimulusContrastDataLoader** | Vary stimulus contrast | Contrast sensitivity | `n_timesteps`, `contrasts`, `contrast_mode` | Test response to different contrast levels |
+| **StimulusNoiseDataLoader** | Add temporal noise | Robustness testing | `n_timesteps`, `noise_types`, `noise_levels` | Test model robustness to noise |
+
+**Rule of thumb:** Use DataLoaders for **testing experiments** with specific temporal manipulations. Use FFCV for **fast training** with simple expansion. Use model-based expansion for **flexible training** with patterns.
+
 ---
 
 ## Configuration Parameters
