@@ -10,7 +10,7 @@ The configuration system is organized into several YAML files, each handling spe
 dynvision/configs/
 ├── config_defaults.yaml       # Base configuration with sensible defaults
 ├── config_data.yaml           # Dataset-specific configurations
-├── config_visualizations.yaml # General visualization settings
+├── config_visualization.yaml  # General visualization settings
 ├── config_experiments.yaml    # Experiment-specific settings
 ├── config_workflow.yaml       # Workflow execution parameters
 └── README.md                  # Configuration documentation
@@ -22,7 +22,7 @@ The configuration files are loaded in the workflow file `snake_utils.smk` in the
 
 1. `config_defaults.yaml`
 2. `config_data.yaml`
-3. `config_visualizations.yaml`
+3. `config_visualization.yaml`
 4. `config_experiments.yaml`
 5. `config_workflow.yaml`
 
@@ -160,10 +160,20 @@ The configuration system is divided into four main files, each responsible for a
 
 Provides the foundational configuration layer with sensible defaults for all components. Contains:
 - Model parameters (time steps, delays, neural dynamics)
+- Temporal presentation parameters (patterns, reaction time masking)
 - Basic training settings (batch size, epochs, optimizer)
 - Response storage configuration
 - Default loss function settings
 - Base data parameters
+
+**Key Temporal Parameters:**
+
+- `n_timesteps`: Number of temporal processing steps in the model (commented out by default, allowing model-specific defaults)
+- `data_presentation_pattern`: Controls stimulus/null presentation pattern (default: `[1]` for continuous stimulus)
+- `loss_reaction_time`: Reaction time window for loss masking in milliseconds (default: `0`)
+- `data_timesteps`: Number of timesteps for data loader temporal expansion (default: `1`)
+
+See [Temporal Data Presentation Guide](../user-guide/temporal-data-presentation.md) for detailed usage.
 
 These defaults can be overridden by other configuration files or command-line arguments.
 

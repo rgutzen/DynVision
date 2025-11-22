@@ -76,9 +76,46 @@ class TemporalBase(nn.Module)
 - `input_dims` (Tuple[int]): Processed input dimensions
 - `n_classes` (int): Number of output classes
 - `n_timesteps` (int): Number of temporal processing steps
-- `dt` (float): Integration time step
-- `tau` (float): Neural time constant
+- `dt` (float): Integration time step in milliseconds
+- `tau` (float): Neural time constant in milliseconds
 - `layer_names` (List[str]): Names of network layers in processing order
+- `data_presentation_pattern` (Union[str, List[int]]): Pattern controlling stimulus/null presentation
+- `shuffle_presentation_pattern` (bool): Whether to shuffle pattern per batch
+- `loss_reaction_time` (float): Reaction time window in milliseconds for loss masking
+- `n_residual_timesteps` (int): Residual timesteps for signal propagation
+
+**Temporal Presentation Parameters**:
+
+TemporalBase now handles sophisticated temporal presentation patterns and reaction time masking:
+
+- **`data_presentation_pattern`**: Controls which timesteps receive stimulus (1) vs null input (0)
+  - String format: `"1011"` or `"1"` (auto-expanded)
+  - List format: `[1, 0, 1, 1]`
+  - Pattern length must divide evenly into `n_timesteps`
+  - See [Temporal Data Presentation Guide](../user-guide/temporal-data-presentation.md) for details
+
+- **`shuffle_presentation_pattern`**: When `True`, randomly permutes pattern per batch
+  - Shuffles base pattern before resampling to `n_timesteps`
+  - Maintains chunk durations after shuffling
+  - Provides temporal variability during training
+
+- **`loss_reaction_time`**: Masks labels after stimulus onset (in milliseconds)
+  - Converts to timesteps: `ceil(loss_reaction_time / dt)`
+  - Applied per stimulus chunk (not just first timestep)
+  - Warnings issued when reaction window exceeds chunk duration
+  - See [Loss Functions Reference](losses.md#temporal-masking-and-presentation-patterns)
+
+- **`non_label_index`**: Label value for masked timesteps (default: -1)
+- **`non_input_value`**: Input value for null timesteps (default: 0.0)
+
+**Loss Configuration**:
+
+TemporalBase owns loss criterion initialization through `_init_loss()`:
+
+- Supports multiple loss functions with configurable weights
+- Automatically registers hooks for EnergyLoss
+- Handles `ignore_index` configuration for temporal masking
+- See [Loss Functions Reference](losses.md) for available losses
 
 **Core Methods**:
 
@@ -133,10 +170,28 @@ class LightningBase(pl.LightningModule)
 - `criterion_params` (List[Tuple[str, Dict]]): Loss function specifications
 - `log_every_n_steps` (int): Frequency of parameter logging. Default: `50`
 
-**Training Methods**:
+**Core Training Methods**:
 
 #### `training_step(batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor`
 Single training step implementation.
+
+**Parameters**:
+- `batch` (Tuple): Input data and labels
+- `batch_idx` (int): Batch index
+
+**Returns**: `torch.Tensor` containing the loss value
+
+#### `validation_step(batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor`
+Single validation step implementation.
+
+**Parameters**:
+- `batch` (Tuple): Input data and labels
+- `batch_idx` (int): Batch index
+
+**Returns**: `torch.Tensor` containing the loss value
+
+#### `test_step(batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor`
+Single test step implementation.
 
 **Parameters**:
 - `batch` (Tuple): Input data and labels
@@ -148,6 +203,29 @@ Single training step implementation.
 Configure optimizers and learning rate schedulers with parameter grouping.
 
 **Returns**: Dictionary containing optimizer and scheduler configurations
+
+#### `backward(loss: torch.Tensor, optimizer: Any = None, optimizer_idx: int = 0) -> None`
+Perform backward pass with optional retain_graph for gradient computation.
+
+**Parameters**:
+- `loss` (torch.Tensor): Loss value to backpropagate
+- `optimizer` (Any): Optimizer instance (provided by Lightning)
+- `optimizer_idx` (int): Optimizer index for multi-optimizer setups
+
+**PyTorch Lightning Hooks**:
+
+LightningBase implements several PyTorch Lightning lifecycle hooks:
+
+- `on_fit_start()`: Called at the beginning of fit
+- `on_train_start()`: Called at the beginning of training
+- `on_train_end()`: Called at the end of training
+- `on_validation_start()`: Called at the beginning of validation
+- `on_validation_epoch_end()`: Called at the end of validation epoch
+- `on_test_start()`: Called at the beginning of testing
+- `on_train_batch_start(batch, batch_idx, dataloader_idx)`: Called before each training batch
+- `on_validation_batch_start(batch, batch_idx, dataloader_idx)`: Called before each validation batch
+- `on_train_batch_end(outputs, batch, batch_idx, dataloader_idx)`: Called after each training batch
+- `on_before_optimizer_step(optimizer, optimizer_idx)`: Called before optimizer step
 
 **Example**:
 ```python
@@ -346,5 +424,7 @@ The inheritance order in `BaseModel` ensures proper method resolution:
 
 - [Getting Started Guide](../getting-started.md) - Basic usage tutorial
 - [Custom Models Guide](../user-guide/custom-models.md) - Creating custom architectures
-- [Training Guide](../user-guide/training.md) - Training configuration and optimization
+- [Model Testing Guide](../user-guide/model-testing.md) - Testing and evaluation
+- [Temporal Data Presentation](../user-guide/temporal-data-presentation.md) - Temporal features and patterns
+- [Loss Functions Reference](losses.md) - Loss configuration and behavior
 - [Configuration Reference](configuration.md) - Configuration system documentation
