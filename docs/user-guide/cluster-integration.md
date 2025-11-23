@@ -122,31 +122,26 @@ The advanced method uses Snakemake's cluster capabilities to run tasks in parall
 
    For more details see the [Snakemake Executor Documentation](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html).
 
-2. **Executor settings**
-   ```yaml
-   # in config_defaults.yaml
-   executor_start: "singularity exec --nv \
-   --overlay /scratch/rg5022/images/rva.ext3:ro \
-   --overlay /vast/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro \
-   --overlay /vast/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro \
-   --overlay /vast/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro \
-   /scratch/work/public/singularity/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif \
-   bash -c '\
-   source /ext3/env.sh; \
-   conda activate rva; \
-   "
-   executor_close: "'"
-   ```
+2. **Automatic Environment Detection**
 
-   For cluster executions any python call is wrapped in these executor settings:
+   DynVision automatically detects cluster execution via scheduler environment variables:
+   - **SLURM**: `SLURM_JOB_ID`
+   - **PBS/Torque**: `PBS_JOBID`
+   - **LSF**: `LSB_JOBID`
+   - **SGE/UGE**: `SGE_TASK_ID`
 
+   When running on a cluster, Python commands are automatically wrapped with:
    ```bash
-   {executor_start}
-   python script.py --arg1 value
-   {executor_close}
+   executor_wrapper.sh python script.py --arg1 value
    ```
 
-   the above settings are an example, adapt them to your system.
+   The `executor_wrapper.sh` script handles:
+   - Singularity container activation
+   - Conda environment setup
+   - GPU device configuration
+   - Overlay mounting
+
+   **No configuration needed** - detection is automatic!
 
 3. **Executor Environment**
    This advanced execution may require the creation of an additional environment if the commands of the scheduler (e.g. SLURM) are not available in the main environment (e.g. because of using singularity).
@@ -159,6 +154,11 @@ The advanced method uses Snakemake's cluster capabilities to run tasks in parall
    module load anaconda3/2020.07  # conda needs to be available
    source activate snake-env  # environment that contains snakemake
    ```
+
+   Also configure the main executor wrapper (`dynvision/cluster/executor_wrapper.sh`) with your:
+   - Singularity container path
+   - Conda environment name
+   - Required overlay images
 
 5. **Use Snakecharm Wrapper**
    DynVision provides `snakecharm.sh` to manage cluster execution:

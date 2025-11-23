@@ -662,23 +662,48 @@ shell:
 
 ### 8.2 Cluster Execution
 
-The workflow supports execution on compute clusters:
+The workflow automatically detects cluster execution via scheduler environment variables and wraps Python commands appropriately:
 
 ```python
 params:
-    executor_start = config.executor_start if config.use_executor else '',
-    executor_close = config.executor_close if config.use_executor else ''
+    execution_cmd = lambda w, input: build_execution_command(
+        script_path=input.script,
+        use_distributed=False,
+    ),
 shell:
     """
-    {params.executor_start}
-    python {input.script:q} \
+    {params.execution_cmd} \
+        --arg1 {wildcards.arg1} \
         # ... parameters
-    {params.executor_close}
     """
 ```
 
-This wrapper allows for cluster-specific execution commands.
-To customize the execution to the requirements of your specific cluster environment, edit the executor_start and executor_close entries in config_defaults.yaml.
+**Automatic Detection:**
+- `build_execution_command()` calls `is_cluster_execution()`
+- Detects SLURM, PBS, LSF, SGE via environment variables
+- On cluster: wraps with `executor_wrapper.sh` (singularity + conda)
+- Local: runs Python directly
+
+**Example Behavior:**
+
+Local workstation:
+```bash
+python script.py --arg1 value
+```
+
+Cluster node (SLURM_JOB_ID present):
+```bash
+executor_wrapper.sh python script.py --arg1 value
+# → Activates singularity container + conda environment
+```
+
+**Configuration:**
+Customize `dynvision/cluster/executor_wrapper.sh` with your:
+- Singularity container path
+- Conda environment name
+- Required overlay images
+
+See: `docs/development/planning/cluster-execution.md` for design details.
 
 ## 9. Practical Usage Examples
 

@@ -556,19 +556,29 @@ class MyDataLoader(TemporalDataset):
 
 ### Running on Clusters
 
-DynVision includes cluster integration via Snakemake's cluster plugins:
+DynVision includes cluster integration via Snakemake's cluster plugins with **automatic environment detection**:
 
 ```bash
 # Basic cluster execution (using NYU Greene as example)
 ./cluster/snakecharm.sh -j100 --config experiment=contrast
+# Cluster automatically detected via SLURM_JOB_ID
+# Python wrapped with executor_wrapper.sh (singularity + conda)
+```
 
+**Automatic Detection:**
+- Detects SLURM, PBS, LSF, SGE via environment variables
+- No configuration needed for cluster vs. local execution
+- See `is_cluster_execution()` in `workflow/snake_utils.smk`
+
+**Manual cluster submission:**
+```bash
 # Custom cluster resources
 snakemake --executor cluster-generic \
   --cluster-generic-submit-cmd "sbatch --cpus-per-task=4 --gres=gpu:1" \
   --jobs 50
 ```
 
-See `cluster/` directory for cluster-specific configuration files.
+See `cluster/` directory for cluster-specific configuration files and `cluster/executor_wrapper.sh` for environment setup.
 
 ## Testing and Validation
 

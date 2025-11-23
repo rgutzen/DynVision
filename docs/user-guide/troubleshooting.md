@@ -578,6 +578,77 @@ conda env list
 
 ---
 
+### Cluster Not Detected (ModuleNotFoundError)
+
+**Symptoms:**
+```
+ModuleNotFoundError: No module named 'torch'
+ModuleNotFoundError: No module named 'numpy'
+```
+
+**Cause:**
+Cluster execution not detected, so Python runs without singularity/conda wrapper.
+
+**Diagnosis:**
+
+Check workflow logs for detection message:
+```bash
+# Should see this on cluster:
+[INFO] Cluster execution detected via: SLURM_JOB_ID
+
+# If you see this instead:
+[DEBUG] Local execution detected (no cluster scheduler variables)
+# Then detection failed
+```
+
+**Solutions:**
+
+1. **Verify scheduler environment variables**:
+```bash
+# On SLURM cluster, check:
+echo $SLURM_JOB_ID
+
+# On PBS cluster:
+echo $PBS_JOBID
+
+# On LSF cluster:
+echo $LSB_JOBID
+```
+
+If these are not set, you're not running in a scheduler job context.
+
+2. **Check executor wrapper configuration**:
+```bash
+# Verify executor_wrapper.sh exists and is configured
+ls -la dynvision/cluster/executor_wrapper.sh
+
+# Test manually
+dynvision/cluster/executor_wrapper.sh python -c "import torch; print(torch.__version__)"
+```
+
+3. **Supported schedulers**:
+DynVision detects:
+- SLURM (via `SLURM_JOB_ID` or `SLURM_JOBID`)
+- PBS/Torque (via `PBS_JOBID`)
+- LSF (via `LSB_JOBID`)
+- SGE/UGE (via `SGE_TASK_ID`)
+
+If using a different scheduler, add its environment variable to `is_cluster_execution()` in `dynvision/workflow/snake_utils.smk`.
+
+4. **Running outside scheduler**:
+If running Snakemake directly (not via `snakecharm.sh`), ensure you're submitting via scheduler:
+```bash
+# Correct (via snakecharm):
+./dynvision/cluster/snakecharm.sh train_model
+
+# Wrong (direct execution on login node):
+cd dynvision/workflow && snakemake train_model  # No cluster detected!
+```
+
+See: [Cluster Integration Guide](cluster-integration.md) for proper setup.
+
+---
+
 ## Performance Debugging
 
 ### Identify Bottlenecks
