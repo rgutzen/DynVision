@@ -33,13 +33,58 @@ from dynvision.project_paths import project_paths
 
 pylogger = logging.getLogger('workflow.utils')
 
-# Load configuration files in priority order
-configfile: project_paths.scripts.configs / 'config_defaults.yaml'
-configfile: project_paths.scripts.configs / 'config_data.yaml'
-configfile: project_paths.scripts.configs / 'config_visualization.yaml'
-configfile: project_paths.scripts.configs / 'config_experiments.yaml'
-configfile: project_paths.scripts.configs / 'config_modes.yaml'
-configfile: project_paths.scripts.configs / 'config_workflow.yaml'
+# Load and freeze configuration files to prevent mid-workflow changes
+# See: docs/development/planning/snakecharm-config-stability-issue.md
+def _load_and_freeze_config() -> Dict[str, Any]:
+    """
+    Load configuration files once and freeze them for the entire workflow.
+
+    This prevents mid-workflow config changes from affecting running jobs
+    when using cluster execution with snakemake-executor-plugin.
+
+    In cluster mode, Snakemake re-parses the workflow for each job submission.
+    Using Snakemake's configfile: directive would cause configs to be re-read
+    from disk each time, allowing changed files to affect running workflows.
+
+    Instead, we load the YAML files manually once, freeze the merged config
+    in memory, and use that frozen version throughout the workflow run.
+
+    Returns:
+        Merged configuration dictionary frozen at workflow start
+    """
+    config_files = [
+        'config_defaults.yaml',
+        'config_data.yaml',
+        'config_visualization.yaml',
+        'config_experiments.yaml',
+        'config_modes.yaml',
+        'config_workflow.yaml',
+    ]
+
+    merged_config = {}
+    configs_dir = project_paths.scripts.configs
+
+    for config_file in config_files:
+        config_path = configs_dir / config_file
+        if config_path.exists():
+            pylogger.debug(f"Loading config: {config_path}")
+            with config_path.open('r', encoding='utf-8') as f:
+                file_config = yaml.safe_load(f) or {}
+                merged_config.update(file_config)
+        else:
+            pylogger.warning(f"Config file not found: {config_path}")
+
+    # Merge with any --config overrides from Snakemake CLI
+    # The 'config' dict at this point contains CLI overrides only
+    if 'config' in dir() and config:
+        pylogger.info(f"Applying {len(config)} CLI config overrides")
+        merged_config.update(config)
+
+    pylogger.info(f"Config frozen at workflow start with {len(merged_config)} keys")
+    return merged_config
+
+# Load config ONCE and freeze it for the entire workflow
+_frozen_config = _load_and_freeze_config()
 
 wildcard_constraints:
     model_name = r'[a-zA-Z0-9]+',
@@ -65,7 +110,12 @@ localrules: all, symlink_data_subsets, symlink_data_groups
 ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model > process_test_data > test_model
 
 def _write_base_config_file(config_payload: Dict[str, Any]) -> Path:
-    """Persist the fully merged Snakemake config for reuse by runtime scripts."""
+    """Persist the fully merged Snakemake config for reuse by runtime scripts.
+
+    The config written here is FROZEN at workflow start. Changes to source
+    config files will NOT affect this workflow run. To use updated configs,
+    start a new workflow run.
+    """
 
     config_dir = project_paths.large_logs / "configs"
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -73,13 +123,20 @@ def _write_base_config_file(config_payload: Dict[str, Any]) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     base_config_path = config_dir / f"workflow_config_{timestamp}.yaml"
 
-    header = ["# DynVision workflow base configuration", f"# Generated at: {timestamp}"]
+    header = [
+        "# DynVision workflow base configuration",
+        f"# Generated at: {timestamp}",
+        "#",
+        "# WARNING: This config is FROZEN for the duration of this workflow run.",
+        "# Changes to source config files will NOT affect this workflow.",
+        "# To use updated configs, start a new workflow run.",
+    ]
 
     with base_config_path.open("w", encoding="utf-8") as handle:
         handle.write("\n".join(header) + "\n\n")
         yaml.safe_dump(config_payload, handle, default_flow_style=False, sort_keys=False)
 
-    pylogger.info(f"Persisted merged workflow config to {base_config_path}")
+    pylogger.info(f"Persisted FROZEN workflow config to {base_config_path}")
     return base_config_path
 
 # Set up logging
@@ -298,11 +355,18 @@ def build_execution_command(script_path, use_distributed=False, use_executor=Fal
 env_name, env_status = get_conda_env()
 pylogger.info(f"Conda environment: {env_name or 'None'}")
 
-_raw_config = config.__dict__.copy() if isinstance(config, SimpleNamespace) else dict(config)
+# Use frozen config for all downstream processing
+# This ensures that changes to config files on disk do not affect the running workflow
+_raw_config = _frozen_config.copy()
 
+# Write snapshot to disk for runtime scripts
 WORKFLOW_CONFIG_PATH = _write_base_config_file(_raw_config)
 
+# Convert to SimpleNamespace for dot notation access in rules
 config = SimpleNamespace(**_raw_config)
+
+# Log the snapshot location for debugging
+pylogger.info(f"Workflow config snapshot: {WORKFLOW_CONFIG_PATH}")
 
 SCRIPTS = project_paths.scripts_path
 
