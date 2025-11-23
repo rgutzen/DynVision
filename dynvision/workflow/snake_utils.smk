@@ -33,6 +33,66 @@ from dynvision.project_paths import project_paths
 
 pylogger = logging.getLogger('workflow.utils')
 
+def is_cluster_execution() -> bool:
+    """
+    Detect if running on a compute cluster via scheduler environment variables.
+
+    Checks for presence of environment variables set by common HPC job schedulers.
+    This enables automatic adaptation of execution commands without config changes.
+
+    Supported Schedulers:
+        - SLURM (SLURM_JOB_ID, SLURM_JOBID)
+        - PBS/Torque (PBS_JOBID)
+        - LSF (LSB_JOBID)
+        - SGE/UGE (JOB_ID when SGE_TASK_ID also present)
+
+    Returns:
+        True if running in a cluster job, False if running locally
+
+    Examples:
+        >>> # On cluster node within SLURM job
+        >>> is_cluster_execution()
+        True
+
+        >>> # On local workstation
+        >>> is_cluster_execution()
+        False
+
+    Notes:
+        - Detection happens at Snakemake parse time (when rule params are evaluated)
+        - For cluster execution, params are evaluated on the submit node
+        - Result is consistent for all jobs in a workflow run
+        - Logging helps debug unexpected detection results
+
+    See:
+        docs/development/planning/cluster-execution.md for design rationale
+    """
+    # Environment variables indicating cluster execution
+    # Listed in order of prevalence (most common first)
+    cluster_indicators = [
+        'SLURM_JOB_ID',    # SLURM (most common in academic HPC)
+        'SLURM_JOBID',     # SLURM alternative spelling
+        'PBS_JOBID',       # PBS/Torque
+        'LSB_JOBID',       # IBM LSF
+        'SGE_TASK_ID',     # SGE/UGE (combined with JOB_ID check)
+    ]
+
+    # Check each indicator
+    detected = any(var in os.environ for var in cluster_indicators)
+
+    # SGE special case: JOB_ID is too generic, require SGE_TASK_ID as well
+    if not detected and 'JOB_ID' in os.environ and 'SGE_TASK_ID' in os.environ:
+        detected = True
+
+    # Log detection for debugging
+    if detected:
+        detected_vars = [var for var in cluster_indicators if var in os.environ]
+        pylogger.info(f"Cluster execution detected via: {', '.join(detected_vars)}")
+    else:
+        pylogger.debug("Local execution detected (no cluster scheduler variables)")
+
+    return detected
+
 # Load and freeze configuration files to prevent mid-workflow changes
 # See: docs/development/planning/snakecharm-config-stability-issue.md
 def _load_and_freeze_config() -> Dict[str, Any]:
@@ -49,8 +109,18 @@ def _load_and_freeze_config() -> Dict[str, Any]:
     Instead, we load the YAML files manually once, freeze the merged config
     in memory, and use that frozen version throughout the workflow run.
 
+    Note on cluster execution:
+        Cluster detection (singularity/conda wrapper) is handled via
+        environment variables (see is_cluster_execution()), NOT config.
+        This ensures detection works correctly with frozen config and
+        separates execution context from experiment configuration.
+
     Returns:
         Merged configuration dictionary frozen at workflow start
+
+    See:
+        - docs/development/planning/snakecharm-config-stability-issue.md
+        - docs/development/planning/cluster-execution.md
     """
     config_files = [
         'config_defaults.yaml',
@@ -313,29 +383,52 @@ def get_conda_env() -> tuple[Optional[str], str]:
 
 
 
-def build_execution_command(script_path, use_distributed=False, use_executor=False):
+def build_execution_command(script_path, use_distributed=False):
     """
     Build the execution command with conditional wrappers.
-    
+
+    Automatically detects cluster execution and wraps commands with
+    executor_wrapper.sh (singularity + conda) when running on cluster nodes.
+
     Args:
         script_path: Path to the Python script to execute
-        use_distributed: Whether to use distributed setup
-        use_executor: Whether to use executor wrapper
-    
+        use_distributed: Whether to use distributed/multi-node setup
+
     Returns:
         String containing the complete execution command
+
+    Execution Modes:
+        Local:
+            python script.py
+
+        Cluster (single-node):
+            executor_wrapper.sh python script.py
+
+        Cluster (distributed):
+            source setup_distributed_execution.sh &&
+            executor_wrapper.sh torchrun --nproc_per_node=... script.py
+
+    Environment Detection:
+        Uses is_cluster_execution() to automatically detect cluster jobs.
+        No configuration needed - detection is based on scheduler env vars.
+
+    See:
+        docs/development/planning/cluster-execution.md for design details
     """
     cmd_parts = []
-    
+
+    # Automatic cluster detection (replaces use_executor config)
+    use_executor = is_cluster_execution()
+
     if use_distributed:
         setup_script = SCRIPTS / 'cluster' / 'setup_distributed_execution.sh'
         cmd_parts.append(f"source {setup_script} &&")
 
-    # Add executor wrapper if enabled
+    # Add executor wrapper if on cluster
     if use_executor:
         executor_script = SCRIPTS / 'cluster' / 'executor_wrapper.sh'
         cmd_parts.append(str(executor_script))
-    
+
     if use_distributed:
         cmd_parts.append(
             "torchrun "
