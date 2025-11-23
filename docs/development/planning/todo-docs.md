@@ -79,16 +79,23 @@ This file tracks inconsistencies between documentation and implementation, areas
 
 ## Documentation Gaps
 
-### 5. Missing Implementation Details
+### 5. Missing Implementation Details ✅ FIXED
 
 **Issue**: Documentation describes features but lacks implementation examples
 - **Location**: `docs/user-guide/custom-models.md`
-- **Gaps**:
-  - TODO placeholders for "Training Configurations" section (line 148-152)
-  - TODO placeholder for "Troubleshooting Guide" (line 226)
-  - References to features but no code examples
-- **Impact**: Users can't implement described features
-- **Fix Required**: Complete TODO sections with actual content
+- **Status**: Fixed (2025-11-23)
+  - ✅ Completed "Training Configurations" section with:
+    - Optimizer configuration examples
+    - Learning rate scheduling
+    - Custom PyTorch Lightning callbacks
+    - Advanced training options
+  - ✅ Completed "Troubleshooting Guide" section with:
+    - Debug mode usage (3 activation methods)
+    - Common issues and solutions (NaN, recurrence, performance, OOM)
+    - Debugging tools (anomaly detection, logging, profiling)
+    - Response inspection techniques
+- **Impact**: Users now have comprehensive implementation guidance
+- **Fix Required**: ✅ Complete
 
 ### 6. Recurrence Type Images Missing
 
@@ -315,19 +322,21 @@ These are documentation tasks that can be completed quickly and provide immediat
 ### Immediate Fixes (< 30 min each)
 1. **Fix training.md reference** in model-base.md - Remove or update broken link
 2. **Update GitHub URLs** in docs/index.md - Replace placeholder URLs
-3. **Fix config file naming** - Ensure all references use `config_visualization.yaml` (singular)
+3. ✅ **Fix config file naming** - COMPLETED (2025-11-22)
 4. **Standardize tutorial paths** - Ensure consistent use of `tutorial/` vs `tutorials/`
 
 ### Quick Additions (30-60 min each)
-5. **Create scheduler quick reference** - Simple table of available schedulers and parameters
-6. **Create optimizer quick reference** - Simple table of available optimizers and defaults
-7. **Add common errors troubleshooting** - Top 5-10 errors and solutions
+5. ✅ **Create scheduler quick reference** - COMPLETED (optimizers-schedulers.md, 2025-11-22)
+6. ✅ **Create optimizer quick reference** - COMPLETED (optimizers-schedulers.md, 2025-11-22)
+7. ✅ **Add common errors troubleshooting** - COMPLETED (troubleshooting.md, 2025-11-22)
 8. **Create model naming conventions guide** - How to name models, variants, and checkpoints
 9. **Add performance tips cheat sheet** - Quick wins for faster training
-10. **Create data loader comparison table** - When to use which data loader type
+10. ✅ **Create data loader comparison table** - COMPLETED (temporal-data-presentation.md, 2025-11-22)
 
 ### Medium Additions (1-2 hours each)
-11. **Complete TODO sections in custom-models.md** - Training configurations and troubleshooting
+11. ✅ **Complete TODO sections in custom-models.md** - COMPLETED (2025-11-23)
+    - Training configurations with optimizer, scheduler, callback examples
+    - Troubleshooting guide with debug mode and common issues
 12. **Create visualization gallery** - Screenshot examples of available plots
 13. **Add inline LaTeX for dynamics equations** - Replace missing equation images
 14. **Create parameter override examples** - Show CLI, YAML, and Snakemake override patterns
