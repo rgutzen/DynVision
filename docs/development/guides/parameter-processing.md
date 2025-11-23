@@ -292,19 +292,65 @@ class TestingParams(CompositeParams):
 
 ### Workflow Integration
 
-`snake_utils.smk` now snapshots the merged Snakemake configuration once per invocation:
+#### Config Freezing for Cluster Execution
 
+**Critical for reproducibility:** `snake_utils.smk` loads and **freezes** configuration at workflow start to prevent mid-workflow changes from affecting running jobs.
+
+**The Problem:**
+When using cluster execution (via `snakecharm.sh` with snakemake-executor-plugin), Snakemake re-parses the workflow for each job submission. If Snakemake's `configfile:` directive were used, configs would be re-read from disk each time, allowing changed files to contaminate running workflows.
+
+**The Solution:**
 ```python
-_raw_config = dict(config)
+def _load_and_freeze_config() -> Dict[str, Any]:
+    """Load configuration files once and freeze them for entire workflow."""
+    config_files = ['config_defaults.yaml', 'config_data.yaml', ...]
+
+    merged_config = {}
+    for config_file in config_files:
+        with (project_paths.scripts.configs / config_file).open('r') as f:
+            merged_config.update(yaml.safe_load(f) or {})
+
+    # Merge CLI overrides
+    if 'config' in dir() and config:
+        merged_config.update(config)
+
+    return merged_config
+
+# Load ONCE and freeze for entire workflow
+_frozen_config = _load_and_freeze_config()
+_raw_config = _frozen_config.copy()
 WORKFLOW_CONFIG_PATH = _write_base_config_file(_raw_config)
 config = SimpleNamespace(**_raw_config)
 ```
 
-- The helper writes `logs/configs/workflow_config_<timestamp>.yaml` containing the stacked defaults/experiments/workflow files plus any CLI overrides passed to Snakemake.
-- Rules reference `WORKFLOW_CONFIG_PATH` directly instead of generating per-rule configs. Wildcards (model name, dataset, etc.) are passed strictly through CLI flags, so runtime scripts can treat them as highest-precedence overrides.
-- Mode activation happens inside `CompositeParams` using the shared `ModeRegistry`. No workflow-level mutation is required anymore.
+**Key Behaviors:**
+- Config files are loaded **once** via manual YAML parsing, not Snakemake's `configfile:` directive
+- The frozen dict is reused for all subsequent workflow parses during cluster execution
+- Changes to config files on disk are **ignored** for the duration of the workflow run
+- CLI `--config` overrides are merged at workflow start and also frozen
+- The frozen snapshot is written to `logs/configs/workflow_config_<timestamp>.yaml`
 
-With this setup the runtime script loads a stable base config, applies mode patches derived from `config_modes.yaml`, merges CLI overrides, and finally persists the fully resolved payload next to its primary artifact.
+**Why This Matters:**
+- **Reproducibility:** All jobs in a workflow run see identical configuration
+- **Safety:** Mid-workflow config edits cannot cause inconsistent results
+- **Transparency:** Frozen config is logged with warning header explaining the behavior
+
+**Usage Implications:**
+- ✅ Config changes **do not** affect running workflows (this is intentional!)
+- ✅ To use updated configs, start a **new** workflow run
+- ✅ Frozen snapshot is preserved in logs for reproducibility audits
+- ✅ CLI `--config` overrides work normally (merged at workflow start)
+
+#### Config Snapshot and Runtime Script Integration
+
+After freezing, the config is snapshotted for runtime scripts:
+
+- The helper writes `logs/configs/workflow_config_<timestamp>.yaml` containing the frozen merged config
+- Rules reference `WORKFLOW_CONFIG_PATH` directly instead of generating per-rule configs
+- Wildcards (model name, dataset, etc.) are passed strictly through CLI flags, so runtime scripts can treat them as highest-precedence overrides
+- Mode activation happens inside `CompositeParams` using the shared `ModeRegistry`. No workflow-level mutation is required
+
+With this setup the runtime script loads a stable frozen base config, applies mode patches derived from `config_modes.yaml`, merges CLI overrides, and finally persists the fully resolved payload next to its primary artifact.
 
 ## Implementation Details
 

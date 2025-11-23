@@ -359,6 +359,7 @@ n_timesteps: 20  # In model config
 1. Config file load order (later files override earlier)
 2. Command-line args override config files
 3. Model defaults override `None` values
+4. **Config frozen at workflow start** (cluster execution only)
 
 **Solutions:**
 
@@ -380,10 +381,52 @@ Command-line --config args  (highest priority)
 dt: 2
 ```
 
-3. **Check config_runtime.yaml**:
+3. **Check the frozen workflow config snapshot**:
 ```bash
-cat logs/config_runtime.yaml  # See final compiled config
+# Find the most recent workflow config
+ls -lt logs/configs/workflow_config_*.yaml | head -1
+
+# View the frozen config used by the workflow
+cat logs/configs/workflow_config_<timestamp>.yaml
 ```
+
+4. **Understanding config freezing** (cluster execution):
+
+When using `snakecharm.sh` for cluster execution, the configuration is **frozen** at workflow start for reproducibility. This means:
+
+- ✅ Config changes **do not** affect running workflows (this is intentional!)
+- ✅ All jobs in a workflow run see identical configuration
+- ✅ To use updated configs, start a **new** workflow run
+- ✅ The frozen snapshot is saved in `logs/configs/workflow_config_<timestamp>.yaml`
+
+**Example scenario:**
+```bash
+# Start workflow
+./dynvision/cluster/snakecharm.sh train_model
+
+# While workflow running, you edit config_defaults.yaml
+vim dynvision/configs/config_defaults.yaml  # Change learning_rate: 0.001 → 0.0001
+
+# Jobs submitted AFTER the edit still use learning_rate: 0.001
+# The workflow uses the frozen config from workflow start
+```
+
+**To apply config changes:**
+```bash
+# Option 1: Stop current workflow and start new one with updated config
+# (Ctrl+C to stop, then restart)
+
+# Option 2: Use CLI override instead (works immediately)
+./dynvision/cluster/snakecharm.sh train_model --config learning_rate=0.0001
+```
+
+**Why freezing is necessary:**
+Without freezing, changing config files mid-workflow would cause:
+- Jobs submitted early vs. late to have different parameters
+- Inconsistent results within a single experiment
+- Irreproducible workflows
+
+See [Parameter Processing Guide](../development/guides/parameter-processing.md#config-freezing-for-cluster-execution) for technical details.
 
 ---
 
