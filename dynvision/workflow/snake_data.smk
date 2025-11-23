@@ -125,7 +125,6 @@ rule get_data:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         flag = directory(project_paths.data.raw \
@@ -248,18 +247,17 @@ rule build_ffcv_datasets:
         train_ratio: Split ratio for training data
         max_resolution: Maximum image resolution
     """
-    input:
+    input: 
         script = SCRIPTS / 'data' / 'ffcv_datasets.py',
         data_ready = project_paths.data.interim / '{data_name}' / 'train_all.ready'
     params:
         train_ratio = get_param('train_ratio'),
         max_resolution = lambda w: config.data_resolution[w.data_name],
-        config_path = lambda w: process_configs(config, wildcards=w),
+        base_config_path = WORKFLOW_CONFIG_PATH,
         data_dir = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),    
     output:
         train = project_paths.data.processed / '{data_name}' / 'train_all' / 'train.beton',
@@ -269,7 +267,7 @@ rule build_ffcv_datasets:
     shell:
         """
         {params.execution_cmd} \
-            --config_path {params.config_path:q} \
+            --config_path {params.base_config_path:q} \
             --input {params.data_dir:q} \
             --output_train {output.train:q} \
             --output_val {output.val:q} \

@@ -41,7 +41,6 @@ rule plot_confusion_matrix:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         plot = project_paths.figures / '{path}_{data_name}_confusion.{format}'
@@ -80,7 +79,6 @@ rule plot_classifier_responses:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         directory(project_paths.figures \
@@ -117,7 +115,6 @@ rule plot_weight_distributions:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         plot = project_paths.figures \
@@ -167,17 +164,17 @@ rule process_test_data:
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
-        measures = ['response_avg', 'response_std', 'label_confidence', 'guess_confidence', 'first_label_confidence', 'classifier_top10', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 
+        measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 'classifier_top5', 'label_confidence',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
         additional_parameters = 'epoch',
         batch_size = 1,
         remove_input_responses = True,
+        fail_on_missing_inputs = False,
         sample_resolution = 'sample',  # 'sample' or 'class'
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     priority: 100,
     output:
@@ -194,7 +191,8 @@ rule process_test_data:
             --batch_size {params.batch_size} \
             --sample_resolution {params.sample_resolution} \
             --additional_parameters {params.additional_parameters} \
-            --remove_input_responses {params.remove_input_responses}
+            --remove_input_responses {params.remove_input_responses} \
+            --fail_on_missing_inputs {params.fail_on_missing_inputs}
         """
 
 rule process_wandb_data:
@@ -205,7 +203,6 @@ rule process_wandb_data:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         Path('{path}_summary.csv'),
@@ -243,7 +240,6 @@ rule plot_performance:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'performance.png',
@@ -292,7 +288,6 @@ rule plot_training:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
@@ -334,7 +329,6 @@ rule plot_dynamics:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'dynamics_{focus_layer}.png',
@@ -376,7 +370,6 @@ rule plot_responses:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'responses.png',
@@ -419,7 +412,6 @@ rule plot_timeparams_tripytch:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
         category = ' '.join(['tau', 'trc', 'tsk']),
         dt = getattr(config, 'dt', 2),
@@ -468,7 +460,6 @@ rule plot_timestep_tripytch:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
         category = ' '.join(['tsteps', 'lossrt', 'idle']),
         dt = getattr(config, 'dt', 2),
@@ -517,7 +508,6 @@ rule plot_connection_tripytch:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
         category = ' '.join(['rctarget', 'skip', 'feedback']),
         dt = getattr(config, 'dt', 2),
@@ -556,7 +546,6 @@ rule plot_experiment:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.figures / '{experiment}' / '{experiment}_{model_identifier}' / 'experiment.png',
@@ -582,7 +571,6 @@ rule plot_unrolling:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.figures / 'unrolling' / 'unrolling_{model_name}:{args1}tff=*{args2}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.png',

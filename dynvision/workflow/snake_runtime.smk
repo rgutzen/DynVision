@@ -37,7 +37,6 @@ rule init_model:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         model_state = project_paths.models \
@@ -96,7 +95,6 @@ rule train_model:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=get_param('use_distributed_mode', False)(w),
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         model_state = project_paths.models \
@@ -173,7 +171,6 @@ rule test_model:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         responses = project_paths.reports \
@@ -212,7 +209,6 @@ rule best_checkpoint_to_statedict:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-best.pt'
@@ -226,7 +222,7 @@ rule best_checkpoint_to_statedict:
 checkpoint intermediate_checkpoint_to_statedict:
     """Convert Lightning checkpoints to state dictionaries."""
     input:
-        # model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
         checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
@@ -235,7 +231,6 @@ checkpoint intermediate_checkpoint_to_statedict:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-epoch={epoch}.pt'
