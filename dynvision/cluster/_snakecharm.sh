@@ -35,8 +35,8 @@ if [[ ! " $* " =~ " --config " ]]; then
     args+=("--config")
 fi
 
-# Always append use_executor=True to config
-args+=("use_executor=True")
+# Cluster execution auto-detected via environment variables (SLURM_JOB_ID, etc.)
+# No config override needed - see docs/development/planning/cluster-execution.md
 
 echo "Final command will be:"
 echo "snakemake ${args[@]} --profile $current_dir/profiles/slurm"

@@ -55,6 +55,7 @@ test:
     drop_last: true              # Consistent batch sizes
     prefetch_factor: null        # Disable prefetching
     num_workers: 4               # Moderate parallelism
+    batch_size: 64               # Smaller batch size for testing
   
   # Trainer configuration for testing
   trainer:
@@ -138,12 +139,12 @@ cache_size: 1000
 # Training run
 seed: 0
 train_ratio: 0.9
-epochs: 200
+epochs: 350
 check_val_every_n_epoch: 10
 log_every_n_steps: 20
 accumulate_grad_batches: 4
 num_sanity_val_steps: 0
-precision: "bf16-mixed"
+precision: "bf16"
 profiler: None
 benchmark: True
 enable_progress_bar: False
@@ -216,9 +217,14 @@ lr_parameter_groups:
 
 # ===== LEARNING RATE & SCHEDULER =====
 learning_rate: 0.0002
+# scheduler: LinearWarmupCosineAnnealingLR
 scheduler: CosineAnnealingLR
 scheduler_kwargs:
-  T_max: 300
+  # warmup_epochs: 10
+  # max_epochs: 350
+  # warmup_start_lr: 0.0000001
+  # eta_min: 0.0000001
+  T_max: 350
 scheduler_configs:
   interval: epoch
   frequency: 1
@@ -231,5 +237,6 @@ lr_scaling:
 
 # System
 log_level: info
-use_executor: False  # automatic setting (don't change)
+# use_executor removed: cluster execution now auto-detected via environment variables
+# See: docs/development/planning/cluster-execution.md
 verbose: True
