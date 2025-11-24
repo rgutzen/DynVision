@@ -835,5 +835,6 @@ loader = get_ffcv_dataloader(..., os_cache=True)
 
 - [Loss Functions Reference](../reference/losses.md) - Loss normalization with temporal masking
 - [Model Base Classes](../reference/model-base.md) - TemporalBase implementation details
-- [Configuration System](configuration.md) - YAML configuration reference
-- [FFCV Integration](../tutorials/ffcv-setup.md) - Setting up FFCV dataloaders
+- [Configuration Reference](../reference/configuration.md) - Complete YAML configuration reference
+- [Data Processing Guide](data-processing.md) - General data loading and preprocessing
+- [FFCV Dependency Guide](../development/dependencies/ffcv.md) - FFCV technical details

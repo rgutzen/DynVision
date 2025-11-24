@@ -498,4 +498,6 @@ If FFCV data loading fails:
 
 ## Next Steps
 
-For more information on specific data loaders, see the [API Reference](../reference/data-loaders.md).
+- Learn about temporal data presentation in [Temporal Data Presentation Guide](temporal-data-presentation.md)
+- Explore workflow management in [Workflow Guide](workflows.md)
+- See configuration options in [Configuration Reference](../reference/configuration.md)

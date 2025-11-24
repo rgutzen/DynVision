@@ -627,7 +627,7 @@ For more details on workflows, see:
 ## Next Steps
 
 - Study [example models](../reference/models.md) for inspiration
-- Check [evaluation guides](../user-guide/evaluation.md) for testing
+- Check [model testing guide](model-testing.md) for evaluation approaches
 
 ## Related Resources
 

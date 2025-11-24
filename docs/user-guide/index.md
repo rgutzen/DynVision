@@ -149,14 +149,14 @@ Below are step-by-step instructions for common tasks in DynVision:
 
 ## FAQ
 
-**Q: How do I run DynVision without using Snakemake?**  
-A: While Snakemake provides the most integrated experience, you can use DynVision components directly in Python scripts. See [Direct API Usage](direct-api-usage.md) for examples.
+**Q: How do I run DynVision without using Snakemake?**
+A: While Snakemake provides the most integrated experience, you can use DynVision components directly in Python scripts. Import models from `dynvision.models` and use them with PyTorch Lightning's Trainer.
 
-**Q: Can I use DynVision with my existing models?**  
-A: Yes, you can wrap existing PyTorch models with DynVision's `LightningBase` class to leverage its training and evaluation infrastructure. See [Integrating Existing Models](integrating-existing-models.md).
+**Q: Can I use DynVision with my existing models?**
+A: Yes, you can wrap existing PyTorch models with DynVision's `LightningBase` class to leverage its training and evaluation infrastructure. See [Custom Models](custom-models.md) for guidance.
 
-**Q: How do I tune hyperparameters efficiently?**  
-A: DynVision supports parameter sweeps through Snakemake's config system. See [Hyperparameter Optimization](hyperparameter-optimization.md) for more details.
+**Q: How do I tune hyperparameters efficiently?**
+A: DynVision supports parameter sweeps through Snakemake's config system. Define parameter ranges in your config files and use wildcards in workflow rules to run multiple experiments. See [Workflow Management](workflows.md) for details.
 
 **Q: Can I use DynVision without a GPU?**  
 A: Yes, DynVision works on CPU, but training will be significantly slower. Use smaller models and datasets for experimentation on CPU.
@@ -168,4 +168,4 @@ A: See the [Contributing Guide](../contributing.md) for information on how to co
 
 For common issues and their solutions, see the [Troubleshooting Guide](troubleshooting.md).
 
-If you encounter problems not covered in the documentation, please [open an issue](https://github.com/yourusername/dynvision/issues) on GitHub.
+If you encounter problems not covered in the documentation, please [open an issue](https://github.com/Lindsay-Lab/dynvision/issues) on GitHub.
