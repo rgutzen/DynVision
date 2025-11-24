@@ -7,6 +7,10 @@ repo_name: Lindsay-Lab/dynvision
 repo_url: https://github.com/Lindsay-Lab/dynvision
 edit_uri: edit/main/docs/
 
+# Specify docs directory (relative to mkdocs.yml location)
+docs_dir: .
+site_dir: ../site
+
 theme:
   name: material
   palette:
@@ -43,8 +47,8 @@ markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - attr_list
   - md_in_html
 
@@ -60,7 +64,7 @@ plugins:
             show_source: true
   - git-revision-date-localized:
       fallback_to_build_date: true
-  - social
+  # - social  # Disabled: requires cairosvg (pip install "mkdocs-material[imaging]")
 
 extra_javascript:
   - https://polyfill.io/v3/polyfill.min.js?features=es6
@@ -76,18 +80,15 @@ nav:
     - Data Processing: user-guide/data-processing.md
     - Workflow Management: user-guide/workflows.md
     - Visualization: user-guide/visualization.md
-    - Model Evaluation: user-guide/evaluation.md
+    - Model Testing: user-guide/model-testing.md
+    - Temporal Data Presentation: user-guide/temporal-data-presentation.md
+    - Parameter Handling: user-guide/parameter-handling.md
     - Cluster Integration: user-guide/cluster-integration.md
-    - Performance Optimization: user-guide/performance-optimization.md
-    - Hyperparameter Optimization: user-guide/hyperparameter-optimization.md
-    - Transfer Learning: user-guide/transfer-learning.md
     - Troubleshooting: user-guide/troubleshooting.md
   - Tutorials:
-    - tutorials/index.md
-    - Basic Model Training: tutorials/basic-model-training.md
-    - Visualization Tutorial: tutorials/visualization-tutorial.md
-    - Custom Model Creation: tutorials/custom-model-creation.md
-    - Experiment Design: tutorials/experiment-design.md
+    - tutorial/index.md
+    - Basic Model Training: tutorial/basic-model-training.md
+    - Custom Model Creation: tutorial/custom-model.md
   - Reference:
     - reference/index.md
     - Architecture: reference/organization.md
@@ -95,37 +96,34 @@ nav:
     - Recurrence Types: reference/recurrence-types.md
     - Dynamics Solvers: reference/dynamics-solvers.md
     - Configuration: reference/configuration.md
-    - Data Loaders: reference/data-loaders.md
-    - Visualization: reference/visualization.md
     - Losses: reference/losses.md
-    - Utilities: reference/utilities.md
+    - Optimizers & Schedulers: reference/optimizers-schedulers.md
   - Explanation:
     - explanation/index.md
     - Biological Plausibility: explanation/biological-plausibility.md
-    - Temporal Dynamics: explanation/temporal-dynamics.md
+    - Temporal Dynamics: explanation/temporal_dynamics.md
     - Design Philosophy: explanation/design-philosophy.md
-    - Comparison with Other Frameworks: explanation/comparison.md
   - Developer Guide:
     - development/index.md
     - Planning:
       - Documentation TODOs: development/planning/todo-docs.md
       - Development Roadmap: development/planning/todo-roadmap.md
     - Guides:
+      - AI Style Guide: development/guides/ai-style-guide.md
       - Claude Code Guide: development/guides/claude-guide.md
       - Documentation Style: development/guides/documentation-style.md
-    - Architecture:
-      - Software Patterns: development/architecture/software-patterns.md
+      - Parameter Processing: development/guides/parameter-processing.md
+      - Transform System: development/guides/transform-system.md
     - Dependencies:
       - Snakemake: development/dependencies/snakemake.md
       - PyTorch Lightning: development/dependencies/pytorch-lightning.md
       - FFCV: development/dependencies/ffcv.md
   - Contributing: contributing.md
-  - API Reference: api/
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/yourusername/dynvision
+      link: https://github.com/Lindsay-Lab/dynvision
   version:
     provider: mike
     default: latest
