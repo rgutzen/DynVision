@@ -131,36 +131,56 @@ rule plot_weight_distributions:
 
 rule process_test_data:
     """Process test data by combining layer responses and test performance metrics.
-    
-    This unified rule combines the functionality of process_plotting_data and 
+
+    This unified rule combines the functionality of process_plotting_data and
     process_test_performance to create a single comprehensive dataset.
-    
+
+    Supports filesystem wildcards (?) with checkpoint awareness:
+        - Use ? in output filename to match only existing files
+        - Example: seed='5?' matches seed=5000, seed=5001, etc. from filesystem
+        - Works with checkpoint-generated files (e.g., trained-epoch=?)
+        - Input functions re-evaluate after checkpoints complete
+        - Mix with * for config expansion where needed
+
     Input:
-        responses: Model layer response files (.pt)
-        test_outputs: Test output files (.csv)
+        responses: Model layer response files (.pt) - expanded with filesystem wildcards
+        test_outputs: Test output files (.csv) - expanded with filesystem wildcards
         script: Processing script
-    
+
     Output:
         Unified test data CSV with layer metrics and performance metrics
     """
     input:
-        responses = expand(project_paths.reports \
+        # # Checkpoint dependency: ensures checkpoint completes before filesystem expansion
+        # checkpoint_files = lambda w: (
+        #     checkpoints.intermediate_checkpoint_to_statedict.get(
+        #         model_name=w.model_name,
+        #         model_args=f"{w.args1}{w.args2}",
+        #         seed=w.seed,
+        #         data_name=w.data_name,
+        #         epoch='*'
+        #     ).output
+        #     if ('?' in str(config.experiment_config[w.experiment].get('status', w.status)) and
+        #         'trained-epoch=' in str(config.experiment_config[w.experiment].get('status', w.status)))
+        #     else []
+        # ),
+        responses =lambda w: expand(project_paths.reports \
             / '{data_loader}' \
             / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
-            category = lambda w: w.category_str.strip('*'),
-            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+            category = w.category_str.strip('*'),
+            category_value = config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
+            status = config.experiment_config[w.experiment].get('status', w.status),
+            data_loader = config.experiment_config[w.experiment]['data_loader'],
+            data_args = args_product(config.experiment_config[w.experiment]['data_args']),
         ),
-        test_outputs = expand(project_paths.reports \
+        test_outputs = lambda w: expand(project_paths.reports \
             / '{data_loader}' \
             / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
-            category = lambda w: w.category_str.strip('*'),
-            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+            category = w.category_str.strip('*'),
+            category_value = config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
+            status = config.experiment_config[w.experiment].get('status', w.status),
+            data_loader = config.experiment_config[w.experiment]['data_loader'],
+            data_args = args_product(config.experiment_config[w.experiment]['data_args']),
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:

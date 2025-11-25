@@ -31,6 +31,17 @@ sys.path.insert(0, str(package_dir))
 
 from dynvision.project_paths import project_paths
 
+# Import workflow utilities (minimal dependency functions for parsing)
+# These are imported from a separate module to enable testing and maintain
+# clean separation between Snakemake integration and pure utility functions
+from workflow_utils import (
+    expand_filesystem_pattern,
+    args_product as args_product_base,
+    parse_arguments as parse_arguments_base,
+    replace_param_in_string,
+    dict_poped,
+)
+
 pylogger = logging.getLogger('workflow.utils')
 
 def is_cluster_execution() -> bool:
@@ -163,18 +174,18 @@ wildcard_constraints:
     data_group = r'[a-z0-9]+',
     data_group_not_all = r'(?!all$)[a-z0-9]+',
     data_loader = r'[a-zA-Z]+',
-    status = r'(init|trained|trained-[a-z0-9\. =]+)',
-    seed = r'\d+',
-    seeds = r'[\d\.]+',
+    status = r'(init|trained|trained-[a-z0-9\. =\?]+)',
+    seed = r'[\d\?]+',
+    seeds = r'[\d\.\?]+',
     category_str = r'([a-z0-9]+=\*|\s?)',
-    model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',
-    data_args = r'(:[a-zTF,;:\+=\d\.]+|\s?)',
-    args = r'([a-z,;:\+=\d\.]+|\s?)',
-    args1 = r'([a-z,;:\+=\d\.]+[,;:\+]|\s?)',
-    args2 = r'([a-z,;:\+=\d\.]+|\s?)',
+    model_args = r'(:[a-z,;:\+=\d\.\*\?]+|\s?)',
+    data_args = r'(:[a-zTF,;:\+=\d\.\?]+|\s?)',
+    args = r'([a-z,;:\+=\d\.\?]+|\s?)',
+    args1 = r'([a-z,;:\+=\d\.\?]+[,;:\+]|\s?)',
+    args2 = r'([a-z,;:\+=\d\.\?]+|\s?)',
     experiment = r'[a-z]+',
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)',
-    model_identifier = r'([\w:+=,\*\#]+)'
+    model_identifier = r'([\w:+=,\*\?\#]+)'
 
 localrules: all, symlink_data_subsets, symlink_data_groups
 ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model > process_test_data > test_model
@@ -247,7 +258,10 @@ def parse_arguments(
     assigner: str = '=',
     prefix: str = ":"
 ) -> str:
-    """Parse argument string into command line arguments.
+    """Parse argument string from wildcards into command line arguments.
+
+    Wrapper around workflow_utils.parse_arguments that extracts the
+    argument string from Snakemake wildcards.
 
     Args:
         wildcards: Snakemake wildcards object
@@ -259,110 +273,132 @@ def parse_arguments(
     Returns:
         Formatted command line arguments string
     """
-    args = getattr(wildcards, args_key, '')
-    args = args.lstrip(prefix).split(delimiter)
-
-    if len(args) == 1 and not args[0]:
-        return ""
-
-    args_dict = {
-        arg.split(assigner)[0]: arg.split(assigner)[1]
-        for arg in args
-    }
-
-    return " ".join(f"--{key} {value}" for key, value in args_dict.items())
+    args_str = getattr(wildcards, args_key, '')
+    return parse_arguments_base(
+        args_str=args_str,
+        delimiter=delimiter,
+        assigner=assigner,
+        prefix=prefix
+    )
 
 def args_product(
     args_dict: Optional[Dict] = None,
     delimiter: str = '+',
     assigner: str = '=',
-    prefix: str = ':'
+    prefix: str = ':',
+    enable_fs_wildcards: bool = True,
+    fs_pattern: Optional[str] = None,
+    fs_base_path: Optional[Path] = None
 ) -> List[str]:
-    """Generate product of argument combinations.
+    """Generate product of argument combinations with optional filesystem wildcards.
+
+    Wrapper around workflow_utils.args_product that integrates with
+    Snakemake config for '*' wildcard expansion.
+
+    Supports mixed wildcard types:
+    - '*' : Expand from config.experiment_config.categories
+    - '?' : Expand from filesystem (e.g., 'seed=5?' finds seed=5000, seed=5001)
+    - concrete values: Use as-is
 
     Args:
         args_dict: Dictionary of argument options
         delimiter: Character separating arguments
         assigner: Character separating key and value
         prefix: Prefix character for argument string
+        enable_fs_wildcards: Enable filesystem wildcard expansion
+        fs_pattern: Pattern template for filesystem search (e.g., 'models/{model_name}/*.pt')
+        fs_base_path: Base path for filesystem search
 
     Returns:
         List of argument combination strings
+
+    Example:
+        >>> args_product(
+        ...     {'tau': '*', 'seed': '5?', 'rctype': 'full'},
+        ...     enable_fs_wildcards=True,
+        ...     fs_pattern='models/DyRCNNx8/*.pt'
+        ... )
+        [':tau=3+seed=5000+rctype=full',
+         ':tau=5+seed=5000+rctype=full',
+         ':tau=3+seed=5001+rctype=full',
+         ':tau=5+seed=5001+rctype=full']
     """
-    if not args_dict:
-        return ['']
+    # Extract config categories if available
+    config_categories = None
+    if hasattr(config, 'experiment_config') and hasattr(config.experiment_config, 'categories'):
+        config_categories = config.experiment_config.categories
 
-    # Convert single values to lists
-    args_dict = {
-        key: [value] if not isinstance(value, list) else value
-        for key, value in args_dict.items()
-    }
+    # Call base function with config
+    return args_product_base(
+        args_dict=args_dict,
+        delimiter=delimiter,
+        assigner=assigner,
+        prefix=prefix,
+        config_categories=config_categories,
+        enable_fs_wildcards=enable_fs_wildcards,
+        fs_pattern=fs_pattern,
+        fs_base_path=fs_base_path
+    )
 
-    # Generate combinations
-    args_combinations = product(*args_dict.values())
-    return [
-        prefix + delimiter.join(
-            f'{key}{assigner}{value}'
-            for key, value in zip(args_dict.keys(), combo)
-        )
-        for combo in args_combinations
-    ]
+def expand_mixed(pattern: Union[str, Path], **wildcards) -> List[str]:
+    """
+    Expand pattern with mixed wildcard types (? for filesystem, * for config).
 
-def replace_param_in_string(
-    s: str,
-    key: str = "contrast",
-    value_type: Optional[type] = None,
-    new_value: str = "*"
-) -> str:
-    """Replace parameter value in string with new value.
+    Drop-in replacement for Snakemake's expand() that supports filesystem
+    wildcards. Automatically detects and expands '?' wildcards by globbing
+    the filesystem before passing to standard expand().
 
     Args:
-        s: Input string
-        key: Parameter key to replace
-        value_type: Type of value to match
-        new_value: New value to insert
+        pattern: Path pattern with {wildcards}
+                Example: 'reports/{data_loader}/{model}_{seed}_{data}_test_data.csv'
+        **wildcards: Wildcard values, can include:
+                    - Lists: Used as-is
+                    - Strings with '?': Expanded from filesystem
+                    - Strings with '*': Expanded from config (if applicable)
+                    - Concrete strings: Used as-is
 
     Returns:
-        Modified string
+        List of expanded paths
 
-    Raises:
-        ValueError: If parameter not found or invalid value type
+    Example:
+        >>> expand_mixed(
+        ...     'reports/{loader}/{model}_{seed}_{data}_test.csv',
+        ...     loader='duration',
+        ...     model='DyRCNNx8',
+        ...     seed='5?',  # filesystem wildcard
+        ...     data='imagenette'
+        ... )
+        ['reports/duration/DyRCNNx8_5000_imagenette_test.csv',
+         'reports/duration/DyRCNNx8_5001_imagenette_test.csv',
+         'reports/duration/DyRCNNx8_5023_imagenette_test.csv']
+
+    Notes:
+        - Filesystem expansion happens first, then standard expand()
+        - If no files match '?' pattern, raises ValueError with helpful message
+        - Can mix '?' and '*' wildcards in same call
     """
-    patterns = {
-        int: rf"{key}=(\d+)",
-        float: rf"{key}=(\d+(\.\d+)?)",
-        str: rf"{key}=([a-z]+)",
-        None: rf"{key}=([\da-z\.]+)"
-    }
+    # Check if any wildcards need filesystem expansion
+    has_fs_wildcards = any(
+        isinstance(v, str) and '?' in v
+        for v in wildcards.values()
+    )
 
-    if value_type not in patterns:
-        raise ValueError(f"Invalid value type: {value_type}")
+    if has_fs_wildcards:
+        # Expand filesystem wildcards
+        try:
+            expanded_wildcards = expand_filesystem_pattern(
+                pattern=str(pattern),
+                wildcard_values=wildcards,
+                base_path=None  # Pattern should be absolute or relative to cwd
+            )
+            # Update wildcards with expanded values
+            wildcards.update(expanded_wildcards)
+        except ValueError as e:
+            pylogger.error(f"Filesystem wildcard expansion failed in expand_mixed(): {e}")
+            raise
 
-    pattern = patterns[value_type]
-    match = re.search(pattern, s)
-    
-    if not match:
-        raise ValueError(f"No {key} value found in string: {s}")
-        
-    return s.replace(match.group(0), f"{key}={new_value}")
-
-def dict_poped(d: Dict, keys: Union[str, List[str]]) -> Dict:
-    """Create new dictionary with specified keys removed.
-
-    Args:
-        d: Input dictionary
-        keys: Key or list of keys to remove
-
-    Returns:
-        New dictionary without specified keys
-    """
-    dc = d.copy()
-    if isinstance(keys, list):
-        for key in keys:
-            dc.pop(key, None)
-    else:
-        dc.pop(keys, None)
-    return dc
+    # Use standard Snakemake expand() with expanded wildcards
+    return expand(str(pattern), **wildcards)
 
 def get_conda_env() -> tuple[Optional[str], str]:
     """Get information about the current conda environment.

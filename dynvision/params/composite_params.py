@@ -568,6 +568,16 @@ class CompositeParams(BaseParams):
         toggle_values: Dict[str, Any] = {}
         config_dict = dict(config_params)
         cli_dict = dict(cli_params)
+
+        def _candidate(raw: Any) -> Optional[Any]:
+            """Return a usable toggle candidate or None if the value is payload-like."""
+
+            if isinstance(raw, Mapping):
+                return None
+            if isinstance(raw, list):
+                return None
+            return raw
+
         for mode_name in ModeRegistry.list_modes():
             definition = ModeRegistry.get_definition(mode_name)
             if not definition:
@@ -576,10 +586,14 @@ class CompositeParams(BaseParams):
             shortcut_keys = (definition.toggle_key, mode_name)
             for key in shortcut_keys:
                 if key in config_dict:
-                    value = config_dict[key]
+                    candidate = _candidate(config_dict[key])
+                    if candidate is not None:
+                        value = candidate
             for key in shortcut_keys:
                 if key in cli_dict:
-                    value = cli_dict[key]
+                    candidate = _candidate(cli_dict[key])
+                    if candidate is not None:
+                        value = candidate
             toggle_values[definition.toggle_key] = value
         return toggle_values
 

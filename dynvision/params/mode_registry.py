@@ -88,7 +88,11 @@ class ModeRegistry:
         for key, value in raw.items():
             if not key.startswith("use_") or not key.endswith("_mode"):
                 continue
-            mode_name = key[len("use_") : -len("_mode")]
+
+            # Keep the `_mode` suffix in the public mode name so payload keys
+            # and human-readable sections align one-to-one (e.g., local_mode).
+            mode_name = key[len("use_") :]
+
             payload = raw.get(mode_name, {})
             if payload is None:
                 payload = {}
@@ -212,10 +216,10 @@ class ModeRegistry:
         """Populate the default detector map. Separated for testability."""
 
         cls._DEFAULT_DETECTORS = {
-            "local": _detect_local_mode,
-            "debug": _detect_debug_mode,
-            "large_dataset": _detect_large_dataset_mode,
-            "distributed": _detect_distributed_mode,
+            "local_mode": _detect_local_mode,
+            "debug_mode": _detect_debug_mode,
+            "large_dataset_mode": _detect_large_dataset_mode,
+            "distributed_mode": _detect_distributed_mode,
         }
 
 

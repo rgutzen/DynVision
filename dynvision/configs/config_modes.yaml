@@ -1,6 +1,6 @@
 # Local Settings
 use_local_mode: "auto"
-local:
+local_mode:
   enable_progress_bar: True
   use_debug_mode: False
   use_distributed_mode: False
@@ -11,7 +11,7 @@ local:
 
 # Debugging Settings
 use_debug_mode: False
-debug:
+debug_mode:
   batch_size: 3
   check_val_every_n_epoch: 1
   log_every_n_steps: 1
@@ -20,7 +20,7 @@ debug:
 
 # Large Dataset Settings
 use_large_dataset_mode: False
-large_dataset:
+large_dataset_mode:
   # batch_size: 32
   use_ffcv: True
   order: "QUASI_RANDOM"
@@ -33,7 +33,7 @@ large_dataset:
 
 # Distributed Settings
 use_distributed_mode: False
-distributed:
+distributed_mode:
   use_distributed: False  # For FFCV dataloaders - let lightning handle distribution
   strategy: "ddp"  # Use standard DDP for SLURM compatibility
   devices: 4  # Number of GPUs per node

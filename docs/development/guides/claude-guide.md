@@ -432,6 +432,34 @@ Components:
 - data_group: all, snakes, mollusks (class subsets)
 ```
 
+**Wildcard Expansion**:
+
+DynVision supports two types of wildcard expansion in workflow files:
+
+1. **Config-based (`*`)**: Expands from `config_experiments.yaml`
+   ```python
+   # Expands to: tau=3, tau=5, tau=9 (from config)
+   tau=*
+   ```
+
+2. **Filesystem-based (`?`)**: Expands from existing files
+   ```python
+   # Expands to: seed=5000, seed=5001 (only if files exist)
+   seed=5?
+   ```
+
+**Implementation**:
+- Pure functions in `workflow_utils.py` (minimal dependencies)
+- Integration wrappers in `snake_utils.smk`
+- `expand_mixed()`: Drop-in replacement for `expand()` with `?` support
+- Works in cluster minimal environment (no PyTorch/Lightning required)
+
+**Checkpoint Integration**:
+- Use input functions (`lambda w: expand_mixed(...)`) for checkpoint-generated files
+- Input functions defer evaluation until after checkpoints complete
+- Example: `trained-epoch=?` discovers intermediate model checkpoints dynamically
+- See `process_test_data` rule in `snake_visualizations.smk` for reference pattern
+
 ## Project Paths
 
 Edit `dynvision/project_paths.py` to configure:

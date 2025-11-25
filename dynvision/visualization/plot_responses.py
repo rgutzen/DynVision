@@ -18,7 +18,8 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,13 +27,20 @@ import pandas as pd
 import seaborn as sns
 
 from dynvision.utils.visualization_utils import (
+    aggregate_plot_data,
     calculate_label_indicator,
+    find_classifier_meta_columns,
+    find_classifier_value_columns,
+    find_layer_response_columns,
     get_color,
     get_display_name,
     get_ordering,
     load_config_from_args,
     order_layers,
+    resolve_measure_columns,
     save_plot,
+    standardize_category_value,
+    standardize_series,
 )
 
 # Configure logging - simplified to prevent duplicate output
@@ -83,20 +91,161 @@ FORMATTING = {
     "max_global_ymax": 4,
 }
 
-# Errorbar configuration for lineplot
-ERRORBAR_CONFIG = {
-    "errorbar": "ci",
-    "err_style": "band",
-    "err_kws": {"alpha": 0.2, "edgecolor": "none"},
-}
-
-
 CLASSIFIER_TOP_PREFIX = "classifier_top"
 SPECIAL_DIMENSIONS = {"layers", "classifier_topk"}
 MAX_DIMENSION_VALUES = 15
 
 # Cache classifier unit indices for legend formatting
 CLASSIFIER_UNIT_ID_MAP: Dict[str, Optional[int]] = {}
+
+
+@dataclass
+class MeasureSpec:
+    requested: str
+    column: str
+
+
+@dataclass
+class ColumnPlan:
+    needed_columns: List[str]
+    accuracy_specs: List[MeasureSpec]
+    confidence_specs: List[MeasureSpec]
+    layer_columns: List[str]
+    classifier_columns: List[str]
+    classifier_meta_columns: List[str]
+    dimension_columns: List[str]
+
+    def value_columns(self) -> List[str]:
+        columns = {spec.column for spec in self.accuracy_specs}
+        columns.update(spec.column for spec in self.confidence_specs)
+        columns.update(self.layer_columns)
+        columns.update(self.classifier_columns)
+        return sorted(columns)
+
+
+def _read_available_columns(path: Path) -> List[str]:
+    header_df = pd.read_csv(path, nrows=0)
+    return list(header_df.columns)
+
+
+def _create_measure_specs(
+    available_columns: Sequence[str],
+    requested: List[str],
+    measure_type: str,
+) -> List[MeasureSpec]:
+    if not requested:
+        return []
+
+    resolved, missing = resolve_measure_columns(available_columns, requested)
+    if missing:
+        logger.warning(
+            "%s measure(s) not found in data columns and will be skipped: %s",
+            measure_type.capitalize(),
+            ", ".join(missing),
+        )
+    return [MeasureSpec(requested=req, column=col) for req, col in resolved]
+
+
+def _build_column_plan(
+    available_columns: Sequence[str],
+    subplot_var: str,
+    hue_var: str,
+    column_var: Optional[str],
+    subplot_key: str,
+    hue_key: str,
+    column_key: Optional[str],
+    accuracy_requests: List[str],
+    confidence_requests: List[str],
+    focus_layer: Optional[str] = None,
+) -> ColumnPlan:
+    available_set = set(available_columns)
+    needed = {"times_index", "label_index"}
+
+    missing_base = [col for col in needed if col not in available_set]
+    if missing_base:
+        raise ValueError(
+            "Required base column(s) missing from data: " + ", ".join(missing_base)
+        )
+
+    def _require_dimension(
+        dimension: Optional[str], key: Optional[str], label: str
+    ) -> None:
+        if dimension and not _is_special_dimension(dimension):
+            if key is None:
+                raise ValueError(f"{label}_key required for dimension '{dimension}'")
+            if key not in available_set:
+                raise ValueError(
+                    f"Column '{key}' (for {label} dimension '{dimension}') not found in data"
+                )
+            needed.add(key)
+
+    _require_dimension(subplot_var, subplot_key, "subplot")
+    _require_dimension(hue_var, hue_key, "hue")
+    _require_dimension(column_var, column_key, "column")
+
+    accuracy_specs = _create_measure_specs(
+        available_columns, accuracy_requests, measure_type="accuracy"
+    )
+    confidence_specs = _create_measure_specs(
+        available_columns, confidence_requests, measure_type="confidence"
+    )
+    for spec in (*accuracy_specs, *confidence_specs):
+        needed.add(spec.column)
+
+    needs_layer_columns = (
+        subplot_var == "layers"
+        or hue_var == "layers"
+        or (column_var == "layers")
+        or bool(focus_layer)
+    )
+    layer_columns = (
+        find_layer_response_columns(available_columns) if needs_layer_columns else []
+    )
+    if needs_layer_columns and not layer_columns:
+        raise ValueError(
+            "Layer response columns not found (expected *_response_avg) but required by layout"
+        )
+    needed.update(layer_columns)
+
+    needs_classifier_columns = (
+        subplot_var == "classifier_topk"
+        or hue_var == "classifier_topk"
+        or (column_var == "classifier_topk")
+    )
+    classifier_columns = (
+        find_classifier_value_columns(available_columns)
+        if needs_classifier_columns
+        else []
+    )
+    classifier_meta_columns = (
+        find_classifier_meta_columns(available_columns)
+        if needs_classifier_columns
+        else []
+    )
+    if needs_classifier_columns and not classifier_columns:
+        raise ValueError(
+            "Classifier response columns (classifier_top*) required but not found in data"
+        )
+    needed.update(classifier_columns)
+    needed.update(classifier_meta_columns)
+
+    dimension_columns: List[str] = []
+    if subplot_var and not _is_special_dimension(subplot_var) and subplot_key:
+        dimension_columns.append(subplot_key)
+    if hue_var and not _is_special_dimension(hue_var) and hue_key:
+        dimension_columns.append(hue_key)
+    if column_var and not _is_special_dimension(column_var) and column_key:
+        dimension_columns.append(column_key)
+
+    return ColumnPlan(
+        needed_columns=sorted(needed),
+        accuracy_specs=accuracy_specs,
+        confidence_specs=confidence_specs,
+        layer_columns=layer_columns,
+        classifier_columns=classifier_columns,
+        classifier_meta_columns=classifier_meta_columns,
+        dimension_columns=dimension_columns,
+    )
 
 
 def _format_legend_label(key: str, value: str, config: Dict, dt: float = 1.0) -> str:
@@ -114,7 +263,7 @@ def _format_legend_label(key: str, value: str, config: Dict, dt: float = 1.0) ->
     # First check if there's a direct naming translation for this value
     if config and "naming" in config:
         # Check both the value directly and the standardized value
-        for check_val in [value, _standardize_category_value(value)]:
+        for check_val in [value, standardize_category_value(value)]:
             translated_name = get_display_name(check_val, config)
             if translated_name and translated_name != check_val:
                 return translated_name
@@ -295,29 +444,6 @@ def _format_measure_label(column: str, base_label: str) -> str:
     return f"{base_label} ({pretty_suffix})"
 
 
-def _resolve_measure_column(df: pd.DataFrame, column: str) -> Optional[str]:
-    """Return the actual dataframe column to use for a requested measure."""
-
-    candidates = [column]
-    if not column.endswith("_avg"):
-        candidates.append(f"{column}_avg")
-    if not column.endswith("_mean"):
-        candidates.append(f"{column}_mean")
-    for candidate in candidates:
-        if candidate in df.columns:
-            return candidate
-    return None
-
-
-def _standardize_category_value(value: str) -> str:
-    """Standardize category value formatting consistently across all processing."""
-    value_str = str(value).strip()
-    # Handle boolean-like values consistently
-    if value_str.lower() in ["true", "false"]:
-        return value_str.lower()
-    return value_str
-
-
 def _classifier_sort_key(column_name: str) -> int:
     suffix = column_name.replace(CLASSIFIER_TOP_PREFIX, "", 1)
     if suffix.isdigit():
@@ -372,6 +498,7 @@ def _extract_dimension_values(
     dimension_key: str,
     config: Dict,
     dimension_limit: Optional[int] = None,
+    prefer_numeric_sort: bool = False,
 ) -> List[str]:
     """Extract and order unique values for a dimension."""
     if dimension == "layers":
@@ -432,7 +559,7 @@ def _extract_dimension_values(
         values: List[str] = []
         seen = set()
         for raw in raw_values:
-            standardized = _standardize_category_value(raw)
+            standardized = standardize_category_value(raw)
             if standardized not in seen:
                 values.append(standardized)
                 seen.add(standardized)
@@ -445,7 +572,7 @@ def _extract_dimension_values(
         ordering = get_ordering(dimension_key, config)
         if ordering:
             # Standardize ordering values too
-            standardized_ordering = [_standardize_category_value(v) for v in ordering]
+            standardized_ordering = [standardize_category_value(v) for v in ordering]
             # Filter to only include values present in data
             ordered = [v for v in standardized_ordering if v in values]
             # Add any missing values
@@ -456,6 +583,22 @@ def _extract_dimension_values(
                 f"Found {len(ordered)} values for '{dimension_key}': {ordered} (config ordering applied)"
             )
             values = ordered
+        elif prefer_numeric_sort:
+            numeric_pairs: List[Tuple[float, str]] = []
+            for v in values:
+                try:
+                    numeric_pairs.append((float(v), v))
+                except (ValueError, TypeError):
+                    numeric_pairs = []
+                    break
+            if numeric_pairs:
+                numeric_pairs.sort(key=lambda pair: pair[0])
+                values = [val for _, val in numeric_pairs]
+                logger.info(
+                    "Applied numeric ordering for '%s': %s",
+                    dimension_key,
+                    values,
+                )
 
         if len(values) > MAX_DIMENSION_VALUES:
             raise ValueError(
@@ -492,13 +635,18 @@ def _filter_data_for_column(
     df: pd.DataFrame, column_var: Optional[str], column_value: Optional[str]
 ) -> pd.DataFrame:
     """Filter dataframe for a specific column value."""
-    if column_var and column_value and column_var in df.columns:
-        # Standardize both the column values and the filter value for comparison
-        df_copy = df.copy()
-        df_copy[column_var] = df_copy[column_var].apply(_standardize_category_value)
-        standardized_column_value = _standardize_category_value(str(column_value))
-        return df_copy[df_copy[column_var] == standardized_column_value].copy()
-    return df.copy()
+    if column_var and column_value is not None and column_var in df.columns:
+        standardized_column_value = standardize_category_value(str(column_value))
+        column_series = df[column_var]
+        if isinstance(column_series.dtype, pd.CategoricalDtype):
+            mask = column_series == standardized_column_value
+        else:
+            mask = (
+                column_series.astype(str).map(standardize_category_value)
+                == standardized_column_value
+            )
+        return df.loc[mask]
+    return df
 
 
 def _plot_accuracy_panel(
@@ -511,186 +659,122 @@ def _plot_accuracy_panel(
     dt: float,
     show_ylabel: bool,
     show_legend: bool,
-    accuracy_cols: List[str],
-    confidence_cols: List[str],
+    accuracy_specs: List[MeasureSpec],
+    confidence_specs: List[MeasureSpec],
+    show_error_bands: bool = False,
     **kwargs,
 ) -> None:
-    """Plot accuracy and confidence over time.
+    """Plot accuracy and confidence trends using pre-aggregated statistics."""
 
-    Args:
-        ax: Matplotlib axes
-        data: DataFrame with accuracy and confidence data
-        hue_var: Variable for color coding
-        hue_key: Column name for hue variable
-        hue_values: Ordered list of hue values
-        colors: Color mapping for hue values
-        dt: Temporal resolution in ms
-        show_ylabel: Whether to show y-axis label
-        show_legend: Whether to show line style legend
-        accuracy_cols: Column names for accuracy metrics
-        confidence_cols: Column names for confidence metrics
-        **kwargs: Override FORMATTING defaults
-    """
     fmt = {**FORMATTING, **kwargs}
-
     ax.patch.set_alpha(0)
 
     accuracy_linestyles = ["-", "--", "-."]
     confidence_linestyles = [":", (0, (3, 2)), (0, (1, 2))]
     greyscale_color = fmt.get("greyscale_color", "#5a5a5a")
 
-    # Create time in ms
-    data_plot = data.copy()
-    data_plot["time_ms"] = data_plot["times_index"] * dt
+    if not accuracy_specs and not confidence_specs:
+        logger.warning("No accuracy or confidence measures requested; skipping panel")
+        return
 
-    # Ensure hue column is standardized to match hue_values
-    has_hue_column = hue_key in data_plot.columns
+    data_plot = data
+    has_hue_column = hue_key in data_plot.columns and not _is_special_dimension(
+        hue_var
+    )
+    hue_sequences: List[Tuple[Optional[str], pd.DataFrame]] = []
+
     if has_hue_column:
-        data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
-        allowed_hues = {_standardize_category_value(val) for val in hue_values}
-        if allowed_hues:
-            before_filter = len(data_plot)
-            data_plot = data_plot[data_plot[hue_key].isin(allowed_hues)].copy()
-            if len(data_plot) != before_filter:
-                logger.debug(
-                    "Filtered accuracy panel data from %d to %d rows using hue selection",
-                    before_filter,
-                    len(data_plot),
-                )
-        if data_plot.empty:
+        allowed_hues = {standardize_category_value(val) for val in hue_values}
+        filtered = (
+            data_plot[data_plot[hue_key].isin(allowed_hues)]
+            if allowed_hues
+            else data_plot
+        )
+        if filtered.empty:
             logger.warning(
                 "No data remaining after applying hue filter for accuracy panel"
             )
             return
+        for hue_value in hue_values:
+            standardized = standardize_category_value(hue_value)
+            subset = filtered.loc[filtered[hue_key] == standardized]
+            if not subset.empty:
+                hue_sequences.append((standardized, subset))
+        if not hue_sequences:
+            hue_sequences.append((None, filtered))
+    else:
+        hue_sequences.append((None, data_plot))
 
-    use_hue = has_hue_column and not _is_special_dimension(hue_var)
+    def _plot_metric(
+        subset: pd.DataFrame,
+        column: str,
+        color: str,
+        linestyle: str,
+    ) -> bool:
+        if column not in subset.columns or subset.empty:
+            return False
+        values = subset[column].to_numpy()
+        if np.all(np.isnan(values)):
+            return False
+        times = subset["time_ms"].to_numpy()
+        ax.plot(
+            times,
+            values,
+            color=color,
+            linewidth=fmt["linewidth_main"],
+            alpha=fmt["alpha_line"],
+            linestyle=linestyle,
+        )
+        err_col = f"{column}_err"
+        if show_error_bands and err_col in subset.columns:
+            errors = subset[err_col].to_numpy()
+            if not np.all(np.isnan(errors)):
+                ax.fill_between(
+                    times,
+                    values - errors,
+                    values + errors,
+                    color=color,
+                    alpha=fmt.get("alpha_error", 0.2),
+                    linewidth=0,
+                )
+        return True
 
-    # Check for required columns
-    n_datapoints = len(data_plot)
-    logger.info(f"Plotting accuracy panel with {n_datapoints} datapoints")
-
-    plotted_accuracy: List[Tuple[str, str, str]] = []
-    plotted_confidence: List[Tuple[str, str, str]] = []
-
-    if not accuracy_cols and not confidence_cols:
-        logger.warning("No accuracy or confidence measures requested; skipping panel")
-        return
-
-    # Plot accuracy metrics
-    for idx, column in enumerate(accuracy_cols):
-        resolved_column = _resolve_measure_column(data_plot, column)
-        if not resolved_column:
-            logger.warning("Accuracy column '%s' not found, skipping", column)
-            continue
-
+    plotted_accuracy = False
+    for idx, spec in enumerate(accuracy_specs):
         linestyle = accuracy_linestyles[idx % len(accuracy_linestyles)]
-
-        logger.debug(
-            "Plotting accuracy column '%s' (resolved to '%s') with hue='%s'",
-            column,
-            resolved_column,
-            hue_key if use_hue else None,
-        )
-        lineplot_kwargs = {
-            "data": data_plot,
-            "x": "time_ms",
-            "y": resolved_column,
-            "ax": ax,
-            "legend": False,
-            "linewidth": fmt["linewidth_main"],
-            "alpha": fmt["alpha_line"],
-            "linestyle": linestyle,
-        }
-        if use_hue:
-            palette = {
-                value: colors.get(value, greyscale_color) for value in hue_values
-            }
-            lineplot_kwargs.update(
-                hue=hue_key,
-                hue_order=hue_values,
-                palette=palette,
+        metric_plotted = False
+        for hue_value, subset in hue_sequences:
+            color = (
+                colors.get(hue_value, greyscale_color)
+                if hue_value
+                else greyscale_color
             )
+            metric_plotted |= _plot_metric(subset, spec.column, color, linestyle)
+        if not metric_plotted:
+            logger.warning("Accuracy column '%s' not found, skipping", spec.column)
         else:
-            lineplot_kwargs["color"] = greyscale_color
+            plotted_accuracy = True
 
-        lineplot_kwargs.update(ERRORBAR_CONFIG)
-        sns.lineplot(**lineplot_kwargs)
-        plotted_accuracy.append((column, resolved_column, linestyle))
-
-    # Plot confidence metrics
-    for idx, column in enumerate(confidence_cols):
-        resolved_column = _resolve_measure_column(data_plot, column)
-        if not resolved_column:
-            logger.warning("Confidence column '%s' not found, skipping", column)
-            continue
-
+    plotted_confidence = False
+    for idx, spec in enumerate(confidence_specs):
         linestyle = confidence_linestyles[idx % len(confidence_linestyles)]
-
-        logger.debug(
-            "Plotting confidence column '%s' (resolved to '%s') with hue='%s'",
-            column,
-            resolved_column,
-            hue_key if use_hue else None,
-        )
-        lineplot_kwargs = {
-            "data": data_plot,
-            "x": "time_ms",
-            "y": resolved_column,
-            "ax": ax,
-            "legend": False,
-            "linewidth": fmt["linewidth_main"],
-            "alpha": fmt["alpha_line"],
-            "linestyle": linestyle,
-        }
-        if use_hue:
-            palette = {
-                value: colors.get(value, greyscale_color) for value in hue_values
-            }
-            lineplot_kwargs.update(
-                hue=hue_key,
-                hue_order=hue_values,
-                palette=palette,
+        metric_plotted = False
+        for hue_value, subset in hue_sequences:
+            color = (
+                colors.get(hue_value, greyscale_color)
+                if hue_value
+                else greyscale_color
             )
+            metric_plotted |= _plot_metric(subset, spec.column, color, linestyle)
+        if not metric_plotted:
+            logger.warning("Confidence column '%s' not found, skipping", spec.column)
         else:
-            lineplot_kwargs["color"] = greyscale_color
-
-        lineplot_kwargs.update(ERRORBAR_CONFIG)
-        sns.lineplot(**lineplot_kwargs)
-        plotted_confidence.append((column, resolved_column, linestyle))
+            plotted_confidence = True
 
     if not plotted_accuracy and not plotted_confidence:
-        logger.warning(
-            "No valid accuracy or confidence columns found after filtering; skipping panel"
-        )
+        logger.warning("Accuracy panel skipped because no metrics were plotted")
         return
 
-    if len(plotted_accuracy) > 1:
-        base_name, base_resolved, _ = plotted_accuracy[0]
-        base_values = data_plot[base_resolved].to_numpy()
-        for column, resolved, _ in plotted_accuracy[1:]:
-            if np.allclose(
-                base_values, data_plot[resolved].to_numpy(), equal_nan=True
-            ):
-                logger.info(
-                    "Accuracy measure '%s' matches '%s'; traces will overlap",
-                    column,
-                    base_name,
-                )
-
-    if len(plotted_confidence) > 1:
-        base_name, base_resolved, _ = plotted_confidence[0]
-        base_values = data_plot[base_resolved].to_numpy()
-        for column, resolved, _ in plotted_confidence[1:]:
-            if np.allclose(
-                base_values, data_plot[resolved].to_numpy(), equal_nan=True
-            ):
-                logger.info(
-                    "Confidence measure '%s' matches '%s'; traces will overlap",
-                    column,
-                    base_name,
-                )
-
-    # Styling
     ax.set_ylim(-0.01, 1.01)
     ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
 
@@ -703,19 +787,18 @@ def _plot_accuracy_panel(
     ax.set_xlabel("Time (ms)", fontsize=fmt["fontsize_axis"])
     ax.tick_params(labelsize=fmt["fontsize_tick"])
 
-    # Build legend entries based on plotted metrics
     if show_legend:
         legend_handles: List[plt.Line2D] = []
         legend_labels: List[str] = []
 
-        single_accuracy = len(plotted_accuracy) == 1
-        single_confidence = len(plotted_confidence) == 1
+        single_accuracy = len(accuracy_specs) == 1
+        single_confidence = len(confidence_specs) == 1
 
-        for column, _, linestyle in plotted_accuracy:
+        for idx, spec in enumerate(accuracy_specs):
             label = (
                 "Accuracy"
                 if single_accuracy
-                else _format_measure_label(column, "Accuracy")
+                else _format_measure_label(spec.column, spec.requested or "Accuracy")
             )
             legend_handles.append(
                 plt.Line2D(
@@ -723,17 +806,17 @@ def _plot_accuracy_panel(
                     [0],
                     color="black",
                     linewidth=fmt["linewidth_main"],
-                    linestyle=linestyle,
+                    linestyle=accuracy_linestyles[idx % len(accuracy_linestyles)],
                     alpha=fmt["alpha_line"],
                 )
             )
             legend_labels.append(label)
 
-        for column, _, linestyle in plotted_confidence:
+        for idx, spec in enumerate(confidence_specs):
             label = (
                 "Confidence"
                 if single_confidence
-                else _format_measure_label(column, "Confidence")
+                else _format_measure_label(spec.column, spec.requested or "Confidence")
             )
             legend_handles.append(
                 plt.Line2D(
@@ -741,7 +824,7 @@ def _plot_accuracy_panel(
                     [0],
                     color="black",
                     linewidth=fmt["linewidth_main"],
-                    linestyle=linestyle,
+                    linestyle=confidence_linestyles[idx % len(confidence_linestyles)],
                     alpha=fmt["alpha_line"],
                 )
             )
@@ -756,7 +839,6 @@ def _plot_accuracy_panel(
                 fontsize=fmt["fontsize_legend"] - 2,
             )
 
-    # Add label indicator
     try:
         label_indicator_df = calculate_label_indicator(
             data,
@@ -764,9 +846,8 @@ def _plot_accuracy_panel(
             ax.get_ylim(),
             0.1,
         )
-        indicator_time = label_indicator_df["times_index"] * dt
         ax.plot(
-            indicator_time,
+            label_indicator_df["times_index"] * dt,
             label_indicator_df["label_indicator"],
             color="dimgray",
             linewidth=fmt["linewidth_indicator"],
@@ -866,18 +947,6 @@ def _plot_response_ridges(
     spacing = layout["ridge_height"] / n_subplots * (1 - layout["ridge_overlap"])
     plot_height = layout["ridge_height"] / n_subplots * 1.4
 
-    # Prepare data
-    data_plot = data.copy()
-    data_plot["time_ms"] = data_plot["times_index"] * dt
-
-    # Ensure categorical columns are standardized to match dimension values
-    if hue_key in data_plot.columns and hue_key != "layers":
-        data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
-    if subplot_key in data_plot.columns and subplot_key != "layers":
-        data_plot[subplot_key] = data_plot[subplot_key].apply(
-            _standardize_category_value
-        )
-
     axes = []
 
     # Calculate ridge top position from other elements
@@ -906,46 +975,93 @@ def _plot_response_ridges(
         # Reference line
         ax.axhline(0, color="gray", linestyle=":", alpha=0.7, linewidth=1)
 
+        def _plot_series(subset: pd.DataFrame, column: str, color: str) -> bool:
+            if subset.empty or column not in subset.columns:
+                return False
+            values = subset[column].to_numpy()
+            if np.all(np.isnan(values)):
+                return False
+            times = subset["time_ms"].to_numpy()
+            ax.plot(
+                times,
+                values,
+                color=color,
+                linewidth=fmt["linewidth_main"],
+                alpha=fmt["alpha_line"],
+            )
+            err_col = f"{column}_err"
+            if err_col in subset.columns:
+                errors = subset[err_col].to_numpy()
+                if not np.all(np.isnan(errors)):
+                    ax.fill_between(
+                        times,
+                        values - errors,
+                        values + errors,
+                        color=color,
+                        alpha=fmt.get("alpha_error", 0.2),
+                        linewidth=0,
+                    )
+            return True
+
+        def _iter_hue_subsets(current_data: pd.DataFrame):
+            if hue_key in current_data.columns and not _is_special_dimension(hue_var):
+                for hue_value in hue_values:
+                    standardized = standardize_category_value(hue_value)
+                    subset = current_data.loc[current_data[hue_key] == standardized]
+                    if not subset.empty:
+                        yield hue_value, subset, colors.get(
+                            standardized, fmt["greyscale_color"]
+                        )
+            else:
+                yield None, current_data, fmt["greyscale_color"]
+
+        greyscale_color = fmt.get("greyscale_color", "#5a5a5a")
+
         # Filter data for this subplot
         if subplot_var == "layers":
             response_col = f"{subplot_value}_response_avg"
-            if response_col not in data_plot.columns:
+            if response_col not in data.columns:
                 logger.warning(
                     f"Response column '{response_col}' not found for layer '{subplot_value}', skipping"
                 )
                 continue
-            plot_data = data_plot.copy()
-            n_points = len(plot_data)
+            plot_data = data
+        elif subplot_var == "classifier_topk":
+            response_col = subplot_value
+            if response_col not in data.columns:
+                logger.warning(
+                    f"Classifier activation column '{response_col}' not found, skipping"
+                )
+                continue
+            plot_data = data
         else:
-            plot_data = data_plot[data_plot[subplot_key] == subplot_value].copy()
-            n_points = len(plot_data)
-            if n_points == 0:
+            if subplot_key not in data.columns:
+                logger.warning(
+                    f"Subplot key '{subplot_key}' not found in data, skipping"
+                )
+                continue
+            standardized = standardize_category_value(subplot_value)
+            plot_data = data.loc[data[subplot_key] == standardized]
+            if plot_data.empty:
                 logger.warning(
                     f"No data found for {subplot_key}={subplot_value}, skipping subplot"
                 )
                 continue
+            response_col = None
 
         logger.debug(
-            f"Subplot {i+1}/{n_subplots} ({subplot_value}): {n_points} datapoints"
+            "Subplot %s/%s (%s): %s datapoints",
+            i + 1,
+            n_subplots,
+            subplot_value,
+            len(plot_data),
         )
 
-        # Plot lines
-        if subplot_var == "layers":
-            # Plot layer response colored by hue
-            sns.lineplot(
-                data=plot_data,
-                x="time_ms",
-                y=response_col,
-                hue=hue_key if hue_var != "layers" else None,
-                hue_order=hue_values if hue_var != "layers" else None,
-                palette=colors if hue_var != "layers" else None,
-                ax=ax,
-                legend=False,
-                linewidth=fmt["linewidth_main"],
-                alpha=fmt["alpha_line"],
-                **ERRORBAR_CONFIG,
-            )
+        plotted_any = False
 
+        if subplot_var == "layers":
+            for hue_value, subset, color in _iter_hue_subsets(data):
+                plotted_any |= _plot_series(subset, response_col, color)
             _add_layer_circle(
                 x=0.95,
                 y=0.25,
@@ -955,30 +1071,8 @@ def _plot_response_ridges(
                 **fmt,
             )
         elif subplot_var == "classifier_topk":
-            response_col = subplot_value
-            if response_col not in data_plot.columns:
-                logger.warning(
-                    f"Classifier activation column '{response_col}' not found, skipping"
-                )
-                continue
-
-            plot_data = data_plot.copy()
-            n_points = len(plot_data)
-
-            sns.lineplot(
-                data=plot_data,
-                x="time_ms",
-                y=response_col,
-                hue=hue_key if not _is_special_dimension(hue_var) else None,
-                hue_order=hue_values if not _is_special_dimension(hue_var) else None,
-                palette=colors if not _is_special_dimension(hue_var) else None,
-                ax=ax,
-                legend=False,
-                linewidth=fmt["linewidth_main"],
-                alpha=fmt["alpha_line"],
-                **ERRORBAR_CONFIG,
-            )
-
+            for hue_value, subset, color in _iter_hue_subsets(data):
+                plotted_any |= _plot_series(subset, response_col, color)
             label_text = _format_classifier_label(subplot_value)
             ax.text(
                 0.95,
@@ -995,84 +1089,30 @@ def _plot_response_ridges(
                     alpha=0.8,
                 ),
             )
-
         else:
-            # Handle parameter subplots - two cases:
-            # 1. hue_var == "layers": plot different layers as different colored lines
-            # 2. focus_layer specified: plot single layer response colored by category
-
-            plotted_any = False
-
             if focus_layer and hue_var == "category":
-                # Panel B case: plot focus layer response colored by category
-                response_col = f"{focus_layer}_response_avg"
-                if response_col in plot_data.columns:
-                    sns.lineplot(
-                        data=plot_data,
-                        x="time_ms",
-                        y=response_col,
-                        hue=hue_key,
-                        hue_order=hue_values,
-                        palette=colors,
-                        ax=ax,
-                        legend=False,
-                        linewidth=fmt["linewidth_main"],
-                        alpha=fmt["alpha_line"],
-                        **ERRORBAR_CONFIG,
-                    )
-                    plotted_any = True
-                else:
+                focus_column = f"{focus_layer}_response_avg"
+                if focus_column not in plot_data.columns:
                     logger.warning(
-                        f"Focus layer response column '{response_col}' not found for parameter '{subplot_value}'"
+                        f"Focus layer response column '{focus_column}' not found for parameter '{subplot_value}'"
                     )
+                else:
+                    for hue_value, subset, color in _iter_hue_subsets(plot_data):
+                        plotted_any |= _plot_series(subset, focus_column, color)
             elif hue_var == "layers":
-                # Plot different layers as hues
                 for hue_val in hue_values:
                     response_col = f"{hue_val}_response_avg"
-                    if response_col in plot_data.columns:
-                        hue_data = plot_data.copy()
-                        sns.lineplot(
-                            data=hue_data,
-                            x="time_ms",
-                            y=response_col,
-                            color=colors.get(hue_val, "#808080"),
-                            ax=ax,
-                            legend=False,
-                            linewidth=fmt["linewidth_main"],
-                            alpha=fmt["alpha_line"],
-                        )
-                        plotted_any = True
-                    else:
-                        logger.warning(
-                            f"Response column '{response_col}' not found for hue '{hue_val}'"
-                        )
+                    color = colors.get(hue_val, greyscale_color)
+                    plotted_any |= _plot_series(plot_data, response_col, color)
             elif hue_var == "classifier_topk":
                 for hue_val in hue_values:
-                    response_col = hue_val
-                    if response_col in plot_data.columns:
-                        hue_data = plot_data.copy()
-                        sns.lineplot(
-                            data=hue_data,
-                            x="time_ms",
-                            y=response_col,
-                            color=colors.get(hue_val, "#808080"),
-                            ax=ax,
-                            legend=False,
-                            linewidth=fmt["linewidth_main"],
-                            alpha=fmt["alpha_line"],
-                        )
-                        plotted_any = True
-                    else:
-                        logger.warning(
-                            f"Classifier activation column '{response_col}' not found for hue '{hue_val}'"
-                        )
-
-            if not plotted_any:
+                    color = colors.get(hue_val, greyscale_color)
+                    plotted_any |= _plot_series(plot_data, hue_val, color)
+            else:
                 logger.warning(
-                    f"No valid response columns found for any hue value in subplot {subplot_value}"
+                    "No supported hue configuration for subplot '%s'", subplot_value
                 )
 
-            # Add parameter label
             display_name = get_display_name(subplot_key, config)
             label_text = f"{display_name}={subplot_value}"
             ax.text(
@@ -1089,6 +1129,11 @@ def _plot_response_ridges(
                     edgecolor="gray",
                     alpha=0.8,
                 ),
+            )
+
+        if not plotted_any:
+            logger.warning(
+                f"No valid response columns found for subplot '{subplot_value}'"
             )
 
         # Adjust limits to common scale across all subplots
@@ -1227,7 +1272,7 @@ def _add_horizontal_legend(
         # Get symbol for title
         symbol = get_display_name(hue_key, config)
 
-        n_cols = min(len(legend_elements), 6)
+        n_cols = min(len(legend_elements), 7)
         logger.debug(
             f"Adding legend with {len(legend_elements)} elements in {n_cols} columns"
         )
@@ -1261,6 +1306,8 @@ def plot_temporal_ridge_responses(
     accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
     config: Optional[Dict] = None,
+    errorbar_type: str = "std",
+    min_group_count: int = 1,
     **kwargs,
 ) -> None:
     """Plot temporal ridge responses with flexible dimension mapping.
@@ -1282,6 +1329,8 @@ def plot_temporal_ridge_responses(
         accuracy_measure: Column name or list of names for accuracy metrics
         dt: Temporal resolution in ms per timestep
         config: Configuration dict with palette, naming, ordering
+        errorbar_type: Statistical summary for shaded errors (none, std, sem, ci95)
+        min_group_count: Drop aggregated groups with fewer than this many rows
         **kwargs: Override LAYOUT and FORMATTING defaults
     """
     logger.info("=" * 60)
@@ -1331,44 +1380,21 @@ def plot_temporal_ridge_responses(
         config = {"palette": {}, "naming": {}, "ordering": {}}
         logger.info("No config provided, using empty defaults")
 
-    accuracy_measures = _coerce_measure_list(accuracy_measure, default="accuracy")
-    confidence_measures = _coerce_measure_list(
+    accuracy_requests = _coerce_measure_list(accuracy_measure, default="accuracy")
+    confidence_requests = _coerce_measure_list(
         confidence_measure, default="first_label_confidence"
     )
 
     logger.info(
         "Selected accuracy measures: %s",
-        accuracy_measures if accuracy_measures else "[none]",
+        accuracy_requests if accuracy_requests else "[none]",
     )
     logger.info(
         "Selected confidence measures: %s",
-        confidence_measures if confidence_measures else "[none]",
+        confidence_requests if confidence_requests else "[none]",
     )
 
-    # Load data
-    if isinstance(data, list):
-        logger.info(f"Loading and concatenating data from {len(data)} files")
-        dfs = []
-        for i, path in enumerate(data):
-            logger.info(f"  Loading file {i+1}/{len(data)}: {path}")
-            df_temp = pd.read_csv(path)
-            logger.debug(
-                f"  Loaded {len(df_temp)} rows, {len(df_temp.columns)} columns"
-            )
-            dfs.append(df_temp)
-        df = pd.concat(dfs, ignore_index=True)
-        logger.info(f"Concatenated total: {len(df)} rows, {len(df.columns)} columns")
-        logger.debug(f"Columns: {list(df.columns)}")
-    elif isinstance(data, Path):
-        logger.info(f"Loading data from: {data}")
-        df = pd.read_csv(data)
-        logger.info(f"Loaded {len(df)} rows, {len(df.columns)} columns")
-        logger.debug(f"Columns: {list(df.columns)}")
-    else:
-        df = data.copy()
-        logger.info(
-            f"Using provided DataFrame with {len(df)} rows, {len(df.columns)} columns"
-        )
+    focus_layer = kwargs.get("focus_layer")
 
     # Get dimension keys
     logger.info("Determining dimension keys...")
@@ -1391,14 +1417,112 @@ def plot_temporal_ridge_responses(
         f"Keys: subplot_key='{subplot_key}', hue_key='{hue_key}', column_key='{column_key}'"
     )
 
+    df_input: Optional[pd.DataFrame]
+    data_paths: Optional[List[Path]]
+    df_input = None
+    data_paths = None
+
+    if isinstance(data, list):
+        data_paths = [Path(p) for p in data]
+    elif isinstance(data, Path):
+        data_paths = [data]
+    elif isinstance(data, pd.DataFrame):
+        df_input = data.copy()
+    else:
+        raise TypeError("data must be a Path, list of Paths, or pandas DataFrame")
+
+    if df_input is not None:
+        available_columns = df_input.columns.tolist()
+    elif data_paths:
+        available_columns = _read_available_columns(data_paths[0])
+    else:
+        raise ValueError("No data sources provided")
+
+    plan = _build_column_plan(
+        available_columns=available_columns,
+        subplot_var=subplot_var,
+        hue_var=hue_var,
+        column_var=column_var,
+        subplot_key=subplot_key,
+        hue_key=hue_key,
+        column_key=column_key,
+        accuracy_requests=accuracy_requests,
+        confidence_requests=confidence_requests,
+        focus_layer=focus_layer,
+    )
+
+    if df_input is not None:
+        missing = [col for col in plan.needed_columns if col not in df_input.columns]
+        if missing:
+            raise ValueError(
+                "Provided DataFrame is missing required columns: " + ", ".join(missing)
+            )
+        df = df_input[plan.needed_columns].copy()
+    else:
+        frames: List[pd.DataFrame] = []
+        assert data_paths is not None
+        logger.info("Loading selected columns from %d file(s)", len(data_paths))
+        for idx, path in enumerate(data_paths, start=1):
+            logger.info("  Loading file %s/%s: %s", idx, len(data_paths), path)
+            df_temp = pd.read_csv(path, usecols=plan.needed_columns)
+            frames.append(df_temp)
+        df = pd.concat(frames, ignore_index=True)
+
+    logger.info("Loaded %d rows across %d selected columns", len(df), len(df.columns))
+
+    # Prepare dataframe for aggregation
+    logger.info("Preparing dataframe for aggregation")
+    df["times_index"] = df["times_index"].astype(int)
+    if "label_index" in df.columns:
+        df["label_valid"] = (df["label_index"].astype(float) >= 0).astype(int)
+
+    for column in plan.dimension_columns:
+        if column in df.columns:
+            df[column] = standardize_series(df[column])
+
+    for column in plan.value_columns():
+        if column in df.columns:
+            df[column] = df[column].astype(np.float32, copy=False)
+
+    group_columns: List[str] = [
+        col for col in plan.dimension_columns if col in df.columns
+    ]
+    group_columns.append("times_index")
+
+    extra_aggs: Dict[str, Any] = {}
+    if "label_valid" in df.columns:
+        extra_aggs["label_valid"] = "max"
+    for meta_col in plan.classifier_meta_columns:
+        if meta_col in df.columns:
+            extra_aggs[meta_col] = "first"
+    if not extra_aggs:
+        extra_aggs = None
+
+    df = aggregate_plot_data(
+        df=df,
+        group_keys=group_columns,
+        mean_columns=plan.value_columns(),
+        error_type=errorbar_type,
+        min_count=min_group_count,
+        extra_aggs=extra_aggs,
+    )
+    df["time_ms"] = df["times_index"].astype(float) * dt
+    logger.info("Aggregated dataframe has %d rows", len(df))
+
     # Extract dimension values
     logger.info("Extracting dimension values...")
+    subplot_numeric = subplot_var is not None and not _is_special_dimension(
+        subplot_var
+    )
+    hue_numeric = hue_var is not None and not _is_special_dimension(hue_var)
+
     subplot_values = _extract_dimension_values(
         df=df,
         dimension=subplot_var,
         dimension_key=subplot_key,
         config=config,
         dimension_limit=subplot_limit,
+        prefer_numeric_sort=subplot_numeric,
     )
     hue_values = _extract_dimension_values(
         df=df,
@@ -1406,6 +1530,7 @@ def plot_temporal_ridge_responses(
         dimension_key=hue_key,
         config=config,
         dimension_limit=hue_limit,
+        prefer_numeric_sort=hue_numeric,
     )
     column_values = (
         _extract_dimension_values(
@@ -1414,6 +1539,8 @@ def plot_temporal_ridge_responses(
             dimension_key=column_key,
             config=config,
             dimension_limit=column_limit,
+            prefer_numeric_sort=column_var is not None
+            and not _is_special_dimension(column_var),
         )
         if column_var
         else [None]
@@ -1432,6 +1559,8 @@ def plot_temporal_ridge_responses(
         values=hue_values, dimension_key=hue_key, config=config
     )
     logger.debug(f"Color mapping: {colors}")
+
+    accuracy_error_bands = kwargs.pop("accuracy_error_bands", False)
 
     # Merge layout defaults with overrides
     layout = {**LAYOUT, **{k: v for k, v in kwargs.items() if k in LAYOUT}}
@@ -1535,8 +1664,9 @@ def plot_temporal_ridge_responses(
             dt=dt,
             show_ylabel=(col_idx == 0),
             show_legend=(col_idx == 0),
-            accuracy_cols=accuracy_measures,
-            confidence_cols=confidence_measures,
+            accuracy_specs=plan.accuracy_specs,
+            confidence_specs=plan.confidence_specs,
+            show_error_bands=accuracy_error_bands,
             **kwargs,
         )
 
@@ -1680,6 +1810,21 @@ def main():
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
     parser.add_argument(
+        "--errorbar-type",
+        "--errorbar_type",
+        type=str,
+        default="std",
+        choices=["none", "std", "sem", "ci95"],
+        help="Error metric used for shaded bands (default: std)",
+    )
+    parser.add_argument(
+        "--min-group-count",
+        "--min_group_count",
+        type=int,
+        default=1,
+        help="Minimum rows per aggregated trace",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="DEBUG",
@@ -1723,6 +1868,8 @@ def main():
         accuracy_measure=args.accuracy_measure,
         dt=args.dt,
         config=config,
+        errorbar_type=args.errorbar_type,
+        min_group_count=args.min_group_count,
     )
 
 

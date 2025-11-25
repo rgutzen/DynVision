@@ -89,7 +89,7 @@ class DyRCNN(BaseModel):
         recurrence_type: str = "full",
         recurrence_target: str = "output",  # Target for recurrent connections
         feedback_mode: str = "additive",
-        skip: bool = False,
+        skip: bool = True,
         feedback: bool = False,
         # DyRCNN-specific biological parameters
         train_tau: bool = False,

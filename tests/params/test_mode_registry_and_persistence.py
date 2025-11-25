@@ -16,7 +16,7 @@ def _load_yaml_body(path):
 
 
 def test_persist_resolved_config_writes_metadata(tmp_path):
-    config_file = create_temp_config({"debug": True})
+    config_file = create_temp_config({"use_debug_mode": True})
     try:
         with temporary_training_paths() as training_paths:
             params = TrainingParams.from_cli_and_config(
@@ -36,10 +36,10 @@ def test_persist_resolved_config_writes_metadata(tmp_path):
 
         assert data["trainer.enable_progress_bar"] is True
         assert data["trainer.log_every_n_steps"] == 1
-        assert data["_active_modes"] == ["debug"]
+        assert data["_active_modes"] == ["debug_mode"]
         provenance = data.get("_provenance", {})
         assert "trainer.enable_progress_bar" in provenance
-        assert "mode:debug" in provenance["trainer.enable_progress_bar"]
+        assert "mode:debug_mode" in provenance["trainer.enable_progress_bar"]
     finally:
         config_file.unlink(missing_ok=True)
 
@@ -49,9 +49,9 @@ def test_mode_registry_resolves_debug_auto():
     toggle_source = {"use_debug_mode": "auto"}
     context = {"log_level": "DEBUG", "epochs": 100}
     resolution = ModeRegistry.resolve_modes(toggle_source, context)
-    assert "debug" in resolution.active_modes
-    assert resolution.toggles["debug"] is True
-    assert "debug" in resolution.patches
+    assert "debug_mode" in resolution.active_modes
+    assert resolution.toggles["debug_mode"] is True
+    assert "debug_mode" in resolution.patches
 
 
 def test_mode_registry_resolves_large_dataset_auto():
@@ -59,6 +59,37 @@ def test_mode_registry_resolves_large_dataset_auto():
     toggle_source = {"use_large_dataset_mode": "auto"}
     context = {"data_name": "imagenet", "local_execution": True}
     resolution = ModeRegistry.resolve_modes(toggle_source, context)
-    assert "large_dataset" in resolution.active_modes
-    assert resolution.toggles["large_dataset"] is True
-    assert resolution.patches["large_dataset"]
+    assert "large_dataset_mode" in resolution.active_modes
+    assert resolution.toggles["large_dataset_mode"] is True
+    assert resolution.patches["large_dataset_mode"]
+
+
+def test_mode_registry_ignores_payload_dict_when_toggle_false():
+    from dynvision.params.base_params import ParamsDict, ProvenanceRecord
+    from dynvision.params.testing_params import TestingParams
+
+    ModeRegistry.reload()
+
+    config_params = ParamsDict(
+        {
+            "use_distributed_mode": False,
+            "distributed_mode": {
+                "devices": 4,
+                "strategy": "ddp",
+            },
+        },
+        provenance={
+            "use_distributed_mode": ProvenanceRecord("config"),
+            "distributed_mode": ProvenanceRecord("config"),
+        },
+    )
+    cli_params = ParamsDict({}, provenance={})
+
+    mode_params, resolution = TestingParams._resolve_mode_overrides(
+        config_params, cli_params
+    )
+
+    assert "distributed_mode" not in resolution.active_modes
+    assert resolution.toggles["distributed_mode"] is False
+    flattened = dict(mode_params or {})
+    assert all(not key.startswith("distributed") for key in flattened.keys())

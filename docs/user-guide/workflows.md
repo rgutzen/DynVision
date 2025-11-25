@@ -202,10 +202,48 @@ Snakemake uses wildcards to generalize rules. In DynVision, wildcards are extens
 - `{data_args}`: Data loader arguments (e.g., `:tsteps=100+stim=5`)
 - `{data_group}`: Named subset of classes for testing
 - `{seed}`: Random seed for reproducibility
-- `{status}`: Either `init` or `trained` 
+- `{status}`: Either `init` or `trained`
 - `{experiment}`: Experiment name (e.g., contrast, duration)
 
 These wildcards are used to specify which files to generate and how to connect the different steps of the workflow.
+
+### Wildcard Expansion Types
+
+DynVision supports two types of wildcard expansion:
+
+**Config-based expansion (`*`)**:
+- Expands to all values defined in configuration files
+- Example: `tau=*` → expands to all tau values from `config_experiments.yaml`
+
+**Filesystem-based expansion (`?`)**:
+- Expands to only existing files matching the pattern
+- Example: `seed=5?` → expands to only seeds starting with 5 that exist in filesystem
+- Works with checkpoint-generated files (e.g., `trained-epoch=?` for intermediate models)
+- Automatically re-evaluates after checkpoint rules complete
+- Useful for resuming interrupted experiments or analyzing partial results
+
+**Example usage**:
+```bash
+# Config expansion: test all tau values from config
+snakemake reports/duration/duration_DyRCNNx8:tau=*_0040_imagenette_trained_all/test_data.csv
+
+# Filesystem expansion: test only existing seeds starting with 5
+snakemake reports/duration/duration_DyRCNNx8:tau=5_5?_imagenette_trained_all/test_data.csv
+
+# Mixed: config for tau, filesystem for seed
+snakemake reports/duration/duration_DyRCNNx8:tau=*_5?_imagenette_trained_all/test_data.csv
+
+# Checkpoint-generated files: analyze intermediate training checkpoints
+snakemake --config experiment=responseintermediate \
+  --allowed-rules intermediate_checkpoint_to_statedict test_model process_test_data \
+  reports/responseintermediate/responseintermediate_DyRCNNx8_5?_imagenette_trained-epoch=?_all/test_data.csv
+```
+
+**When to use `?` vs `*`**:
+- Use `*` when you want to test/analyze ALL configured parameter values
+- Use `?` when you want to test/analyze only COMPLETED runs matching a pattern
+- Use `?` to avoid re-running failed experiments
+- Use `?` for exploratory analysis of partial results
 
 ## Configuring Workflows
 

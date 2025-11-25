@@ -14,13 +14,13 @@ import logging
 import sys
 from copy import deepcopy
 from pathlib import Path
-from typing import List, Tuple, Dict, Any, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import seaborn as sns
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import torch
 
 from .data_utils import load_df
@@ -40,6 +40,179 @@ def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
 
 
 logger = logging.getLogger(__name__)
+
+
+def standardize_category_value(value: Any) -> str:
+    """Normalize categorical labels (booleans, whitespace, casing)."""
+
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+
+    value_str = str(value).strip()
+    lowered = value_str.lower()
+    if lowered in {"true", "false"}:
+        return lowered
+    return value_str
+
+
+def standardize_series(series: pd.Series) -> pd.Series:
+    """Vectorized wrapper around :func:`standardize_category_value`."""
+
+    return series.astype(str).map(standardize_category_value)
+
+
+def parse_error_type(error_type: Optional[str]) -> str:
+    """Return a normalized error type identifier."""
+
+    if not error_type:
+        return "std"
+
+    normalized = error_type.strip().lower()
+    if normalized in {"none", "std", "sem", "ci95"}:
+        return normalized
+    raise ValueError(
+        f"Unsupported errorbar type '{error_type}'. Choose from none, std, sem, ci95"
+    )
+
+
+def _error_function_factory(kind: str) -> Callable[[pd.Series], float]:
+    if kind == "std":
+        return lambda s: float(s.std(ddof=0))
+    if kind == "sem":
+        return lambda s: float(s.sem(ddof=0))
+    if kind == "ci95":
+        return lambda s: float(s.sem(ddof=0) * 1.96)
+    raise ValueError(f"Unknown error function kind '{kind}'")
+
+
+def aggregate_plot_data(
+    df: pd.DataFrame,
+    group_keys: Sequence[str],
+    mean_columns: Sequence[str],
+    error_type: str = "std",
+    min_count: int = 1,
+    extra_aggs: Optional[Dict[str, Any]] = None,
+) -> pd.DataFrame:
+    """Aggregate large plotting tables to the desired granularity.
+
+    Args:
+        df: Source dataframe (already filtered to required columns).
+        group_keys: Columns to group by (order preserved for sorting).
+        mean_columns: Numeric columns that should be averaged (and get errors).
+        error_type: One of ``none``, ``std``, ``sem``, ``ci95``.
+        min_count: Drop groups with fewer than this many rows.
+        extra_aggs: Optional mapping of ``column -> aggregation``
+            (e.g., ``{"label_valid": "max"}``).
+
+    Returns:
+        Aggregated dataframe containing the group keys, averaged columns,
+        and optional error/extra aggregation columns.
+    """
+
+    if not group_keys:
+        raise ValueError("At least one group key is required for aggregation")
+
+    observed = True
+    grouped = df.groupby(list(group_keys), observed=observed, sort=True)
+
+    frames: List[pd.DataFrame] = []
+
+    if mean_columns:
+        mean_df = grouped[list(mean_columns)].mean()
+        frames.append(mean_df)
+
+        normalized_error = parse_error_type(error_type)
+        if normalized_error != "none":
+            error_fn = _error_function_factory(normalized_error)
+            err_frames = []
+            for column in mean_columns:
+                err_series = grouped[column].agg(error_fn)
+                err_frames.append(err_series.rename(f"{column}_err"))
+            if err_frames:
+                frames.append(pd.concat(err_frames, axis=1))
+
+    if extra_aggs:
+        extra_df = grouped[list(extra_aggs.keys())].agg(extra_aggs)
+        frames.append(extra_df)
+
+    if not frames:
+        result = grouped.size().to_frame("__count")
+    else:
+        result = pd.concat(frames, axis=1)
+
+    counts = grouped.size().rename("__count")
+    result = result.join(counts)
+    if min_count > 1:
+        result = result[result["__count"] >= min_count]
+
+    result = result.reset_index().sort_values(list(group_keys)).reset_index(drop=True)
+    return result.drop(columns=["__count"], errors="ignore")
+
+
+def find_layer_response_columns(
+    columns: Sequence[str], suffix: str = "_response_avg"
+) -> List[str]:
+    """Return all layer response columns matching the expected suffix."""
+
+    return [col for col in columns if isinstance(col, str) and col.endswith(suffix)]
+
+
+def find_classifier_value_columns(
+    columns: Sequence[str], prefix: str = "classifier_top"
+) -> List[str]:
+    """Return classifier activation columns (excluding metadata columns)."""
+
+    return [
+        col
+        for col in columns
+        if isinstance(col, str) and col.startswith(prefix) and not col.endswith("_id")
+    ]
+
+
+def find_classifier_meta_columns(
+    columns: Sequence[str], prefix: str = "classifier_top", suffix: str = "_id"
+) -> List[str]:
+    """Return classifier metadata columns (e.g., unit ids)."""
+
+    return [
+        col
+        for col in columns
+        if isinstance(col, str) and col.startswith(prefix) and col.endswith(suffix)
+    ]
+
+
+def resolve_measure_columns(
+    columns: Sequence[str],
+    requested: Sequence[str],
+) -> Tuple[List[Tuple[str, str]], List[str]]:
+    """Resolve requested metric names to actual dataframe columns.
+
+    Returns a tuple ``(resolved, missing)`` where ``resolved`` is a list of
+    ``(requested_name, actual_column)`` pairs and ``missing`` contains names that
+    could not be matched.
+    """
+
+    if not requested:
+        return [], []
+
+    available = set(columns)
+    resolved: List[Tuple[str, str]] = []
+    missing: List[str] = []
+
+    for base in requested:
+        candidates = [base]
+        if not base.endswith("_avg"):
+            candidates.append(f"{base}_avg")
+        if not base.endswith("_mean"):
+            candidates.append(f"{base}_mean")
+
+        match = next((cand for cand in candidates if cand in available), None)
+        if match:
+            resolved.append((base, match))
+        else:
+            missing.append(base)
+
+    return resolved, missing
 
 
 def layer_response_avg(response: torch.Tensor) -> torch.Tensor:
@@ -358,10 +531,21 @@ def calculate_label_indicator(
     Returns:
         DataFrame with times_index and label_indicator (relative to subplot height)
     """
+    y_min, y_max = y_range
+
+    if "label_valid" in df.columns:
+        indicator_source = (
+            df.groupby("times_index", observed=True)["label_valid"].max().reset_index()
+        )
+        indicator_source["label_indicator"] = indicator_source["label_valid"].apply(
+            lambda flag: y_min + ((y_max - y_min) * step_height) if flag else y_min
+        )
+        return indicator_source[["times_index", "label_indicator"]]
+
+    # Fallback for legacy datasets that still require label_index logic
     # Get first model's data to determine label validity at each time step
     first_model = df[category].iloc[0]
     model_data = df[df[category] == first_model]
-    y_min, y_max = y_range
 
     # Calculate step height as 25% of the y-axis range
     if step_height >= 0 and step_height < 1:

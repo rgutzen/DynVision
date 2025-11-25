@@ -1,7 +1,8 @@
 # SEED = ["1000", "1001", "1002"] #, "1003", "1004","1005"]  # energy loss weight 0.05 & use_ffcv=False
 # SEED = ["2000", "2001", "2002"] # energy loss weight 0.2 & use_ffcv=True
 # SEED = ["3000", "3001", "3002"] # energy loss weight not applied? & use_ffcv=True
-SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
+# SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
+SEED = ["5000", "5001", "5002"] # pattern = 10011 & shuffle pattern = True
 STATUS = 'trained-best'
 
 # ###############
@@ -197,12 +198,30 @@ rule unrolling:
 
 rule energyloss:
     input:
-        expand(project_paths.figures / 'responseintermediate' / 'responseintermediate_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip={skip}+lossrt=4+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
+        expand(project_paths.figures / 'responseintermediate' / 'responseintermediate_DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern={pattern}+shufflepattern={shuffle}+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
                     seeds='.'.join(SEED),
-                    skip='true',  # is faster to train
+                    pattern='1011',
+                    shuffle='true',
                     status=STATUS,
                 ),
 
+rule ckptmodels:
+    input:
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern={pattern}+shufflepattern={shuffle}+energyloss={eloss}_{seeds}_imagenette_{status}.pt",
+            seeds=SEED[0], #.'.join(SEED),
+            pattern='1011',
+            shuffle='true',
+            status="trained-epoch=49",
+            eloss=config.experiment_config['categories'].get('energyloss')
+        ),
+
+
+rule energylossprep:
+    input:
+        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss={weight}_{seed}_imagenette_trained-epoch=349.pt",
+        seed=SEED,
+        weight=['0.0', '0.01', '0.05', '0.1', '0.2', '0.5', '1.0', '2.0', '4.0']
+        ),
 # rule training:
 #     input:
 #         expand(project_paths.figures / 'responseintermediate' / 'responseintermediate_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss=*_{seeds}_imagenette_trained_all' / 'responses.png',
