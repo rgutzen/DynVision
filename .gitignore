@@ -10,6 +10,7 @@
 
 # user files
 Makefile
+./project_paths.py
 
 # runtime files
 config_runtime.yaml
