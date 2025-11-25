@@ -242,14 +242,17 @@ This is the cleanest solution that:
 # dynvision/workflow/snake_utils.smk
 
 import yaml
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-def _load_and_freeze_config() -> Dict[str, Any]:
+def _load_and_freeze_config(cli_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Load configuration files once and freeze them for the entire workflow.
 
     This prevents mid-workflow config changes from affecting running jobs
     when using cluster execution with snakemake-executor-plugin.
+
+    Args:
+        cli_config: Optional dictionary of CLI config overrides from Snakemake --config
 
     Returns:
         Merged configuration dictionary
@@ -277,9 +280,9 @@ def _load_and_freeze_config() -> Dict[str, Any]:
             pylogger.warning(f"Config file not found: {config_path}")
 
     # Merge with any --config overrides from Snakemake CLI
-    # The 'config' dict at this point contains CLI overrides only
-    if 'config' in dir():
-        merged_config.update(config)
+    if cli_config:
+        pylogger.info(f"Applying {len(cli_config)} CLI config overrides: {list(cli_config.keys())}")
+        merged_config.update(cli_config)
 
     pylogger.info(f"Config frozen at workflow start with {len(merged_config)} keys")
     return merged_config
@@ -291,7 +294,13 @@ def _load_and_freeze_config() -> Dict[str, Any]:
 # ... etc
 
 # Load and freeze config ONCE
-_frozen_config = _load_and_freeze_config()
+# Snakemake injects 'config' dict into global scope before parsing workflow files
+try:
+    _frozen_config = _load_and_freeze_config(cli_config=config)
+except NameError:
+    # If config doesn't exist (e.g., when testing modules in isolation)
+    pylogger.warning("Snakemake config not found - CLI overrides will not be applied")
+    _frozen_config = _load_and_freeze_config(cli_config=None)
 ```
 
 ### Phase 2: Update Config Snapshot Creation

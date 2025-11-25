@@ -301,8 +301,12 @@ When using cluster execution (via `snakecharm.sh` with snakemake-executor-plugin
 
 **The Solution:**
 ```python
-def _load_and_freeze_config() -> Dict[str, Any]:
-    """Load configuration files once and freeze them for entire workflow."""
+def _load_and_freeze_config(cli_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Load configuration files once and freeze them for entire workflow.
+
+    Args:
+        cli_config: Optional dictionary of CLI config overrides from Snakemake --config
+    """
     config_files = ['config_defaults.yaml', 'config_data.yaml', ...]
 
     merged_config = {}
@@ -310,14 +314,20 @@ def _load_and_freeze_config() -> Dict[str, Any]:
         with (project_paths.scripts.configs / config_file).open('r') as f:
             merged_config.update(yaml.safe_load(f) or {})
 
-    # Merge CLI overrides
-    if 'config' in dir() and config:
-        merged_config.update(config)
+    # Merge CLI overrides from --config flag
+    if cli_config:
+        merged_config.update(cli_config)
 
     return merged_config
 
 # Load ONCE and freeze for entire workflow
-_frozen_config = _load_and_freeze_config()
+# Snakemake injects 'config' dict into global scope before parsing workflow files
+try:
+    _frozen_config = _load_and_freeze_config(cli_config=config)
+except NameError:
+    # If config doesn't exist (e.g., when testing modules in isolation)
+    _frozen_config = _load_and_freeze_config(cli_config=None)
+
 _raw_config = _frozen_config.copy()
 WORKFLOW_CONFIG_PATH = _write_base_config_file(_raw_config)
 config = SimpleNamespace(**_raw_config)
