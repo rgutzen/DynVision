@@ -1227,7 +1227,7 @@ def _add_horizontal_legend(
         # Get symbol for title
         symbol = get_display_name(hue_key, config)
 
-        n_cols = min(len(legend_elements), 6)
+        n_cols = min(len(legend_elements), 7)
         logger.debug(
             f"Adding legend with {len(legend_elements)} elements in {n_cols} columns"
         )
@@ -1454,7 +1454,21 @@ def plot_temporal_ridge_responses(
         )
     )
     sns.set_context("talk")
-
+    
+    # Add figure title
+    if experiment:
+        title_name = (
+            get_display_name(key=f"{experiment}_experiment", config=config)
+            if experiment
+            else ""
+        )
+        fig.suptitle(
+            title_name,
+            fontsize=fmt["fontsize_title"],
+            fontweight="bold",
+            y=0.98,
+        )
+        
     # Plot each column
     all_ridge_axes = []
     for col_idx, column_value in enumerate(column_values):
@@ -1486,16 +1500,8 @@ def plot_temporal_ridge_responses(
                     layout["title_pad"],
                 ]
             )
-            title_name = (
-                get_display_name(key=f"{experiment}_experiment", config=config)
-                if experiment
-                else ""
-            )
             title_symbol = get_display_name(key=column_key, config=config)
-            if title_name:
-                title_text = f"{title_name} ({title_symbol} = {column_value})"
-            else:
-                title_text = f"{title_symbol} = {column_value}"
+            title_text = f"{title_symbol} = {column_value}"
             title_ax.text(
                 0.5,
                 0.5,
