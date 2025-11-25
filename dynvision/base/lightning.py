@@ -7,7 +7,8 @@ import pandas as pd
 import pytorch_lightning as pl
 import torch
 import wandb
-from dynvision.losses import lr_scheduler
+
+# from dynvision.losses import lr_scheduler
 from dynvision.utils import alias_kwargs
 from dynvision.utils.performance_measures import (
     calculate_accuracy,
@@ -318,7 +319,14 @@ class LightningBase(pl.LightningModule):
     ) -> float:
         return calculate_accuracy(label_index, guess_index)
 
-    def backward(self, loss: torch.Tensor, optimizer: Any = None, optimizer_idx: int = 0, *args: Any, **kwargs: Any) -> None:
+    def backward(
+        self,
+        loss: torch.Tensor,
+        optimizer: Any = None,
+        optimizer_idx: int = 0,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """Perform backward pass with optional retain_graph.
 
         Args:
@@ -594,7 +602,10 @@ class LightningBase(pl.LightningModule):
         super().on_test_start() if hasattr(super(), "on_test_start") else None
 
     def on_train_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
         """Called before each training batch.
 
@@ -607,7 +618,10 @@ class LightningBase(pl.LightningModule):
             super().on_train_batch_start(batch, batch_idx, dataloader_idx)
 
     def on_validation_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
         """Called before each validation batch.
 
@@ -620,7 +634,11 @@ class LightningBase(pl.LightningModule):
             super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
 
     def on_train_batch_end(
-        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
+        self,
+        outputs: Any,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
         """Called after each training batch.
 
