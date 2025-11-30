@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Union, Dict, Any, Tuple
+from typing import Callable, Optional, Union, Dict, Any, Tuple, List
 
 import torch
 import torch.nn as nn
@@ -176,6 +176,102 @@ class ForwardRecurrenceBase(RecurrenceBase):
                 "Setting hidden states at specific delays is not supported with DataBuffer. "
                 "Only appending new states (delay=None) is allowed."
             )
+
+    def detach_hidden_states(self) -> None:
+        """Detach all hidden states from the computation graph.
+
+        This preserves the hidden state values but breaks gradient connections,
+        freeing memory from intermediate activations. Useful after idle timesteps
+        to prevent backpropagation through the warmup period.
+        """
+        if hasattr(self, "_hidden_states") and self._hidden_states is not None:
+            self._hidden_states.detach()
+            # Clear GPU cache immediately to free memory
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+    def reenable_grad_on_hidden_states(self) -> None:
+        """Re-enable gradients on hidden states after no_grad context.
+
+        DEPRECATED: This method is kept for backward compatibility but should not
+        be used. Use initialize_hidden_states() instead for proper gradient flow.
+
+        This is used after running idle timesteps in a torch.no_grad() context.
+        It detaches the tensors (removing the no_grad computation graph) and
+        re-enables gradient tracking for future forward passes.
+
+        This allows us to:
+        1. Run idle timesteps without building computation graphs (saves memory)
+        2. Keep the converged hidden state values
+        3. Enable gradients for the actual training timesteps
+        """
+        if hasattr(self, "_hidden_states") and self._hidden_states is not None:
+            self._hidden_states.detach_and_reenable_grad()
+
+    def cache_hidden_states(self) -> List[Optional[torch.Tensor]]:
+        """Cache current hidden state values for later restoration.
+
+        Returns a list of cloned tensors representing the current buffer state.
+        These values can be used to initialize a fresh buffer later.
+
+        Returns:
+            List of cached hidden state tensors (cloned to preserve values)
+
+        Example:
+            # After idle timesteps
+            cached = layer.cache_hidden_states()
+
+            # Reset and reinitialize
+            layer.reset(input_shape)
+            layer.initialize_hidden_states(cached)
+        """
+        if not hasattr(self, "_hidden_states") or self._hidden_states is None:
+            return []
+
+        cached = []
+        for i in range(len(self._hidden_states)):
+            tensor = self._hidden_states[i]
+            if tensor is not None:
+                # Clone to preserve values independent of original buffer
+                cached.append(tensor.clone())
+            else:
+                cached.append(None)
+        return cached
+
+    def initialize_hidden_states(self, values: List[Optional[torch.Tensor]]) -> None:
+        """Initialize hidden state buffer with pre-computed values.
+
+        This method resets the hidden state buffer and populates it with the
+        provided values. Used to set initial conditions from idle timesteps
+        or other state preparation processes.
+
+        The buffer is first reset (cleared), then initialized with the values.
+        This ensures a fresh buffer that will participate in new computation
+        graphs during subsequent forward passes.
+
+        Args:
+            values: List of tensors to initialize buffer with. Should match
+                   the expected buffer structure (same length as n_hidden_states)
+
+        Example:
+            # Compute initial states through idle period
+            with torch.no_grad():
+                for t in range(idle_timesteps):
+                    layer.forward(null_input)
+
+            # Cache and reset
+            cached = layer.cache_hidden_states()
+            layer.reset(input_shape)
+            layer.initialize_hidden_states(cached)
+
+            # Now layer is ready for training with converged initial states
+        """
+        # Reset buffer (creates fresh DataBuffer)
+        self.reset(input_shape=None)
+
+        # Initialize with provided values
+        if hasattr(self, "_hidden_states") and self._hidden_states is not None:
+            self._hidden_states.initialize_from_values(values)
 
     def sync_persistent_state(self) -> None:
         """Sync hidden states to match model's device and dtype.

@@ -83,6 +83,11 @@ class ModelParams(BaseParams):
     feedforward_only: Optional[bool] = Field(
         default=None, description="Use only feedforward connections"
     )
+    truncated_bptt_timesteps: Optional[int] = Field(
+        default=None,
+        description="Truncated backpropagation through time - detach hidden states every N timesteps (0 or None = disabled)",
+        ge=0,
+    )
     # ===== RECURRENT ARCHITECTURE =====
     recurrence_type: Optional[
         Literal[
@@ -249,6 +254,7 @@ class ModelParams(BaseParams):
             SummaryItem("t_feedback"),
             SummaryItem("t_skip"),
             SummaryItem("idle_timesteps"),
+            SummaryItem("truncated_bptt_timesteps"),
         ),
         "Connectivity": (
             SummaryItem("recurrence_type"),
@@ -298,6 +304,7 @@ class ModelParams(BaseParams):
                 "idle": "idle_timesteps",
                 "ffonly": "feedforward_only",
                 "inadapt": "input_adaption_weight",
+                "tbptt": "truncated_bptt_timesteps",
                 # Storage aliases
                 "store_train_resp": "store_train_responses",
                 "store_val_resp": "store_val_responses",
@@ -736,6 +743,9 @@ class ModelParams(BaseParams):
             "t_feedback": self.t_feedback,
             "t_skip": self.t_skip,
             "dynamics_solver": self.dynamics_solver,
+            "idle_timesteps": self.idle_timesteps,
+            "feedforward_only": self.feedforward_only,
+            "truncated_bptt_timesteps": self.truncated_bptt_timesteps,
             "recurrence_type": self.recurrence_type,
             "skip": self.skip,
             "feedback": self.feedback,
@@ -876,6 +886,7 @@ class ModelParams(BaseParams):
                         "t_recurrence",
                         "t_feedback",
                         "t_skip",
+                        "truncated_bptt_timesteps",
                     ),
                 ),
                 (

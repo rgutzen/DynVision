@@ -38,14 +38,15 @@ class TemporalBase(nn.Module):
         tff="t_feedforward",
         tfb="t_feedback",
         tsk="t_skip",
-        pattern="data_presentation_pattern",
         lossrt="loss_reaction_time",
+        pattern="data_presentation_pattern",
         shufflepattern="shuffle_presentation_pattern",
         rctype="recurrence_type",
         rctarget="recurrence_target",
         solver="dynamics_solver",
         idle="idle_timesteps",
         ffonly="feedforward_only",
+        tbptt="truncated_bptt_timesteps",
     )
     def __init__(
         self,
@@ -69,6 +70,7 @@ class TemporalBase(nn.Module):
         idle_timesteps: int = 0,
         loss_reaction_time: float = 0.0,
         feedforward_only: bool = False,
+        truncated_bptt_timesteps: int = 0,
         # Architecture configuration
         classifier_name: str = "classifier",
         dynamics_solver: str = "euler",
@@ -108,6 +110,7 @@ class TemporalBase(nn.Module):
         self.non_input_value = float(non_input_value)
         self.idle_timesteps = int(idle_timesteps)
         self.feedforward_only = str_to_bool(feedforward_only)
+        self.truncated_bptt_timesteps = int(truncated_bptt_timesteps)
 
         # Set operation selections (use defaults if not provided)
         self.non_feedforward_operations = (
@@ -215,6 +218,76 @@ class TemporalBase(nn.Module):
     def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset the model state, in particular hidden states."""
         pass
+
+    def compute_idle_initial_states(
+        self, batch_size: int, device: torch.device, dtype: torch.dtype
+    ) -> Dict[str, List[Optional[torch.Tensor]]]:
+        """Compute initial hidden states through idle timesteps.
+
+        Runs the model for idle_timesteps with null input to allow spontaneous
+        activity to converge. Returns the converged hidden state values that
+        can be used to initialize the model for training timesteps.
+
+        This is a pure state initialization step - it runs in torch.no_grad()
+        context and does not contribute to loss or gradients. The returned
+        values are detached from any computation graph.
+
+        Args:
+            batch_size: Batch size for idle timestep computation
+            device: Device to run computation on
+            dtype: Data type for tensors
+
+        Returns:
+            Dictionary mapping layer names to lists of hidden state tensors.
+            These can be used with layer.initialize_hidden_states(values)
+
+        Example:
+            # Compute initial states
+            initial_states = model.compute_idle_initial_states(
+                batch_size=256, device='cuda', dtype=torch.float32
+            )
+
+            # Reset model and initialize with converged states
+            model.reset(input_shape)
+            for name, layer in model.named_modules():
+                if name in initial_states:
+                    layer.initialize_hidden_states(initial_states[name])
+
+            # Now forward pass starts with converged hidden states
+            output = model(real_input)
+        """
+        if not hasattr(self, "idle_timesteps") or self.idle_timesteps <= 0:
+            return {}
+
+        # Create null input for idle timesteps
+        null_input = torch.full(
+            (batch_size, self.n_channels, self.dim_y, self.dim_x),
+            self.non_input_value,
+            device=device,
+            dtype=dtype,
+            requires_grad=False,
+        )
+
+        # Run idle timesteps without building computation graph
+        with torch.no_grad():
+            for t in range(self.idle_timesteps):
+                x, _ = self._forward(
+                    null_input,
+                    t=t,
+                    feedforward_only=False,
+                    store_responses=False,
+                )
+                del x  # Don't accumulate outputs
+
+        # Cache hidden states from all layers
+        cached_states = {}
+        for name, layer in self.named_modules():
+            if hasattr(layer, "cache_hidden_states"):
+                cached = layer.cache_hidden_states()
+                if cached:  # Only store if layer has hidden states
+                    cached_states[name] = cached
+
+        return cached_states
 
     # Core forward pass
     ###################
@@ -359,11 +432,21 @@ class TemporalBase(nn.Module):
         Returns:
             torch.Tensor: Model outputs.
         """
+        # Log initial memory at DEBUG level
+        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+            mem_start = torch.cuda.memory_allocated(0) / (1024**3)
+            logger.debug(f"Forward start: {mem_start:.2f} GB allocated")
+
         x_0 = _adjust_data_dimensions(x_0)
         batch_size, n_timesteps, dim_channels, dim_y, dim_x = x_0.shape
 
         if hasattr(self, "reset"):
             self.reset(x_0.shape)
+            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+                mem_after_reset = torch.cuda.memory_allocated(0) / (1024**3)
+                logger.debug(
+                    f"After reset: {mem_after_reset:.2f} GB allocated (+{mem_after_reset - mem_start:.2f} GB)"
+                )
 
         store_responses = (
             hasattr(self, "storage") and self.storage.responses.should_store()
@@ -380,21 +463,41 @@ class TemporalBase(nn.Module):
         # Collect outputs in a list to preserve gradients
         output_list = []
 
-        # Optionally run idle timesteps with null input for spontaneous activity to converge
+        # Initialize hidden states from idle timesteps if configured
+        # This computes converged initial states through spontaneous activity
         if hasattr(self, "idle_timesteps") and self.idle_timesteps > 0:
-            null_input = torch.full(
-                (batch_size, dim_channels, dim_y, dim_x),
-                self.non_input_value,
+            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+                mem_before_idle = torch.cuda.memory_allocated(0) / (1024**3)
+                logger.debug(
+                    f"Computing initial states from {self.idle_timesteps} idle timesteps: {mem_before_idle:.2f} GB"
+                )
+
+            # Compute initial hidden states through idle period (no_grad, memory efficient)
+            initial_states = self.compute_idle_initial_states(
+                batch_size=batch_size,
                 device=x_0.device,
                 dtype=x_0.dtype,
             )
-            for t in range(self.idle_timesteps):
-                x, _ = self._forward(
-                    null_input,
-                    t=t,
-                    feedforward_only=False,
-                    store_responses=False,
+
+            # Reset model state (clears buffers, creates fresh ones)
+            if hasattr(self, "reset"):
+                self.reset(x_0.shape)
+
+            # Initialize hidden states with converged values from idle period
+            # These become the initial conditions for real timesteps
+            for name, layer in self.named_modules():
+                if name in initial_states and hasattr(layer, "initialize_hidden_states"):
+                    layer.initialize_hidden_states(initial_states[name])
+
+            # Clear cache to free memory
+            del initial_states
+
+            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+                mem_after_idle = torch.cuda.memory_allocated(0) / (1024**3)
+                logger.debug(
+                    f"After idle initialization: {mem_after_idle:.2f} GB allocated"
                 )
+
         # Forward the model over all timesteps
         for t in torch.arange(n_timesteps, device=x_0.device):
             x = x_0[:, t, ...]
@@ -405,6 +508,32 @@ class TemporalBase(nn.Module):
                 feedforward_only=self.feedforward_only,
                 store_responses=store_responses,
             )
+
+            # Log memory for each real timestep to track accumulation (DEBUG level)
+            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+                mem_timestep = torch.cuda.memory_allocated(0) / (1024**3)
+                logger.debug(
+                    f"After real timestep {t.item()+1}/{n_timesteps}: {mem_timestep:.2f} GB allocated"
+                )
+
+            # Truncated BPTT: Detach hidden states periodically to limit memory accumulation
+            # NOTE: Current implementation creates discrete gradient segments (e.g., [0-9], [10-19], [20-29])
+            # TODO: Implement true sliding window TBPTT where gradients always flow back exactly N steps
+            # (requires gradient checkpointing or manual recomputation for proper sliding window)
+            if (
+                hasattr(self, "truncated_bptt_timesteps")
+                and self.truncated_bptt_timesteps > 0
+            ):
+                # Check if we should detach at this timestep
+                # We detach after every N timesteps (where N = truncated_bptt_timesteps)
+                timestep_num = t.item() + 1  # Convert to 1-based indexing
+                if timestep_num % self.truncated_bptt_timesteps == 0:
+                    logger.info(
+                        f"[TBPTT] Detaching hidden states at timestep {timestep_num} (every {self.truncated_bptt_timesteps} timesteps)"
+                    )
+                    for layer in self.modules():
+                        if hasattr(layer, "detach_hidden_states"):
+                            layer.detach_hidden_states()
 
             if x is None:
                 # Handle None case - create zero tensor with gradients
@@ -433,7 +562,17 @@ class TemporalBase(nn.Module):
                 responses.append(t_responses)
 
         # Concatenate all outputs along time dimension - preserves gradients
+        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+            mem_before_concat = torch.cuda.memory_allocated(0) / (1024**3)
+            logger.debug(
+                f"Before concatenating {len(output_list)} outputs: {mem_before_concat:.2f} GB allocated"
+            )
+
         outputs = torch.cat(output_list, dim=1)
+
+        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+            mem_after_concat = torch.cuda.memory_allocated(0) / (1024**3)
+            logger.debug(f"After concatenation: {mem_after_concat:.2f} GB allocated")
 
         if store_responses:
             response_dict = responses.to_dict(dim=1)  # Concatenate time dimension
@@ -441,6 +580,11 @@ class TemporalBase(nn.Module):
             del responses, response_dict
 
         del output_list
+
+        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
+            mem_end = torch.cuda.memory_allocated(0) / (1024**3)
+            logger.debug(f"Forward end: {mem_end:.2f} GB allocated")
+
         return outputs
 
     # Input processing utilities
@@ -596,8 +740,10 @@ class TemporalBase(nn.Module):
 
                 # Check if any masking needed (use count instead of any() to avoid sync)
                 # For patterns with nulls or reaction time, we always need to clone
-                needs_masking = (len(self.data_presentation_pattern) > 1 and
-                                '0' in str(self.data_presentation_pattern)) or self.loss_reaction_time > 0
+                needs_masking = (
+                    len(self.data_presentation_pattern) > 1
+                    and "0" in str(self.data_presentation_pattern)
+                ) or self.loss_reaction_time > 0
 
                 if needs_masking:
                     # Expanded tensors are views; clone before in-place mutation
@@ -667,7 +813,9 @@ class TemporalBase(nn.Module):
         reaction_steps = max(1, math.ceil(self.loss_reaction_time / self.dt))
 
         # Detect rising edges (stimulus onsets) - where pattern goes from False to True
-        padded = torch.cat([torch.zeros(1, dtype=torch.bool, device=pattern.device), pattern])
+        padded = torch.cat(
+            [torch.zeros(1, dtype=torch.bool, device=pattern.device), pattern]
+        )
         rising_edges = padded[1:] & ~padded[:-1]
 
         # Get indices of rising edges

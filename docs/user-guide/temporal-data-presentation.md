@@ -386,6 +386,257 @@ If reaction window exceeds chunk duration, a warning is logged:
 
 ---
 
+## Idle Timesteps
+
+**Purpose:** Warm up recurrent network dynamics before presenting actual stimuli
+
+**Parameter:** `idle_timesteps` (alias: `idle`) - number of timesteps to run before stimulus presentation
+
+### Overview
+
+Recurrent neural networks often require a "warm-up" period for their internal dynamics to reach a stable state before stimulus presentation. The `idle_timesteps` parameter allows the network to process null input for a specified number of timesteps, allowing spontaneous activity and recurrent connections to converge to baseline dynamics.
+
+### Basic Usage
+
+```python
+model = DyRCNNx4(
+    n_timesteps=20,
+    idle_timesteps=10,  # Run 10 idle timesteps before each batch
+    non_input_value=0.0,  # Input value during idle period
+)
+
+# Forward pass timeline:
+# [10 idle timesteps with null input] → [20 stimulus timesteps]
+```
+
+### How It Works
+
+1. **Before stimulus timesteps**, the model runs `idle_timesteps` forward passes with null input (`non_input_value`)
+2. **Hidden states** accumulate recurrent dynamics during idle period
+3. **After idle timesteps complete**, hidden state values are preserved but computation graph is cleared
+4. **Actual stimulus timesteps** then start with converged hidden states
+
+### Memory-Efficient Implementation
+
+Idle timesteps use a cache-reset-restore pattern to provide both memory efficiency and correct gradient flow:
+
+```python
+# Inside TemporalBase.forward():
+
+# 1. Compute converged states (no computation graph)
+initial_states = self.compute_idle_initial_states(
+    batch_size=batch_size,
+    device=device,
+    dtype=dtype,
+)
+
+# 2. Reset model (creates fresh buffers)
+self.reset(input_shape)
+
+# 3. Initialize with converged values
+for name, layer in self.named_modules():
+    if name in initial_states:
+        layer.initialize_hidden_states(initial_states[name])
+
+# 4. Real timesteps build NEW computation graph
+# Hidden states evolve with gradients: h[t+1] = f(x[t], h[t], params)
+```
+
+**Key design:**
+- **Idle period**: Pure state initialization in `torch.no_grad()` context
+- **Cache values**: Extract converged hidden states using `layer.cache_hidden_states()`
+- **Reset buffers**: Clear old buffers and create fresh ones
+- **Initialize**: Populate fresh buffers with cached values
+- **Training**: Real timesteps start with these values as initial conditions and build new computation graph
+
+**Why this works:**
+- Idle timesteps don't contribute to loss (as intended biologically)
+- Hidden state values provide representative initial conditions
+- Real timesteps can backpropagate: `loss → h[T] → ... → h[1] → params`
+- Initial hidden state `h[0]` acts as input (like batch norm running stats)
+- No memory accumulation during idle period (~0.1 GB total)
+
+### Use Cases
+
+**1. Spontaneous Activity Convergence**
+```python
+# Allow recurrent dynamics to stabilize before stimulus
+model = DyRCNNx4(
+    idle_timesteps=15,
+    t_recurrence=6.0,  # Recurrent connections with 6ms delay
+    dt=2.0,
+)
+# Idle period: 15 * 2ms = 30ms of spontaneous activity
+```
+
+**2. Baseline State Establishment**
+```python
+# Ensure consistent baseline state across batches
+model = DyRCNNx4(
+    idle_timesteps=10,
+    feedback=True,  # Feedback connections benefit from idle period
+)
+```
+
+**3. Avoiding Transient Artifacts**
+```python
+# Skip initial transient responses from zero initialization
+model = DyRCNNx4(
+    idle_timesteps=20,
+    recurrence_type="full",  # Full recurrence requires longer convergence
+)
+```
+
+### Configuration
+
+**In model initialization:**
+```python
+model = DyRCNNx4(
+    idle_timesteps=10,          # Number of idle timesteps
+    non_input_value=0.0,        # Input value during idle period (typically 0)
+)
+```
+
+**In config file (`config_defaults.yaml`):**
+```yaml
+# idle_timesteps: 0  # Idle timesteps for convergence (0 = disabled)
+```
+
+**Using alias:**
+```python
+model = DyRCNNx4(idle=10)  # Alias for idle_timesteps
+```
+
+### Performance Considerations
+
+**Memory usage:** Idle timesteps add minimal memory overhead due to `torch.no_grad()` optimization:
+- Without optimization: ~2.8 GB per idle timestep (accumulating computation graphs)
+- With optimization: ~0.1 GB total for all idle timesteps (only hidden state values)
+
+**Computational cost:** Idle timesteps add forward pass computation but no backward pass:
+- Training time increases proportionally to `idle_timesteps / (idle_timesteps + n_timesteps)`
+- Example: 10 idle + 20 training = 33% overhead
+
+### Best Practices
+
+**1. Match convergence time to network dynamics:**
+```python
+# Rule of thumb: idle_timesteps ≥ 2-3 × tau / dt
+tau = 10.0  # Neural time constant (ms)
+dt = 2.0    # Integration timestep (ms)
+idle_timesteps = int(3 * tau / dt)  # = 15 timesteps
+
+model = DyRCNNx4(
+    tau=tau,
+    dt=dt,
+    idle_timesteps=idle_timesteps,
+)
+```
+
+**2. Disable for feedforward networks:**
+```python
+# No recurrence = no need for idle period
+model = DyRCNNx4(
+    feedforward_only=True,
+    idle_timesteps=0,  # Disabled (default)
+)
+```
+
+**3. Increase for complex recurrent architectures:**
+```python
+# More recurrence = longer convergence time
+model = DyRCNNx4(
+    recurrence_type="full",
+    feedback=True,           # Adds feedback loops
+    idle_timesteps=25,       # Longer idle period for convergence
+)
+```
+
+**4. Monitor convergence in debugging:**
+```python
+# Enable DEBUG logging to track hidden state evolution
+logging.getLogger("dynvision.base.temporal").setLevel(logging.DEBUG)
+
+# Logs will show:
+# DEBUG: After idle timestep 5/10: 1.14 GB
+# DEBUG: After idle timestep 10/10: 2.06 GB
+# DEBUG: After idle timesteps + grad reenable: 2.06 GB allocated
+```
+
+### Interaction with Other Features
+
+**With presentation patterns:**
+```python
+model = DyRCNNx4(
+    idle_timesteps=10,                    # Warmup period first
+    n_timesteps=20,
+    data_presentation_pattern="1011",    # Applied after idle timesteps
+)
+# Timeline: [10 idle] → [20 stimulus with pattern]
+```
+
+**With truncated BPTT:**
+```python
+model = DyRCNNx4(
+    idle_timesteps=10,               # No gradients (torch.no_grad)
+    n_timesteps=20,
+    truncated_bptt_timesteps=10,     # Applies only to stimulus timesteps
+)
+# Idle timesteps never backpropagate (by design)
+# Stimulus timesteps detach every 10 steps (if enabled)
+```
+
+**With loss reaction time:**
+```python
+model = DyRCNNx4(
+    idle_timesteps=10,           # Warmup before stimulus
+    loss_reaction_time=6.0,      # Reaction masking on stimulus only
+)
+# Reaction time masking only affects stimulus timesteps, not idle
+```
+
+### Troubleshooting
+
+**Issue: Model not learning with idle_timesteps enabled**
+
+If loss doesn't decrease with `idle_timesteps > 0`, verify the cache-reset-restore pattern is active.
+
+**Solution:** Check that layers have the new initialization methods:
+```python
+# Check layer has required methods
+layer = model.V1  # Example recurrent layer
+assert hasattr(layer, "cache_hidden_states")
+assert hasattr(layer, "initialize_hidden_states")
+
+# Verify model has compute method
+assert hasattr(model, "compute_idle_initial_states")
+```
+
+**Issue: High memory usage during idle timesteps**
+
+If memory grows significantly during idle period (>1 GB), the `torch.no_grad()` context may not be active.
+
+**Solution:** Check implementation in `temporal.py`:
+```python
+# Should see this pattern in compute_idle_initial_states()
+with torch.no_grad():
+    for t in range(self.idle_timesteps):
+        x, _ = self._forward(null_input, t=t, ...)
+```
+
+**Issue: Gradients still not flowing**
+
+If you updated from an earlier version and gradients aren't flowing:
+
+**Solution:** The old `reenable_grad_on_hidden_states()` method is deprecated. The new implementation uses:
+- `compute_idle_initial_states()` - Computes converged states
+- `cache_hidden_states()` - Extracts values from layers
+- `initialize_hidden_states()` - Populates fresh buffers
+
+No manual gradient re-enabling is needed.
+
+---
+
 ## Residual Timesteps
 
 **Purpose:** Handle mismatch between data temporal dimension and model configuration

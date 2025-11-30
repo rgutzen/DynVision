@@ -595,6 +595,101 @@ class DataBuffer:
         # Force garbage collection
         gc.collect()
 
+    def detach(self) -> None:
+        """Detach all tensors in storage from the computation graph.
+
+        This preserves the tensor values but breaks gradient connections,
+        freeing memory from intermediate activations while keeping the state.
+        Useful for breaking computation graphs in recurrent operations.
+        """
+        if self._lock:
+            with self._lock:
+                self._detach_impl()
+        else:
+            self._detach_impl()
+
+    def _detach_impl(self) -> None:
+        """Internal detach implementation."""
+        for i in range(len(self._storage)):
+            if self._storage[i] is not None and isinstance(self._storage[i], torch.Tensor):
+                # Detach ALL tensors, not just those with requires_grad=True
+                # Even tensors without requires_grad can hold references to the computation graph
+                self._storage[i] = self._storage[i].detach()
+
+    def detach_and_reenable_grad(self) -> None:
+        """Detach tensors from computation graph and re-enable gradients.
+
+        This is useful after no_grad contexts where you want to:
+        1. Keep the tensor values (no computation graph from previous operations)
+        2. But enable gradient tracking for future operations
+
+        Example use case: After idle timesteps run in no_grad context,
+        we want to keep the converged hidden state values but enable
+        gradients for the actual training timesteps.
+        """
+        if self._lock:
+            with self._lock:
+                self._detach_and_reenable_grad_impl()
+        else:
+            self._detach_and_reenable_grad_impl()
+
+    def _detach_and_reenable_grad_impl(self) -> None:
+        """Internal implementation of detach and re-enable grad."""
+        for i in range(len(self._storage)):
+            if self._storage[i] is not None and isinstance(self._storage[i], torch.Tensor):
+                # Detach (remove computation graph) and re-enable gradients
+                self._storage[i] = self._storage[i].detach().requires_grad_(True)
+
+    def initialize_from_values(self, values: List[Optional[torch.Tensor]]) -> None:
+        """Initialize buffer with pre-computed values.
+
+        This is used to set initial buffer state from values computed elsewhere
+        (e.g., from idle timesteps). The buffer is first cleared, then populated
+        with the provided values.
+
+        Args:
+            values: List of tensors to initialize buffer with. Can contain None.
+                   Should match the buffer's expected size/structure.
+
+        Example:
+            # Compute initial hidden states
+            with torch.no_grad():
+                for t in range(warmup_steps):
+                    state = compute_state(...)
+                    buffer.append(state)
+
+            # Cache values
+            cached = [buffer[i] for i in range(len(buffer))]
+
+            # Later: initialize fresh buffer with cached values
+            new_buffer = DataBuffer(...)
+            new_buffer.initialize_from_values(cached)
+        """
+        if self._lock:
+            with self._lock:
+                self._initialize_from_values_impl(values)
+        else:
+            self._initialize_from_values_impl(values)
+
+    def _initialize_from_values_impl(self, values: List[Optional[torch.Tensor]]) -> None:
+        """Internal implementation of initialize from values."""
+        # Clear existing storage and reset state
+        self._storage.clear()
+        self._size = 0
+        self._total_seen = 0
+
+        # Directly populate storage (bypass strategy for initialization)
+        # This ensures the buffer starts in a known state
+        for value in values:
+            if value is not None:
+                # Apply preprocessing (device placement, dtype conversion, detachment)
+                processed = self._preprocess_data(value)
+                self._storage.append(processed)
+            else:
+                self._storage.append(None)
+            self._size += 1
+            self._total_seen += 1
+
     def to_tensor(self, dim: int = 0) -> torch.Tensor:
         """
         Concatenate all tensor data efficiently.
