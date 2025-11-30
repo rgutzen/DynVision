@@ -678,15 +678,25 @@ class DataBuffer:
         self._size = 0
         self._total_seen = 0
 
-        # Directly populate storage (bypass strategy for initialization)
-        # This ensures the buffer starts in a known state
-        for value in values:
+        # For cyclic buffers, pre-allocate storage to max_size
+        # This ensures subsequent cyclic appends can use index assignment
+        if not self._unlimited:
+            self._storage = [None] * self.max_size
+
+        # Populate storage with provided values
+        for i, value in enumerate(values):
             if value is not None:
                 # Apply preprocessing (device placement, dtype conversion, detachment)
                 processed = self._preprocess_data(value)
-                self._storage.append(processed)
+                if self._unlimited:
+                    self._storage.append(processed)
+                else:
+                    # For cyclic buffers, use index assignment
+                    self._storage[i] = processed
             else:
-                self._storage.append(None)
+                if self._unlimited:
+                    self._storage.append(None)
+                # For cyclic buffers, None is already in pre-allocated storage
             self._size += 1
             self._total_seen += 1
 
