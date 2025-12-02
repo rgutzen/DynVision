@@ -1,280 +1,227 @@
-"""Plot training accuracy over epochs and loss curves with comprehensive model statistics."""
+"""Plot training overview with training/validation accuracy, losses, and test performance.
 
-"""Plot training accuracy over epochs and loss curves with comprehensive model statistics."""
+This module creates a comprehensive training visualization with:
+- Left column: Training/validation accuracy (top), energy/cross-entropy loss (bottom)
+- Right column: Test performance panel (top), layer response ridge plots (bottom)
+- Horizontal category legend between left panels
+"""
 
 import argparse
-import json
 import logging
 import re
-import ast  # Add this import for ast.literal_eval
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from scipy.ndimage import uniform_filter1d
 
 from dynvision.utils.visualization_utils import (
-    save_plot,
     load_config_from_args,
     get_display_name,
-    get_color,
-    calculate_label_indicator,
+    save_plot,
+)
+from dynvision.visualization.plot_responses import (
+    _plot_accuracy_panel,
+    _plot_response_ridges,
+    _extract_dimension_values,
+    _get_colors_for_dimension,
+    _get_dimension_key,
+    _normalize_dimension,
+    _validate_dimensions,
+    _format_legend_label,
+    FORMATTING as RESPONSES_FORMATTING,
 )
 
-
+# Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel("INFO")
 
-
-DEFAULT_PALETTE = {
-    "full": "#1f77b4",  # Blue
-    "self": "#ff7f0e",  # Orange
-    "depthpointwise": "#2ca02c",  # Green
-    "pointdepthwise": "#d62728",  # Red
-    "local": "#9467bd",  # Purple
-    "localdepthwise": "#8c564b",  # Brown
+# Training plot layout configuration
+TRAINING_LAYOUT = {
+    # Figure dimensions
+    "figure_width": 14,
+    "figure_height": 14,
+    # Column layout (relative coordinates 0-1)
+    "left_column_width": 0.45,  # Configurable
+    "right_column_width": 0.50,
+    "column_spacing": 0.08,
+    "left_margin": 0.06,
+    "right_margin": 0.02,
+    # Left column vertical layout
+    "top_margin": 0.05,
+    "accuracy_height": 0.35,
+    "accuracy_bottom_margin": 0.02,
+    "legend_height": 0.1,
+    "legend_top_margin": 0.02,  # Space above legend
+    "legend_bottom_margin": 0.02,  # Space below legend (increased to move legend down)
+    "loss_height": 0.35,
+    "loss_bottom_margin": 0.05,
+    # Right column follows plot_responses layout
+    "performance_height": 0.2,
+    "performance_pad": 0.05,
+    "ridge_legend_height": 0.08,
+    "ridge_legend_pad": 0.01,
+    "ridge_overlap": 0.15,  # Overlap fraction between ridge plots
+    # Panel letters
+    "panel_letter_offset_x": -0.05,
+    "panel_letter_offset_y": 0.015,
 }
 
-DEFAULT_COLOR = "#5a5a5a"
+# Formatting configuration (inherit from plot_responses)
+TRAINING_FORMATTING = {
+    **RESPONSES_FORMATTING,
+    "fontsize_panel_label": 18,
+    "max_global_ymax": 1.5,  # Increased from 1.5 to accommodate higher response values
+}
 
 
-def _coerce_to_json_string(value: Optional[str]) -> Optional[str]:
-    """Convert loose JSON-like CLI strings into valid JSON strings."""
+def _auto_detect_category_key(df: pd.DataFrame) -> Optional[str]:
+    """Auto-detect category key from grouped W&B CSV column names.
 
-    if value is None:
-        return None
-
-    text = value.strip()
-    if not text:
-        return None
-
-    try:
-        json.loads(text)
-        return text
-    except json.JSONDecodeError:
-        try:
-            literal_value = ast.literal_eval(text)
-        except (ValueError, SyntaxError):
-            logger.warning("Unable to parse configuration string: %s", text)
-            return None
-
-        try:
-            return json.dumps(literal_value)
-        except (TypeError, ValueError):
-            logger.warning("Unable to convert configuration literal to JSON: %s", text)
-            return None
-
-
-def parse_palette(
-    palette_input: Optional[Union[str, Dict[str, str]]]
-) -> Dict[str, str]:
-    """Parse palette input from CLI/config into a dictionary."""
-
-    if palette_input is None:
-        return {}
-
-    if isinstance(palette_input, dict):
-        return {str(k): str(v) for k, v in palette_input.items()}
-
-    try:
-        parsed = ast.literal_eval(palette_input)
-    except (ValueError, SyntaxError):
-        logger.warning("Could not parse palette input: %s", palette_input)
-        return {}
-
-    if not isinstance(parsed, dict):
-        logger.warning("Palette input is not a mapping: %s", palette_input)
-        return {}
-
-    return {str(k): str(v) for k, v in parsed.items()}
-
-
-def _resolve_palette(
-    config: Optional[Dict[str, Dict[str, str]]],
-    palette_input: Optional[Union[str, Dict[str, str]]],
-) -> Dict[str, str]:
-    """Merge default palette with config overrides and CLI overrides."""
-
-    palette = DEFAULT_PALETTE.copy()
-
-    if config:
-        palette.update(config.get("palette", {}))
-
-    parsed_palette = parse_palette(palette_input)
-    if parsed_palette:
-        palette.update(parsed_palette)
-
-    return palette
-
-
-def _determine_model_order(
-    all_models: Sequence[str], config: Optional[Dict[str, Dict[str, str]]]
-) -> List[str]:
-    """Determine plotting order for model categories."""
-
-    candidate_order: List[str] = []
-
-    if config:
-        ordering = config.get("ordering", {})
-        for key in (
-            "model_type",
-            "model_types",
-            "recurrence_type",
-            "recurrence",
-            "rctype",
-        ):
-            values = ordering.get(key) or ordering.get(key.lower())
-            if values:
-                candidate_order = list(values)
-                break
-
-    if not candidate_order:
-        candidate_order = list(MODEL_ORDER)
-
-    ordered = [model for model in candidate_order if model in all_models]
-    remaining = [model for model in sorted(set(all_models)) if model not in ordered]
-    ordered.extend(remaining)
-
-    return ordered
-
-
-def _get_model_color(
-    model_type: str,
-    colors: Dict[str, str],
-    config: Optional[Dict[str, Dict[str, str]]],
-) -> str:
-    """Resolve color for a model based on config overrides and palette."""
-
-    if config:
-        configured_color = get_color(model_type, config)
-        if configured_color:
-            return configured_color
-
-    if model_type in colors:
-        return colors[model_type]
-
-    model_lower = model_type.lower()
-    if model_lower in colors:
-        return colors[model_lower]
-
-    logger.debug("Falling back to default color for model '%s'", model_type)
-    return DEFAULT_COLOR
-
-
-def _format_model_label(
-    model_type: str, config: Optional[Dict[str, Dict[str, str]]]
-) -> str:
-    """Format model label using config naming overrides when available."""
-
-    if config:
-        display = get_display_name(model_type, config)
-        if display:
-            return display
-
-    return model_type.replace("wise", "w.")
-
-
-def _load_test_data(test_data_paths: Sequence[Path]) -> pd.DataFrame:
-    """Load and concatenate test performance CSV files."""
-
-    if not test_data_paths:
-        raise ValueError("No test data paths provided")
-
-    dataframes = []
-    for idx, path in enumerate(test_data_paths, start=1):
-        logger.info(
-            "Loading test data file %s/%s: %s", idx, len(test_data_paths), path
-        )
-        df = pd.read_csv(path)
-        logger.debug("Loaded test data shape %s from %s", df.shape, path)
-        dataframes.append(df)
-
-    concatenated = pd.concat(dataframes, ignore_index=True)
-    logger.info(
-        "Concatenated test data: %s rows, %s columns",
-        concatenated.shape[0],
-        concatenated.shape[1],
-    )
-    return concatenated
-
-
-# Global model order for consistent plotting across all subplots
-MODEL_ORDER = [
-    "full",
-    "self",
-    "depthpointwise",
-    "pointdepthwise",
-    "local",
-    "localdepthwise",
-]
-
-
-def parse_model_identifier_from_column(column_name: str) -> str:
-    """
-    Extract model identifier from W&B column name.
+    Looks for columns with pattern: "<key>: <value> - <metric>"
 
     Args:
-        column_name: Full column name from W&B export
+        df: DataFrame with W&B export columns
 
     Returns:
-        Model identifier (e.g., 'full', 'pointdepthwise', etc.)
+        Detected category key or None
     """
-    # Extract rctype from the column name
-    match = re.search(r"recurrence_type: ([^-]+) -", column_name)
+    # Pattern: "category_key: category_value - metric_name"
+    pattern = r"^([^:]+):\s*[^-]+-\s*.+$"
+
+    for col in df.columns:
+        match = re.match(pattern, col)
+        if match:
+            category_key = match.group(1).strip()
+            logger.info(
+                f"Auto-detected category key: '{category_key}' from column '{col}'"
+            )
+            return category_key
+
+    logger.warning("Could not auto-detect category key from column names")
+    return None
+
+
+def _extract_category_value_from_column(
+    column_name: str, category_key: str
+) -> Optional[str]:
+    """Extract category value from grouped W&B column name.
+
+    Args:
+        column_name: Column name like "energy_loss_weight: 0.05 - train_accuracy"
+        category_key: Category key like "energy_loss_weight"
+
+    Returns:
+        Category value like "0.05" or None if not found
+    """
+    # Pattern: "category_key: category_value - metric_name"
+    pattern = rf"^{re.escape(category_key)}:\s*([^-]+)\s*-\s*.+$"
+    match = re.match(pattern, column_name)
+
     if match:
-        result = match.group(1).strip()
-        return result
-    else:
-        return "unknown"
+        return match.group(1).strip()
+    return None
 
 
-def load_accuracy_data(accuracy_csv_path: Path) -> pd.DataFrame:
+def _standardize_category_value(value: str) -> str:
+    """Standardize category value formatting consistently.
+
+    Converts numeric strings to float for consistent comparison.
+    E.g., "0", "0.0", "0.00" all become 0.0
     """
-    Load and process training and validation accuracy data from W&B export.
+    value_str = str(value).strip()
+
+    # Handle boolean-like values consistently
+    if value_str.lower() in ["true", "false"]:
+        return value_str.lower()
+
+    # Try to convert to numeric for consistent comparison
+    try:
+        return float(value_str)
+    except (ValueError, TypeError):
+        # Not numeric, return as string
+        return value_str
+
+
+def _parse_accuracy_data(
+    accuracy_csv: Path, category_key: str
+) -> Tuple[pd.DataFrame, str]:
+    """Parse training/validation accuracy CSV from W&B export.
 
     Args:
-        accuracy_csv_path: Path to accuracy CSV file
+        accuracy_csv: Path to accuracy CSV file
+        category_key: Category key to look for (may be auto-detected)
 
     Returns:
-        Processed DataFrame with columns: epoch, model_type, train_accuracy, val_accuracy
+        Tuple of (processed DataFrame, actual category_key used)
+        DataFrame has columns: epoch, category_value, train_accuracy, val_accuracy
     """
-    df = pd.read_csv(accuracy_csv_path)
+    df = pd.read_csv(accuracy_csv)
 
-    # Find all accuracy columns (excluding MIN/MAX variants)
-    train_accuracy_columns = [
+    # Auto-detect category key if needed
+    actual_category_key = category_key
+    if category_key not in df.columns:
+        detected_key = _auto_detect_category_key(df)
+        if detected_key:
+            actual_category_key = detected_key
+            logger.info(f"Using auto-detected category key: '{actual_category_key}'")
+        else:
+            logger.warning(
+                f"Category key '{category_key}' not found and auto-detection failed"
+            )
+            return pd.DataFrame(), category_key
+
+    # Find training and validation accuracy columns
+    train_acc_cols = [
         col
         for col in df.columns
-        if "train_accuracy" in col and "__MIN" not in col and "__MAX" not in col
+        if "train_accuracy" in col.lower()
+        and "__MIN" not in col
+        and "__MAX" not in col
     ]
-    val_accuracy_columns = [
+    val_acc_cols = [
         col
         for col in df.columns
-        if "val_accuracy" in col and "__MIN" not in col and "__MAX" not in col
+        if "val_accuracy" in col.lower() and "__MIN" not in col and "__MAX" not in col
     ]
 
+    if not train_acc_cols and not val_acc_cols:
+        logger.warning("No train_accuracy or val_accuracy columns found")
+        return pd.DataFrame(), actual_category_key
+
+    logger.info(
+        f"Found {len(train_acc_cols)} train_accuracy columns, {len(val_acc_cols)} val_accuracy columns"
+    )
+
+    # Extract data for each category value
     processed_data = []
 
-    # Group by model type
-    model_types = set()
-    for col in train_accuracy_columns + val_accuracy_columns:
-        model_types.add(parse_model_identifier_from_column(col))
+    # Get all category values from column names
+    category_values = set()
+    for col in train_acc_cols + val_acc_cols:
+        cat_val = _extract_category_value_from_column(col, actual_category_key)
+        if cat_val:
+            category_values.add(cat_val)
 
-    for model_type in model_types:
+    for cat_val in category_values:
+        # Find columns for this category value
         train_col = next(
             (
                 col
-                for col in train_accuracy_columns
-                if parse_model_identifier_from_column(col) == model_type
+                for col in train_acc_cols
+                if _extract_category_value_from_column(col, actual_category_key)
+                == cat_val
             ),
             None,
         )
         val_col = next(
             (
                 col
-                for col in val_accuracy_columns
-                if parse_model_identifier_from_column(col) == model_type
+                for col in val_acc_cols
+                if _extract_category_value_from_column(col, actual_category_key)
+                == cat_val
             ),
             None,
         )
@@ -289,1092 +236,1169 @@ def load_accuracy_data(accuracy_csv_path: Path) -> pd.DataFrame:
                 processed_data.append(
                     {
                         "epoch": row["epoch"],
-                        "model_type": model_type,
+                        "category_value": _standardize_category_value(cat_val),
                         "train_accuracy": train_acc,
                         "val_accuracy": val_acc,
                     }
                 )
 
-    return pd.DataFrame(processed_data)
+    result_df = pd.DataFrame(processed_data)
+    logger.info(
+        f"Parsed {len(result_df)} accuracy data points for {len(category_values)} category values"
+    )
+
+    return result_df, actual_category_key
 
 
-def load_loss_data(loss_csv_path: Path, loss_type: str) -> pd.DataFrame:
-    """
-    Load and process loss data from W&B export.
+def _parse_loss_data(loss_csv: Path, category_key: str) -> Tuple[pd.DataFrame, str]:
+    """Parse loss CSV from W&B export.
 
     Args:
-        loss_csv_path: Path to loss CSV file
-        loss_type: Type of loss ('energy' or 'cross_entropy')
+        loss_csv: Path to loss CSV file
+        category_key: Category key to look for (may be auto-detected)
 
     Returns:
-        Processed DataFrame with columns: epoch, model_type, {loss_type}_loss
+        Tuple of (processed DataFrame, actual category_key used)
+        DataFrame has columns: epoch, category_value, cross_entropy_loss, energy_loss
     """
-    df = pd.read_csv(loss_csv_path)
+    df = pd.read_csv(loss_csv)
 
-    # Find all loss columns (excluding MIN/MAX variants)
-    loss_columns = [
+    # Auto-detect category key if needed
+    actual_category_key = category_key
+    if category_key not in df.columns:
+        detected_key = _auto_detect_category_key(df)
+        if detected_key:
+            actual_category_key = detected_key
+            logger.info(f"Using auto-detected category key: '{actual_category_key}'")
+        else:
+            logger.warning(
+                f"Category key '{category_key}' not found and auto-detection failed"
+            )
+            return pd.DataFrame(), category_key
+
+    # Find loss columns
+    ce_loss_cols = [
         col
         for col in df.columns
-        if loss_type.lower().replace("_", "").replace(" ", "")
-        in col.lower().replace("_", "").replace(" ", "")
-        and "__MIN" not in col
-        and "__MAX" not in col
+        if "CrossEntropyLoss" in col and "__MIN" not in col and "__MAX" not in col
+    ]
+    energy_loss_cols = [
+        col
+        for col in df.columns
+        if "EnergyLoss" in col and "__MIN" not in col and "__MAX" not in col
     ]
 
+    if not ce_loss_cols and not energy_loss_cols:
+        logger.warning("No CrossEntropyLoss or EnergyLoss columns found")
+        return pd.DataFrame(), actual_category_key
+
+    logger.info(
+        f"Found {len(ce_loss_cols)} CrossEntropyLoss columns, {len(energy_loss_cols)} EnergyLoss columns"
+    )
+
+    # Extract data for each category value
     processed_data = []
 
-    for col in loss_columns:
-        model_type = parse_model_identifier_from_column(col)
+    # Get all category values from column names
+    category_values = set()
+    for col in ce_loss_cols + energy_loss_cols:
+        cat_val = _extract_category_value_from_column(col, actual_category_key)
+        if cat_val:
+            category_values.add(cat_val)
 
-        # Create records for this model
+    for cat_val in category_values:
+        # Find columns for this category value
+        ce_col = next(
+            (
+                col
+                for col in ce_loss_cols
+                if _extract_category_value_from_column(col, actual_category_key)
+                == cat_val
+            ),
+            None,
+        )
+        energy_col = next(
+            (
+                col
+                for col in energy_loss_cols
+                if _extract_category_value_from_column(col, actual_category_key)
+                == cat_val
+            ),
+            None,
+        )
+
         for idx, row in df.iterrows():
-            if not pd.isna(row[col]):  # Only include non-NaN values
+            ce_loss = row[ce_col] if ce_col and not pd.isna(row[ce_col]) else None
+            energy_loss = (
+                row[energy_col]
+                if energy_col and not pd.isna(row[energy_col])
+                else None
+            )
+
+            if ce_loss is not None or energy_loss is not None:
                 processed_data.append(
                     {
                         "epoch": row["epoch"],
-                        "model_type": model_type,
-                        f"{loss_type}_loss": row[col],
+                        "category_value": _standardize_category_value(cat_val),
+                        "cross_entropy_loss": ce_loss,
+                        "energy_loss": energy_loss,
                     }
                 )
 
-    return pd.DataFrame(processed_data)
+    result_df = pd.DataFrame(processed_data)
+    logger.info(
+        f"Parsed {len(result_df)} loss data points for {len(category_values)} category values"
+    )
+
+    return result_df, actual_category_key
 
 
-def load_memory_data(memory_csv_path: Path) -> pd.DataFrame:
-    """
-    Load and process GPU memory allocation data from W&B export.
+def _plot_training_accuracy_panel(
+    fig: plt.Figure,
+    column_left: float,
+    column_width: float,
+    bottom: float,
+    height: float,
+    accuracy_df: pd.DataFrame,
+    category_key: str,
+    hue_values: List[str],
+    colors: Dict[str, str],
+    show_ylabel: bool = True,
+    show_legend: bool = True,
+    xlim: Optional[Tuple[float, float]] = None,
+    **kwargs,
+) -> None:
+    """Plot training and validation accuracy panel.
 
     Args:
-        memory_csv_path: Path to memory CSV file
-
-    Returns:
-        Processed DataFrame with columns: model_type, gpu_mem_alloc
+        fig: Matplotlib figure
+        column_left: Left position of panel
+        column_width: Width of panel
+        bottom: Bottom position of panel
+        height: Height of panel
+        accuracy_df: DataFrame with train/val accuracy data
+        category_key: Column name for category dimension
+        hue_values: Ordered list of category values
+        colors: Color mapping for category values
+        show_ylabel: Whether to show y-axis label
+        show_legend: Whether to show legend
+        **kwargs: Override FORMATTING defaults
     """
-    df = pd.read_csv(memory_csv_path)
+    fmt = {**TRAINING_FORMATTING, **kwargs}
 
-    # Find all memory columns (excluding MIN/MAX variants)
-    memory_columns = [
-        col
-        for col in df.columns
-        if "memoryAllocatedBytes" in col and "__MIN" not in col and "__MAX" not in col
-    ]
+    ax = fig.add_axes([column_left, bottom, column_width, height])
+    ax.patch.set_alpha(0)
 
-    processed_data = []
+    if accuracy_df.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No training accuracy data",
+            ha="center",
+            va="center",
+            fontsize=14,
+            alpha=0.6,
+        )
+        return
 
-    for col in memory_columns:
-        model_type = parse_model_identifier_from_column(col)
+    # Note: accuracy_df["category_value"] is already standardized to numeric/string
+    # Standardize hue_values for comparison
+    hue_values_std = [_standardize_category_value(v) for v in hue_values]
 
-        # Create records for this model
-        for idx, row in df.iterrows():
-            if not pd.isna(row[col]):  # Only include non-NaN values
-                processed_data.append(
-                    {
-                        "model_type": model_type,
-                        "gpu_mem_alloc": row[col] / (1024**3),  # Convert bytes to GB
-                    }
+    # Plot training accuracy (solid lines)
+    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+        cat_data = accuracy_df[accuracy_df["category_value"] == cat_val_std]
+        if not cat_data.empty:
+            train_data = cat_data.dropna(subset=["train_accuracy"])
+            if not train_data.empty:
+                ax.plot(
+                    train_data["epoch"],
+                    train_data["train_accuracy"],
+                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                    linewidth=fmt["linewidth_main"],
+                    linestyle="-",
+                    alpha=fmt["alpha_line"],
                 )
-    return pd.DataFrame(processed_data)
 
+    # Plot validation accuracy (dotted lines)
+    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+        cat_data = accuracy_df[accuracy_df["category_value"] == cat_val_std]
+        if not cat_data.empty:
+            val_data = cat_data.dropna(subset=["val_accuracy"])
+            if not val_data.empty:
+                ax.plot(
+                    val_data["epoch"],
+                    val_data["val_accuracy"],
+                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                    linewidth=fmt["linewidth_main"],
+                    linestyle=":",
+                    alpha=fmt["alpha_line"],
+                )
 
-def load_epoch_data(epoch_csv_path: Path) -> pd.DataFrame:
-    """
-    Load and process epoch timing data from W&B export.
+    # Styling
+    ax.set_ylim(-0.01, 1.01)
+    ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
 
-    Calculate epoch duration by analyzing the progression of epoch numbers over time
-    for each model type.
-
-    Args:
-        epoch_csv_path: Path to epoch CSV file
-
-    Returns:
-        Processed DataFrame with columns: model_type, epoch_duration
-    """
-    df = pd.read_csv(epoch_csv_path)
-
-    # Find epoch timing columns (excluding MIN/MAX variants)
-    # Look for columns like "recurrence_type: {model_type} - epoch"
-    epoch_columns = [
-        col
-        for col in df.columns
-        if "recurrence_type:" in col
-        and " - epoch" in col
-        and "__MIN" not in col
-        and "__MAX" not in col
-    ]
-
-    processed_data = []
-
-    for col in epoch_columns:
-        model_type = parse_model_identifier_from_column(col)
-
-        # Get time and epoch data for this model, filtering out NaN values
-        model_data = df[["Relative Time (Process)", col]].dropna()
-        model_data = model_data[model_data[col] > 0]  # Only positive epoch values
-
-        if len(model_data) < 2:  # Need at least 2 points to calculate slope
-            continue
-
-        # Sort by time to ensure proper order
-        model_data = model_data.sort_values("Relative Time (Process)")
-
-        times = model_data["Relative Time (Process)"].values
-        epochs = model_data[col].values
-
-        # Calculate epoch durations by finding time differences between epoch changes
-        epoch_durations = []
-
-        for i in range(1, len(epochs)):
-            if epochs[i] > epochs[i - 1]:  # Epoch has increased
-                time_diff = times[i] - times[i - 1]
-                epoch_diff = epochs[i] - epochs[i - 1]
-                if epoch_diff > 0:  # Avoid division by zero
-                    duration_per_epoch = time_diff / epoch_diff
-                    # Add multiple entries for this duration (one per epoch completed)
-                    for _ in range(int(epoch_diff)):
-                        epoch_durations.append(duration_per_epoch)
-
-        # Add all calculated durations to processed data
-        for duration in epoch_durations:
-            processed_data.append(
-                {
-                    "model_type": model_type,
-                    "epoch_duration": duration,
-                }
-            )
-
-    return pd.DataFrame(processed_data)
-
-
-def smooth_data(data: pd.Series, window_size: int = 5) -> pd.Series:
-    """
-    Smooth data using uniform filter.
-
-    Args:
-        data: Data to smooth
-        window_size: Size of smoothing window
-
-    Returns:
-        Smoothed data
-    """
-    if len(data) < window_size:
-        return data
-    return pd.Series(uniform_filter1d(data.values, size=window_size), index=data.index)
-
-
-def format_parameter_count(n_params: int) -> str:
-    """
-    Format parameter count in millions with 1 decimal place.
-
-    Args:
-        n_params: Number of parameters
-
-    Returns:
-        Formatted string like "5.4M"
-    """
-    if n_params is None:
-        return "N/A"
-    millions = n_params / 1_000_000
-    return f"{millions:.2f}M"
-
-
-def format_memory(mem_gb: float) -> str:
-    """
-    Format memory in GB with 1 decimal place.
-
-    Args:
-        mem_gb: Memory in GB
-
-    Returns:
-        Formatted string like "2.4GB"
-    """
-    if mem_gb is None:
-        return "N/A"
-    return f"{mem_gb:.1f}GB"
-
-
-def format_time(time_seconds: float) -> str:
-    """
-    Format time in appropriate units.
-
-    Args:
-        time_seconds: Time in seconds
-
-    Returns:
-        Formatted string like "1.5s" or "2.3m"
-    """
-    if time_seconds is None:
-        return "N/A"
-    if time_seconds < 60:
-        return f"{time_seconds:.1f}s"
+    # Set x-axis limits
+    if xlim is not None:
+        ax.set_xlim(xlim[0], xlim[1])
     else:
-        return f"{time_seconds/60:.1f}m"
+        ax.margins(x=0)
+
+    # Log axis limits
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    logger.info(
+        f"Training accuracy panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]"
+    )
+
+    if show_ylabel:
+        ax.set_ylabel(
+            "Train Accuracy", fontsize=fmt["fontsize_axis"], fontweight="bold"
+        )
+    else:
+        ax.set_ylabel("")
+        ax.set_yticklabels([])
+
+    ax.set_xlabel("Epoch", fontsize=fmt["fontsize_axis"])
+    ax.tick_params(labelsize=fmt["fontsize_tick"])
+
+    # Add legend for line styles
+    if show_legend:
+        from matplotlib.lines import Line2D
+
+        legend_handles = [
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                linewidth=fmt["linewidth_main"],
+                linestyle="-",
+                label="Training",
+                alpha=fmt["alpha_line"],
+            ),
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                linewidth=fmt["linewidth_main"],
+                linestyle=":",
+                label="Validation",
+                alpha=fmt["alpha_line"],
+            ),
+        ]
+        ax.legend(
+            handles=legend_handles,
+            loc="lower right",
+            frameon=False,
+            fontsize=fmt["fontsize_legend"] - 2,
+        )
+
+    ax.grid(True, alpha=0.3)
+    sns.despine(ax=ax, left=True, bottom=True)
 
 
-def calculate_model_statistics(
-    accuracy_df: pd.DataFrame,
-    energy_loss_df: pd.DataFrame,
-    cross_entropy_loss_df: pd.DataFrame,
-    memory_df: pd.DataFrame,
-    epoch_df: pd.DataFrame,
-) -> Dict[str, Dict[str, float]]:
-    """
-    Calculate comprehensive statistics for each model.
+def _plot_loss_panel(
+    fig: plt.Figure,
+    column_left: float,
+    column_width: float,
+    bottom: float,
+    height: float,
+    loss_df: pd.DataFrame,
+    category_key: str,
+    hue_values: List[str],
+    colors: Dict[str, str],
+    show_ylabel: bool = True,
+    show_legend: bool = True,
+    xlim: Optional[Tuple[float, float]] = None,
+    energy_loss_scale: float = 10.0,
+    **kwargs,
+) -> None:
+    """Plot cross-entropy and energy loss panel.
 
     Args:
-        accuracy_df: Training and validation accuracy data
-        energy_loss_df: Energy loss data
-        cross_entropy_loss_df: Cross entropy loss data
-        memory_df: GPU memory allocation data
-        epoch_df: Epoch timing data
-
-    Returns:
-        Dictionary with model statistics
+        fig: Matplotlib figure
+        column_left: Left position of panel
+        column_width: Width of panel
+        bottom: Bottom position of panel
+        height: Height of panel
+        loss_df: DataFrame with loss data
+        category_key: Column name for category dimension
+        hue_values: Ordered list of category values
+        colors: Color mapping for category values
+        show_ylabel: Whether to show y-axis label
+        show_legend: Whether to show legend
+        xlim: X-axis limits (min, max)
+        energy_loss_scale: Scale factor for energy loss (default: 10.0)
+        **kwargs: Override FORMATTING defaults
     """
-    stats = {}
+    fmt = {**TRAINING_FORMATTING, **kwargs}
 
-    # Parameter counts for each model type
-    # format: without skip connections + skip connections
-    skip_count = 93_345
-    parameter_counts = {
-        "depthpointwise": 5_425_195 + skip_count,  # 5_425_195,  # 6_043_240,
-        "pointdepthwise": 5_425_195 + skip_count,  # 5_425_195,  # 6_043_240,
-        "full": 8_441_449 + skip_count,  # 8_441_449,  # 9_059_494,
-        "self": 5_045_025 + skip_count,  # 5_045_025,  # 5_663_070,
-        "local": 5_043_111 + skip_count,  # 5_043_111,  # 5_661_156,
-        "localdepthwise": 5_054_065 + skip_count,  # 5_054_065,  # 5_672_110,
-    }
+    ax = fig.add_axes([column_left, bottom, column_width, height])
+    ax.patch.set_alpha(0)
 
-    # Get unique model types
-    all_models = set()
-    for df in [
-        accuracy_df,
-        energy_loss_df,
-        cross_entropy_loss_df,
-        memory_df,
-        epoch_df,
-    ]:
-        if not df.empty and "model_type" in df.columns:
-            all_models.update(df.model_type.unique())
+    if loss_df.empty:
+        ax.text(
+            0.5, 0.5, "No loss data", ha="center", va="center", fontsize=14, alpha=0.6
+        )
+        return
 
-    for model_type in all_models:
-        stats[model_type] = {}
+    # Note: loss_df["category_value"] is already standardized to numeric/string
+    # Standardize hue_values for comparison
+    hue_values_std = [_standardize_category_value(v) for v in hue_values]
 
-        # Get max train and validation accuracy for this model
-        if not accuracy_df.empty and model_type in accuracy_df.model_type.values:
-            model_acc_data = accuracy_df[accuracy_df.model_type == model_type]
-            max_train_acc = model_acc_data.train_accuracy.max()
-            max_val_acc = model_acc_data.val_accuracy.max()
-            stats[model_type]["max_train_acc"] = max_train_acc
-            stats[model_type]["max_val_acc"] = max_val_acc
+    # Plot cross-entropy loss (solid lines)
+    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+        cat_data = loss_df[loss_df["category_value"] == cat_val_std]
+        if not cat_data.empty:
+            ce_data = cat_data.dropna(subset=["cross_entropy_loss"])
+            if not ce_data.empty:
+                ax.plot(
+                    ce_data["epoch"],
+                    ce_data["cross_entropy_loss"],
+                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                    linewidth=fmt["linewidth_main"],
+                    linestyle="-",
+                    alpha=fmt["alpha_line"],
+                )
+
+    # Plot energy loss (dashed lines) - scaled and smoothed
+    # Energy loss is 0 during validation steps, causing periodic drops to 0
+    # We smooth the data to remove these outliers while preserving truly zero series
+    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+        cat_data = loss_df[loss_df["category_value"] == cat_val_std]
+        if not cat_data.empty:
+            energy_data = cat_data.dropna(subset=["energy_loss"]).copy()
+            if not energy_data.empty:
+                energy_values = energy_data["energy_loss"].values
+                epochs = energy_data["epoch"].values
+
+                # Check if energy loss is all zeros (disabled energy loss)
+                if np.all(energy_values == 0):
+                    # Plot as-is for truly disabled energy loss
+                    ax.plot(
+                        epochs,
+                        energy_values * energy_loss_scale,
+                        color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                        linewidth=fmt["linewidth_main"],
+                        linestyle=":",
+                        alpha=fmt["alpha_line"],
+                    )
+                else:
+                    # Apply smoothing to remove validation step outliers
+                    # Use median filter to remove isolated zeros while preserving trends
+                    from scipy.ndimage import median_filter
+
+                    # Apply median filter with window size 3 to remove isolated outliers
+                    # This preserves the general trend better than simple interpolation
+                    smoothed_values = median_filter(
+                        energy_values, size=3, mode="nearest"
+                    )
+
+                    # For any remaining zeros (edges or consecutive zeros), interpolate
+                    smoothed_values_clean = smoothed_values.copy().astype(float)
+                    smoothed_values_clean[smoothed_values_clean == 0] = np.nan
+
+                    import pandas as pd
+
+                    series = pd.Series(smoothed_values_clean, index=epochs)
+                    series_interpolated = series.interpolate(
+                        method="linear", limit_direction="both"
+                    )
+
+                    # Fill any remaining NaNs (e.g., all zeros at start/end)
+                    series_interpolated = series_interpolated.fillna(0)
+
+                    ax.plot(
+                        epochs,
+                        series_interpolated.values * energy_loss_scale,
+                        color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                        linewidth=fmt["linewidth_main"],
+                        linestyle=":",
+                        alpha=fmt["alpha_line"],
+                    )
+
+    # Set x-axis limits
+    if xlim is not None:
+        ax.set_xlim(xlim[0], xlim[1])
+    else:
+        ax.margins(x=0)
+
+    # Log axis limits
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    logger.info(f"Loss panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
+
+    # Styling
+    if show_ylabel:
+        ax.set_ylabel("Loss", fontsize=fmt["fontsize_axis"], fontweight="bold")
+    else:
+        ax.set_ylabel("")
+        ax.set_yticklabels([])
+
+    ax.set_xlabel("Epoch", fontsize=fmt["fontsize_axis"])
+    ax.tick_params(labelsize=fmt["fontsize_tick"])
+
+    # Add legend for line styles
+    if show_legend:
+        from matplotlib.lines import Line2D
+
+        # Format energy loss scale for legend
+        if energy_loss_scale == 1.0:
+            energy_label = "Energy"
         else:
-            stats[model_type]["max_train_acc"] = None
-            stats[model_type]["max_val_acc"] = None
+            # Format scale: show as integer if whole number, otherwise with decimals
+            scale_str = (
+                f"{int(energy_loss_scale)}"
+                if energy_loss_scale == int(energy_loss_scale)
+                else f"{energy_loss_scale:.1f}"
+            )
+            energy_label = f"Energy × {scale_str}"
 
-        # Get average GPU memory allocation
-        if not memory_df.empty and "model_type" in memory_df.columns:
-            model_mem_data = memory_df[memory_df.model_type == model_type]
-            if not model_mem_data.empty:
-                avg_gpu_mem = model_mem_data["gpu_mem_alloc"].mean()
-                stats[model_type]["avg_gpu_mem"] = avg_gpu_mem
-            else:
-                stats[model_type]["avg_gpu_mem"] = None
-        else:
-            stats[model_type]["avg_gpu_mem"] = None
+        legend_handles = [
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                linewidth=fmt["linewidth_main"],
+                linestyle="-",
+                label="Cross Entropy",
+                alpha=fmt["alpha_line"],
+            ),
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                linewidth=fmt["linewidth_main"],
+                linestyle=":",
+                label=energy_label,
+                alpha=fmt["alpha_line"],
+            ),
+        ]
+        ax.legend(
+            handles=legend_handles,
+            loc="upper right",
+            frameon=False,
+            fontsize=fmt["fontsize_legend"] - 2,
+        )
 
-        # Get average runtime per epoch
-        if not epoch_df.empty and "model_type" in epoch_df.columns:
-            model_epoch_data = epoch_df[epoch_df.model_type == model_type]
-            if not model_epoch_data.empty:
-                avg_epoch_time = model_epoch_data["epoch_duration"].mean()
-                stats[model_type]["avg_epoch_time"] = avg_epoch_time
-            else:
-                stats[model_type]["avg_epoch_time"] = None
-        else:
-            stats[model_type]["avg_epoch_time"] = None
-
-        # Add parameter count
-        stats[model_type]["n_parameters"] = parameter_counts.get(model_type, None)
-
-    return stats
+    ax.grid(True, alpha=0.3)
+    sns.despine(ax=ax, left=True, bottom=True)
 
 
-def plot_training_losses(
-    accuracy_df: pd.DataFrame,
-    energy_loss_df: pd.DataFrame,
-    cross_entropy_loss_df: pd.DataFrame,
-    memory_df: pd.DataFrame,
-    epoch_df: pd.DataFrame,
-    palette: Optional[Union[str, Dict[str, str]]],
-    test_data=None,
-    dt=None,
-    category_col="model_type",
-    config=None,
-    figsize: Tuple[int, int] = (24, 8),
+def _add_panel_letters(
+    fig: plt.Figure,
+    left_col_left: float,
+    right_col_left: float,
+    accuracy_top: float,
+    loss_top: float,
+    performance_top: float,
+    ridge_top: float,
+    layout: Dict,
+    fmt: Dict,
+) -> None:
+    """Add panel letters A-D to identify plot sections.
+
+    Args:
+        fig: Matplotlib figure
+        left_col_left: Left position of left column
+        right_col_left: Left position of right column
+        accuracy_top: Top position of accuracy panel
+        loss_top: Top position of loss panel
+        performance_top: Top position of performance panel
+        ridge_top: Top position of ridge plots
+        layout: Layout configuration dict
+        fmt: Formatting configuration dict
+    """
+    panel_letters = [
+        ("A)", left_col_left, accuracy_top),  # Training/validation accuracy
+        ("B)", left_col_left, loss_top),  # Loss panel
+        ("C)", right_col_left, performance_top),  # Performance panel
+        ("D)", right_col_left, ridge_top),  # Ridge plots
+    ]
+
+    for letter, x_pos, y_pos in panel_letters:
+        fig.text(
+            x_pos + layout["panel_letter_offset_x"],
+            y_pos + layout["panel_letter_offset_y"],
+            letter,
+            fontsize=fmt["fontsize_panel_label"],
+            fontweight="bold",
+            ha="center",
+            va="top",
+        )
+
+
+def _plot_category_legend(
+    fig: plt.Figure,
+    column_left: float,
+    column_width: float,
+    bottom: float,
+    height: float,
+    category_key: str,
+    hue_values: List[str],
+    colors: Dict[str, str],
+    config: Dict,
+    dt: float = 2.0,
+    **kwargs,
+) -> None:
+    """Add horizontal category legend between left panels.
+
+    Args:
+        fig: Matplotlib figure
+        column_left: Left position of legend
+        column_width: Width of legend
+        bottom: Bottom position of legend
+        height: Height of legend
+        category_key: Column name for category dimension
+        hue_values: Ordered list of category values
+        colors: Color mapping for category values
+        config: Configuration dict with naming mappings
+        dt: Temporal resolution in ms per timestep
+        **kwargs: Override FORMATTING defaults
+    """
+    fmt = {**TRAINING_FORMATTING, **kwargs}
+
+    legend_ax = fig.add_axes([column_left, bottom, column_width, height])
+    legend_ax.set_xlim(0, 1)
+    legend_ax.set_ylim(0, 1)
+    legend_ax.axis("off")
+    legend_ax.patch.set_alpha(0)
+
+    # Create legend elements
+    legend_elements = []
+    legend_labels = []
+
+    for val in hue_values:
+        if val in colors:
+            legend_elements.append(
+                plt.Line2D(
+                    [0],
+                    [0],
+                    color=colors[val],
+                    linewidth=fmt["linewidth_main"],
+                    alpha=fmt["alpha_line"],
+                )
+            )
+            legend_labels.append(_format_legend_label(category_key, val, config, dt))
+
+    if legend_elements:
+        # Get symbol for title
+        symbol = get_display_name(category_key, config)
+
+        n_cols = min(len(legend_elements), 7)
+        logger.debug(
+            f"Adding category legend with {len(legend_elements)} elements in {n_cols} columns"
+        )
+
+        legend = legend_ax.legend(
+            legend_elements,
+            legend_labels,
+            loc="center",
+            ncol=n_cols,
+            frameon=False,
+            fontsize=fmt["fontsize_legend"],
+            handlelength=2,
+            handletextpad=0.5,
+            columnspacing=1.0,
+            title=symbol,
+            title_fontsize=fmt["fontsize_legend"],
+        )
+        # Make legend title bold
+        legend.get_title().set_fontweight("bold")
+
+
+def plot_training_overview(
+    test_data: Union[Path, List[Path]],
+    accuracy_csv: Path,
+    loss_csv: Path,
+    output: Path,
+    subplot_var: str = "layers",
+    hue_var: str = "category",
+    column_var: Optional[str] = None,
+    category_key: Optional[str] = None,
+    parameter_key: Optional[str] = None,
+    confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
+    accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
+    dt: float = 2.0,
+    energy_loss_scale: float = 10.0,
+    config: Optional[Dict] = None,
+    **kwargs,
 ) -> plt.Figure:
-    """
-    Create three-panel plot:
-    - Left: training/validation accuracy + loss curves
-    - Center: comprehensive stats table
-    - Right: test performance (accuracy/confidence) + V1 response over time
+    """Create comprehensive training overview plot.
 
     Args:
-        accuracy_df: Processed accuracy data
-        energy_loss_df: Processed energy loss data
-        cross_entropy_loss_df: Processed cross entropy loss data
-        memory_df: Processed memory data
-        epoch_df: Processed epoch timing data
-        palette: Color palette override (string or dict)
-        test_data: Optional DataFrame with test performance and layer responses
-        dt: Optional time step duration in milliseconds for x-axis in test plots
-        category_col: Column name containing model categories in test data
-        config: Dictionary with visualization configuration
-        figsize: Figure dimensions
+        test_data: Path(s) to test_data.csv with layer responses and performance
+        accuracy_csv: Path to training/validation accuracy CSV
+        loss_csv: Path to loss CSV
+        output: Path to save figure
+        subplot_var: Variable for ridge plot subplots (default: "layers")
+        hue_var: Variable for color coding (default: "category")
+        column_var: Variable for columns (optional)
+        category_key: Column name for category dimension
+        parameter_key: Column name for parameter dimension
+        confidence_measure: Column name(s) for confidence metrics
+        accuracy_measure: Column name(s) for accuracy metrics
+        dt: Temporal resolution in ms per timestep
+        energy_loss_scale: Scale factor for energy loss display (default: 10.0)
+        config: Configuration dict with palette, naming, ordering
+        **kwargs: Override LAYOUT and FORMATTING defaults
 
     Returns:
         Matplotlib figure
     """
-    sns.set_context("talk")
-    sns.set_style("ticks")
+    logger.info("=" * 60)
+    logger.info("Starting training overview plot")
+    logger.info("=" * 60)
 
-    colors = _resolve_palette(config, palette)
+    # Normalize dimension configuration
+    subplot_var, subplot_limit = _normalize_dimension(subplot_var)
+    hue_var, hue_limit = _normalize_dimension(hue_var)
+    column_var, column_limit = _normalize_dimension(column_var)
 
-    fig = plt.figure(figsize=figsize)
+    if subplot_var is None or hue_var is None:
+        raise ValueError("subplot and hue dimensions cannot be empty")
 
-    ax1 = fig.add_subplot(2, 3, 1)
-    ax2 = fig.add_subplot(2, 3, 4)
-    ax3 = fig.add_axes([0.35, 0.1, 0.31, 0.8])
-
-    if test_data is not None:
-        ax4 = fig.add_subplot(2, 3, 3)
-        ax5 = fig.add_subplot(2, 3, 6)
-    else:
-        ax4 = ax5 = None
-
-    all_models: set = set()
-    for df in [
-        accuracy_df,
-        energy_loss_df,
-        cross_entropy_loss_df,
-        memory_df,
-        epoch_df,
-    ]:
-        if df is not None and not df.empty and "model_type" in df.columns:
-            all_models.update(df["model_type"].dropna().unique())
-
-    if (
-        test_data is not None
-        and isinstance(test_data, pd.DataFrame)
-        and category_col in test_data.columns
-    ):
-        all_models.update(test_data[category_col].dropna().unique())
-
-    available_model_order = _determine_model_order(list(all_models), config)
-    display_names = {
-        model: _format_model_label(model, config) for model in available_model_order
-    }
-    color_lookup = {
-        model: _get_model_color(model, colors, config)
-        for model in available_model_order
-    }
-
-    # Plot training and validation accuracy curves
-    if (
-        accuracy_df is not None
-        and not accuracy_df.empty
-        and "model_type" in accuracy_df.columns
-    ):
-        for model_type in available_model_order:
-            model_slice = accuracy_df[accuracy_df.model_type == model_type].copy()
-            if model_slice.empty:
-                continue
-
-            model_slice = model_slice.sort_values("epoch")
-            color = color_lookup.get(model_type, DEFAULT_COLOR)
-
-            train_slice = model_slice.dropna(subset=["train_accuracy"]).reset_index(
-                drop=True
-            )
-            if not train_slice.empty:
-                smoothed_train = smooth_data(train_slice.train_accuracy)
-                ax1.plot(
-                    train_slice.epoch.values,
-                    smoothed_train.values,
-                    color=color,
-                    linewidth=2,
-                    alpha=0.85,
-                )
-
-            val_slice = model_slice.dropna(subset=["val_accuracy"]).reset_index(
-                drop=True
-            )
-            if not val_slice.empty:
-                smoothed_val = smooth_data(val_slice.val_accuracy)
-                ax1.plot(
-                    val_slice.epoch.values,
-                    smoothed_val.values,
-                    color=color,
-                    linewidth=2,
-                    linestyle=":",
-                    alpha=0.75,
-                )
-
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Accuracy")
-    ax1.grid(True, alpha=0.3)
-
-    from matplotlib.lines import Line2D
-
-    train_val_legend = [
-        Line2D([0], [0], color="black", linewidth=2, linestyle="-", label="Training"),
-        Line2D(
-            [0], [0], color="black", linewidth=2, linestyle=":", label="Validation"
-        ),
-    ]
-    ax1.legend(handles=train_val_legend, loc="lower right", frameon=False)
-
-    # Plot loss curves
-    if (
-        cross_entropy_loss_df is not None
-        and not cross_entropy_loss_df.empty
-        and "model_type" in cross_entropy_loss_df.columns
-    ):
-        for model_type in available_model_order:
-            model_slice = cross_entropy_loss_df[
-                cross_entropy_loss_df.model_type == model_type
-            ].copy()
-            if model_slice.empty:
-                continue
-
-            model_slice = model_slice.sort_values("epoch")
-            ce_slice = model_slice.dropna(subset=["cross_entropy_loss"]).reset_index(
-                drop=True
-            )
-            if ce_slice.empty:
-                continue
-
-            smoothed_loss = smooth_data(ce_slice.cross_entropy_loss)
-            ax2.plot(
-                ce_slice.epoch.values,
-                smoothed_loss.values,
-                color=color_lookup.get(model_type, DEFAULT_COLOR),
-                linewidth=2,
-                alpha=0.85,
-            )
-
-    if (
-        energy_loss_df is not None
-        and not energy_loss_df.empty
-        and "model_type" in energy_loss_df.columns
-    ):
-        for model_type in available_model_order:
-            model_slice = energy_loss_df[
-                energy_loss_df.model_type == model_type
-            ].copy()
-            if model_slice.empty:
-                continue
-
-            model_slice = model_slice.sort_values("epoch")
-            energy_slice = model_slice.dropna(subset=["energy_loss"]).reset_index(
-                drop=True
-            )
-            if energy_slice.empty:
-                continue
-
-            smoothed_energy = smooth_data(energy_slice.energy_loss)
-            ax2.plot(
-                energy_slice.epoch.values,
-                smoothed_energy.values,
-                color=color_lookup.get(model_type, DEFAULT_COLOR),
-                linewidth=2,
-                linestyle="--",
-                alpha=0.85,
-            )
-
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Loss")
-    ax2.grid(True, alpha=0.3)
-
-    loss_legend = [
-        Line2D(
-            [0], [0], color="black", linewidth=2, linestyle="-", label="Cross Entropy"
-        ),
-        Line2D([0], [0], color="black", linewidth=2, linestyle="--", label="Energy"),
-    ]
-    ax2.legend(handles=loss_legend, loc="upper right", frameon=False)
-
-    # Statistics table
-    ax3.axis("off")
-    stats = calculate_model_statistics(
-        accuracy_df, energy_loss_df, cross_entropy_loss_df, memory_df, epoch_df
+    _validate_dimensions(
+        subplot_var=subplot_var, hue_var=hue_var, column_var=column_var
     )
 
-    col_widths = [0.16, 0.14, 0.17, 0.14, 0.16, 0.17]
-    col_offset = 0.0
-    col_headers = [
-        "Recurrence",
-        "# Params",
-        "Avg epoch\nruntime",
-        "Avg GPU\nMem",
-        "Max\nTrain Acc",
-        "Max\nVal Acc",
-    ]
+    if config is None:
+        config = {"palette": {}, "naming": {}, "ordering": {}}
 
-    y_start = 0.9
-    row_height = 0.12
+    # Merge layout and formatting defaults with overrides
+    layout = {
+        **TRAINING_LAYOUT,
+        **{k: v for k, v in kwargs.items() if k in TRAINING_LAYOUT},
+    }
+    fmt = {
+        **TRAINING_FORMATTING,
+        **{k: v for k, v in kwargs.items() if k in TRAINING_FORMATTING},
+    }
 
-    for i, header in enumerate(col_headers):
-        x_pos = sum(col_widths[:i]) + col_offset
-        ax3.text(
-            x_pos + col_widths[i] / 2,
-            y_start,
-            header,
-            fontsize=13,
-            fontweight="bold",
-            ha="center",
-            va="center",
+    # Load test data
+    if isinstance(test_data, list):
+        logger.info(f"Loading and concatenating test data from {len(test_data)} files")
+        dfs = [pd.read_csv(path) for path in test_data]
+        test_df = pd.concat(dfs, ignore_index=True)
+    else:
+        logger.info(f"Loading test data from: {test_data}")
+        test_df = pd.read_csv(test_data)
+
+    logger.info(f"Test data: {len(test_df)} rows, {len(test_df.columns)} columns")
+
+    # Parse training data
+    logger.info(f"Parsing accuracy data from: {accuracy_csv}")
+    accuracy_df, detected_category_key = _parse_accuracy_data(
+        accuracy_csv, category_key
+    )
+
+    logger.info(f"Parsing loss data from: {loss_csv}")
+    loss_df, _ = _parse_loss_data(loss_csv, detected_category_key)
+
+    # Use original category_key for test data lookups (may be alias like "energyloss")
+    # Use detected_category_key for W&B CSV parsing (full name like "energy_loss_weight")
+    test_data_category_key = category_key
+    wandb_category_key = detected_category_key
+
+    # Extract dimension values from test data
+    logger.info("Extracting dimension values from test data...")
+    logger.info(f"Using category key '{test_data_category_key}' for test data lookups")
+
+    hue_key = _get_dimension_key(
+        dimension=hue_var,
+        category_key=test_data_category_key,
+        parameter_key=parameter_key,
+    )
+    subplot_key = _get_dimension_key(
+        dimension=subplot_var,
+        category_key=test_data_category_key,
+        parameter_key=parameter_key,
+    )
+    column_key = (
+        _get_dimension_key(
+            dimension=column_var,
+            category_key=test_data_category_key,
+            parameter_key=parameter_key,
+        )
+        if column_var
+        else None
+    )
+
+    hue_values = _extract_dimension_values(
+        df=test_df,
+        dimension=hue_var,
+        dimension_key=hue_key,
+        config=config,
+        dimension_limit=hue_limit,
+    )
+    subplot_values = _extract_dimension_values(
+        df=test_df,
+        dimension=subplot_var,
+        dimension_key=subplot_key,
+        config=config,
+        dimension_limit=subplot_limit,
+    )
+
+    if not hue_values or not subplot_values:
+        raise ValueError("Cannot create plot with empty dimension values")
+
+    # Get colors for hue dimension
+    colors = _get_colors_for_dimension(
+        values=hue_values, dimension_key=hue_key, config=config
+    )
+
+    # Standardize and filter W&B data to only include category values present in test data
+    # The W&B CSVs may have more category values than the test data
+    # (e.g., test data has [0.0, 0.1, 0.5] but W&B has [0, 0.01, 0.05, 0.1, 0.5, ...])
+    logger.info(f"Test data category values: {hue_values}")
+
+    # Standardize hue_values to numeric if possible for consistent comparison
+    hue_values_standardized = []
+    for v in hue_values:
+        try:
+            hue_values_standardized.append(float(v))
+        except (ValueError, TypeError):
+            hue_values_standardized.append(v)
+
+    test_values_set = set(hue_values_standardized)
+    logger.info(
+        f"Test data standardized values: {sorted(test_values_set, key=lambda x: (isinstance(x, str), x))}"
+    )
+
+    # Filter accuracy data to only include test data category values
+    if not accuracy_df.empty:
+        wandb_acc_values_orig = sorted(accuracy_df["category_value"].unique())
+        logger.info(f"W&B accuracy category values (all): {wandb_acc_values_orig}")
+
+        # Keep only rows with category values present in test data
+        accuracy_df = accuracy_df[
+            accuracy_df["category_value"].isin(test_values_set)
+        ].copy()
+
+        remaining_acc_values = sorted(accuracy_df["category_value"].unique())
+        logger.info(f"W&B accuracy category values (filtered): {remaining_acc_values}")
+        logger.info(f"Filtered accuracy data: {len(accuracy_df)} rows")
+
+    # Filter loss data to only include test data category values
+    if not loss_df.empty:
+        wandb_loss_values_orig = sorted(loss_df["category_value"].unique())
+        logger.info(f"W&B loss category values (all): {wandb_loss_values_orig}")
+
+        # Keep only rows with category values present in test data
+        loss_df = loss_df[loss_df["category_value"].isin(test_values_set)].copy()
+
+        remaining_loss_values = sorted(loss_df["category_value"].unique())
+        logger.info(f"W&B loss category values (filtered): {remaining_loss_values}")
+        logger.info(f"Filtered loss data: {len(loss_df)} rows")
+
+    # Create figure
+    fig = plt.figure(figsize=(layout["figure_width"], layout["figure_height"]))
+    sns.set_context("talk")
+
+    # Calculate column positions
+    left_col_left = layout["left_margin"]
+    left_col_width = layout["left_column_width"]
+    right_col_left = left_col_left + left_col_width + layout["column_spacing"]
+    right_col_width = layout["right_column_width"]
+
+    # Calculate left column x-axis limits (epoch range)
+    # Start at 0, round max up to next decimal (e.g., 349 -> 350)
+    import math
+
+    if not accuracy_df.empty or not loss_df.empty:
+        epoch_max_acc = accuracy_df["epoch"].max() if not accuracy_df.empty else 0
+        epoch_max_loss = loss_df["epoch"].max() if not loss_df.empty else 0
+        epoch_max = max(epoch_max_acc, epoch_max_loss)
+        # Round up to next multiple of 10
+        left_xmax = math.ceil(epoch_max / 10) * 10
+        left_xmin = 0
+        logger.info(
+            f"Left column x-axis limits: [0, {left_xmax}] (data max: {epoch_max})"
+        )
+    else:
+        left_xmin, left_xmax = 0, 100
+
+    # Calculate left column panel positions (from top to bottom)
+    current_top = 1 - layout["top_margin"]
+
+    # Training accuracy panel
+    accuracy_bottom = current_top - layout["accuracy_height"]
+    logger.info("Creating training accuracy panel...")
+    _plot_training_accuracy_panel(
+        fig=fig,
+        column_left=left_col_left,
+        column_width=left_col_width,
+        bottom=accuracy_bottom,
+        height=layout["accuracy_height"],
+        accuracy_df=accuracy_df,
+        category_key="category_value",
+        hue_values=hue_values,
+        colors=colors,
+        show_ylabel=True,
+        show_legend=True,
+        xlim=(left_xmin, left_xmax),
+        **fmt,
+    )
+
+    # Category legend (moved down slightly)
+    current_top = (
+        accuracy_bottom
+        - layout["accuracy_bottom_margin"]
+        - layout["legend_top_margin"]
+    )
+    legend_bottom = current_top - layout["legend_height"]
+    logger.info("Adding category legend...")
+    _plot_category_legend(
+        fig=fig,
+        column_left=left_col_left,
+        column_width=left_col_width,
+        bottom=legend_bottom,
+        height=layout["legend_height"],
+        category_key=hue_key,
+        hue_values=hue_values,
+        colors=colors,
+        config=config,
+        dt=dt,
+        **fmt,
+    )
+
+    # Loss panel
+    current_top = legend_bottom - layout["legend_bottom_margin"]
+    loss_bottom = current_top - layout["loss_height"]
+    logger.info("Creating loss panel...")
+    _plot_loss_panel(
+        fig=fig,
+        column_left=left_col_left,
+        column_width=left_col_width,
+        bottom=loss_bottom,
+        height=layout["loss_height"],
+        loss_df=loss_df,
+        category_key="category_value",
+        hue_values=hue_values,
+        colors=colors,
+        show_ylabel=True,
+        show_legend=True,
+        xlim=(left_xmin, left_xmax),
+        energy_loss_scale=energy_loss_scale,
+        **fmt,
+    )
+
+    # Right column: performance panel + ridge plots
+    # Calculate right column x-axis limits (time in ms)
+    # Start at 0, round max up to next multiple of 10
+    if "times_index" in test_df.columns:
+        time_max = test_df["times_index"].max() * dt
+        # Round up to next multiple of 10
+        right_xmax = math.ceil(time_max / 10) * 10
+        right_xmin = 0
+        logger.info(
+            f"Right column x-axis limits: [0, {right_xmax}] (data max: {time_max} ms)"
+        )
+    else:
+        right_xmin, right_xmax = 0, 120
+
+    # Calculate positions
+    right_top = 1 - layout["top_margin"]
+    performance_bottom = right_top - layout["performance_height"]
+
+    logger.info("Creating test performance panel...")
+    perf_ax = fig.add_axes(
+        [
+            right_col_left,
+            performance_bottom,
+            right_col_width,
+            layout["performance_height"],
+        ]
+    )
+
+    _plot_accuracy_panel(
+        ax=perf_ax,
+        data=test_df,
+        hue_var=hue_var,
+        hue_key=hue_key,
+        hue_values=hue_values,
+        colors=colors,
+        dt=dt,
+        show_ylabel=True,
+        show_legend=True,
+        accuracy_cols=(
+            [accuracy_measure]
+            if isinstance(accuracy_measure, str)
+            else accuracy_measure
+        ),
+        confidence_cols=(
+            [confidence_measure]
+            if isinstance(confidence_measure, str)
+            else confidence_measure
+        ),
+        **fmt,
+    )
+
+    # Set x-axis limits
+    perf_ax.set_xlim(right_xmin, right_xmax)
+
+    # Log axis limits
+    xmin, xmax = perf_ax.get_xlim()
+    ymin, ymax = perf_ax.get_ylim()
+    logger.info(f"Performance panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
+
+    # Ridge plots - align bottom with left column loss panel
+    # Calculate required ridge_height to align bottoms properly
+    ridge_top = performance_bottom - layout["performance_pad"]
+
+    # The ridge plot function calculates:
+    # spacing = ridge_height / n_subplots * (1 - ridge_overlap)
+    # plot_height = ridge_height / n_subplots * 1.4
+    # bottom_position = ridge_top - (n_subplots - 1) * spacing - plot_height
+    #
+    # We want: bottom_position = loss_bottom
+    # Solving for ridge_height:
+    # loss_bottom = ridge_top - (n_subplots - 1) * (ridge_height / n_subplots * (1 - ridge_overlap)) - (ridge_height / n_subplots * 1.4)
+    # loss_bottom = ridge_top - ridge_height * [(n_subplots - 1) * (1 - ridge_overlap) / n_subplots + 1.4 / n_subplots]
+    # ridge_height = (ridge_top - loss_bottom) / [(n_subplots - 1) * (1 - ridge_overlap) / n_subplots + 1.4 / n_subplots]
+
+    n_subplots = len(subplot_values)
+    if n_subplots > 0:
+        denominator = (n_subplots - 1) * (
+            1 - layout["ridge_overlap"]
+        ) / n_subplots + 1.4 / n_subplots
+        ridge_height = (ridge_top - loss_bottom) / denominator
+    else:
+        ridge_height = ridge_top - loss_bottom
+
+    logger.info("Creating ridge plots...")
+    logger.info(f"Subplot values for ridges: {subplot_values}")
+    logger.info(
+        f"Ridge plot: top={ridge_top}, bottom target={loss_bottom}, height={ridge_height:.4f}"
+    )
+    logger.info(f"Ridge overlap: {layout['ridge_overlap']}, n_subplots: {n_subplots}")
+
+    # Calculate actual bottom position for verification
+    if n_subplots > 0:
+        spacing = ridge_height / n_subplots * (1 - layout["ridge_overlap"])
+        plot_height = ridge_height / n_subplots * 1.4
+        calculated_bottom = ridge_top - (n_subplots - 1) * spacing - plot_height
+        logger.info(
+            f"Calculated ridge bottom: {calculated_bottom:.6f}, target: {loss_bottom:.6f}, diff: {calculated_bottom - loss_bottom:.6f}"
         )
 
-    for row_idx, model_type in enumerate(available_model_order):
-        if model_type not in stats:
-            continue
+    ridge_axes = _plot_response_ridges(
+        fig=fig,
+        column_left=right_col_left,
+        column_width=right_col_width,
+        data=test_df,
+        subplot_var=subplot_var,
+        subplot_key=subplot_key,
+        subplot_values=subplot_values,
+        hue_var=hue_var,
+        hue_key=hue_key,
+        hue_values=hue_values,
+        colors=colors,
+        dt=dt,
+        show_ylabel=True,
+        config=config,
+        ridge_top=ridge_top,
+        ridge_height=ridge_height,
+        ridge_overlap=layout["ridge_overlap"],
+        **fmt,
+    )
 
-        model_stats = stats[model_type]
-        y_pos = y_start - (row_idx + 1) * row_height
+    # Note: No separate ridge legend - we already have the category legend on the left
 
-        model_label = display_names.get(model_type, model_type)
-        color = color_lookup.get(model_type, DEFAULT_COLOR)
+    # Set x-axis limits to match performance panel
+    for ax in ridge_axes:
+        ax.set_xlim(right_xmin, right_xmax)
 
-        x_pos = col_widths[0] / 2 + col_offset
-        ax3.text(
-            x_pos,
-            y_pos,
-            model_label,
-            fontsize=13,
-            color=color,
-            fontweight="bold",
-            ha="center",
-            va="center",
+    # Log ridge plot axis limits and verify bottom alignment
+    if ridge_axes:
+        # Check top and bottom ridge plots
+        top_ax = ridge_axes[0]
+        bottom_ax = ridge_axes[-1]
+
+        xmin, xmax = top_ax.get_xlim()
+        ymin, ymax = top_ax.get_ylim()
+        logger.info(
+            f"Ridge plots: global x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]"
         )
 
-        fontsize = 14
-
-        n_params = model_stats.get("n_parameters")
-        text_str = format_parameter_count(n_params)
-        x_pos = col_widths[0] + col_widths[1] / 2 + col_offset
-        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
-
-        avg_time = model_stats.get("avg_epoch_time")
-        text_str = format_time(avg_time) if avg_time is not None else "N/A"
-        x_pos = sum(col_widths[:2]) + col_widths[2] / 2 + col_offset
-        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
-
-        avg_mem = model_stats.get("avg_gpu_mem")
-        text_str = format_memory(avg_mem) if avg_mem is not None else "N/A"
-        x_pos = sum(col_widths[:3]) + col_widths[3] / 2 + col_offset
-        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
-
-        max_train = model_stats.get("max_train_acc")
-        text_str = f"{max_train:.3f}" if max_train is not None else "N/A"
-        x_pos = sum(col_widths[:4]) + col_widths[4] / 2 + col_offset
-        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
-
-        max_val = model_stats.get("max_val_acc")
-        text_str = f"{max_val:.3f}" if max_val is not None else "N/A"
-        x_pos = sum(col_widths[:5]) + col_widths[5] / 2 + col_offset
-        ax3.text(x_pos, y_pos, text_str, fontsize=fontsize, ha="center", va="center")
-
-    if test_data is not None and ax4 is not None and ax5 is not None:
-        plot_test_accuracy_confidence(
-            test_data,
-            ax4,
-            color_lookup,
-            dt,
-            category_col,
-            model_order=available_model_order,
-            display_names=display_names,
-        )
-        plot_v1_response(
-            test_data,
-            ax5,
-            color_lookup,
-            dt,
-            category_col,
-            model_order=available_model_order,
-            display_names=display_names,
+        # Get actual position of bottommost ridge plot
+        bottom_pos = bottom_ax.get_position()
+        logger.info(
+            f"Ridge plot actual bottom: {bottom_pos.y0:.4f}, target: {loss_bottom:.4f}, diff: {(bottom_pos.y0 - loss_bottom):.4f}"
         )
 
-    sns.despine(ax=ax1)
-    sns.despine(ax=ax2)
+    # Align y-labels
+    all_axes = ridge_axes
+    fig.align_ylabels(all_axes)
 
-    if test_data is not None:
-        for axis in [ax4, ax5]:
-            sns.despine(ax=axis)
-            axis.grid(True, alpha=0.3)
+    # Add panel letters
+    logger.info("Adding panel letters...")
+    _add_panel_letters(
+        fig=fig,
+        left_col_left=left_col_left,
+        right_col_left=right_col_left,
+        accuracy_top=1 - layout["top_margin"],
+        loss_top=legend_bottom - layout["legend_bottom_margin"],
+        performance_top=1 - layout["top_margin"],
+        ridge_top=ridge_top,
+        layout=layout,
+        fmt=fmt,
+    )
 
-    plt.subplots_adjust(wspace=0.3, hspace=0.3)
+    logger.info(f"Saving figure to: {output}")
+    save_plot(output)
+    logger.info("=" * 60)
+    logger.info("Training overview plot complete")
+    logger.info("=" * 60)
 
     return fig
 
 
-def plot_test_accuracy_confidence(
-    test_data,
-    ax,
-    colors,
-    dt=None,
-    category_col="model_type",
-    model_order: Optional[Sequence[str]] = None,
-    display_names: Optional[Dict[str, str]] = None,
-):
-    """
-    Create the test accuracy and confidence plot for the top-right panel
-
-    Args:
-        test_data: DataFrame with test performance data
-        ax: Matplotlib axis to plot on
-        colors: Dictionary mapping model types to colors
-        dt: Optional time step duration in milliseconds
-        category_col: Column name containing model categories
-    """
-    # Convert time axis if dt is provided
-    time_col = "times_index"
-    if dt is not None and time_col in test_data.columns:
-        test_data = test_data.copy()
-        test_data["time_ms"] = test_data[time_col] * dt
-        time_col = "time_ms"
-        xlabel = "Time (ms)"
-    else:
-        xlabel = "Time Step"
-
-    display_lookup = display_names or {}
-
-    available_models = test_data[category_col].unique()
-    ordered_models: List[str] = []
-    if model_order:
-        ordered_models.extend([m for m in model_order if m in available_models])
-    extra_models = [m for m in available_models if m not in ordered_models]
-    ordered_models.extend(sorted(extra_models))
-
-    for model_type in ordered_models:
-        logger.debug(
-            "Plotting test accuracy for %s", display_lookup.get(model_type, model_type)
-        )
-        model_data = test_data[test_data[category_col] == model_type]
-        if len(model_data) == 0 or "accuracy" not in model_data.columns:
-            continue
-
-        # Group by time to get average accuracy
-        time_avg_data = model_data.groupby(time_col)["accuracy"].mean().reset_index()
-
-        # Plot accuracy as solid line
-        ax.plot(
-            time_avg_data[time_col],
-            time_avg_data["accuracy"],
-            color=colors.get(model_type, DEFAULT_COLOR),
-            linewidth=2,
-            alpha=0.8,
-        )
-
-        # Plot confidence if available (dotted line)
-        if "confidence_avg" in model_data.columns:
-            time_conf_data = (
-                model_data.groupby(time_col)["confidence_avg"].mean().reset_index()
-            )
-            ax.plot(
-                time_conf_data[time_col],
-                time_conf_data["confidence_avg"],
-                color=colors.get(model_type, DEFAULT_COLOR),
-                linewidth=2,
-                linestyle=":",
-                alpha=0.8,
-            )
-
-    if (
-        len(test_data) > 0
-        and "label_index" in test_data.columns
-        and "times_index" in test_data.columns
-    ):
-        y_min, y_max = ax.get_ylim()
-        indicator_df = calculate_label_indicator(
-            df=test_data,
-            category=category_col,
-            y_range=(y_min, y_max),
-            step_height=0.05,
-        )
-
-        x_values = indicator_df["times_index"].to_numpy()
-        if time_col == "time_ms" and dt is not None:
-            x_values = x_values * dt
-
-        ax.plot(
-            x_values,
-            indicator_df["label_indicator"].to_numpy(),
-            color="black",
-            linewidth=2,
-            drawstyle="steps-pre",
-            alpha=0.6,
-        )
-
-    # Add legend for metrics - moved to center center
-    from matplotlib.lines import Line2D
-
-    metric_legend = [
-        Line2D([0], [0], color="black", linewidth=2, linestyle="-", label="Accuracy"),
-        Line2D(
-            [0], [0], color="black", linewidth=2, linestyle=":", label="Confidence"
-        ),
-        Line2D([0], [0], color="black", linewidth=2, alpha=0.6, label="Stimulus"),
-    ]
-    ax.legend(handles=metric_legend, loc="center", frameon=False)
-
-    # Customize subplot
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Performance")
-
-
-def plot_v1_response(
-    test_data,
-    ax,
-    colors,
-    dt=None,
-    category_col="model_type",
-    model_order: Optional[Sequence[str]] = None,
-    display_names: Optional[Dict[str, str]] = None,
-):
-    """
-    Create the V1 response plot for the bottom-right panel
-
-    Args:
-        test_data: DataFrame with layer response data
-        ax: Matplotlib axis to plot on
-        colors: Dictionary mapping model types to colors
-        dt: Optional time step duration in milliseconds
-        category_col: Column name containing model categories
-    """
-    # Look for V1 response column
-    v1_columns = [
-        col
-        for col in test_data.columns
-        if "V1_response_avg" in col or "layer1_response_avg" in col
-    ]
-
-    if not v1_columns:
-        ax.text(
-            0.5,
-            0.5,
-            "No V1 response data available",
-            ha="center",
-            va="center",
-            fontsize=14,
-        )
-        return
-
-    v1_col = v1_columns[0]  # Use the first V1 column found
-
-    # Convert time axis if dt is provided
-    time_col = "times_index"
-    if dt is not None and time_col in test_data.columns:
-        test_data = test_data.copy()
-        test_data["time_ms"] = test_data[time_col] * dt
-        time_col = "time_ms"
-        xlabel = "Time (ms)"
-    else:
-        xlabel = "Time Step"
-
-    display_lookup = display_names or {}
-
-    available_models = test_data[category_col].unique()
-    ordered_models: List[str] = []
-    if model_order:
-        ordered_models.extend([m for m in model_order if m in available_models])
-    extra_models = [m for m in available_models if m not in ordered_models]
-    ordered_models.extend(sorted(extra_models))
-
-    for model_type in ordered_models:
-        logger.debug(
-            "Plotting V1 response for %s", display_lookup.get(model_type, model_type)
-        )
-        model_data = test_data[test_data[category_col] == model_type]
-        if len(model_data) == 0 or v1_col not in model_data.columns:
-            continue
-
-        # Group by time to get average V1 response
-        time_avg_data = model_data.groupby(time_col)[v1_col].mean().reset_index()
-
-        # Plot V1 response
-        ax.plot(
-            time_avg_data[time_col],
-            time_avg_data[v1_col],
-            color=colors.get(model_type, DEFAULT_COLOR),
-            linewidth=2,
-            alpha=0.8,
-        )
-
-    # Add label indicator (same as in accuracy/confidence plot)
-    if (
-        len(test_data) > 0
-        and "label_index" in test_data.columns
-        and "times_index" in test_data.columns
-    ):
-        y_min, y_max = ax.get_ylim()
-        indicator_df = calculate_label_indicator(
-            df=test_data,
-            category=category_col,
-            y_range=(y_min, y_max),
-            step_height=0.05,
-        )
-
-        x_values = indicator_df["times_index"].to_numpy()
-        if time_col == "time_ms" and dt is not None:
-            x_values = x_values * dt
-
-        ax.plot(
-            x_values,
-            indicator_df["label_indicator"].to_numpy(),
-            color="black",
-            linewidth=2,
-            drawstyle="steps-pre",
-            alpha=0.6,
-            label="Stimulus",
-        )
-
-    # Customize subplot
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Avg V1 Response")  # Changed as requested
-    # Remove title as requested
-
-
 def main():
-    """Main execution function."""
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Plot training accuracy and loss curves with comprehensive model statistics."
-    )
-    parser.add_argument(
-        "--accuracy_csv",
-        type=Path,
-        required=True,
-        help="Path to training/validation accuracy CSV from W&B",
-    )
-    parser.add_argument(
-        "--memory_csv",
-        type=Path,
-        required=True,
-        help="Path to GPU memory allocation CSV from W&B",
-    )
-    parser.add_argument(
-        "--epoch_csv",
-        type=Path,
-        required=True,
-        help="Path to epoch timing CSV from W&B",
-    )
-    parser.add_argument(
-        "--energy_csv",
-        type=Path,
-        required=True,
-        help="Path to energy loss CSV from W&B",
-    )
-    parser.add_argument(
-        "--cross_entropy_csv",
-        type=Path,
-        required=True,
-        help="Path to cross entropy loss CSV from W&B",
+        description="Plot training overview with accuracy, loss, and test performance"
     )
     parser.add_argument(
         "--test_data",
         type=Path,
         nargs="+",
-        required=False,
-        help="Path(s) to test performance data CSV for third column plots",
+        required=True,
+        help="Path(s) to test_data.csv file(s). Multiple paths will be concatenated.",
     )
     parser.add_argument(
-        "--palette",
+        "--accuracy_csv",
+        type=Path,
+        required=True,
+        help="Path to training/validation accuracy CSV",
+    )
+    parser.add_argument(
+        "--loss_csv",
+        type=Path,
+        required=True,
+        help="Path to loss CSV with CrossEntropyLoss and EnergyLoss",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Output figure path",
+    )
+    parser.add_argument(
+        "--subplot",
+        type=str,
+        default="layers",
+        help="Variable for ridge plot subplots (default: layers)",
+    )
+    parser.add_argument(
+        "--hue",
+        type=str,
+        default="category",
+        help="Variable for color coding (default: category)",
+    )
+    parser.add_argument(
+        "--column",
         type=str,
         default=None,
-        help="Color palette overrides as JSON or Python dict string",
+        help="Variable for columns (optional)",
     )
     parser.add_argument(
-        "--ordering",
+        "--category-key",
         type=str,
-        default=None,
-        help="JSON formatted ordering dictionary for model types",
+        required=True,
+        help="Category column name (will be auto-detected if not found)",
     )
     parser.add_argument(
-        "--naming",
+        "--parameter-key",
         type=str,
-        default=None,
-        help="JSON formatted naming dictionary for model types",
-    )
-    parser.add_argument(
-        "--output", type=Path, required=True, help="Path to output file"
-    )
-    parser.add_argument(
-        "--category",
-        type=str,
-        default="model_type",
-        help="Column name containing model categories in test data",
+        help="Parameter column name",
     )
     parser.add_argument(
         "--dt",
         type=float,
-        default=None,
-        help="Time step duration in milliseconds for x-axis in test plots",
+        default=2.0,
+        help="Temporal resolution in ms per timestep",
+    )
+    parser.add_argument(
+        "--energy-loss-scale",
+        type=float,
+        default=10.0,
+        help="Scale factor for energy loss display (default: 10.0)",
+    )
+    parser.add_argument(
+        "--confidence-measure",
+        type=str,
+        default="first_label_confidence",
+        help="Confidence measure column name",
+    )
+    parser.add_argument(
+        "--accuracy-measure",
+        type=str,
+        default="accuracy",
+        help="Accuracy measure column name",
+    )
+    parser.add_argument(
+        "--palette",
+        type=str,
+        help="JSON color palette",
+    )
+    parser.add_argument(
+        "--naming",
+        type=str,
+        help="JSON naming dict",
+    )
+    parser.add_argument(
+        "--ordering",
+        type=str,
+        help="JSON ordering dict",
     )
     parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging verbosity",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level",
     )
 
     args, unknown = parser.parse_known_args()
 
-    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    # Configure logging
     logging.basicConfig(
-        level=log_level,
-        format="%(levelname)s:%(name)s:%(message)s",
+        level=getattr(logging, args.log_level),
+        format="%(levelname)s: %(message)s",
     )
-    logger.setLevel(log_level)
 
     if unknown:
-        logger.warning("Ignoring unknown arguments: %s", unknown)
+        logger.info(f"Ignoring unknown arguments: {unknown}")
 
-    # Validate input files
-    required_files = [
-        (args.accuracy_csv, "Accuracy CSV"),
-        (args.memory_csv, "Memory CSV"),
-        (args.epoch_csv, "Epoch CSV"),
-        (args.energy_csv, "Energy loss CSV"),
-        (args.cross_entropy_csv, "Cross entropy loss CSV"),
-    ]
-
-    # Only validate test_data if provided
-    if args.test_data:
-        for path in args.test_data:
-            required_files.append((path, "Test performance data CSV"))
-
-    for file_path, file_name in required_files:
-        if not file_path.exists():
-            logger.error("%s not found: %s", file_name, file_path)
-            raise FileNotFoundError(f"{file_name} not found: {file_path}")
-
-    # Create output directory if needed
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-
-    # Load configuration from command line arguments
-    palette_json = _coerce_to_json_string(args.palette)
-    naming_json = _coerce_to_json_string(args.naming)
-    ordering_json = _coerce_to_json_string(args.ordering)
-
+    # Load config
     config = load_config_from_args(
-        palette_str=palette_json,
-        naming_str=naming_json,
-        ordering_str=ordering_json,
+        palette_str=args.palette,
+        naming_str=args.naming,
+        ordering_str=args.ordering,
     )
 
-    # Ensure palette has defaults while keeping overrides
-    palette_config = config.get("palette", {}) or {}
-    config["palette"] = {**DEFAULT_PALETTE, **palette_config}
+    # Handle single vs multiple test data files
+    test_data_input = args.test_data if len(args.test_data) > 1 else args.test_data[0]
 
-    # Load and process data
-    logger.info("Loading accuracy data from %s", args.accuracy_csv)
-    accuracy_df = load_accuracy_data(args.accuracy_csv)
-    unique_accuracy_models = (
-        sorted(accuracy_df.model_type.unique())
-        if not accuracy_df.empty and "model_type" in accuracy_df.columns
-        else []
-    )
-    logger.info(
-        "Found %s model types in accuracy data: %s",
-        len(unique_accuracy_models),
-        unique_accuracy_models,
-    )
-
-    logger.info("Loading memory data from %s", args.memory_csv)
-    memory_df = load_memory_data(args.memory_csv)
-    if not memory_df.empty and "model_type" in memory_df.columns:
-        memory_models = sorted(memory_df.model_type.unique())
-        logger.info(
-            "Found %s model types in memory data: %s",
-            len(memory_models),
-            memory_models,
-        )
-    else:
-        logger.warning("No memory data processed")
-
-    logger.info("Loading epoch timing data from %s", args.epoch_csv)
-    epoch_df = load_epoch_data(args.epoch_csv)
-    if not epoch_df.empty and "model_type" in epoch_df.columns:
-        epoch_models = sorted(epoch_df.model_type.unique())
-        logger.info(
-            "Found %s model types in epoch data: %s",
-            len(epoch_models),
-            epoch_models,
-        )
-    else:
-        logger.warning("No epoch data processed")
-
-    logger.info("Loading energy loss data from %s", args.energy_csv)
-    energy_loss_df = load_loss_data(args.energy_csv, "energy")
-    energy_models = (
-        sorted(energy_loss_df.model_type.unique())
-        if not energy_loss_df.empty and "model_type" in energy_loss_df.columns
-        else []
-    )
-    logger.info(
-        "Found %s model types in energy loss data: %s",
-        len(energy_models),
-        energy_models,
-    )
-
-    logger.info("Loading cross entropy loss data from %s", args.cross_entropy_csv)
-    cross_entropy_loss_df = load_loss_data(args.cross_entropy_csv, "cross_entropy")
-    ce_models = (
-        sorted(cross_entropy_loss_df.model_type.unique())
-        if not cross_entropy_loss_df.empty
-        and "model_type" in cross_entropy_loss_df.columns
-        else []
-    )
-    logger.info(
-        "Found %s model types in cross entropy loss data: %s",
-        len(ce_models),
-        ce_models,
-    )
-
-    # Load test performance data if provided
-    test_data_df = None
-    if args.test_data:
-        test_data_df = _load_test_data(args.test_data)
-        logger.info("Test data shape: %s", test_data_df.shape)
-        if args.category in test_data_df.columns:
-            test_models = sorted(test_data_df[args.category].unique())
-            logger.info(
-                "Found %s model types in test data: %s",
-                len(test_models),
-                test_models,
-            )
-        else:
-            logger.warning(
-                "Category column '%s' not found in test data", args.category
-            )
-
-    # Generate plot
-    fig = plot_training_losses(
-        accuracy_df,
-        energy_loss_df,
-        cross_entropy_loss_df,
-        memory_df,
-        epoch_df,
-        config.get("palette"),
-        test_data=test_data_df,
+    # Plot
+    plot_training_overview(
+        test_data=test_data_input,
+        accuracy_csv=args.accuracy_csv,
+        loss_csv=args.loss_csv,
+        output=args.output,
+        subplot_var=args.subplot,
+        hue_var=args.hue,
+        column_var=args.column,
+        category_key=args.category_key,
+        parameter_key=args.parameter_key,
+        confidence_measure=args.confidence_measure,
+        accuracy_measure=args.accuracy_measure,
         dt=args.dt,
-        category_col=args.category,
+        energy_loss_scale=args.energy_loss_scale,
         config=config,
     )
-
-    # Save plot
-    plt.figure(fig.number)
-    save_plot(args.output)
-    logger.info("Plot saved to: %s", args.output)
 
 
 if __name__ == "__main__":
