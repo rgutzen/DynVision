@@ -422,7 +422,8 @@ class TestingDataModule(SimpleDataModule):
         if self.dataloader is not None:
             return self.dataloader
 
-        dataset = self.setup_dataset()
+        # Use existing dataset if available, otherwise set it up
+        dataset = self.dataset if self.dataset is not None else self.setup_dataset()
         dataloader_name = self.config.data.data_loader
         dataloader_class = get_data_loader_class(dataloader_name)
         dataloader_kwargs = self.config.get_dataloader_kwargs(
