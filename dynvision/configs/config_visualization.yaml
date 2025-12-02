@@ -35,7 +35,7 @@ naming:
   rctype: "Recurrence"
   lossrt: "$t_{loss}$"
   idle: "$t_{idle}$"
-  energyloss: "EnergyLoss Weight"
+  energyloss: "Energy Loss Weight"
   tsteps: "$T$"
   feedback: "Feedback"
   skip: "Skip"

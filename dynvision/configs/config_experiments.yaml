@@ -5,21 +5,21 @@ experiment_config:
     rctarget: ['output', 'input', 'middle']  # Target for recurrent connections
     pattern: ['01110', '11100', '1']
     dsteps: [1, 20]
-    tsteps: [5, 10, 15, 20]
+    tsteps: [8, 14, 20, 26]
     dt: [2]
     tau: [3, 5, 9]
     tff: [0, 10]
     trc: [2, 6, 10]
     tsk: [0, 4, 8]
-    # lossrt: [0, 4, 8, 20, 38]
-    lossrt: [0, 6, 12, 18]
-    idle: [0, 1, 5, 10, 15]
+    # lossrt: [0, 4, 8, 20, 38]  # for pattern=1
+    lossrt: [0, 4, 8, 18, 28]  # for pattern=1011 + shuffle
+    idle: [0, 1, 5, 10, 20]
     feedback: ['add','false', 'mul']
     skip: ['true', 'false']
     dloader: ['ffcv', 'torch']
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
-    energyloss: [0, 0.01, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0]
+    energyloss: [0, 0.1, 0.5, 1.0, 2.0] #0.3
     
   response:
     parameter: stim
@@ -49,12 +49,23 @@ experiment_config:
       stim: [30]
       idle: [20]
 
+  stabilityintermediate:
+    status: [trained-epoch=199, trained-epoch=249, trained-epoch=299, trained-epoch=349]
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      dsteps: 125
+      intro: 1
+      stim: [100]
+      idle: [20]
+
   stability:
     parameter: stim
     data_loader: StimulusDuration
     data_args:
       dsteps: 125
-      stim: [25, 100]
+      # stim: [25, 100]
+      stim: [100]
       intro: 0
       idle: [20]
 

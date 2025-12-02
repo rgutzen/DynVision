@@ -1,9 +1,7 @@
 # Local Settings
 use_local_mode: "auto"
-local:
+local_mode:
   enable_progress_bar: True
-  use_debug_mode: False
-  use_distributed_mode: False
   verbose: True
   use_ffcv: False 
   num_workers: 0
@@ -11,7 +9,7 @@ local:
 
 # Debugging Settings
 use_debug_mode: False
-debug:
+debug_mode:
   batch_size: 3
   check_val_every_n_epoch: 1
   log_every_n_steps: 1
@@ -20,7 +18,7 @@ debug:
 
 # Large Dataset Settings
 use_large_dataset_mode: False
-large_dataset:
+large_dataset_mode:
   # batch_size: 32
   use_ffcv: True
   order: "QUASI_RANDOM"
@@ -33,7 +31,7 @@ large_dataset:
 
 # Distributed Settings
 use_distributed_mode: False
-distributed:
+distributed_mode:
   use_distributed: False  # For FFCV dataloaders - let lightning handle distribution
   strategy: "ddp"  # Use standard DDP for SLURM compatibility
   devices: 4  # Number of GPUs per node
@@ -47,8 +45,6 @@ distributed:
   store_val_responses: 0  # n_batches
   check_val_every_n_epoch: 100
   monitor_checkpoint: "train_loss"
-  batch_size: 512
-  use_ffcv: True
   num_workers: 8
   persistent_workers: True
   pin_memory: False
@@ -56,6 +52,10 @@ distributed:
   os_cache: True
   chunksize: 5000
   drop_last: True  # Ensure all batches are of the same size
+  train:
+    data:
+      batch_size: 512
+      use_ffcv: True
   # Advanced DDP settings
   strategy_kwargs:
     find_unused_parameters: False  # Set to True if your model has unused parameters
