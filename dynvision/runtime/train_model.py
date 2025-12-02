@@ -339,13 +339,20 @@ class ModelManager:
     def __init__(self, config: TrainingParams):
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._cached_state_dict = (
+            None  # Cache to avoid loading state dict multiple times
+        )
 
     def load_and_initialize_model(self, load_state_dict=True) -> pl.LightningModule:
         """Load and initialize model with current configuration."""
-        # Load state dict
-        state_dict = torch.load(
-            self.config.input_model_state, map_location=self.device, weights_only=True
-        )
+        # Load state dict (use cached version if available to avoid loading twice)
+        if self._cached_state_dict is None:
+            self._cached_state_dict = torch.load(
+                self.config.input_model_state,
+                map_location=self.device,
+                weights_only=True,
+            )
+        state_dict = self._cached_state_dict
 
         # Create model with current configuration
         model_class = getattr(models, self.config.model.model_name)
@@ -403,7 +410,14 @@ class TrainingOrchestrator:
         try:
             # Setup
             torch.set_float32_matmul_precision("medium")
-            torch.cuda.empty_cache()
+
+            # Aggressive GPU cache clearing to prevent OOM from lingering allocations
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()  # Wait for all operations to complete
+                # Also try PyTorch's expandable segments if available
+                if hasattr(torch.cuda, "memory"):
+                    torch.cuda.reset_peak_memory_stats()
 
             # Log comprehensive configuration
             self._log_training_configuration()
@@ -412,7 +426,9 @@ class TrainingOrchestrator:
 
         finally:
             # Cleanup
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
     def _log_training_configuration(self) -> None:
         """Log key training configuration information."""
@@ -485,10 +501,12 @@ class TrainingOrchestrator:
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        # Extract n_classes from state dict
-        state_dict = torch.load(
-            self.config.input_model_state, map_location=device, weights_only=True
-        )
+        # Extract n_classes from state dict (use cached version to avoid loading twice)
+        if self.model_manager._cached_state_dict is None:
+            self.model_manager._cached_state_dict = torch.load(
+                self.config.input_model_state, map_location=device, weights_only=True
+            )
+        state_dict = self.model_manager._cached_state_dict
         actual_n_classes = self._extract_n_classes_from_state_dict(state_dict)
 
         # Update model parameters using the dedicated method
@@ -499,6 +517,11 @@ class TrainingOrchestrator:
         )
         # Log sample images
         self._log_sample_images(inputs, label_indices, pl_logger)
+
+        # Explicitly delete preview data to free memory
+        del inputs, label_indices, state_dict
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def _extract_n_classes_from_state_dict(
         self, state_dict: Dict[str, torch.Tensor]
@@ -621,18 +644,37 @@ class TrainingOrchestrator:
 
                 # Synchronize after model loading in distributed mode
                 if trainer.strategy and hasattr(trainer.strategy, "barrier"):
-                    logger.info("Synchronizing ranks after model initialization...")
+                    logger.debug("Synchronizing ranks after model initialization...")
                     trainer.strategy.barrier()
-                    logger.info("All ranks synchronized")
+                    logger.debug("All ranks synchronized")
 
                 # Hack to log histograms
                 wandb.init(settings=wandb.Settings(init_timeout=120))
 
                 # Final synchronization before training
                 if trainer.strategy and hasattr(trainer.strategy, "barrier"):
-                    logger.info("Final synchronization before training start...")
+                    logger.debug("Final synchronization before training start...")
                     trainer.strategy.barrier()
-                    logger.info("All ranks ready to train")
+                    logger.debug("All ranks ready to train")
+
+                # Clear GPU cache one more time right before training to prevent OOM
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    # Log detailed memory stats
+                    allocated = torch.cuda.memory_allocated(0) / (1024**3)
+                    reserved = torch.cuda.memory_reserved(0) / (1024**3)
+                    logger.info(
+                        f"Pre-training GPU memory: {allocated:.2f} GB allocated, {reserved:.2f} GB reserved"
+                    )
+                    if allocated > 20.0:  # More than 20GB is suspicious
+                        logger.error(
+                            f"GPU memory usage is very high ({allocated:.2f} GB) before training starts!"
+                        )
+                        logger.error(
+                            "This suggests a memory leak during model/data initialization."
+                        )
+                        logger.error("Attempting to continue, but OOM is likely...")
 
                 # Train model using DataModule
                 logger.info("Starting training...")
@@ -677,12 +719,20 @@ class TrainingOrchestrator:
         )
 
         if not is_distributed:
-            # Single GPU/CPU: simple existence check
-            if os.path.exists(checkpoint_path):
-                logger.info(f"Checkpoint found: {checkpoint_path}")
-                return checkpoint_path
-            else:
+            # Single GPU/CPU: verify existence and readability
+            if not os.path.exists(checkpoint_path):
                 logger.info(f"Checkpoint not found: {checkpoint_path}")
+                return None
+
+            try:
+                torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+                logger.info(f"Checkpoint found and readable: {checkpoint_path}")
+                return checkpoint_path
+            except Exception as err:  # noqa: BLE001
+                logger.warning(
+                    "Checkpoint exists but failed to load (%s). Will start from state dict instead.",
+                    err,
+                )
                 return None
 
         # Distributed mode: Check if distributed is actually initialized
@@ -811,6 +861,28 @@ class TrainingOrchestrator:
 @handle_errors(verbose=True)
 def main() -> int:
     """Main entry point for training with comprehensive configuration management."""
+    # Enable PyTorch's expandable segments to reduce memory fragmentation
+    # This helps prevent OOM errors from fragmentation
+    if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        logger.info(
+            "Set PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to reduce fragmentation"
+        )
+
+    # Check GPU memory status before starting
+    if torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            allocated = torch.cuda.memory_allocated(i) / (1024**3)  # GB
+            reserved = torch.cuda.memory_reserved(i) / (1024**3)  # GB
+            if (
+                allocated > 1.0 or reserved > 1.0
+            ):  # More than 1GB suggests leftover memory
+                logger.warning(
+                    f"GPU {i} has {allocated:.2f} GB allocated and {reserved:.2f} GB reserved "
+                    f"before training start. This may indicate a previous process didn't clean up properly. "
+                    f"Consider clearing GPU memory or restarting the job."
+                )
+
     try:
         config = TrainingParams.from_cli_and_config()
         config.setup_logging()
