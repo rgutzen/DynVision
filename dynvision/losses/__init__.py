@@ -33,6 +33,7 @@ import torch
 from .base_loss import BaseLoss
 from .cross_entropy_loss import CrossEntropyLoss
 from .energy_loss import EnergyLoss
+from .lr_scheduler import *
 
 __all__ = [
     "BaseLoss",

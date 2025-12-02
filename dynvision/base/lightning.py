@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 import torch
 import wandb
 
-# from dynvision.losses import lr_scheduler
+from dynvision.losses import lr_scheduler
 from dynvision.utils import alias_kwargs
 from dynvision.utils.performance_measures import (
     calculate_accuracy,
