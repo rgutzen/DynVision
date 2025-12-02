@@ -89,7 +89,9 @@ class ModeRegistry:
             if not key.startswith("use_") or not key.endswith("_mode"):
                 continue
             mode_name = key[len("use_") : -len("_mode")]
-            payload = raw.get(mode_name, {})
+            # Look for payload key with _mode suffix (e.g., "distributed_mode")
+            payload_key = f"{mode_name}_mode"
+            payload = raw.get(payload_key, {})
             if payload is None:
                 payload = {}
             if not isinstance(payload, dict):
