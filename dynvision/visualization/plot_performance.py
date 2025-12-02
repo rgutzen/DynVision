@@ -32,7 +32,6 @@ from dynvision.visualization.plot_responses import (
     _get_dimension_key,
     _extract_dimension_values,
     _normalize_dimension,
-    _resolve_measure_column,
     _standardize_category_value,
     _validate_dimensions as _validate_dimension_choices,
 )
@@ -44,6 +43,7 @@ from dynvision.utils.visualization_utils import (
     get_ordering,
     load_config_from_args,
     order_layers,
+    resolve_measure_columns,
     save_plot,
 )
 
@@ -80,6 +80,16 @@ FORMATTING = {
     "title_fontsize": 16,
     "fontsize_panel_label": 18,
 }
+
+
+def _resolve_measure_column(df: pd.DataFrame, requested: str) -> Optional[str]:
+    """Resolve a requested metric name to an available dataframe column."""
+
+    resolved, _ = resolve_measure_columns(df.columns, [requested])
+    if resolved:
+        return resolved[0][1]
+    return None
+
 
 # Errorbar configuration for lineplot
 ERRORBAR_CONFIG = {
@@ -159,10 +169,11 @@ def _plot_accuracy_panel_with_ffonly(
     """Plot accuracy and confidence over time for both full and feedforward-only models."""
 
     fmt = {**FORMATTING, **kwargs}
-    errorbar_settings = {
-        "errorbar": kwargs.get("errorbar", ERRORBAR_CONFIG["errorbar"]),
-        "err_style": kwargs.get("err_style", ERRORBAR_CONFIG["err_style"]),
-    }
+    errorbar_mode = kwargs.get("errorbar", ERRORBAR_CONFIG["errorbar"])
+    err_style = kwargs.get("err_style", ERRORBAR_CONFIG["err_style"])
+    errorbar_settings = {"errorbar": errorbar_mode}
+    if errorbar_mode not in (None, "none") and err_style:
+        errorbar_settings["err_style"] = err_style
 
     requested_accuracy = list(accuracy_cols or [])
     requested_confidence = list(confidence_cols or [])

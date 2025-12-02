@@ -266,8 +266,9 @@ def plot_unrolling(
             linewidth=LINEWIDTH_MAIN + 1,  # Slightly wider than default
             alpha=ALPHA_LINES,
             label="Engineering time shifted",
-            linestyle=":",
-            marker="1",
+            linestyle="none",
+            marker="o",
+            markersize=8,
             markevery=4,  # Show marker only every 4 steps
         )
 
@@ -279,9 +280,10 @@ def plot_unrolling(
             ax.set_xlabel("Time Step", fontsize=FONTSIZE_AXIS_LABELS)
 
         ax.grid(True, alpha=0.3)
+        ax.set_xlim(min(time_steps), max(time_steps))
 
         # Remove top and right spines
-        sns.despine(ax=ax)
+        sns.despine(ax=ax, left=True, bottom=True)
 
         # Add label indicator to the bottom subplot
         if i == n_layers - 1:

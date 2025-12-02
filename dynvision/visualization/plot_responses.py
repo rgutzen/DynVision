@@ -80,7 +80,7 @@ FORMATTING = {
         "IT": "#ba55d3ff",
     },
     "min_global_ymin": -0.005,
-    "max_global_ymax": 4,
+    "max_global_ymax": 3,
 }
 
 # Errorbar configuration for lineplot
@@ -879,6 +879,9 @@ def _plot_response_ridges(
         )
 
     axes = []
+    layer_circle_info = (
+        []
+    )  # Store (ax, layer_name) to add circles after y-limits are set
 
     # Calculate ridge top position from other elements
     if ridge_top is None:
@@ -946,14 +949,8 @@ def _plot_response_ridges(
                 **ERRORBAR_CONFIG,
             )
 
-            _add_layer_circle(
-                x=0.95,
-                y=0.25,
-                layer_name=subplot_value.upper(),
-                ax=ax,
-                config=config,
-                **fmt,
-            )
+            # Store layer circle info to add after y-limits are set
+            layer_circle_info.append((ax, subplot_value.upper()))
         elif subplot_var == "classifier_topk":
             response_col = subplot_value
             if response_col not in data_plot.columns:
@@ -1093,8 +1090,12 @@ def _plot_response_ridges(
 
         # Adjust limits to common scale across all subplots
         ymin, ymax = ax.get_ylim()
-        global_ymin = min(min(global_ymin, ymin), fmt["min_global_ymin"])
-        global_ymax = min(max(global_ymax, ymax), fmt["max_global_ymax"])
+        global_ymin = max(
+            min(global_ymin, ymin), fmt["min_global_ymin"]
+        )  # Floor at min_global_ymin
+        global_ymax = min(
+            max(global_ymax, ymax), fmt["max_global_ymax"]
+        )  # Ceiling at max_global_ymax
         xmin, xmax = ax.get_xlim()
         global_xmin = min(global_xmin, xmin)
         global_xmax = max(global_xmax, xmax)
@@ -1140,13 +1141,42 @@ def _plot_response_ridges(
             ax.set_xlabel("Time (ms)", fontsize=fmt["fontsize_axis"])
             ax.tick_params(labelsize=fmt["fontsize_tick"])
 
-        ax.set_yticks([0, 1])
-        ax.set_yticklabels(["0", "1"], fontsize=fmt["fontsize_tick"])
         sns.despine(ax=ax, left=True, bottom=True)
 
     for ax in axes:
         ax.set_ylim(global_ymin, global_ymax)
         ax.set_xlim(global_xmin, global_xmax)
+        # Set standard y-ticks depending on global_ymax value
+        yticks_map = [
+            (10.0, [0, 10], ["0", "10"]),
+            (5.0, [0, 5], ["0", "5"]),
+            (1.0, [0, 1], ["0", "1"]),
+            (0.5, [0, 0.5], ["0", "0.5"]),
+            (0.1, [0, 0.1], ["0", "0.1"]),
+            (0.05, [0, 0.05], ["0", "0.05"]),
+            (0.01, [0, 0.01], ["0", "0.01"]),
+        ]
+        for limit, ticks, labels in yticks_map:
+            if global_ymax > limit:
+                ax.set_yticks(ticks)
+                ax.set_yticklabels(labels, fontsize=fmt["fontsize_tick"])
+                break
+        else:
+            ax.set_yticks([0, global_ymax])
+            ax.set_yticklabels(
+                [str(0), f"{global_ymax:.2g}"], fontsize=fmt["fontsize_tick"]
+            )
+
+    # Add layer circles after y-limits are finalized
+    for ax, layer_name in layer_circle_info:
+        _add_layer_circle(
+            x=0.95,
+            y=0.25,
+            layer_name=layer_name,
+            ax=ax,
+            config=config,
+            **fmt,
+        )
 
     logger.info(f"Created {len(axes)} ridge plot axes")
     return axes
@@ -1454,7 +1484,7 @@ def plot_temporal_ridge_responses(
         )
     )
     sns.set_context("talk")
-    
+
     # Add figure title
     if experiment:
         title_name = (
@@ -1468,7 +1498,7 @@ def plot_temporal_ridge_responses(
             fontweight="bold",
             y=0.98,
         )
-        
+
     # Plot each column
     all_ridge_axes = []
     for col_idx, column_value in enumerate(column_values):
@@ -1595,8 +1625,12 @@ def plot_temporal_ridge_responses(
                 global_xmin = min(global_xmin, xmin)
                 global_xmax = max(global_xmax, xmax)
 
-            global_ymax = min(global_ymax, fmt["max_global_ymax"])
-            global_ymin = min(global_ymin, fmt["min_global_ymin"])
+            global_ymax = min(
+                global_ymax, fmt["max_global_ymax"]
+            )  # Ceiling at max_global_ymax
+            global_ymin = max(
+                global_ymin, fmt["min_global_ymin"]
+            )  # Floor at min_global_ymin
 
             for ax in all_ridge_axes:
                 ax.set_ylim(global_ymin, global_ymax)

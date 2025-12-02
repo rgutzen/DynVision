@@ -821,7 +821,7 @@ parser.add_argument(
 parser.add_argument(
     "--memory_limit_gb",
     type=float,
-    default=60.0,
+    default=68.0,
     help="Soft memory limit in GB (triggers warnings, default: 20.0)",
 )
 parser.add_argument(
@@ -1005,6 +1005,8 @@ if __name__ == "__main__":
 
                 # Save processed data
                 logger.info(f"\nSaving processed data to: {args.output}")
+                # Ensure output directory exists (redundant safety check before save)
+                args.output.parent.mkdir(parents=True, exist_ok=True)
                 df.to_csv(args.output, index=False)
                 logger.info(f"✅ Successfully saved {len(df)} rows")
 

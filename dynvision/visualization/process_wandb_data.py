@@ -12,7 +12,18 @@ logger = logging.getLogger(__name__)
 
 
 def extract_param_value(column_name: str, param_key: str) -> Optional[str]:
-    """Extract parameter value from column name (e.g., 'rctype=full' -> 'full')."""
+    """Extract parameter value from column name.
+
+    Supports formats:
+    - 'rctype=full' -> 'full'
+    - 'energy_loss_weight: 0.05' -> '0.05'
+    """
+    # Try colon-space format first (W&B default): "param_key: value"
+    match = re.search(rf"{param_key}:\s*([^-]+?)(?:\s+-|$)", column_name)
+    if match:
+        return match.group(1).strip()
+
+    # Fallback to equals format: "param_key=value"
     match = re.search(rf"{param_key}=([^+_\s-]+)", column_name)
     return match.group(1) if match else None
 
@@ -73,8 +84,14 @@ def extract_category_keys(columns: List[str], max_categories: int = 2) -> List[s
     # Try parameter extraction
     all_params = {}
     for col in columns:
-        params = re.findall(r"([a-zA-Z_]+)=([^+_\s-]+)", col)
-        for param_key, param_value in params:
+        # Try colon-space format first (W&B default): "param_key: value"
+        params_colon = re.findall(r"([a-zA-Z_]+):\s*([^-]+?)(?:\s+-)", col)
+        for param_key, param_value in params_colon:
+            all_params.setdefault(param_key, set()).add(param_value.strip())
+
+        # Also try equals format: "param_key=value"
+        params_equals = re.findall(r"([a-zA-Z_]+)=([^+_\s-]+)", col)
+        for param_key, param_value in params_equals:
             all_params.setdefault(param_key, set()).add(param_value)
 
     # Find parameters with multiple values
@@ -410,6 +427,15 @@ def process_wandb_csv(
 
     processed_df = pd.DataFrame(processed_data)
     logger.info(f"Processed shape: {processed_df.shape}")
+
+    # Check if processed_df is empty
+    if processed_df.empty:
+        logger.error("No data was extracted. Possible issues:")
+        logger.error("  1. Category parameter not found in column names")
+        logger.error("  2. All values are NaN")
+        logger.error(f"Sample column names from CSV: {list(df.columns[:5])}")
+        logger.error(f"Looking for categories: {category_keys}")
+        raise ValueError("No data extracted - check category parameter names match column naming pattern")
 
     # Warn if any category has very few data points
     group_cols = ["metric"] + [k for k in category_keys if k in processed_df.columns]
