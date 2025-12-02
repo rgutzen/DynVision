@@ -672,7 +672,13 @@ class DataBuffer:
             self._initialize_from_values_impl(values)
 
     def _initialize_from_values_impl(self, values: List[Optional[torch.Tensor]]) -> None:
-        """Internal implementation of initialize from values."""
+        """Internal implementation of initialize from values.
+
+        Note: This method does NOT preprocess values. The values are expected to
+        already be in the correct format (device, dtype, etc.) and should preserve
+        their gradient tracking state. This is critical for initialization from
+        cached hidden states that need to enable gradient flow during training.
+        """
         # Clear existing storage and reset state
         self._storage.clear()
         self._size = 0
@@ -683,16 +689,19 @@ class DataBuffer:
         if not self._unlimited:
             self._storage = [None] * self.max_size
 
-        # Populate storage with provided values
+        # Populate storage with provided values (no preprocessing)
+        # Values are stored directly to preserve gradient tracking
         for i, value in enumerate(values):
             if value is not None:
-                # Apply preprocessing (device placement, dtype conversion, detachment)
-                processed = self._preprocess_data(value)
+                # Ensure tensors have requires_grad enabled for gradient flow
+                if isinstance(value, torch.Tensor) and not value.requires_grad:
+                    value = value.detach().requires_grad_(True)
+
                 if self._unlimited:
-                    self._storage.append(processed)
+                    self._storage.append(value)
                 else:
                     # For cyclic buffers, use index assignment
-                    self._storage[i] = processed
+                    self._storage[i] = value
             else:
                 if self._unlimited:
                     self._storage.append(None)
