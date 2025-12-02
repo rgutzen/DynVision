@@ -1,29 +1,30 @@
 # SEED = ["1000", "1001", "1002"] #, "1003", "1004","1005"]  # energy loss weight 0.05 & use_ffcv=False
 # SEED = ["2000", "2001", "2002"] # energy loss weight 0.2 & use_ffcv=True
 # SEED = ["3000", "3001", "3002"] # energy loss weight not applied? & use_ffcv=True
-SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
+# SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
+SEED = ["5000", "5001", "5002"] # shuffled patterns
 STATUS = 'trained-best'
 
 # ###############
 # for cmd in \
 #     "rctarget" \
-#     "rctype" \
-    # "skip" \
-    # "feedback --config batch_size=128" \
-#     "tsteps" \
 #     "lossrt" \
 #     "idle" \
-#     "timeparams" \
-#     "stability --config test_batch_size=16" \
-#     "references --config test_batch_size=32" \
-#     "unrolling --config batch_size=128" \
-#     "energyloss --config epochs=201" \
-#     "dataloader --config epochs=100" \
-#     "training --allowed-rules test_model process_test_data plot_responses" \
+#     "skip" \
 # ; do
 #     sh snakecharm.sh "$cmd"
 #     sleep 120
 # done
+#     "rctype" \
+#     "tsteps" \
+#     "timeparams" \
+    # "feedback --config batch_size=128" \
+#     "stability --config test_batch_size=16" \
+#     "references --config test_batch_size=32" \
+#     "unrolling --config batch_size=128" \
+#     "energyloss --config epochs=350" \
+#     "dataloader --config epochs=100" \
+#     "training --allowed-rules test_model process_test_data plot_responses" \
 # # sh snakecharm.sh "imagenet --config use_distributed_mode=True batch_size=512"
 # ###############
 
@@ -87,13 +88,13 @@ rule manuscript_figures: # manuscript figures
         seed=SEED[0],
         status=STATUS,
         ),
-        # energy loss scan
-        expand(project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
-            seeds=SEED[0], #'.'.join(SEED),
-            status=STATUS,
-        ),
+        # # energy loss scan
+        # expand(project_paths.figures / 'response' / 'response_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
+        #     seeds=SEED[0], #'.'.join(SEED),
+        #     status=STATUS,
+        # ),
         # dataloader comparison
-        expand(project_paths.figures / 'response' / 'response_DyRCNNx8:{configuration}_{seed}_imagenette_{status}_all' / 'responses.png',
+        expand(project_paths.figures / 'response' / 'response_DyRCNNx8:{configuration}+pattern=1+shufflepattern=false_{seed}_imagenette_{status}_all' / 'responses.png',
         seed=SEED,
         status=STATUS,
         configuration=[
@@ -152,8 +153,10 @@ rule lossrt:
 rule rctarget:
     input:
         expand(project_paths.reports / "{experiment}" / "{experiment}_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4_{seed}_imagenette_{status}_all" / "test_data.csv",
-        seed=["1002", "1003", "1004"],  # non-oscillatory seeds only
-        experiment=['responseffonly', 'response', 'duration', 'contrast', 'interval', 'uniformnoise', 'uniformnoiseffonly', 'poissonnoise', 'poissonnoiseffonly', 'gaussiannoise', 'gaussiannoiseffonly', 'gaussiancorrnoise', 'gaussiancorrnoiseffonly', 'phasescramblednoise', 'phasescramblednoiseffonly'],
+        seed=SEED,  # non-oscillatory seeds only
+        # experiment=['responseffonly', 'response', 'duration', 'contrast', 'interval', 'uniformnoise', 'uniformnoiseffonly',
+        experiment=['gaussiannoise', 'gaussiannoiseffonly', 'gaussiancorrnoise', 'gaussiancorrnoiseffonly'],
+        # 'poissonnoise', 'poissonnoiseffonly', 'phasescramblednoise', 'phasescramblednoiseffonly'],
         status=STATUS),
 
 rule rctype:
@@ -197,21 +200,27 @@ rule unrolling:
 
 rule energyloss:
     input:
-        expand(project_paths.figures / 'responseintermediate' / 'responseintermediate_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip={skip}+lossrt=4+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
+        expand(project_paths.figures / 'stabilityintermediate' / 'stabilityintermediate_DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern=1011+shufflepattern=true+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
                     seeds='.'.join(SEED),
-                    skip='true',  # is faster to train
                     status=STATUS,
                 ),
 
-# rule training:
-#     input:
-#         expand(project_paths.figures / 'responseintermediate' / 'responseintermediate_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss=*_{seeds}_imagenette_trained_all' / 'responses.png',
+rule training:
+    input:
+        expand(project_paths.figures / '{experiment}' / '{experiment}_DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern={pattern}+energyloss=*_{seeds}_imagenette_{status}_all/training.png',
+        pattern=['1011', '1'],
+        seeds='.'.join(SEED),
+        status=STATUS,
+        experiment=['stability']
+        ),
+        # 'responseintermediate_DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4+energyloss=*_{seeds}_imagenette_trained_all' / 'responses.png',
 #                     seeds=SEED[0], #'.'.join(SEED),
 #                 ),
 
+
 rule dataloader:
     input:
-        expand(project_paths.figures / 'response' / 'response_DyRCNNx8:{configuration}_{seed}_imagenette_{status}_all' / 'response.png',
+        expand(project_paths.figures / 'response' / 'response_DyRCNNx8:pattern=1+{configuration}_{seed}_imagenette_{status}_all' / 'response.png',
         seed=SEED,
         status=STATUS,
         configuration=[

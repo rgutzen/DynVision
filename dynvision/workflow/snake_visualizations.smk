@@ -263,12 +263,12 @@ rule plot_performance:
             --subplot-filter {params.subplot_filter}
         """
 
-rule plot_training:
+rule plot_training_old:
     input:
         test_data = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
             seeds = lambda w: w.seeds.split('.'),
             ),
-        script = SCRIPTS / 'visualization' / 'plot_training.py'
+        script = SCRIPTS / 'visualization' / 'plot_training_old.py'
     params:
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
@@ -294,7 +294,7 @@ rule plot_training:
         ordering = lambda w: json.dumps(config.ordering),
         dt = getattr(config, 'dt', 2),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'training.png',
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'training_old.png',
     shell:
         """
         {params.execution_cmd} \
@@ -309,6 +309,56 @@ rule plot_training:
             --ordering {params.ordering:q} \
             --category {wildcards.category} \
             --dt {params.dt} \
+            --output {output:q} 
+        """
+
+rule plot_training:
+    input:
+        test_data = expand(project_paths.reports / '{{experiment}}' / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}' / 'test_data.csv',
+            seeds = lambda w: w.seeds.split('.'),
+            ),
+        script = SCRIPTS / 'visualization' / 'plot_training.py'
+    params:
+        accuracy_csv = lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_accuracy.csv',
+        loss_csv= lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_loss.csv',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+        column = getattr(config, 'column', 'parameter'),  
+        subplot = getattr(config, 'subplot', 'layers'),
+        hue = getattr(config, 'hue', 'category'),
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category_str.strip('=*'),
+        dt = getattr(config, 'dt', 2),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+    output:
+        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'training.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --test_data {input.test_data:q} \
+            --accuracy_csv {params.accuracy_csv:q} \
+            --loss_csv {params.loss_csv:q} \
+            --column {params.column} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --category-key {params.category} \
+            --parameter-key {params.parameter} \
+            --confidence-measure {params.confidence_measure} \
+            --accuracy-measure {params.accuracy_measure} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
             --output {output:q} 
         """
 
@@ -356,7 +406,7 @@ rule plot_responses:
             ),
         script = SCRIPTS / 'visualization' / 'plot_responses.py'
     params:
-        column = getattr(config, 'column', 'parameter'),  # first_label_index
+        column = getattr(config, 'column', 'parameter'),  # first_label_index, epoch
         subplot = getattr(config, 'subplot', 'layers'),  # classifier_topk
         hue = getattr(config, 'hue', 'category'),
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],

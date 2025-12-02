@@ -222,7 +222,7 @@ rule best_checkpoint_to_statedict:
 checkpoint intermediate_checkpoint_to_statedict:
     """Convert Lightning checkpoints to state dictionaries."""
     input:
-        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        # model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
         checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
