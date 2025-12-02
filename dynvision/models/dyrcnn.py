@@ -76,6 +76,8 @@ class DyRCNN(BaseModel):
         tff="t_feedforward",
         rctype="recurrence_type",
         fbmode="feedback_mode",
+        pattern="data_presentation_pattern",
+        shufflepattern="shuffle_presentation_pattern",
     )
     def __init__(
         self,
@@ -89,8 +91,10 @@ class DyRCNN(BaseModel):
         recurrence_type: str = "full",
         recurrence_target: str = "output",  # Target for recurrent connections
         feedback_mode: str = "additive",
-        skip: bool = False,
+        skip: bool = True,
         feedback: bool = False,
+        data_presentation_pattern: Union[str, List[int]] = "1011",
+        shuffle_presentation_pattern: bool = True,
         # DyRCNN-specific biological parameters
         train_tau: bool = False,
         bias: bool = True,
@@ -125,6 +129,8 @@ class DyRCNN(BaseModel):
             recurrence_target=recurrence_target,
             skip=skip,
             feedback=self.feedback,
+            data_presentation_pattern=data_presentation_pattern,
+            shuffle_presentation_pattern=shuffle_presentation_pattern,
             # All other Lightning/training parameters pass through kwargs
             **kwargs,
         )
