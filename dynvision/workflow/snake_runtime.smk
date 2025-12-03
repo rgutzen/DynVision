@@ -38,6 +38,7 @@ rule init_model:
             script_path=input.script,
             use_distributed=False,
         ),
+    priority: 0
     output:
         model_state = project_paths.models \
             / '{model_name}' \
@@ -96,6 +97,7 @@ rule train_model:
             script_path=input.script,
             use_distributed=get_param('use_distributed_mode', False)(w),
         ),
+    priority: 2
     output:
         model_state = project_paths.models \
             / '{model_name}' \
@@ -172,6 +174,7 @@ rule test_model:
             script_path=input.script,
             use_distributed=False,
         ),
+    priority: 1
     output:
         responses = project_paths.reports \
             / '{data_loader}' \
@@ -240,4 +243,89 @@ checkpoint intermediate_checkpoint_to_statedict:
             --checkpoint_dir {params.checkpoint_dir:q} \
             --output_dir {params.output_dir:q} \
             --checkpoint_globs {params.checkpoint_globs:q}
+        """
+
+
+rule process_test_data:
+    """Process test data by combining layer responses and test performance metrics.
+    
+    This unified rule combines the functionality of process_plotting_data and 
+    process_test_performance to create a single comprehensive dataset.
+    
+    Input:
+        responses: Model layer response files (.pt)
+        test_outputs: Test output files (.csv)
+        script: Processing script
+    
+    Output:
+        Unified test data CSV with layer metrics and performance metrics
+    """
+    input:
+        responses = expand(project_paths.reports \
+            / '{data_loader}' \
+            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
+            category = lambda w: w.category_str.strip('*'),
+            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
+            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+        ),
+        test_outputs = expand(project_paths.reports \
+            / '{data_loader}' \
+            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
+            category = lambda w: w.category_str.strip('*'),
+            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
+            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+        ),
+        script = SCRIPTS / 'visualization' / 'process_test_data.py'
+    params:
+        measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 'classifier_top5', 'label_confidence',
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category_str.strip('=*'),
+        additional_parameters = 'epoch',
+        batch_size = 1,
+        remove_input_responses = True,
+        fail_on_missing_inputs = False,
+        sample_resolution = 'sample',  # 'sample' or 'class'
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    priority: 3,
+    output:
+        test_data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+    shell:
+        """
+        {params.execution_cmd} \
+            --responses {input.responses:q} \
+            --test_outputs {input.test_outputs:q} \
+            --output {output.test_data:q} \
+            --parameter {params.parameter} \
+            --category {params.category} \
+            --measures {params.measures} \
+            --batch_size {params.batch_size} \
+            --sample_resolution {params.sample_resolution} \
+            --additional_parameters {params.additional_parameters} \
+            --remove_input_responses {params.remove_input_responses} \
+            --fail_on_missing_inputs {params.fail_on_missing_inputs}
+        """
+
+rule process_wandb_data:
+    input:
+        data = Path('{path}.csv'),
+        script = SCRIPTS / 'visualization' / 'process_wandb_data.py'
+    params:
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    output:
+        Path('{path}_summary.csv'),
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q}
         """

@@ -78,15 +78,24 @@ from .model_utils import (
 )
 
 from .visualization_utils import (
+    aggregate_plot_data,
+    calculate_accuracy,
+    calculate_label_indicator,
+    find_classifier_meta_columns,
+    find_classifier_value_columns,
+    find_layer_response_columns,
     layer_response_avg,
     layer_response_std,
-    peak_time,
-    peak_height,
-    peak_ratio,
-    calculate_accuracy,
     load_responses,
     load_responses_in_batches,
+    parse_error_type,
+    peak_height,
+    peak_ratio,
+    peak_time,
+    resolve_measure_columns,
     save_plot,
+    standardize_category_value,
+    standardize_series,
 )
 
 # For backward compatibility, expose all utilities at package level
@@ -140,11 +149,22 @@ __all__ = [
     "handle_errors",
     "load_model_and_weights",
     # Visualization utilities
+    "standardize_category_value",
+    "standardize_series",
+    "parse_error_type",
+    "aggregate_plot_data",
+    "find_layer_response_columns",
+    "find_classifier_value_columns",
+    "find_classifier_meta_columns",
+    "resolve_measure_columns",
     "layer_response_avg",
     "layer_response_std",
     "peak_time",
     "peak_height",
     "peak_ratio",
     "calculate_accuracy",
+    "calculate_label_indicator",
+    "load_responses",
+    "load_responses_in_batches",
     "save_plot",
 ]

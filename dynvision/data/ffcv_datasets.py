@@ -56,14 +56,36 @@ def main() -> None:
         include_defaults=False,
     )
 
+    # data_path: Path,
+    # data_name: Optional[str] = None,
+    # # Transform interface
+    # transform_backend: str = "torch",
+    # transform_context: str = "train",
+    # transform_preset: Optional[str] = None,
+    # # Target transform interface
+    # target_data_name: Optional[str] = None,
+    # target_data_group: str = "all",
+    # # Other parameters
+    # dataset_class: Callable[..., Dataset] = PathFolder,
+    # normalize: Optional[Tuple[List[float], List[float]]] = None,
+    # dtype: Optional[torch.dtype] = None,
+    # pixel_range: str = "0-1",
+    # cache_size: int = 1000,
+    # pin_memory: bool = False,
+    # pil_to_tensor: bool = True,
+    # **kwargs: Any,
+
     # Load dataset
     dataset = get_dataset(
-        Path(config.input),
+        data_path=Path(config.input),
         dataset_class=datasets.DatasetFolder,
         loader=load_raw_data,
         extensions=IMG_EXTENSIONS,
-        data_transform=None,
-        target_transform=f"{config.data_name}_all",
+        transform_backend="torch",
+        transform_context="train",
+        transform_preset="ffcv-build",
+        target_data_name=config.data_name,
+        target_data_group="all",
         pil_to_tensor=False,
         dtype=None,
         normalize=None,
