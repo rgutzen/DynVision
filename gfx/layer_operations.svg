@@ -1,0 +1,3922 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="26mm"
+   height="26mm"
+   viewBox="0 0 26 26"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="layer_operations.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="false"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:zoom="0.53291925"
+     inkscape:cx="-138.85781"
+     inkscape:cy="1047.0629"
+     inkscape:window-width="1920"
+     inkscape:window-height="1055"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1">
+    <sodipodi:guide
+       position="32.422002,292.10593"
+       orientation="0,-1"
+       id="guide12636" />
+    <sodipodi:guide
+       position="20.245389,282.10593"
+       orientation="0,-1"
+       id="guide12638" />
+    <sodipodi:guide
+       position="32.422002,302.10593"
+       orientation="0,-1"
+       id="guide12640" />
+    <sodipodi:guide
+       position="32.422002,287.10593"
+       orientation="0,-1"
+       id="guide12642" />
+    <sodipodi:guide
+       position="32.422002,297.10593"
+       orientation="0,-1"
+       id="guide12644" />
+    <sodipodi:guide
+       position="32.422001,307.10594"
+       orientation="0,-1"
+       id="guide17872" />
+    <sodipodi:guide
+       position="173.38904,294.63209"
+       orientation="0,-1"
+       id="guide21280" />
+    <sodipodi:guide
+       position="-4.791667,261.16437"
+       orientation="1,0"
+       id="guide36190" />
+    <sodipodi:guide
+       position="20.666974,293.21171"
+       orientation="0,-1"
+       id="guide40750" />
+    <sodipodi:guide
+       position="299.08788,284.60594"
+       orientation="0,-1"
+       id="guide49539" />
+    <sodipodi:guide
+       position="266.65587,304.60595"
+       orientation="0,-1"
+       id="guide49747" />
+    <sodipodi:guide
+       position="100.59306,208.63116"
+       orientation="0,-1"
+       id="guide49936" />
+    <sodipodi:guide
+       position="26.494582,233.63116"
+       orientation="0,-1"
+       id="guide50047" />
+    <sodipodi:guide
+       position="44.433307,228.63116"
+       orientation="0,-1"
+       id="guide50073" />
+    <sodipodi:guide
+       position="44.433307,223.63116"
+       orientation="0,-1"
+       id="guide50155" />
+    <sodipodi:guide
+       position="44.433307,218.63116"
+       orientation="0,-1"
+       id="guide50157" />
+    <sodipodi:guide
+       position="44.433307,213.63116"
+       orientation="0,-1"
+       id="guide50159" />
+    <sodipodi:guide
+       position="-4.791667,223.63117"
+       orientation="1,0"
+       id="guide52025" />
+    <sodipodi:guide
+       position="221.18146,44.85535"
+       orientation="1,0"
+       id="guide52027" />
+    <sodipodi:guide
+       position="74.720532,203.63116"
+       orientation="0,-1"
+       id="guide52849" />
+    <sodipodi:guide
+       position="74.565342,238.63117"
+       orientation="0,-1"
+       id="guide52851" />
+    <sodipodi:guide
+       position="106.15685,178.84852"
+       orientation="0,-1"
+       id="guide53343" />
+    <sodipodi:guide
+       position="87.987667,173.8485"
+       orientation="0,-1"
+       id="guide53345" />
+    <sodipodi:guide
+       position="87.987667,168.84849"
+       orientation="0,-1"
+       id="guide53347" />
+    <sodipodi:guide
+       position="87.987667,163.84847"
+       orientation="0,-1"
+       id="guide53349" />
+    <sodipodi:guide
+       position="-24.055575,161.34846"
+       orientation="0,-1"
+       id="guide53351" />
+    <sodipodi:guide
+       position="87.987667,153.84846"
+       orientation="0,-1"
+       id="guide53353" />
+    <sodipodi:guide
+       position="87.987667,148.84846"
+       orientation="0,-1"
+       id="guide53355" />
+    <sodipodi:guide
+       position="87.987667,143.84846"
+       orientation="0,-1"
+       id="guide53357" />
+    <sodipodi:guide
+       position="114.15984,127.99137"
+       orientation="0,-1"
+       id="guide53852" />
+    <sodipodi:guide
+       position="47.591877,122.99137"
+       orientation="0,-1"
+       id="guide53958" />
+    <sodipodi:guide
+       position="47.591878,117.99137"
+       orientation="0,-1"
+       id="guide53960" />
+    <sodipodi:guide
+       position="28.429736,113.46011"
+       orientation="0,-1"
+       id="guide53962" />
+    <sodipodi:guide
+       position="47.591877,107.99137"
+       orientation="0,-1"
+       id="guide53964" />
+    <sodipodi:guide
+       position="47.591877,102.99137"
+       orientation="0,-1"
+       id="guide53966" />
+    <sodipodi:guide
+       position="47.591877,97.991369"
+       orientation="0,-1"
+       id="guide53968" />
+    <sodipodi:guide
+       position="47.591878,92.991367"
+       orientation="0,-1"
+       id="guide53992" />
+    <sodipodi:guide
+       position="46.121429,79.855353"
+       orientation="0,-1"
+       id="guide53994" />
+    <sodipodi:guide
+       position="46.121429,74.855351"
+       orientation="0,-1"
+       id="guide53996" />
+    <sodipodi:guide
+       position="46.121429,69.855351"
+       orientation="0,-1"
+       id="guide53998" />
+    <sodipodi:guide
+       position="46.121429,64.855351"
+       orientation="0,-1"
+       id="guide54000" />
+    <sodipodi:guide
+       position="46.121429,59.855351"
+       orientation="0,-1"
+       id="guide54002" />
+    <sodipodi:guide
+       position="46.121429,54.855351"
+       orientation="0,-1"
+       id="guide54004" />
+    <sodipodi:guide
+       position="46.121429,49.855351"
+       orientation="0,-1"
+       id="guide54006" />
+    <sodipodi:guide
+       position="46.121429,44.85535"
+       orientation="0,-1"
+       id="guide54030" />
+    <sodipodi:guide
+       position="50.372051,30.500002"
+       orientation="0,-1"
+       id="guide54032" />
+    <sodipodi:guide
+       position="50.372051,25.500003"
+       orientation="0,-1"
+       id="guide54034" />
+    <sodipodi:guide
+       position="50.372051,20.500002"
+       orientation="0,-1"
+       id="guide54036" />
+    <sodipodi:guide
+       position="50.372051,15.500002"
+       orientation="0,-1"
+       id="guide54038" />
+    <sodipodi:guide
+       position="50.372051,10.500002"
+       orientation="0,-1"
+       id="guide54040" />
+    <sodipodi:guide
+       position="50.372051,5.5000023"
+       orientation="0,-1"
+       id="guide54042" />
+    <sodipodi:guide
+       position="50.372051,0.50000123"
+       orientation="0,-1"
+       id="guide54044" />
+    <sodipodi:guide
+       position="78.752097,0.50000123"
+       orientation="0,-1"
+       id="guide54068" />
+    <sodipodi:guide
+       position="85.821659,-4.4999988"
+       orientation="0,-1"
+       id="guide54070" />
+    <sodipodi:guide
+       position="67.877255,-24.116424"
+       orientation="0,-1"
+       id="guide54072" />
+    <sodipodi:guide
+       position="67.877255,-29.116424"
+       orientation="0,-1"
+       id="guide54074" />
+    <sodipodi:guide
+       position="67.877255,-34.116424"
+       orientation="0,-1"
+       id="guide54076" />
+    <sodipodi:guide
+       position="67.877255,-39.116424"
+       orientation="0,-1"
+       id="guide54078" />
+    <sodipodi:guide
+       position="67.877255,-44.116424"
+       orientation="0,-1"
+       id="guide54080" />
+    <sodipodi:guide
+       position="67.877255,-49.116425"
+       orientation="0,-1"
+       id="guide54082" />
+    <sodipodi:guide
+       position="67.877255,-54.116425"
+       orientation="0,-1"
+       id="guide54084" />
+    <sodipodi:guide
+       position="67.877255,-59.116425"
+       orientation="0,-1"
+       id="guide54108" />
+    <sodipodi:guide
+       position="51.814833,161.34846"
+       orientation="0,-1"
+       id="guide63151" />
+    <sodipodi:guide
+       position="196.86679,221.13116"
+       orientation="0,-1"
+       id="guide65678" />
+    <sodipodi:guide
+       position="204.93006,110.49137"
+       orientation="0,-1"
+       id="guide65680" />
+    <sodipodi:guide
+       position="231.77988,62.355356"
+       orientation="0,-1"
+       id="guide65682" />
+    <sodipodi:guide
+       position="233.42899,13.000007"
+       orientation="0,-1"
+       id="guide65684" />
+    <sodipodi:guide
+       position="108.20833,196.26762"
+       orientation="1,0"
+       id="guide4152" />
+    <sodipodi:guide
+       position="-4.791667,178.84852"
+       orientation="1,0"
+       id="guide60181" />
+    <sodipodi:guide
+       position="56.846871,-99.857483"
+       orientation="0,-1"
+       id="guide80785" />
+    <sodipodi:guide
+       position="92.178001,-277.3237"
+       orientation="0,-1"
+       id="guide2416" />
+  </sodipodi:namedview>
+  <defs
+     id="defs2">
+    <marker
+       style="overflow:visible"
+       id="marker72578"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4) translate(7.4, 1)"
+         style="fill-rule:evenodd;fill:context-stroke;stroke:context-stroke;stroke-width:1.0pt"
+         d="M -2.5,-1.0 C -2.5,1.7600000 -4.7400000,4.0 -7.5,4.0 C -10.260000,4.0 -12.5,1.7600000 -12.5,-1.0 C -12.5,-3.7600000 -10.260000,-6.0 -7.5,-6.0 C -4.7400000,-6.0 -2.5,-3.7600000 -2.5,-1.0 z "
+         id="path72576" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker72568"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4) translate(7.4, 1)"
+         style="fill-rule:evenodd;fill:context-stroke;stroke:context-stroke;stroke-width:1.0pt"
+         d="M -2.5,-1.0 C -2.5,1.7600000 -4.7400000,4.0 -7.5,4.0 C -10.260000,4.0 -12.5,1.7600000 -12.5,-1.0 C -12.5,-3.7600000 -10.260000,-6.0 -7.5,-6.0 C -4.7400000,-6.0 -2.5,-3.7600000 -2.5,-1.0 z "
+         id="path72566" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker72558"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4) translate(7.4, 1)"
+         style="fill-rule:evenodd;fill:context-stroke;stroke:context-stroke;stroke-width:1.0pt"
+         d="M -2.5,-1.0 C -2.5,1.7600000 -4.7400000,4.0 -7.5,4.0 C -10.260000,4.0 -12.5,1.7600000 -12.5,-1.0 C -12.5,-3.7600000 -10.260000,-6.0 -7.5,-6.0 C -4.7400000,-6.0 -2.5,-3.7600000 -2.5,-1.0 z "
+         id="path72556" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker72548"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4) translate(7.4, 1)"
+         style="fill-rule:evenodd;fill:context-stroke;stroke:context-stroke;stroke-width:1.0pt"
+         d="M -2.5,-1.0 C -2.5,1.7600000 -4.7400000,4.0 -7.5,4.0 C -10.260000,4.0 -12.5,1.7600000 -12.5,-1.0 C -12.5,-3.7600000 -10.260000,-6.0 -7.5,-6.0 C -4.7400000,-6.0 -2.5,-3.7600000 -2.5,-1.0 z "
+         id="path72546" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker72538"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4) translate(7.4, 1)"
+         style="fill-rule:evenodd;fill:context-stroke;stroke:context-stroke;stroke-width:1.0pt"
+         d="M -2.5,-1.0 C -2.5,1.7600000 -4.7400000,4.0 -7.5,4.0 C -10.260000,4.0 -12.5,1.7600000 -12.5,-1.0 C -12.5,-3.7600000 -10.260000,-6.0 -7.5,-6.0 C -4.7400000,-6.0 -2.5,-3.7600000 -2.5,-1.0 z "
+         id="path72536" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="DotM"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4) translate(7.4, 1)"
+         style="fill-rule:evenodd;fill:context-stroke;stroke:context-stroke;stroke-width:1.0pt"
+         d="M -2.5,-1.0 C -2.5,1.7600000 -4.7400000,4.0 -7.5,4.0 C -10.260000,4.0 -12.5,1.7600000 -12.5,-1.0 C -12.5,-3.7600000 -10.260000,-6.0 -7.5,-6.0 C -4.7400000,-6.0 -2.5,-3.7600000 -2.5,-1.0 z "
+         id="path72332" />
+    </marker>
+    <rect
+       x="835.96141"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363" />
+    </marker>
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="97.861023"
+       height="57.71632"
+       id="rect9982-0-0-1" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-5" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="126.08312"
+       height="55.662533"
+       id="rect9982-0-0-1-9-5-6" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500-1" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-7" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-2" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-4" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500-1-0" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500-1-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-7-5" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-4-7" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-5-1" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-7-5-7" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-7" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-9" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-6" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8-8" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-9-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-7-5-7-7" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8-1" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500-1-4-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-6-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-4-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-5-3" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-5" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-54" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="261.40524"
+       height="60.435412"
+       id="rect55656-2" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-7" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-6-5" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8-1-9" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-7-6" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-6-5-7" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-7-6" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-2-1" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8-1-6" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500-1-4-0-3" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-5-1-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-7-5-7-9" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-7-6-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-4-7-8" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-1" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-0"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-8" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-7"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-0" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-1" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="126.08312"
+       height="55.662533"
+       id="rect9982-0-0-1-9-5-6-5" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-7"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-6" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="126.08312"
+       height="55.662533"
+       id="rect9982-0-0-1-9-5-6-50" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-6"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-9" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="126.08312"
+       height="55.662533"
+       id="rect9982-0-0-1-9-5-6-50-0" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-4"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-0" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-8" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-0" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-9"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-27" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-9-4"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-27-3" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-0-6" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-22"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-3" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-22-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-3-4" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-9-4-2" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-0-6-7" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-4-6"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-0-9" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-4-6-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-0-9-3" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-4-6-1-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-0-9-3-7" />
+    </marker>
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-5" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-5-9" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-9-1-4-6-1-3-9"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-07-2-0-9-3-7-9" />
+    </marker>
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-1" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-8" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-7" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-2" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-5" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-9" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-9-0" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-7" />
+    </marker>
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-5" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-5-5" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-5-2" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-5-1" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-5-24" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-6" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-6-8" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-6-9" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-6-7" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-6-6" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="97.861023"
+       height="57.71632"
+       id="rect9982-0-0-1-16" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-9-1" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-9-1-0" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-71-9-1-3" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="155.52306"
+       height="41.12207"
+       id="rect36110-6-71-9-1-6" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-7-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path63363-0-1" />
+    </marker>
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8-1-3" />
+    <rect
+       x="56.52734"
+       y="149.08134"
+       width="90.67218"
+       height="59.745777"
+       id="rect2130-2-3-8-1-9-5" />
+    <rect
+       x="157.25272"
+       y="125.75522"
+       width="70.383202"
+       height="39.548599"
+       id="rect5500-1-4-0-9" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-6-5-3" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-6-5-7-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-1-7-6-1" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-7-5" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-7-6-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="126.08312"
+       height="55.662533"
+       id="rect9982-0-0-1-9-5-6-50-8" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="261.40524"
+       height="60.435413"
+       id="rect55656-2-3" />
+    <marker
+       style="overflow:visible"
+       id="marker72548-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(0.4,0,0,0.4,2.96,0.4)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="m -2.5,-1 c 0,2.76 -2.24,5 -5,5 -2.76,0 -5,-2.24 -5,-5 0,-2.76 2.24,-5 5,-5 2.76,0 5,2.24 5,5 z"
+         id="path72546-6" />
+    </marker>
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-5-1-5" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-9" />
+    <rect
+       x="835.96143"
+       y="-445.4115"
+       width="132.34348"
+       height="59.932308"
+       id="rect36110-6-7-9" />
+    <rect
+       x="305.09399"
+       y="221.02193"
+       width="226.52849"
+       height="61.422771"
+       id="rect55656-6-7-0" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="97.861023"
+       height="57.71632"
+       id="rect9982-0-0-1-16-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-1-9-0-6-7-4" />
+    <rect
+       x="243.89275"
+       y="148.11171"
+       width="96.396271"
+       height="29.24638"
+       id="rect9982-0-0-7-6-6" />
+    <marker
+       style="overflow:visible"
+       id="marker72548-5-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(0.4,0,0,0.4,2.96,0.4)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="m -2.5,-1 c 0,2.76 -2.24,5 -5,5 -2.76,0 -5,-2.24 -5,-5 0,-2.76 2.24,-5 5,-5 2.76,0 5,2.24 5,5 z"
+         id="path72546-6-2" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker72548-5-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="DotM"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(0.4,0,0,0.4,2.96,0.4)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="m -2.5,-1 c 0,2.76 -2.24,5 -5,5 -2.76,0 -5,-2.24 -5,-5 0,-2.76 2.24,-5 5,-5 2.76,0 5,2.24 5,5 z"
+         id="path72546-6-8" />
+    </marker>
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-4.791667,-287.36133)">
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 203.49636,554.97415 c 1.36108,25.89915 -51.19218,24.69999 -106.74582,24.46653"
+       id="path63301-63-2-0-2"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 203.49636,554.97415 c -0.54332,35.71088 -76.93573,29.06516 -132.489374,28.8317"
+       id="path63301-63-2-0-24"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <g
+       id="g49972-0"
+       transform="translate(-206.37198,163.13575)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,139.20085,-23.749815)"
+         id="text9980-8-4-3-3-3"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-0)"
+         x="94.633789"
+         y="0"><tspan
+           x="268.90234"
+           y="165.80664"
+           id="tspan7152">skip</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#90c23c;stroke-width:4.64123;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1-5-4"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(9.635555e-4,0.20368562,-0.22791277,5.3841919e-4,242.05016,-115.94597)"
+         inkscape:transform-center-x="-4.0062214"
+         inkscape:transform-center-y="0.0087100743"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.50000001;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.00000003,1.00000003;stroke-opacity:1;stroke-dashoffset:0"
+       d="m 198.72592,164.51286 c 0.19029,25.8571 -113.300573,20.8571 -173.231492,17.35218"
+       id="path63301-63-24"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend)"
+       d="M 0,152.01287 H 225.97313"
+       id="path63301"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-3)"
+       d="M 5.2727231e-8,92.230172 H 225.97313"
+       id="path63301-4"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-7)"
+       d="M 5.4e-6,336.34488 H 225.97313"
+       id="path63301-6"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-1)"
+       d="M -5.4338646e-6,430.683 H 225.97312"
+       id="path63301-9"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-0)"
+       d="M 4e-7,231.95586 H 225.97313"
+       id="path63301-98"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:#e1cd0f;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect4396-4-2"
+       width="25"
+       height="15"
+       x="36.148743"
+       y="144.51285"
+       rx="5.5101066e-07"
+       ry="5.5102919e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-2.0559248,115.4247)"
+       id="text5498-2-4"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect5500-1-4)"
+       x="21.972656"
+       y="0"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="169.1582"
+         y="143.45117"
+         id="tspan7156"><tspan
+           style="text-align:center;text-anchor:middle"
+           id="tspan7154">bias</tspan></tspan></text>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:"
+       d="m 198.72592,164.51286 c -0.26769,16.29488 -83.57889,13.78634 -139.132525,13.55288"
+       id="path63301-63"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker72568)"
+       d="m 47.535935,169.51287 c -0.107222,-5 -13.847692,0.0196 -14.463315,-17.48041"
+       id="path63301-63-4"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <g
+       id="g49941">
+      <rect
+         style="fill:none;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7160"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7158">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7164"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7162">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2"
+       transform="translate(12.51627,73.47477)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
+         id="rect916-6"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7168"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7166">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7172"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7170">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2-1"
+       transform="translate(-1.5446591,133.25747)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7176"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7174">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7180"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7178">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2-1-5"
+       transform="translate(-1.3480403,213.21891)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8-2"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3-1"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3-8)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7184"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7182">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7188"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7186">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2-1-5-2"
+       transform="translate(-3.4630396,317.44695)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8-2-2"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3-1-15"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3-8-1)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7192"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7190">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7196"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7194">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2-1-5-2-5"
+       transform="translate(-0.99458313,412.31092)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8-2-2-0"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3-1-15-0"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3-8-1-6)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7200"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7198">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7204"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7202">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2-1-5-2-2"
+       transform="translate(109.29166,317.44695)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8-2-2-7"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3-1-15-3"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3-8-1-9)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7208"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7206">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7212"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7210">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49941-2-1-5-9"
+       transform="translate(103.17266,213.21891)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8-2-3"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3-1-1"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3-8-8)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7216"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7214">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7220"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7218">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49946">
+      <rect
+         style="fill:none;stroke:#e1cd0f;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4396"
+         width="25"
+         height="15"
+         x="40.087635"
+         y="11.255401"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,1.8829689,-17.832738)"
+         id="text5498"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect5500)"
+         x="21.972656"
+         y="0"><tspan
+           x="169.1582"
+           y="143.45117"
+           id="tspan7224"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7222">bias</tspan></tspan></text>
+    </g>
+    <g
+       id="g49946-0"
+       transform="translate(32.21727,73.474769)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;stroke:#e1cd0f;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
+         id="rect4396-4"
+         width="25"
+         height="15"
+         x="40.087635"
+         y="11.255401"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,1.8829689,-17.832738)"
+         id="text5498-2"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect5500-1)"
+         x="21.972656"
+         y="0"><tspan
+           x="169.1582"
+           y="143.45117"
+           id="tspan7228"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7226">bias</tspan></tspan></text>
+    </g>
+    <g
+       id="g49946-0-2-9"
+       transform="translate(-9.8702382,317.44695)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#e1cd0f;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4396-4-2-0"
+         width="25"
+         height="15"
+         x="40.087635"
+         y="11.255401"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,1.8829689,-17.832738)"
+         id="text5498-2-4-4"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect5500-1-4-0)"
+         x="21.972656"
+         y="0"><tspan
+           x="169.1582"
+           y="143.45117"
+           id="tspan7232"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7230">bias</tspan></tspan></text>
+    </g>
+    <g
+       id="g49946-0-2-9-4"
+       transform="translate(6.3763851,412.31092)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#e1cd0f;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4396-4-2-0-6"
+         width="25"
+         height="15"
+         x="40.087635"
+         y="11.255401"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,1.8829689,-17.832738)"
+         id="text5498-2-4-4-6"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect5500-1-4-0-3)"
+         x="21.972656"
+         y="0"><tspan
+           x="169.1582"
+           y="143.45117"
+           id="tspan7236"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7234">bias</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951">
+      <path
+         style="fill:none;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7240"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7238">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-49"
+       transform="translate(0.77129373,213.21891)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-9"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-0"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-6)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7244"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7242">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-49-7"
+       transform="translate(15.879914,317.44695)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-9-8"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-0-5"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-6-5)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7248"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7246">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-49-7-2"
+       transform="translate(101.47274,317.44695)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-9-8-2"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-0-5-1"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-6-5-7)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7252"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7250">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-4"
+       transform="translate(56.057216,73.474769)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
+         id="path8276-0"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-3"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-7)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7256"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7254">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-4-1"
+       transform="translate(-5.54626,133.25747)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-0-7"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-3-5"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-7-5)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7260"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7258">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-4-1-9"
+       transform="translate(82.752637,133.25747)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-0-7-8"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-3-5-6"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-7-5-7)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7264"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7262">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-4-1-9-5"
+       transform="translate(48.770741,412.31092)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-0-7-8-0"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-3-5-6-6"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-7-5-7-9)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7268"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7266">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-4-1-9-7"
+       transform="translate(106.35824,213.21891)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-0-7-8-3"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-3-5-6-7"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-7-5-7-7)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7272"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7270">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49977">
+      <rect
+         style="fill:#ffffff;stroke:#5e5e5e;stroke-width:1.00037;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
+         id="rect916-4"
+         width="17.431688"
+         height="17.429699"
+         x="185.90253"
+         y="-177.82306"
+         rx="4.9848336e-07"
+         ry="4.9852639e-07"
+         transform="matrix(0.69228626,0.72162299,-0.6944169,0.71957291,0,0)" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,175.31126,-23.697742)"
+         id="text9980-8-4-3-5"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="261.76367"
+           y="165.80664"
+           id="tspan7274">delay</tspan></text>
+    </g>
+    <g
+       id="g2978"
+       transform="translate(4.7625002)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#1a1a1a;stroke-width:1.00037;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-4-4"
+         width="17.431688"
+         height="17.429699"
+         x="236.56821"
+         y="-43.527538"
+         rx="4.9848336e-07"
+         ry="4.9852639e-07"
+         transform="matrix(0.69228626,0.72162299,-0.6944169,0.71957291,0,0)" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,117.12933,109.4992)"
+         id="text9980-8-4-3-5-8"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1-7)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="261.76367"
+           y="165.80664"
+           id="tspan7276">delay</tspan></text>
+    </g>
+    <g
+       id="g49977-0-3"
+       transform="translate(-39.572601,317.50747)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#5e5e5e;stroke-width:1.00037;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-4-4-0"
+         width="17.431999"
+         height="17.429699"
+         x="185.90253"
+         y="-177.82306"
+         rx="4.9848336e-07"
+         ry="4.9852639e-07"
+         transform="matrix(0.69228626,0.72162299,-0.6944169,0.71957291,0,0)" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,175.31126,-23.697742)"
+         id="text9980-8-4-3-5-8-2"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1-7-6)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="261.76367"
+           y="165.80664"
+           id="tspan7278">delay</tspan></text>
+    </g>
+    <g
+       id="g49977-0-3-8"
+       transform="translate(-82.208592,411.90901)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#5e5e5e;stroke-width:1.00037;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-4-4-0-3"
+         width="17.431688"
+         height="17.429699"
+         x="185.90253"
+         y="-177.82306"
+         rx="4.9848336e-07"
+         ry="4.9852639e-07"
+         transform="matrix(0.69228626,0.72162299,-0.6944169,0.71957291,0,0)" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,175.31126,-23.697742)"
+         id="text9980-8-4-3-5-8-2-7"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1-7-6-0)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="261.76367"
+           y="165.80664"
+           id="tspan7280">delay</tspan></text>
+    </g>
+    <g
+       id="g53706">
+      <path
+         style="fill:none;stroke:#52c0d7;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-3"
+         sodipodi:type="arc"
+         sodipodi:cx="289.14917"
+         sodipodi:cy="-11.255401"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         transform="scale(1,-1)"
+         d="m 276.70777,-11.255401 a 12.441403,15.091851 0 0 1 12.4414,-15.091851 12.441403,15.091851 0 0 1 12.4414,15.091851 h -12.4414 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,211.89858,-23.724207)"
+         id="text9980-8-4-3-3-6"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.6377"
+           y="165.80664"
+           id="tspan7282">tstep</tspan></text>
+    </g>
+    <g
+       id="g53706-3"
+       transform="translate(-150.18582,133.25744)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#52c0d7;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-3-3"
+         sodipodi:type="arc"
+         sodipodi:cx="289.14917"
+         sodipodi:cy="-11.255401"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         transform="scale(1,-1)"
+         d="m 276.70777,-11.255401 a 12.441403,15.091851 0 0 1 12.4414,-15.091851 12.441403,15.091851 0 0 1 12.4414,15.091851 h -12.4414 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,211.89858,-23.724207)"
+         id="text9980-8-4-3-3-6-3"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-1)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.6377"
+           y="165.80664"
+           id="tspan7284">tstep</tspan></text>
+    </g>
+    <g
+       id="g53706-3-2"
+       transform="translate(-191.99242,412.31092)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#52c0d7;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-3-3-5"
+         sodipodi:type="arc"
+         sodipodi:cx="289.14917"
+         sodipodi:cy="-11.255401"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         transform="scale(1,-1)"
+         d="m 276.70777,-11.255401 a 12.441403,15.091851 0 0 1 12.4414,-15.091851 12.441403,15.091851 0 0 1 12.4414,15.091851 h -12.4414 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,211.89858,-23.724207)"
+         id="text9980-8-4-3-3-6-3-8"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-1-0)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.6377"
+           y="165.80664"
+           id="tspan7286">tstep</tspan></text>
+    </g>
+    <g
+       id="g49957"
+       transform="matrix(0.99925192,0,0,1.0364692,0.09262783,-0.70850273)">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,52.955438,-23.637531)"
+         id="text9980-8"
+         style="font-weight:bold;font-size:19.6523px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0)"
+         x="66.923828"
+         y="0"><tspan
+           x="243.89258"
+           y="165.49901"
+           id="tspan7288">pool</tspan></text>
+      <ellipse
+         style="fill:none;stroke:#ed8d4c;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path12692"
+         ry="11.796825"
+         rx="11.826192"
+         cy="18.790033"
+         cx="123.82055" />
+    </g>
+    <g
+       id="g49957-3"
+       transform="matrix(0.99925192,0,0,1.0364692,69.232778,72.513854)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <ellipse
+         style="fill:#ffffff;stroke:#ed8d4c;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
+         id="path12692-6"
+         ry="11.796825"
+         rx="11.826192"
+         cy="18.790033"
+         cx="123.82055" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,52.955438,-23.637531)"
+         id="text9980-8-8"
+         style="font-weight:bold;font-size:19.6523px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-4)"
+         x="66.923828"
+         y="0"><tspan
+           x="243.89258"
+           y="165.49901"
+           id="tspan7290">pool</tspan></text>
+    </g>
+    <g
+       id="g49957-3-1"
+       transform="matrix(0.99925192,0,0,1.0364692,-14.748616,132.50855)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#ed8d4c;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path12692-6-9"
+         ry="11.796825"
+         rx="11.826192"
+         cy="18.790033"
+         cx="123.82055" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,52.955438,-23.637531)"
+         id="text9980-8-8-6"
+         style="font-weight:bold;font-size:19.6523px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-4-7)"
+         x="66.923828"
+         y="0"><tspan
+           x="243.89258"
+           y="165.49901"
+           id="tspan7292">pool</tspan></text>
+    </g>
+    <g
+       id="g49957-3-1-2"
+       transform="matrix(0.99925192,0,0,1.0364692,82.052051,411.03821)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#ed8d4c;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path12692-6-9-0"
+         ry="11.796825"
+         rx="11.826192"
+         cy="18.790033"
+         cx="123.82055" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,52.955438,-23.637531)"
+         id="text9980-8-8-6-1"
+         style="font-weight:bold;font-size:19.6523px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-4-7-8)"
+         x="66.923828"
+         y="0"><tspan
+           x="243.89258"
+           y="165.49901"
+           id="tspan7294">pool</tspan></text>
+    </g>
+    <g
+       id="g49962">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7296">norm</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052" />
+    </g>
+    <g
+       id="g30415">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,276.12,-26.276256)"
+         id="text9980-8-4-3-5-2"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1-5)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="255.48926"
+           y="165.80664"
+           id="tspan7298">record</tspan></text>
+      <g
+         id="g49962-8"
+         transform="matrix(1,0,0,-1,196.13142,37.510804)">
+        <path
+           sodipodi:type="star"
+           style="fill:none;stroke:#b8b8b8;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+           id="path15525-168"
+           inkscape:flatsided="true"
+           sodipodi:sides="3"
+           sodipodi:cx="660.96497"
+           sodipodi:cy="118.13065"
+           sodipodi:r1="70.653236"
+           sodipodi:r2="35.326618"
+           sodipodi:arg1="-1.5693623"
+           sodipodi:arg2="-0.52216474"
+           inkscape:rounded="0"
+           inkscape:randomized="0"
+           transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+           inkscape:transform-center-x="0.012080891"
+           inkscape:transform-center-y="-3.3223052"
+           d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      </g>
+    </g>
+    <g
+       id="g30415-6"
+       transform="translate(-173.2762,446.82877)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,276.12,-26.276256)"
+         id="text9980-8-4-3-5-2-0"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1-5-9)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="255.48926"
+           y="165.80664"
+           id="tspan7300">record</tspan></text>
+      <g
+         id="g49962-8-6"
+         transform="matrix(1,0,0,-1,196.13142,37.510804)">
+        <path
+           sodipodi:type="star"
+           style="fill:none;stroke:#b8b8b8;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+           id="path15525-168-4"
+           inkscape:flatsided="true"
+           sodipodi:sides="3"
+           sodipodi:cx="660.96497"
+           sodipodi:cy="118.13065"
+           sodipodi:r1="70.653236"
+           sodipodi:r2="35.326618"
+           sodipodi:arg1="-1.5693623"
+           sodipodi:arg2="-0.52216474"
+           inkscape:rounded="0"
+           inkscape:randomized="0"
+           transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+           inkscape:transform-center-x="0.012080891"
+           inkscape:transform-center-y="-3.3223052"
+           d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      </g>
+    </g>
+    <g
+       id="g49962-2"
+       transform="translate(-85.395707,317.44696)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-16"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4-4"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-7)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7302">norm</tspan></text>
+    </g>
+    <g
+       id="g49962-2-4"
+       transform="translate(-0.08226291,317.44696)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-16-9"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4-4-7"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-7-6)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7304">norm</tspan></text>
+    </g>
+    <g
+       id="g49962-9"
+       transform="translate(-106.30226,213.21891)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-0"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4-6"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-9)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7306">norm</tspan></text>
+    </g>
+    <g
+       id="g49962-9-8"
+       transform="translate(-0.22265171,213.21892)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-0-6"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4-6-9"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-9-4)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7308">norm</tspan></text>
+    </g>
+    <g
+       id="g49967">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,113.65475,-24.408328)"
+         id="text9980-8-4-3"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1)"
+         x="94.633789"
+         y="0"><tspan
+           x="267.75"
+           y="161.80664"
+           id="tspan7310">feed
+</tspan><tspan
+           x="266.33887"
+           y="178.80664"
+           id="tspan7312">back</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#4c47a5;stroke-width:4.64209;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(-9.6127911e-4,0.204092,0.22737433,5.394934e-4,164.82274,-116.21472)"
+         inkscape:transform-center-x="3.9967605"
+         inkscape:transform-center-y="0.0087246707"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <g
+       id="g49967-3"
+       transform="translate(-142.11433,442.73878)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,113.65475,-24.408328)"
+         id="text9980-8-4-3-0"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-16)"
+         x="94.633789"
+         y="0"><tspan
+           x="267.75"
+           y="161.80664"
+           id="tspan7314">feed
+</tspan><tspan
+           x="266.33887"
+           y="178.80664"
+           id="tspan7316">back</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#4c47a5;stroke-width:4.64209;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1-2"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(-9.6127911e-4,0.204092,0.22737433,5.394934e-4,164.82274,-116.21472)"
+         inkscape:transform-center-x="3.9967605"
+         inkscape:transform-center-y="0.0087246707"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <g
+       id="g49967-3-2"
+       transform="translate(-128.0338,557.32504)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,113.65475,-24.408328)"
+         id="text9980-8-4-3-0-5"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-16-4)"
+         x="94.633789"
+         y="0"><tspan
+           x="267.75"
+           y="161.80664"
+           id="tspan7318">feed
+</tspan><tspan
+           x="266.33887"
+           y="178.80664"
+           id="tspan7320">back</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#4c47a5;stroke-width:4.64209;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1-2-2"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(-9.6127911e-4,0.204092,0.22737433,5.394934e-4,164.82274,-116.21472)"
+         inkscape:transform-center-x="3.9967605"
+         inkscape:transform-center-y="0.0087246707"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <g
+       id="g49972">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,139.20085,-23.749815)"
+         id="text9980-8-4-3-3"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9)"
+         x="94.633789"
+         y="0"><tspan
+           x="268.90234"
+           y="165.80664"
+           id="tspan7322">skip</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#90c23c;stroke-width:4.64123;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1-5"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(9.635555e-4,0.20368562,-0.22791277,5.3841919e-4,242.05016,-115.94597)"
+         inkscape:transform-center-x="-4.0062214"
+         inkscape:transform-center-y="0.0087100743"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <g
+       id="g12390">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#7a35c4;stroke-width:7.75541;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path44504"
+         inkscape:flatsided="true"
+         sodipodi:sides="5"
+         sodipodi:cx="1240.5131"
+         sodipodi:cy="42.540096"
+         sodipodi:r1="100.05138"
+         sodipodi:r2="80.943268"
+         sodipodi:arg1="0.85644341"
+         sodipodi:arg2="1.4847619"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.12592206,0.01019177,-0.01035097,0.12398546,163.39163,0.79785553)"
+         inkscape:transform-center-x="0.015699605"
+         inkscape:transform-center-y="-1.1738617"
+         d="m 1306.0596,118.13064 -117.1824,10.10667 -45.8234,-108.323971 88.862,-77.054561 100.7431,60.7016323 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,237.7081,-24.93071)"
+         id="text9980-8-4-3-3-6-5"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-6)"
+         x="94.633789"
+         y="0"><tspan
+           x="273.0918"
+           y="161.80664"
+           id="tspan7324">recur-
+</tspan><tspan
+           x="275.3916"
+           y="178.80664"
+           id="tspan7326">rence</tspan></text>
+    </g>
+    <g
+       id="g12390-65"
+       transform="translate(-205.12016,349.93883)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#7a35c4;stroke-width:7.75541;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path44504-0"
+         inkscape:flatsided="true"
+         sodipodi:sides="5"
+         sodipodi:cx="1240.5131"
+         sodipodi:cy="42.540096"
+         sodipodi:r1="100.05138"
+         sodipodi:r2="80.943268"
+         sodipodi:arg1="0.85644341"
+         sodipodi:arg2="1.4847619"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.12592206,0.01019177,-0.01035097,0.12398546,163.39163,0.79785553)"
+         inkscape:transform-center-x="0.015699605"
+         inkscape:transform-center-y="-1.1738617"
+         d="m 1306.0596,118.13064 -117.1824,10.10667 -45.8234,-108.323971 88.862,-77.054561 100.7431,60.7016323 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,237.7081,-24.93071)"
+         id="text9980-8-4-3-3-6-5-8"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-6-50)"
+         x="94.633789"
+         y="0"><tspan
+           x="273.0918"
+           y="161.80664"
+           id="tspan7328">recur-
+</tspan><tspan
+           x="275.3916"
+           y="178.80664"
+           id="tspan7330">rence</tspan></text>
+    </g>
+    <g
+       id="g12390-6"
+       transform="translate(-271.57254,163.24429)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#7a35c4;stroke-width:7.75541;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path44504-5"
+         inkscape:flatsided="true"
+         sodipodi:sides="5"
+         sodipodi:cx="1240.5131"
+         sodipodi:cy="42.540096"
+         sodipodi:r1="100.05138"
+         sodipodi:r2="80.943268"
+         sodipodi:arg1="0.85644341"
+         sodipodi:arg2="1.4847619"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.12592206,0.01019177,-0.01035097,0.12398546,163.39163,0.79785553)"
+         inkscape:transform-center-x="0.015699605"
+         inkscape:transform-center-y="-1.1738617"
+         d="m 1306.0596,118.13064 -117.1824,10.10667 -45.8234,-108.323971 88.862,-77.054561 100.7431,60.7016323 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,237.7081,-24.93071)"
+         id="text9980-8-4-3-3-6-5-9"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-6-5)"
+         x="94.633789"
+         y="0"><tspan
+           x="273.0918"
+           y="161.80664"
+           id="tspan7332">recur-
+</tspan><tspan
+           x="275.3916"
+           y="178.80664"
+           id="tspan7334">rence</tspan></text>
+    </g>
+    <rect
+       style="fill:none;stroke:#666666;stroke-width:0.362631;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.362631, 2.1758;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect52131"
+       width="225.99258"
+       height="34.812065"
+       x="-0.019448647"
+       y="74.74366"
+       rx="4.984829e-07"
+       ry="4.9852525e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <rect
+       style="fill:none;stroke:#666666;stroke-width:0.49619;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.49619, 2.97715;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect52131-2"
+       width="225.83955"
+       height="65.221474"
+       x="0.06678737"
+       y="134.57961"
+       rx="4.984829e-07"
+       ry="4.9852525e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,13.074342,8.2342603)"
+       id="text55654"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7336">AlexNet</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-85.227272,5.3228148)"
+       id="text55654-5"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-6)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7340"><tspan
+           style="font-weight:normal;-inkscape-font-specification:sans-serif"
+           id="tspan7338">A)</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-86.128955,65.125102)"
+       id="text55654-5-5"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-6-8)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7344"><tspan
+           style="font-weight:normal;-inkscape-font-specification:sans-serif"
+           id="tspan7342">D)</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,8.9321282,68.086594)"
+       id="text55654-6"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-5)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7346">CordsNet</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,8.2220284,147.78126)"
+       id="text55654-2"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-54)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7348">ResNet18</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,5.3119585,252.40845)"
+       id="text55654-1"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-2)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7350">CORnet-RT</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,5.8024584,338.34089)"
+       id="text55654-1-5"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-2-1)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7352">DyRCNNx4</tspan></text>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:"
+       d="m 212.57296,348.82363 c -0.26769,16.29488 -30.97355,16.17011 -86.52719,15.93665"
+       id="path63301-63-2"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1, 1;stroke-dashoffset:0;stroke-opacity:1"
+       d="M 169.93675,443.22494 C 169.33931,473.7349 98.187387,483.8109 57.984793,473.98208"
+       id="path63301-63-2-3-8"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1, 1;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker72538)"
+       d="m 57.906875,449.05599 c 8.905574,-6.93051 17.007166,-6.23112 17.556172,-18.44705"
+       id="path63301-63-2-3-8-3"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#DotM)"
+       d="m 169.93675,443.22494 c 0.19659,9.35823 -89.297616,32.32527 -88.382876,-12.48516"
+       id="path63301-63-2-3-8-3-9"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-9-1-4-6-1-3-9)"
+       d="m 152.55246,430.85974 c 0.27894,18.95897 27.06305,15.00678 27.7249,26.65094"
+       id="path63301-63-2-3-8-3-9-0"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker72548)"
+       d="M 113.98831,356.20741 114.095,336.27152"
+       id="path63301-63-2-1"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1, 1;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker72578)"
+       d="m 1.3011847,169.4281 c -0.107222,-5 1.0585604,-2.69046 0.8139955,-17.37196"
+       id="path63301-63-4-8"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <g
+       id="g49972-0-0"
+       transform="translate(-97.92609,243.10841)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,139.20085,-23.749815)"
+         id="text9980-8-4-3-3-3-8"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-0-6)"
+         x="94.633789"
+         y="0"><tspan
+           x="268.90234"
+           y="165.80664"
+           id="tspan7354">skip</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#90c23c;stroke-width:4.64123;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1-5-4-9"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(9.635555e-4,0.20368562,-0.22791277,5.3841919e-4,242.05016,-115.94597)"
+         inkscape:transform-center-x="-4.0062214"
+         inkscape:transform-center-y="0.0087100743"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <g
+       id="g49972-0-0-5"
+       transform="translate(-149.76629,442.76364)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,139.20085,-23.749815)"
+         id="text9980-8-4-3-3-3-8-7"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-0-6-7)"
+         x="94.633789"
+         y="0"><tspan
+           x="268.90234"
+           y="165.80664"
+           id="tspan7356">skip</tspan></text>
+      <path
+         sodipodi:type="star"
+         style="fill:none;stroke:#90c23c;stroke-width:4.64123;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-1-5-4-9-1"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(9.635555e-4,0.20368562,-0.22791277,5.3841919e-4,242.05016,-115.94597)"
+         inkscape:transform-center-x="-4.0062214"
+         inkscape:transform-center-y="0.0087100743"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+    </g>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.50000001;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.00000003,1.00000003;stroke-opacity:1;stroke-dashoffset:0"
+       d="M 1.7727966,232.17163 C 1.4954137,266.50825 27.553826,261.06256 109.28503,261.05273"
+       id="path63301-63-2-18"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1, 1;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker72558)"
+       d="m 133.94032,261.8377 c 80.0045,-0.12133 82.09724,-2.36986 81.52926,-29.86843"
+       id="path63301-63-2-18-2"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <g
+       id="g49962-9-8-4"
+       transform="translate(-0.70368262,243.49277)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-0-6-5"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4-6-9-1"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-9-4-2)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7358">norm</tspan></text>
+    </g>
+    <g
+       id="g12390-65-4"
+       transform="translate(-220.96639,442.38206)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#7a35c4;stroke-width:7.75541;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path44504-0-2"
+         inkscape:flatsided="true"
+         sodipodi:sides="5"
+         sodipodi:cx="1240.5131"
+         sodipodi:cy="42.540096"
+         sodipodi:r1="100.05138"
+         sodipodi:r2="80.943268"
+         sodipodi:arg1="0.85644341"
+         sodipodi:arg2="1.4847619"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.12592206,0.01019177,-0.01035097,0.12398546,163.39163,0.79785553)"
+         inkscape:transform-center-x="0.015699605"
+         inkscape:transform-center-y="-1.1738617"
+         d="m 1306.0596,118.13064 -117.1824,10.10667 -45.8234,-108.323971 88.862,-77.054561 100.7431,60.7016323 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,237.7081,-24.93071)"
+         id="text9980-8-4-3-3-6-5-8-7"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-6-50-0)"
+         x="94.633789"
+         y="0"><tspan
+           x="273.0918"
+           y="161.80664"
+           id="tspan7360">recur-
+</tspan><tspan
+           x="275.3916"
+           y="178.80664"
+           id="tspan7362">rence</tspan></text>
+    </g>
+    <rect
+       style="fill:none;stroke:#666666;stroke-width:0.49619;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.49619, 2.97715;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect52131-2-6"
+       width="225.83955"
+       height="65.221474"
+       x="0.051830504"
+       y="214.23579"
+       rx="4.984829e-07"
+       ry="4.9852525e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <rect
+       style="fill:none;stroke:#666666;stroke-width:0.49619;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.49619, 2.97715;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect52131-2-7"
+       width="225.83955"
+       height="65.221474"
+       x="0.061693825"
+       y="318.84186"
+       rx="4.984829e-07"
+       ry="4.9852525e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <rect
+       style="fill:none;stroke:#666666;stroke-width:0.525296;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.525296, 3.15179;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect52131-2-0"
+       width="225.81044"
+       height="73.107056"
+       x="-0.16238643"
+       y="404.79556"
+       rx="4.984829e-07"
+       ry="4.9852525e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-9.0567214,264.16824)"
+       id="text36108"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7366"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7364">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-2.2231076,186.98302)"
+       id="text36108-6"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-5)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_alexnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7368">x5</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-2.1329845,246.73034)"
+       id="text36108-6-4"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-5-5)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7370">x8</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-2.1329845,325.53644)"
+       id="text36108-6-2"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-5-2)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7372">x4</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-2.1227006,431.03885)"
+       id="text36108-6-7"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-5-1)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7374">x4</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-51.399967,286.9922)"
+       id="text36108-4"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-1)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7378"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7376">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-34.930714,293.0207)"
+       id="text36108-9"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-8)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7382"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7380">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-36.114411,474.46529)"
+       id="text36108-7"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7386"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7384">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-4.9032071,460.83159)"
+       id="text36108-7-3"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-7)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7390"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7388">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-41.080009,541.18522)"
+       id="text36108-7-2"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7394"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7392">+t_ff</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-95.771039,582.9815)"
+       id="text36108-7-2-1"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-2)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7398"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7396">+t_ff</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-96.114726,567.64451)"
+       id="text36108-7-2-0"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-5)"
+       inkscape:transform-center-y="1.0466396"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7402"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7400">+t_rc</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-134.97676,557.03957)"
+       id="text36108-7-2-04"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-9)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7406"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7404">~dt/tau</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-191.67575,526.0152)"
+       id="text36108-7-2-04-5"
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold Italic';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-9-1);fill:#666666;fill-opacity:0.7"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7408">dendritic</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-135.12314,525.62511)"
+       id="text36108-7-2-04-5-0"
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold Italic';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-9-1-0);fill:#666666;fill-opacity:0.7"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7410">somatic</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-83.079651,525.33711)"
+       id="text36108-7-2-04-5-4"
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold Italic';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-9-1-3);fill:#666666;fill-opacity:0.7"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7412">axonal</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-41.463874,525.50594)"
+       id="text36108-7-2-04-5-6"
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold Italic';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-9-1-6);fill:#666666;fill-opacity:0.7"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7414">complex cells</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-93.407358,278.30482)"
+       id="text36108-7-2-04-1"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-71-9-0)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cordsnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7418"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7416">~dt/tau</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-1.7794358,516.60762)"
+       id="text36108-6-1"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-5-24)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7420">x4</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-85.385687,144.50385)"
+       id="text55654-5-2"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-6-9)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_resnet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7424"><tspan
+           style="font-weight:normal;-inkscape-font-specification:sans-serif"
+           id="tspan7422">C)</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-85.055194,249.64489)"
+       id="text55654-5-3"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-6-7)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_cornet.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7428"><tspan
+           style="font-weight:normal;-inkscape-font-specification:sans-serif"
+           id="tspan7426">B)</tspan></tspan></text>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-7-1)"
+       d="M -0.03666556,542.77834 H 225.93647"
+       id="path63301-6-7"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <g
+       id="g49941-2-1-5-2-6"
+       transform="translate(-3.4997105,523.88041)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#2e9529;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-6-8-2-2-3"
+         width="25"
+         height="25"
+         x="6.2862501"
+         y="6.2554002"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,-7.9985647,-24.666497)"
+         id="text2128-9-3-1-15-7"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect2130-2-3-8-1-3)"
+         x="25.859375"
+         y="0"><tspan
+           x="76.790039"
+           y="162.77734"
+           id="tspan7432"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7430">feed
+</tspan></tspan><tspan
+           x="57.634766"
+           y="179.77734"
+           id="tspan7436"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7434">forward</tspan></tspan></text>
+    </g>
+    <g
+       id="g49946-0-2-9-0"
+       transform="translate(-9.9069083,523.88041)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#e1cd0f;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect4396-4-2-0-65"
+         width="25"
+         height="15"
+         x="40.087635"
+         y="11.255401"
+         rx="5.5101066e-07"
+         ry="5.5102919e-07" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,1.8829689,-17.832738)"
+         id="text5498-2-4-4-0"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect5500-1-4-0-9)"
+         x="21.972656"
+         y="0"><tspan
+           x="169.1582"
+           y="143.45117"
+           id="tspan7440"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7438">bias</tspan></tspan></text>
+    </g>
+    <g
+       id="g49951-49-7-8"
+       transform="translate(46.372995,523.54757)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:#d03535;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path8276-9-8-1"
+         sodipodi:type="arc"
+         sodipodi:cx="85.448242"
+         sodipodi:cy="26.255402"
+         sodipodi:rx="12.441403"
+         sodipodi:ry="15.091851"
+         sodipodi:start="3.1415927"
+         sodipodi:end="0"
+         sodipodi:arc-type="slice"
+         d="M 73.006839,26.255402 A 12.441403,15.091851 0 0 1 85.448242,11.16355 12.441403,15.091851 0 0 1 97.889646,26.255402 H 85.448242 Z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,8.2355496,-23.73341)"
+         id="text9980-0-5-2"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-6-5-3)"
+         x="66.923828"
+         y="0"><tspan
+           x="257.00781"
+           y="165.80664"
+           id="tspan7444"><tspan
+             style="text-align:center;text-anchor:middle"
+             id="tspan7442">nonlin</tspan></tspan></text>
+    </g>
+    <g
+       id="g49977-0-3-1"
+       transform="translate(-48.649199,523.65799)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke:#5e5e5e;stroke-width:1.00037;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="rect916-4-4-0-0"
+         width="17.431999"
+         height="17.429699"
+         x="185.90253"
+         y="-177.82306"
+         rx="4.9848336e-07"
+         ry="4.9852639e-07"
+         transform="matrix(0.69228626,0.72162299,-0.6944169,0.71957291,0,0)" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,175.31126,-23.697742)"
+         id="text9980-8-4-3-5-8-2-4"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-1-7-6-1)"
+         x="94.633789"
+         y="0"
+         inkscape:transform-center-x="-1.0937093"><tspan
+           x="261.76367"
+           y="165.80664"
+           id="tspan7446">delay</tspan></text>
+    </g>
+    <g
+       id="g12390-65-8"
+       transform="translate(-231.88999,556.93116)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#7a35c4;stroke-width:7.75541;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path44504-0-0"
+         inkscape:flatsided="true"
+         sodipodi:sides="5"
+         sodipodi:cx="1240.5131"
+         sodipodi:cy="42.540096"
+         sodipodi:r1="100.05138"
+         sodipodi:r2="80.943268"
+         sodipodi:arg1="0.85644341"
+         sodipodi:arg2="1.4847619"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.12592206,0.01019177,-0.01035097,0.12398546,163.39163,0.79785553)"
+         inkscape:transform-center-x="0.015699605"
+         inkscape:transform-center-y="-1.1738617"
+         d="m 1306.0596,118.13064 -117.1824,10.10667 -45.8234,-108.323971 88.862,-77.054561 100.7431,60.7016323 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,237.7081,-24.93071)"
+         id="text9980-8-4-3-3-6-5-8-3"
+         style="font-weight:bold;font-size:20px;line-height:0.85;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-5-6-50-8)"
+         x="94.633789"
+         y="0"><tspan
+           x="273.0918"
+           y="161.80664"
+           id="tspan7448">recur-
+</tspan><tspan
+           x="275.3916"
+           y="178.80664"
+           id="tspan7450">rence</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,23.266963,458.84191)"
+       id="text55654-1-7"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-2-3)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7452">BLT</tspan></text>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 203.49636,554.97415 c -0.26769,16.29488 -18.8501,20.50039 -74.40374,20.26693"
+       id="path63301-63-2-0"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker72548-5)"
+       d="M 113,567.00103 V 542.58281"
+       id="path63301-63-2-1-0"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <rect
+       style="fill:none;stroke:#666666;stroke-width:0.49619;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.49619, 2.97715;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect52131-2-7-3"
+       width="225.83955"
+       height="65.221474"
+       x="0.025022773"
+       y="525.27533"
+       rx="4.984829e-07"
+       ry="4.9852525e-07"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-2.1593715,637.47231)"
+       id="text36108-6-7-4"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-5-1-5)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7454">x6</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-38.796916,680.89875)"
+       id="text36108-7-9"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-9)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7458"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7456">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-6.5273781,663.56086)"
+       id="text36108-7-3-2"
+       style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect36110-6-7-9)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="835.96094"
+         y="-427.7168"
+         id="tspan7462"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#666666"
+           id="tspan7460">+dt</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-85.091864,456.07835)"
+       id="text55654-5-3-7"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-6-7-0)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7466"><tspan
+           style="font-weight:normal;-inkscape-font-specification:sans-serif"
+           id="tspan7464">E)</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,-85.095477,335.03343)"
+       id="text55654-5-4"
+       style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect55656-6-6)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_dyrcnn.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300"><tspan
+         x="305.09375"
+         y="250.51364"
+         id="tspan7470"><tspan
+           style="font-weight:normal;-inkscape-font-specification:sans-serif"
+           id="tspan7468">F)</tspan></tspan></text>
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker72548-5-2)"
+       d="m 87.218485,563.19974 0,-20.71403"
+       id="path63301-63-2-1-0-3"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <path
+       style="fill:none;stroke:#666666;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker72548-5-1)"
+       d="M 65.156922,567.17163 V 542.75341"
+       id="path63301-63-2-1-0-34"
+       sodipodi:nodetypes="cc"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300" />
+    <g
+       id="g49972-0-0-5-4"
+       transform="translate(-102.77379,556.51179)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;stroke:#90c23c;stroke-width:4.64123;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
+         id="path15525-1-5-4-9-1-8"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(9.635555e-4,0.20368562,-0.22791277,5.3841919e-4,242.05016,-115.94597)"
+         inkscape:transform-center-x="-4.0062214"
+         inkscape:transform-center-y="0.0087100743"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,139.20085,-23.749815)"
+         id="text9980-8-4-3-3-3-8-7-3"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-1-9-0-6-7-4)"
+         x="94.633789"
+         y="0"><tspan
+           x="268.90234"
+           y="165.80664"
+           id="tspan7472">skip</tspan></text>
+    </g>
+    <g
+       id="g49962-2-4-0"
+       transform="translate(11.897144,523.94526)"
+       inkscape:export-filename="/home/rgutzen/Projects/rhythmic_visual_attention/reports/figures/sketches/ordering_blt.png"
+       inkscape:export-xdpi="300"
+       inkscape:export-ydpi="300">
+      <path
+         sodipodi:type="star"
+         style="fill:#ffffff;fill-opacity:1;stroke:#c53d96;stroke-width:4.71591;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path15525-16-9-8"
+         inkscape:flatsided="true"
+         sodipodi:sides="3"
+         sodipodi:cx="660.96497"
+         sodipodi:cy="118.13065"
+         sodipodi:r1="70.653236"
+         sodipodi:r2="35.326618"
+         sodipodi:arg1="-1.5693623"
+         sodipodi:arg2="-0.52216474"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         transform="matrix(0.23846276,0,0,0.18855928,-0.24254911,-2.6969305)"
+         inkscape:transform-center-x="0.012080891"
+         inkscape:transform-center-y="-3.3223052"
+         d="m 661.06628,47.47749 61.03546,106.06749 -122.37487,-0.17549 z" />
+      <text
+         xml:space="preserve"
+         transform="matrix(0.26458333,0,0,0.26458333,80.194047,-23.733094)"
+         id="text9980-8-4-4-7-9"
+         style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect9982-0-0-7-6-6)"
+         x="94.633789"
+         y="0"><tspan
+           x="262.75"
+           y="165.80664"
+           id="tspan7474">norm</tspan></text>
+    </g>
+  </g>
+</svg>

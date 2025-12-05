@@ -1,0 +1,2955 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 800 600"
+   version="1.1"
+   id="svg169"
+   sodipodi:docname="rcnn_architecture..svg"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview171"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     showgrid="false"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:zoom="1.4516667"
+     inkscape:cx="314.81056"
+     inkscape:cy="-248.33525"
+     inkscape:window-width="1920"
+     inkscape:window-height="1060"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg169">
+    <sodipodi:guide
+       position="-119.3542,723.19713"
+       orientation="0,-1"
+       id="guide1208" />
+    <sodipodi:guide
+       position="-391.94003,919.31295"
+       orientation="0,-1"
+       id="guide1581" />
+    <sodipodi:guide
+       position="-52.909156,820.07713"
+       orientation="0,-1"
+       id="guide1663" />
+    <sodipodi:guide
+       position="-414.49017,1160.6494"
+       orientation="0,-1"
+       id="guide7860" />
+    <sodipodi:guide
+       position="-782.54879,613.77727"
+       orientation="1,0"
+       id="guide1365" />
+    <sodipodi:guide
+       position="-17.388226,819.56025"
+       orientation="0,-1"
+       id="guide1367" />
+    <sodipodi:guide
+       position="-243.68853,798.64159"
+       orientation="0,-1"
+       id="guide12223" />
+    <sodipodi:guide
+       position="214.81108,875.69858"
+       orientation="1,0"
+       id="guide20140" />
+    <sodipodi:guide
+       position="-415.59671,888.40024"
+       orientation="1,0"
+       id="guide27786" />
+    <sodipodi:guide
+       position="488.82182,1013.4106"
+       orientation="0,-1"
+       id="guide27963" />
+    <sodipodi:guide
+       position="462.22732,955.4535"
+       orientation="1,0"
+       id="guide28155" />
+    <sodipodi:guide
+       position="365.75619,819.56025"
+       orientation="1,0"
+       id="guide28233" />
+    <sodipodi:guide
+       position="-428.81047,864.92947"
+       orientation="0,-1"
+       id="guide35600" />
+    <sodipodi:guide
+       position="-418.90597,841.60158"
+       orientation="0,-1"
+       id="guide36197" />
+    <sodipodi:guide
+       position="-214.32398,798.64159"
+       orientation="0,-1"
+       id="guide64248" />
+    <sodipodi:guide
+       position="-232.83378,786.55929"
+       orientation="0,-1"
+       id="guide64250" />
+    <sodipodi:guide
+       position="673.31348,862.95746"
+       orientation="1,0"
+       id="guide120099" />
+    <sodipodi:guide
+       position="462.22732,620.6659"
+       orientation="0,-1"
+       id="guide120101" />
+    <sodipodi:guide
+       position="484.27095,1188.9782"
+       orientation="0,-1"
+       id="guide120103" />
+    <sodipodi:guide
+       position="673.31348,1219.4395"
+       orientation="0,-1"
+       id="guide120105" />
+    <sodipodi:guide
+       position="630.71781,886.72695"
+       orientation="1,0"
+       id="guide120344" />
+    <sodipodi:guide
+       position="705.32075,1002.8317"
+       orientation="1,0"
+       id="guide120346" />
+    <sodipodi:guide
+       position="598.73659,899.50529"
+       orientation="1,0"
+       id="guide131685" />
+    <sodipodi:guide
+       position="480.82664,1262.6866"
+       orientation="0,-1"
+       id="guide139713" />
+    <sodipodi:guide
+       position="770.14925,1100.6121"
+       orientation="0,-1"
+       id="guide159732" />
+    <sodipodi:guide
+       position="746.7279,738.6043"
+       orientation="1,0"
+       id="guide159734" />
+    <sodipodi:guide
+       position="333.92051,819.78517"
+       orientation="0,-1"
+       id="guide198105" />
+    <sodipodi:guide
+       position="-488.00956,915.6095"
+       orientation="1,0"
+       id="guide198381" />
+    <sodipodi:guide
+       position="-516.12231,1082.7378"
+       orientation="0,-1"
+       id="guide198440" />
+    <sodipodi:guide
+       position="493.83365,955.32153"
+       orientation="0,-1"
+       id="guide198442" />
+    <sodipodi:guide
+       position="328.58783,984.38576"
+       orientation="0,-1"
+       id="guide198520" />
+    <sodipodi:guide
+       position="214.81108,1039.3642"
+       orientation="0,-1"
+       id="guide198602" />
+    <sodipodi:guide
+       position="496.54921,984.38576"
+       orientation="0,-1"
+       id="guide198604" />
+    <sodipodi:guide
+       position="-17.910448,804.89218"
+       orientation="1,0"
+       id="guide198606" />
+    <sodipodi:guide
+       position="0.68886338,708.15155"
+       orientation="0,-1"
+       id="guide209020" />
+    <sodipodi:guide
+       position="400.88327,819.78517"
+       orientation="1,0"
+       id="guide213508" />
+    <sodipodi:guide
+       position="365.75619,955.32153"
+       orientation="1,0"
+       id="guide213590" />
+    <sodipodi:guide
+       position="371.98894,972.65152"
+       orientation="1,0"
+       id="guide213592" />
+    <sodipodi:guide
+       position="-245.49838,819.78517"
+       orientation="1,0"
+       id="guide213623" />
+  </sodipodi:namedview>
+  <!-- Background -->
+  <!-- Title -->
+  <!-- Input -->
+  <!-- V1 Layer -->
+  <!-- V2 Layer -->
+  <!-- V4 Layer -->
+  <!-- IT Layer -->
+  <!-- Classifier -->
+  <!-- Feedforward Connections -->
+  <g
+     id="g1395"
+     transform="matrix(1,0,0,0.65803717,49.051769,-108.91391)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g2952-4-7-2-0"
+       style="fill:#7e7e7e;fill-opacity:0;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+       transform="matrix(2.014811,0,0,3.7795276,-407.71758,-670.64441)">
+      <path
+         d="m 98.077847,92.933993 26.596093,4.235672 V 171.74405 L 98.077847,149.41893 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3150-1-5-2-8" />
+      <path
+         d="m 97.361923,92.730758 v 56.849592 l 0.715924,-0.16142 V 92.933993 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3152-1-4-3-7" />
+      <path
+         d="m 97.361923,149.58035 26.592017,22.56793 0.72,-0.40423 -26.596093,-22.32512 z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3154-3-4-9-6" />
+      <path
+         d="m 97.361923,92.730758 26.592017,4.206207 0.72,0.2327 -26.596093,-4.235672 z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3156-5-9-6-3" />
+      <path
+         d="m 123.95394,96.936965 v 75.211315 l 0.72,-0.40423 V 97.169665 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3158-9-6-5-5" />
+      <path
+         d="m 97.361923,92.730758 26.592017,4.206207 V 172.14828 L 97.361923,149.58035 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3160-3-7-7-0" />
+    </g>
+    <g
+       id="g2966-4-2-4-8"
+       style="fill:#7e7e7e;fill-opacity:0.03;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+       transform="matrix(2.014811,0,0,3.7795276,-416.61758,-670.64441)">
+      <path
+         d="m 109.84726,93.02433 29.22862,4.104966 v 74.569044 l -29.22862,-21.67557 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3136-1-1-3-0" />
+      <path
+         d="m 109.11596,92.792747 v 57.418943 l 0.7313,-0.18892 V 93.02433 Z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3138-5-0-9-4" />
+      <path
+         d="m 109.11596,150.21169 29.28375,21.94405 0.67617,-0.4574 -29.22862,-21.67557 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3140-0-1-4-1" />
+      <path
+         d="m 109.11596,92.792747 29.28375,4.072597 0.67617,0.263952 -29.22862,-4.104966 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3142-8-3-4-1" />
+      <path
+         d="m 138.39971,96.865344 v 75.290396 l 0.67617,-0.4574 V 97.129296 Z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3144-3-7-0-3" />
+      <path
+         d="m 109.11596,92.792747 29.28375,4.072597 v 75.290396 l -29.28375,-21.94405 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3146-5-7-6-5" />
+    </g>
+    <g
+       id="g2980-6-6-0-9"
+       style="fill:#7e7e7e;fill-opacity:0.06;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+       transform="matrix(2.014811,0,0,3.7795276,-425.51758,-670.64441)">
+      <path
+         d="m 122.96702,93.056372 30.30734,3.748086 V 171.4227 l -30.30734,-20.10673 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3122-5-3-2-3" />
+      <path
+         d="m 122.24397,92.792745 v 58.749375 l 0.72305,-0.22615 V 93.056372 Z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3124-9-9-2-4" />
+      <path
+         d="m 122.24397,151.54212 30.42922,20.38793 0.60117,-0.50735 -30.30734,-20.10673 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3126-9-1-8-1" />
+      <path
+         d="m 122.24397,92.792745 30.42922,3.713716 0.60117,0.297997 -30.30734,-3.748086 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3128-0-0-4-5" />
+      <path
+         d="m 152.67319,96.506461 v 75.423589 l 0.60117,-0.50735 V 96.804458 Z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3130-7-41-3-0" />
+      <path
+         d="m 122.24397,92.792745 30.42922,3.713716 v 75.423589 l -30.42922,-20.38793 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3132-6-1-1-8" />
+    </g>
+    <g
+       id="g2994-3-8-1-3"
+       style="fill:#7e7e7e;fill-opacity:0.09;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+       transform="matrix(2.014811,0,0,3.7795276,-434.41757,-670.64441)">
+      <path
+         d="m 136.5542,93.089558 31.22883,3.43877 V 171.59249 L 136.5542,152.80754 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3108-7-6-1-5" />
+      <path
+         d="m 135.86801,92.792745 v 60.283815 l 0.68619,-0.26902 V 93.089558 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3110-6-4-9-6" />
+      <path
+         d="m 135.86801,153.07656 31.42323,19.07918 0.49179,-0.56325 -31.22883,-18.78495 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3112-1-3-0-5" />
+      <path
+         d="m 135.86801,92.792745 31.42323,3.402641 0.49179,0.332942 -31.22883,-3.43877 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3114-5-4-0-9" />
+      <path
+         d="m 167.29124,96.195386 v 75.960354 l 0.49179,-0.56325 V 96.528328 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3116-0-7-0-9" />
+      <path
+         d="m 135.86801,92.792745 31.42323,3.402641 v 75.960354 l -31.42323,-19.07918 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3118-6-7-2-0" />
+    </g>
+  </g>
+  <g
+     id="g1395-7"
+     transform="matrix(1,0,0,0.65803717,221.01759,-109.45666)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g2952-4-7-2-0-6"
+       style="fill:#7e7e7e;fill-opacity:0;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+       transform="matrix(2.014811,0,0,3.7795276,-407.71758,-670.64441)">
+      <path
+         d="m 98.077847,92.933993 26.596093,4.235672 V 171.74405 L 98.077847,149.41893 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3150-1-5-2-8-3" />
+      <path
+         d="m 97.361923,92.730758 v 56.849592 l 0.715924,-0.16142 V 92.933993 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3152-1-4-3-7-7" />
+      <path
+         d="m 97.361923,149.58035 26.592017,22.56793 0.72,-0.40423 -26.596093,-22.32512 z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3154-3-4-9-6-6" />
+      <path
+         d="m 97.361923,92.730758 26.592017,4.206207 0.72,0.2327 -26.596093,-4.235672 z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3156-5-9-6-3-1" />
+      <path
+         d="m 123.95394,96.936965 v 75.211315 l 0.72,-0.40423 V 97.169665 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3158-9-6-5-5-5" />
+      <path
+         d="m 97.361923,92.730758 26.592017,4.206207 V 172.14828 L 97.361923,149.58035 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3160-3-7-7-0-0" />
+    </g>
+    <g
+       id="g2966-4-2-4-8-6"
+       style="fill:#7e7e7e;fill-opacity:0.03;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+       transform="matrix(2.014811,0,0,3.7795276,-416.61758,-670.64441)">
+      <path
+         d="m 109.84726,93.02433 29.22862,4.104966 v 74.569044 l -29.22862,-21.67557 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3136-1-1-3-0-5" />
+      <path
+         d="m 109.11596,92.792747 v 57.418943 l 0.7313,-0.18892 V 93.02433 Z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3138-5-0-9-4-0" />
+      <path
+         d="m 109.11596,150.21169 29.28375,21.94405 0.67617,-0.4574 -29.22862,-21.67557 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3140-0-1-4-1-8" />
+      <path
+         d="m 109.11596,92.792747 29.28375,4.072597 0.67617,0.263952 -29.22862,-4.104966 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3142-8-3-4-1-1" />
+      <path
+         d="m 138.39971,96.865344 v 75.290396 l 0.67617,-0.4574 V 97.129296 Z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3144-3-7-0-3-2" />
+      <path
+         d="m 109.11596,92.792747 29.28375,4.072597 v 75.290396 l -29.28375,-21.94405 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3146-5-7-6-5-2" />
+    </g>
+    <g
+       id="g2980-6-6-0-9-6"
+       style="fill:#7e7e7e;fill-opacity:0.06;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+       transform="matrix(2.014811,0,0,3.7795276,-425.51758,-670.64441)">
+      <path
+         d="m 122.96702,93.056372 30.30734,3.748086 V 171.4227 l -30.30734,-20.10673 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3122-5-3-2-3-9" />
+      <path
+         d="m 122.24397,92.792745 v 58.749375 l 0.72305,-0.22615 V 93.056372 Z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3124-9-9-2-4-1" />
+      <path
+         d="m 122.24397,151.54212 30.42922,20.38793 0.60117,-0.50735 -30.30734,-20.10673 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3126-9-1-8-1-0" />
+      <path
+         d="m 122.24397,92.792745 30.42922,3.713716 0.60117,0.297997 -30.30734,-3.748086 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3128-0-0-4-5-4" />
+      <path
+         d="m 152.67319,96.506461 v 75.423589 l 0.60117,-0.50735 V 96.804458 Z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3130-7-41-3-0-2" />
+      <path
+         d="m 122.24397,92.792745 30.42922,3.713716 v 75.423589 l -30.42922,-20.38793 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3132-6-1-1-8-7" />
+    </g>
+    <g
+       id="g2994-3-8-1-3-4"
+       style="fill:#7e7e7e;fill-opacity:0.09;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+       transform="matrix(2.014811,0,0,3.7795276,-434.41757,-670.64441)">
+      <path
+         d="m 136.5542,93.089558 31.22883,3.43877 V 171.59249 L 136.5542,152.80754 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3108-7-6-1-5-0" />
+      <path
+         d="m 135.86801,92.792745 v 60.283815 l 0.68619,-0.26902 V 93.089558 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3110-6-4-9-6-3" />
+      <path
+         d="m 135.86801,153.07656 31.42323,19.07918 0.49179,-0.56325 -31.22883,-18.78495 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3112-1-3-0-5-2" />
+      <path
+         d="m 135.86801,92.792745 31.42323,3.402641 0.49179,0.332942 -31.22883,-3.43877 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3114-5-4-0-9-8" />
+      <path
+         d="m 167.29124,96.195386 v 75.960354 l 0.49179,-0.56325 V 96.528328 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3116-0-7-0-9-0" />
+      <path
+         d="m 135.86801,92.792745 31.42323,3.402641 v 75.960354 l -31.42323,-19.07918 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3118-6-7-2-0-3" />
+    </g>
+  </g>
+  <!-- Skip Connections -->
+  <!-- Feedback Connections -->
+  <!-- RecurrentConnectedConv2d Detail -->
+  <!-- Legend -->
+  <!-- Arrow markers -->
+  <defs
+     id="defs167">
+    <rect
+       x="1163.6572"
+       y="-63.15984"
+       width="2.910383e-11"
+       height="42.49394"
+       id="rect162270" />
+    <rect
+       x="1275.1936"
+       y="-422.70051"
+       width="37.38917"
+       height="54.517669"
+       id="rect152106" />
+    <rect
+       x="-405.39938"
+       y="-714.60969"
+       width="531.24518"
+       height="61.894694"
+       id="rect41589" />
+    <rect
+       x="-118.93657"
+       y="-679.82251"
+       width="204.20721"
+       height="79.33487"
+       id="rect18966" />
+    <rect
+       x="88.941053"
+       y="-564.5216"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888" />
+    <rect
+       x="-576.08649"
+       y="-458.08366"
+       width="83.704252"
+       height="74.64717"
+       id="rect6550" />
+    <marker
+       style="overflow:visible;"
+       id="Arrow2Mend"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.6) rotate(180) translate(0,0)"
+         d="M 8.7185878,4.0337352 L -2.2072895,0.016013256 L 8.7185884,-4.0017078 C 6.9730900,-1.6296469 6.9831476,1.6157441 8.7185878,4.0337352 z "
+         style="stroke:context-stroke;fill-rule:evenodd;fill:context-stroke;stroke-width:0.62500000;stroke-linejoin:round;"
+         id="path1903" />
+    </marker>
+    <marker
+       id="arrowhead"
+       markerWidth="10"
+       markerHeight="7"
+       refX="9"
+       refY="3.5"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3.5, 0 7"
+         fill="#2c3e50"
+         id="polygon152" />
+    </marker>
+    <marker
+       id="arrowhead-blue"
+       markerWidth="10"
+       markerHeight="7"
+       refX="9"
+       refY="3.5"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3.5, 0 7"
+         fill="#3498db"
+         id="polygon155" />
+    </marker>
+    <marker
+       id="arrowhead-green"
+       markerWidth="10"
+       markerHeight="7"
+       refX="9"
+       refY="3.5"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3.5, 0 7"
+         fill="#27ae60"
+         id="polygon158" />
+    </marker>
+    <marker
+       id="arrowhead-red"
+       markerWidth="10"
+       markerHeight="7"
+       refX="9"
+       refY="3.5"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3.5, 0 7"
+         fill="#e74c3c"
+         id="polygon161" />
+    </marker>
+    <marker
+       id="small-arrow"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0 0, 6 2, 0 4"
+         fill="#2c3e50"
+         id="polygon164" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-0"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-4" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-4"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-8" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-4" />
+    </marker>
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-4" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3" />
+    </marker>
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-0" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-10" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-0-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-4-8" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-0"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-73" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-8"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-2" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-4-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-8-0" />
+    </marker>
+    <rect
+       x="-118.93657"
+       y="-679.82251"
+       width="204.20721"
+       height="79.334869"
+       id="rect18966-7" />
+    <rect
+       x="-576.08649"
+       y="-458.08365"
+       width="83.704254"
+       height="74.647171"
+       id="rect6550-7" />
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-7" />
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-0-6" />
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-4-9" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2-6"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2-6-4"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23-5-3" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2-6-44"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23-5-0" />
+    </marker>
+    <rect
+       x="-118.93657"
+       y="-679.82251"
+       width="204.20721"
+       height="79.334869"
+       id="rect18966-0" />
+    <rect
+       x="-118.93657"
+       y="-679.82251"
+       width="25.850016"
+       height="168.06715"
+       id="rect18966-0-2" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2-6-44-8"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23-5-0-7" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2-6-6"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23-5-6" />
+    </marker>
+    <rect
+       x="-576.08649"
+       y="-458.08365"
+       width="83.704254"
+       height="74.647171"
+       id="rect6550-3" />
+    <rect
+       x="-576.08649"
+       y="-458.08365"
+       width="83.704254"
+       height="74.647171"
+       id="rect6550-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-8" />
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-0-4" />
+    <rect
+       x="88.941055"
+       y="-564.52161"
+       width="167.86111"
+       height="122.50403"
+       id="rect11888-0-2" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-8-0" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-8-0-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-4" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-4-1" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-4-1-4" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756753"
+       height="38.928574"
+       id="rect41589-4-1-4-5" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-7" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-3" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-0" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-0-8" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-3-1" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-0-8-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="145.27638"
+       height="28.631095"
+       id="rect41589-4-1-4-5-0-8-6-8" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-3-1-7" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-3-1-7-0" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="292.54699"
+       height="42.157871"
+       id="rect41589-4-1-4-5-0-8-6-7" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-0-8-6-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-0-9" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="284.25318"
+       height="44.270825"
+       id="rect41589-43" />
+    <marker
+       id="arrowhead-4"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-5" />
+    </marker>
+    <marker
+       id="marker1639"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon1637" />
+    </marker>
+    <marker
+       id="marker1643"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon1641" />
+    </marker>
+    <marker
+       id="marker1647"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon1645" />
+    </marker>
+    <marker
+       id="arrowhead-4-2"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="6,2 0,4 0,0 "
+         fill="#444444"
+         id="polygon2-5-3" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-1" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-8"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-9" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-6" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-86"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-2" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-0"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-0" />
+    </marker>
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="60.23551"
+       height="39.567476"
+       id="rect41589-4-1-4-8" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="60.235512"
+       height="39.567474"
+       id="rect41589-4-1-4-8-8" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="60.235512"
+       height="39.567474"
+       id="rect41589-4-1-4-8-8-0" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="60.235512"
+       height="39.567474"
+       id="rect41589-4-1-4-8-8-0-5" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="60.235512"
+       height="39.567474"
+       id="rect41589-4-1-4-8-8-0-5-8" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="217.54951"
+       height="56.040155"
+       id="rect41589-4-1-4-8-8-0-5-7" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-4-1-4-51" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="420.23836"
+       height="136.297"
+       id="rect41589-4-1-4-51-3" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="291.91183"
+       height="120.86"
+       id="rect41589-4-1-4-51-3-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="291.91183"
+       height="120.86"
+       id="rect41589-4-1-4-51-3-6-9" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="291.91183"
+       height="120.86"
+       id="rect41589-4-1-4-51-3-6-7" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="291.91183"
+       height="120.86"
+       id="rect41589-4-1-4-51-3-6-0" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="221.35774"
+       height="75.799079"
+       id="rect41589-4-1-4-51-3-1" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="420.23837"
+       height="136.297"
+       id="rect41589-4-1-4-51-3-9" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="383.85113"
+       height="93.222437"
+       id="rect41589-4-1-4-51-3-9-2" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="383.85114"
+       height="93.222435"
+       id="rect41589-4-1-4-51-3-9-2-4" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="531.24518"
+       height="61.894695"
+       id="rect41589-4-1-4-51-9" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-0-7"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-0-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-8-5-8-9"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-3-1-9-8" />
+    </marker>
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="98.654453"
+       height="25.457307"
+       id="rect41589-8-0-6-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="98.654449"
+       height="25.457308"
+       id="rect41589-8-0-6-6-6" />
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="98.654449"
+       height="25.457308"
+       id="rect41589-8-0-6-6-6-6" />
+    <marker
+       style="overflow:visible"
+       id="Arrow2Mend-5-8-3-2-6-4-9"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Mend"
+       inkscape:isstock="true">
+      <path
+         transform="scale(-0.6)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path1903-1-6-7-23-5-3-4" />
+    </marker>
+    <rect
+       x="-405.39938"
+       y="-714.60968"
+       width="88.756752"
+       height="38.928574"
+       id="rect41589-4-1-4-5-3-1-1" />
+  </defs>
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend)"
+     d="m -415.59671,-219.56025 281.05805,0"
+     id="path1874"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5)"
+     d="m -46.390343,-219.56025 83.528663,0"
+     id="path1874-7"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+     d="m 124.00548,-219.56025 198.45401,-0.22492"
+     id="path1874-7-76"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8)"
+     d="m 322.45949,-219.78517 c 2.10368,-226.01716 -20.30012,-329.05315 -137.54198,-329.19494"
+     id="path1874-7-7"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3)"
+     d="m 179.80013,-517.04525 c 44.4295,0.003 35.01095,35.00269 35.23983,273.40908"
+     id="path1874-7-7-8"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+     d="m 179.64456,-482.7378 c 173.30504,-0.80451 166.1887,-1.417 165.17706,262.95263"
+     id="path1874-7-7-8-9"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#1b780e;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3-2-6)"
+     d="m 179.46045,-412.9612 419.27614,-0.4494"
+     id="path1874-7-7-8-9-7"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#1b780e;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3-2-6-6)"
+     d="m -415.59671,-360.11247 c 578.12864,0 560.33163,-0.70525 561.77155,95.183"
+     id="path1874-7-7-8-9-7-5"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#d3a60c;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3-2-6-44)"
+     d="m 144.99481,-482.73785 -560.59152,5e-5"
+     id="path1874-7-7-8-9-7-6"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#d3a60c;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3-2-6-44-8)"
+     d="m 598.73659,-355.32153 c -419.00916,0 -419.2541,-0.76576 -420.7182,90.39206"
+     id="path1874-7-7-8-9-7-6-7"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8)"
+     d="m 365.75619,-219.56025 0,-395.69133"
+     id="path1874-7-7-5"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8-5)"
+     d="m 861.31348,-159.52296 v -50.30621"
+     id="path1874-7-7-5-5"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <g
+     id="path1874-7-7-5-5-79"
+     transform="translate(56,0.86996577)"
+     style="fill:#1b780e;fill-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#1b780e;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 769.25586,-357.76953 c -37.79191,21.3048 -56.82553,56.81825 -54.11133,94.24414 2.7142,37.42589 27.08646,76.63914 75.39258,105.67187 l 1.54492,-2.57031 c -47.66657,-28.64835 -71.31387,-67.03366 -73.94531,-103.31836 -2.63144,-36.2847 15.66489,-70.5958 52.59375,-91.41406 z"
+       id="path194182" />
+    <g
+       id="g194172"
+       style="fill:#1b780e;fill-opacity:1">
+      <g
+         id="path194174"
+         style="fill:#1b780e;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#1b780e;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 752.75658,-355.08027 20.68328,-3.35808 -13.58038,15.95769 c 0.64017,-5.26233 -2.24435,-10.34223 -7.1029,-12.59961 z"
+           id="path194178" />
+        <path
+           style="color:#000000;fill:#1b780e;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 773.34961,-358.99414 -20.68359,3.35937 a 0.56255625,0.56255625 0 0 0 -0.14649,1.06446 c 4.64325,2.15735 7.39172,7.00331 6.78125,12.02148 a 0.56255625,0.56255625 0 0 0 0.98633,0.4336 l 13.58203,-15.95899 a 0.56255625,0.56255625 0 0 0 -0.51953,-0.91992 z m -1.33008,1.35547 -11.66406,13.70703 c -0.006,-4.43473 -2.30028,-8.47714 -6.11328,-10.82031 z"
+           id="path194180" />
+      </g>
+    </g>
+  </g>
+  <g
+     id="path1874-7-7-5-5-79-1"
+     transform="translate(55.23145,-115.35394)"
+     style="fill:#1b780e;fill-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#1b780e;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 769.25586,-357.76953 c -37.79191,21.3048 -56.82553,56.81825 -54.11133,94.24414 2.7142,37.42589 27.08646,76.63914 75.39258,105.67187 l 1.54492,-2.57031 c -47.66657,-28.64835 -71.31387,-67.03366 -73.94531,-103.31836 -2.63144,-36.2847 15.66489,-70.5958 52.59375,-91.41406 z"
+       id="path194182-7" />
+    <g
+       id="g194172-3"
+       style="fill:#1b780e;fill-opacity:1">
+      <g
+         id="path194174-9"
+         style="fill:#1b780e;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#1b780e;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 752.75658,-355.08027 20.68328,-3.35808 -13.58038,15.95769 c 0.64017,-5.26233 -2.24435,-10.34223 -7.1029,-12.59961 z"
+           id="path194178-6" />
+        <path
+           style="color:#000000;fill:#1b780e;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 773.34961,-358.99414 -20.68359,3.35937 a 0.56255625,0.56255625 0 0 0 -0.14649,1.06446 c 4.64325,2.15735 7.39172,7.00331 6.78125,12.02148 a 0.56255625,0.56255625 0 0 0 0.98633,0.4336 l 13.58203,-15.95899 a 0.56255625,0.56255625 0 0 0 -0.51953,-0.91992 z m -1.33008,1.35547 -11.66406,13.70703 c -0.006,-4.43473 -2.30028,-8.47714 -6.11328,-10.82031 z"
+           id="path194180-9" />
+      </g>
+    </g>
+  </g>
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8-5-0)"
+     d="M 861.31348,-35.405695 V -93.925994"
+     id="path1874-7-7-5-5-0"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <g
+     id="path1874-7-7-5-5-0-6"
+     style="fill:#960f9e;fill-opacity:1"
+     transform="matrix(1,0,0,-1,55.418621,-260.9391)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 759.03125,-158.60547 c -9.36925,-0.34801 -16.79292,1.67744 -22.31836,5.22461 -8.84071,5.67547 -12.62848,15.19778 -11.70898,24.35742 0.9195,9.15965 6.51592,18.03599 16.21679,22.5918 9.70088,4.55581 23.38203,4.73721 40.36524,-2.99219 l -1.24219,-2.73047 c -16.41726,7.47183 -29.09909,7.1164 -37.84766,3.00782 -8.74856,-4.10858 -13.68743,-12.025 -14.50586,-20.17774 -0.81842,-8.15274 2.45038,-16.46394 10.34375,-21.53125 7.89338,-5.06731 20.60781,-6.9421 38.81641,-1.50195 l 0.85938,-2.87305 c -7.03425,-2.10161 -13.35697,-3.16619 -18.97852,-3.375 z"
+       id="path193202" />
+    <g
+       id="g193192"
+       style="fill:#960f9e;fill-opacity:1">
+      <g
+         id="path193194"
+         style="fill:#960f9e;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 764.62126,-165.24313 16.7733,12.5591 -20.91378,1.29939 c 4.23268,-3.19161 5.8876,-8.79402 4.14048,-13.85849 z"
+           id="path193198" />
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 764.28906,-165.69727 a 0.56255625,0.56255625 0 0 0 -0.19922,0.63672 c 1.6697,4.84005 0.089,10.18304 -3.94726,13.22657 a 0.56255625,0.56255625 0 0 0 0.37304,1.01171 l 20.91407,-1.30078 a 0.56255625,0.56255625 0 0 0 0.30273,-1.01172 l -16.77344,-12.55859 a 0.56255625,0.56255625 0 0 0 -0.66992,-0.004 z m 1.12696,1.75196 14.41601,10.79492 -17.96094,1.11719 c 3.18844,-3.08255 4.50443,-7.54066 3.54493,-11.91211 z"
+           id="path193200" />
+      </g>
+    </g>
+  </g>
+  <g
+     id="path1874-7-7-5-5-0-6-9"
+     transform="matrix(1,0,0,-1,55.799129,-377.10827)"
+     style="fill:#960f9e;fill-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 759.03125,-158.60547 c -9.36925,-0.34801 -16.79292,1.67744 -22.31836,5.22461 -8.84071,5.67547 -12.62848,15.19778 -11.70898,24.35742 0.9195,9.15965 6.51592,18.03599 16.21679,22.5918 9.70088,4.55581 23.38203,4.73721 40.36524,-2.99219 l -1.24219,-2.73047 c -16.41726,7.47183 -29.09909,7.1164 -37.84766,3.00782 -8.74856,-4.10858 -13.68743,-12.025 -14.50586,-20.17774 -0.81842,-8.15274 2.45038,-16.46394 10.34375,-21.53125 7.89338,-5.06731 20.60781,-6.9421 38.81641,-1.50195 l 0.85938,-2.87305 c -7.03425,-2.10161 -13.35697,-3.16619 -18.97852,-3.375 z"
+       id="path193202-6" />
+    <g
+       id="g193192-8"
+       style="fill:#960f9e;fill-opacity:1">
+      <g
+         id="path193194-9"
+         style="fill:#960f9e;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 764.62126,-165.24313 16.7733,12.5591 -20.91378,1.29939 c 4.23268,-3.19161 5.8876,-8.79402 4.14048,-13.85849 z"
+           id="path193198-6" />
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 764.28906,-165.69727 a 0.56255625,0.56255625 0 0 0 -0.19922,0.63672 c 1.6697,4.84005 0.089,10.18304 -3.94726,13.22657 a 0.56255625,0.56255625 0 0 0 0.37304,1.01171 l 20.91407,-1.30078 a 0.56255625,0.56255625 0 0 0 0.30273,-1.01172 l -16.77344,-12.55859 a 0.56255625,0.56255625 0 0 0 -0.66992,-0.004 z m 1.12696,1.75196 14.41601,10.79492 -17.96094,1.11719 c 3.18844,-3.08255 4.50443,-7.54066 3.54493,-11.91211 z"
+           id="path193200-8" />
+      </g>
+    </g>
+  </g>
+  <g
+     id="path1874-7-7-5-5-0-6-5"
+     transform="matrix(1,0,0,-1,55.915078,-494.86416)"
+     style="fill:#960f9e;fill-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 759.03125,-158.60547 c -9.36925,-0.34801 -16.79292,1.67744 -22.31836,5.22461 -8.84071,5.67547 -12.62848,15.19778 -11.70898,24.35742 0.9195,9.15965 6.51592,18.03599 16.21679,22.5918 9.70088,4.55581 23.38203,4.73721 40.36524,-2.99219 l -1.24219,-2.73047 c -16.41726,7.47183 -29.09909,7.1164 -37.84766,3.00782 -8.74856,-4.10858 -13.68743,-12.025 -14.50586,-20.17774 -0.81842,-8.15274 2.45038,-16.46394 10.34375,-21.53125 7.89338,-5.06731 20.60781,-6.9421 38.81641,-1.50195 l 0.85938,-2.87305 c -7.03425,-2.10161 -13.35697,-3.16619 -18.97852,-3.375 z"
+       id="path193202-9" />
+    <g
+       id="g193192-87"
+       style="fill:#960f9e;fill-opacity:1">
+      <g
+         id="path193194-0"
+         style="fill:#960f9e;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 764.62126,-165.24313 16.7733,12.5591 -20.91378,1.29939 c 4.23268,-3.19161 5.8876,-8.79402 4.14048,-13.85849 z"
+           id="path193198-7" />
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 764.28906,-165.69727 a 0.56255625,0.56255625 0 0 0 -0.19922,0.63672 c 1.6697,4.84005 0.089,10.18304 -3.94726,13.22657 a 0.56255625,0.56255625 0 0 0 0.37304,1.01171 l 20.91407,-1.30078 a 0.56255625,0.56255625 0 0 0 0.30273,-1.01172 l -16.77344,-12.55859 a 0.56255625,0.56255625 0 0 0 -0.66992,-0.004 z m 1.12696,1.75196 14.41601,10.79492 -17.96094,1.11719 c 3.18844,-3.08255 4.50443,-7.54066 3.54493,-11.91211 z"
+           id="path193200-85" />
+      </g>
+    </g>
+  </g>
+  <g
+     id="path1874-7-7-5-5-0-6-8"
+     transform="matrix(1,0,0,-1,57.10614,-608.67022)"
+     style="fill:#960f9e;fill-opacity:1;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none"
+       d="m 759.03125,-158.60547 c -9.36925,-0.34801 -16.79292,1.67744 -22.31836,5.22461 -8.84071,5.67547 -12.62848,15.19778 -11.70898,24.35742 0.9195,9.15965 6.51592,18.03599 16.21679,22.5918 9.70088,4.55581 23.38203,4.73721 40.36524,-2.99219 l -1.24219,-2.73047 c -16.41726,7.47183 -29.09909,7.1164 -37.84766,3.00782 -8.74856,-4.10858 -13.68743,-12.025 -14.50586,-20.17774 -0.81842,-8.15274 2.45038,-16.46394 10.34375,-21.53125 7.89338,-5.06731 20.60781,-6.9421 38.81641,-1.50195 l 0.85938,-2.87305 c -7.03425,-2.10161 -13.35697,-3.16619 -18.97852,-3.375 z"
+       id="path193202-7" />
+    <g
+       id="g193192-80"
+       style="fill:#960f9e;fill-opacity:1;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none">
+      <g
+         id="path193194-5"
+         style="fill:#960f9e;fill-opacity:1;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none">
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-width:0;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+           d="m 764.62126,-165.24313 16.7733,12.5591 -20.91378,1.29939 c 4.23268,-3.19161 5.8876,-8.79402 4.14048,-13.85849 z"
+           id="path193198-2" />
+        <path
+           style="color:#000000;fill:#960f9e;fill-opacity:1;fill-rule:evenodd;stroke-width:0;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+           d="m 764.28906,-165.69727 a 0.56255625,0.56255625 0 0 0 -0.19922,0.63672 c 1.6697,4.84005 0.089,10.18304 -3.94726,13.22657 a 0.56255625,0.56255625 0 0 0 0.37304,1.01171 l 20.91407,-1.30078 a 0.56255625,0.56255625 0 0 0 0.30273,-1.01172 l -16.77344,-12.55859 a 0.56255625,0.56255625 0 0 0 -0.66992,-0.004 z m 1.12696,1.75196 14.41601,10.79492 -17.96094,1.11719 c 3.18844,-3.08255 4.50443,-7.54066 3.54493,-11.91211 z"
+           id="path193200-857" />
+      </g>
+    </g>
+  </g>
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8-5-1)"
+     d="m 861.31348,-275.77777 v -50.30621"
+     id="path1874-7-7-5-5-5"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8-5-8)"
+     d="m 861.31348,-391.95197 v -50.30621"
+     id="path1874-7-7-5-5-3"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <g
+     id="path1874-7-7-5-5-3-7"
+     style="fill:#d3a60c;fill-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"
+     transform="translate(56)">
+    <path
+       style="color:#000000;fill:#d3a60c;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 831.45898,-462.70898 -2.71289,1.28125 c 25.62298,54.2864 23.8715,113.25473 -4.88281,183.60351 l 2.77734,1.13477 c 28.96113,-70.85477 30.82302,-130.92448 4.81836,-186.01953 z"
+       id="path194644" />
+    <g
+       id="g194634"
+       style="fill:#d3a60c;fill-opacity:1">
+      <g
+         id="path194636"
+         style="fill:#d3a60c;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#d3a60c;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 837.90999,-289.03668 -14.13522,15.46837 0.74665,-20.9408 c 2.76355,4.52379 8.17784,6.71726 13.38857,5.47243 z"
+           id="path194640" />
+        <path
+           style="color:#000000;fill:#d3a60c;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 824.37891,-295.05273 a 0.56255625,0.56255625 0 0 0 -0.41993,0.52343 l -0.74609,20.94141 a 0.56255625,0.56255625 0 0 0 0.97656,0.39844 l 14.13672,-15.46875 a 0.56255625,0.56255625 0 0 0 -0.54687,-0.92578 c -4.97983,1.18966 -10.14202,-0.90486 -12.77735,-5.21875 a 0.56255625,0.56255625 0 0 0 -0.62304,-0.25 z m 0.65429,1.99023 c 2.75677,3.47279 7.06447,5.21763 11.50782,4.68945 l -12.1504,13.29688 z"
+           id="path194642" />
+      </g>
+    </g>
+  </g>
+  <g
+     id="path1874-7-7-5-5-3-7-7"
+     transform="translate(56.15233,117.96343)"
+     style="fill:#d3a60c;fill-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       style="color:#000000;fill:#d3a60c;fill-opacity:1;fill-rule:evenodd;-inkscape-stroke:none"
+       d="m 831.45898,-462.70898 -2.71289,1.28125 c 25.62298,54.2864 23.8715,113.25473 -4.88281,183.60351 l 2.77734,1.13477 c 28.96113,-70.85477 30.82302,-130.92448 4.81836,-186.01953 z"
+       id="path194644-3" />
+    <g
+       id="g194634-6"
+       style="fill:#d3a60c;fill-opacity:1">
+      <g
+         id="path194636-5"
+         style="fill:#d3a60c;fill-opacity:1">
+        <path
+           style="color:#000000;fill:#d3a60c;fill-opacity:1;fill-rule:evenodd;stroke-width:1.125;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 837.90999,-289.03668 -14.13522,15.46837 0.74665,-20.9408 c 2.76355,4.52379 8.17784,6.71726 13.38857,5.47243 z"
+           id="path194640-2" />
+        <path
+           style="color:#000000;fill:#d3a60c;fill-opacity:1;fill-rule:evenodd;stroke-linejoin:round;-inkscape-stroke:none"
+           d="m 824.37891,-295.05273 a 0.56255625,0.56255625 0 0 0 -0.41993,0.52343 l -0.74609,20.94141 a 0.56255625,0.56255625 0 0 0 0.97656,0.39844 l 14.13672,-15.46875 a 0.56255625,0.56255625 0 0 0 -0.54687,-0.92578 c -4.97983,1.18966 -10.14202,-0.90486 -12.77735,-5.21875 a 0.56255625,0.56255625 0 0 0 -0.62304,-0.25 z m 0.65429,1.99023 c 2.75677,3.47279 7.06447,5.21763 11.50782,4.68945 l -12.1504,13.29688 z"
+           id="path194642-8" />
+      </g>
+    </g>
+  </g>
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8-5-3)"
+     d="m 861.31348,-508.31341 v -50.30621"
+     id="path1874-7-7-5-5-7"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#960f9e;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-4)"
+     d="m 144.73845,-486.80187 c -323.90542,-1.86137 -438.07158,4.07223 -440.03042,223.46218"
+     id="path1874-7-7-1"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <g
+     id="g3005"
+     transform="translate(315.97824,-30.483478)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       id="rect2542-5-6"
+       style="fill:none;stroke:#5b5b5b;stroke-width:1.882;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m -170.43622,-400.39612 h 33.91841 c 0,0 1e-5,0 1e-5,0 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,0 0,0 0,0 z m 0,-33.91843 h 33.91841 c 0,0 1e-5,0 1e-5,10e-6 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,-10e-6 0,-10e-6 0,-10e-6 z m 0,-33.91842 h 33.91841 c 0,0 1e-5,0 1e-5,0 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,0 0,0 0,0 z m 0,-33.91843 h 33.91841 c 0,0 1e-5,0 1e-5,0 v 33.91841 c 0,0 -1e-5,10e-6 -1e-5,10e-6 h -33.91841 c 0,0 0,-10e-6 0,-10e-6 v -33.91841 c 0,0 0,0 0,0 z m 0,-33.9184 h 33.91841 c 0,0 1e-5,10e-6 1e-5,10e-6 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,0 0,-10e-6 0,-10e-6 z m 0,0 h 33.91841 c 0,0 0,10e-6 0,10e-6 v 169.59208 c 0,0 0,0 0,0 h -33.91841 c 0,0 0,0 0,0 v -169.59208 c 0,0 0,-10e-6 0,-10e-6 z" />
+    <rect
+       style="fill:none;stroke:#353535;stroke-width:2.5;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect2921"
+       width="33.918419"
+       height="169.59209"
+       x="-170.43622"
+       y="-536.06982"
+       rx="1.88403e-06"
+       ry="1.8841901e-06" />
+    <text
+       xml:space="preserve"
+       transform="translate(-43.431256,145.27765)"
+       id="text18964-2"
+       style="font-weight:bold;font-size:26.6667px;line-height:1.26;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect18966-0-2)"><tspan
+         x="-118.9375"
+         y="-656.09515"
+         id="tspan217585"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#bababa"
+           id="tspan217583">0
+</tspan></tspan><tspan
+         x="-118.9375"
+         y="-622.49512"
+         id="tspan217589"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#bababa"
+           id="tspan217587">1
+</tspan></tspan><tspan
+         x="-118.9375"
+         y="-588.89508"
+         id="tspan217593"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#bababa"
+           id="tspan217591">2
+</tspan></tspan><tspan
+         x="-118.9375"
+         y="-555.29504"
+         id="tspan217597"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#bababa"
+           id="tspan217595">3
+</tspan></tspan><tspan
+         x="-118.9375"
+         y="-521.69501"
+         id="tspan217601"><tspan
+           style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';fill:#bababa"
+           id="tspan217599">4</tspan></tspan></text>
+  </g>
+  <g
+     id="g3005-5"
+     transform="rotate(-90,-20.00297,-770.88384)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       id="rect2542-5-6-9"
+       style="fill:none;stroke:#5b5b5b;stroke-width:1.882;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m -170.43622,-400.39612 h 33.91841 c 0,0 1e-5,0 1e-5,0 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,0 0,0 0,0 z m 0,-33.91843 h 33.91841 c 0,0 1e-5,0 1e-5,10e-6 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,-10e-6 0,-10e-6 0,-10e-6 z m 0,-33.91842 h 33.91841 c 0,0 1e-5,0 1e-5,0 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,0 0,0 0,0 z m 0,-33.91843 h 33.91841 c 0,0 1e-5,0 1e-5,0 v 33.91841 c 0,0 -1e-5,10e-6 -1e-5,10e-6 h -33.91841 c 0,0 0,-10e-6 0,-10e-6 v -33.91841 c 0,0 0,0 0,0 z m 0,-33.9184 h 33.91841 c 0,0 1e-5,10e-6 1e-5,10e-6 v 33.91841 c 0,0 -1e-5,0 -1e-5,0 h -33.91841 c 0,0 0,0 0,0 v -33.91841 c 0,0 0,-10e-6 0,-10e-6 z m 0,0 h 33.91841 c 0,0 0,10e-6 0,10e-6 v 169.59208 c 0,0 0,0 0,0 h -33.91841 c 0,0 0,0 0,0 v -169.59208 c 0,0 0,-10e-6 0,-10e-6 z" />
+    <rect
+       style="fill:none;stroke:#353535;stroke-width:2.5;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect2921-9"
+       width="33.918419"
+       height="169.59209"
+       x="-170.43622"
+       y="-536.06982"
+       rx="1.88403e-06"
+       ry="1.8841901e-06" />
+  </g>
+  <text
+     xml:space="preserve"
+     id="text6548"
+     style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect6550)"
+     transform="matrix(0.80583324,0,0,0.80583324,156.08739,109.54407)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-576.08594"
+       y="-422.69336"
+       id="tspan217603">+</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text6548-7"
+     style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect6550-3)"
+     transform="matrix(0.80583324,0,0,0.80583324,596.57752,110.07177)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-576.08594"
+       y="-422.69336"
+       id="tspan217605">+</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text6548-9"
+     style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect6550-6)"
+     transform="matrix(0.80583324,0,0,0.80583324,629.05426,109.69039)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-576.08594"
+       y="-422.69336"
+       id="tspan217607">+</tspan></text>
+  <g
+     id="g1982"
+     transform="matrix(0.75300042,0,0,0.70109931,122.02054,223.66253)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g3706"
+       transform="translate(-1.5824524,-71.811715)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <path
+         style="fill:none;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m -440.97354,-555.2127 26.31568,5e-5"
+         id="path7858"
+         inkscape:connector-type="polyline"
+         inkscape:connector-curvature="0"
+         sodipodi:nodetypes="cc" />
+      <path
+         style="fill:none;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m -391.14914,-574.34131 -23.50872,19.12866"
+         id="path7858-9"
+         inkscape:connector-type="polyline"
+         inkscape:connector-curvature="0"
+         sodipodi:nodetypes="cc" />
+    </g>
+  </g>
+  <g
+     id="g3706-6"
+     transform="matrix(0.75300042,0,0,0.70109931,604.58393,-172.21817)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g12221"
+       transform="translate(-714.1291,493.28984)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-3"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <text
+         xml:space="preserve"
+         transform="matrix(1.3280205,0,0,1.4263315,-549.42616,209.65506)"
+         id="text11886"
+         style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect11888)"><tspan
+           x="88.941406"
+           y="-529.13086"
+           id="tspan217609">x</tspan></text>
+    </g>
+  </g>
+  <g
+     id="g3706-6-8"
+     transform="matrix(0.75300042,0,0,0.70109931,605.24032,-375.4957)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g12221-12"
+       transform="translate(-714.1291,493.28984)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-3-2"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <text
+         xml:space="preserve"
+         transform="matrix(1.3280205,0,0,1.4263315,-549.42616,209.65506)"
+         id="text11886-6"
+         style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect11888-0)"><tspan
+           x="88.941406"
+           y="-529.13086"
+           id="tspan217611">x</tspan></text>
+    </g>
+  </g>
+  <g
+     id="g3706-6-8-3"
+     transform="matrix(0.75300042,0,0,0.70109931,831.87011,-306.59389)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g12221-12-9"
+       transform="translate(-714.1291,493.28984)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-3-2-4"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <text
+         xml:space="preserve"
+         transform="matrix(1.3280205,0,0,1.4263315,-549.42616,209.65506)"
+         id="text11886-6-6"
+         style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect11888-0-4)"><tspan
+           x="88.941406"
+           y="-529.13086"
+           id="tspan217613">x</tspan></text>
+    </g>
+  </g>
+  <g
+     id="g3706-6-8-38"
+     transform="matrix(0.75300042,0,0,0.70109931,1249.4038,-307.7513)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g12221-12-6"
+       transform="translate(-714.1291,493.28984)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-3-2-2"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <text
+         xml:space="preserve"
+         transform="matrix(1.3280205,0,0,1.4263315,-549.42616,209.65506)"
+         id="text11886-6-7"
+         style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect11888-0-2)"><tspan
+           x="88.941406"
+           y="-529.13086"
+           id="tspan217615">x</tspan></text>
+    </g>
+  </g>
+  <g
+     id="g3706-6-1"
+     transform="matrix(0.75300042,0,0,0.70109931,831.13715,-172.27505)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g12221-1"
+       transform="translate(-714.1291,493.28984)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-3-3"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <text
+         xml:space="preserve"
+         transform="matrix(1.3280205,0,0,1.4263315,-549.42616,209.65506)"
+         id="text11886-5"
+         style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect11888-4)"><tspan
+           x="88.941406"
+           y="-529.13086"
+           id="tspan217617">x</tspan></text>
+    </g>
+  </g>
+  <g
+     id="g1982-8"
+     transform="matrix(0.75300042,0,0,0.70109931,589.82784,223.45719)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g3706-5"
+       transform="translate(-1.5824524,-71.811715)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-1"
+         cx="-414.49017"
+         cy="-560.64935"
+         rx="27.187235"
+         ry="27.906727" />
+      <path
+         style="fill:none;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m -440.97354,-555.2127 26.31568,5e-5"
+         id="path7858-0"
+         inkscape:connector-type="polyline"
+         inkscape:connector-curvature="0"
+         sodipodi:nodetypes="cc" />
+      <path
+         style="fill:none;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m -391.14914,-574.34131 -23.50872,19.12866"
+         id="path7858-9-8"
+         inkscape:connector-type="polyline"
+         inkscape:connector-curvature="0"
+         sodipodi:nodetypes="cc" />
+    </g>
+  </g>
+  <g
+     id="g3706-7"
+     transform="matrix(0.75300042,0,0,0.70109931,527.06134,173.51062)"
+     style="fill:#ffffff;fill-opacity:1;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       id="path7858-3"
+       style="fill:#ffffff;fill-opacity:1;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m -437.35009,-547.45011 c 19.14402,-27.75242 27.03484,-0.15977 46.20095,-26.8912 m 3.8462,13.69196 a 27.187235,27.906727 0 0 1 -27.18723,27.90672 27.187235,27.906727 0 0 1 -27.18724,-27.90672 27.187235,27.906727 0 0 1 27.18724,-27.90673 27.187235,27.906727 0 0 1 27.18723,27.90673 z" />
+  </g>
+  <rect
+     style="fill:none;fill-opacity:1;stroke:#838383;stroke-width:2.41177;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:2.41177, 9.64704;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect15843"
+     width="950.32306"
+     height="567.58148"
+     x="-380.9523"
+     y="-588.97821"
+     rx="7.1207405e-06"
+     ry="7.1213494e-06"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <text
+     xml:space="preserve"
+     id="text41587"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589);fill:#575757;fill-opacity:1"
+     transform="translate(42.333974,210.11098)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-696.91406"
+       id="tspan217621"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217619">feedback</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-59"
+     style="font-weight:bold;font-size:24px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-43);fill:#575757;fill-opacity:1"
+     transform="translate(23.104347,95.14385)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-693.375"
+       id="tspan217625"><tspan
+         style="fill:#838383"
+         id="tspan217623">Network Layer</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4);fill:#575757;fill-opacity:1"
+     transform="translate(776.10073,317.99122)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-696.91406"
+       id="tspan217629"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217627">feedback</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2"
+     style="font-weight:bold;font-size:24px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,13.730766,-816.53749)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-693.375"
+       id="tspan217633"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217631">hidden states</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7"
+     style="font-weight:bold;font-size:24px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4);fill:#575757;fill-opacity:1"
+     transform="translate(620.09599,29.904894)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-693.375"
+       id="tspan217637"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217635">storage buffer</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3"
+     style="font-weight:bold;font-size:24px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51);fill:#575757;fill-opacity:1"
+     transform="translate(1181.4183,30.532778)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-693.375"
+       id="tspan217641"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217639">storage buffer</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3-3"
+     style="font-weight:bold;font-size:24px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51-9);fill:#575757;fill-opacity:1"
+     transform="translate(1194.9371,703.90654)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-693.375"
+       id="tspan217645"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217643">input image</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3-9"
+     style="font-weight:bold;font-size:16px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51-3);fill:#575757;fill-opacity:1"
+     transform="translate(1323.9667,542.969)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-700.45312"
+       id="tspan217649"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217647">channels = (64, 64)
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-680.45312"
+       id="tspan217653"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217651">kernel = 5x5
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-660.45312"
+       id="tspan217657"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217655">stride = (2, 1)
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-640.45312"
+       id="tspan217661"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217659">pool = {kernel = 3x3; stride=2}</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3-9-1"
+     style="font-weight:bold;font-size:16px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51-3-9);fill:#575757;fill-opacity:1"
+     transform="translate(1324.3604,429.88507)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-700.45312"
+       id="tspan217665"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217663">channels = (144, 144)
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-680.45312"
+       id="tspan217669"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217667">kernel = 3x3
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-660.45312"
+       id="tspan217673"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217671">stride = (2, 1)
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-640.45312"
+       id="tspan217677"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217675">pool = {kernel = 3x3; stride=2}</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3-9-1-6"
+     style="font-weight:bold;font-size:16px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51-3-9-2);fill:#575757;fill-opacity:1"
+     transform="translate(1323.04,320.80373)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-700.45312"
+       id="tspan217681"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217679">channels = (256, 256)
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-680.45312"
+       id="tspan217685"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217683">kernel = 3x3
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-660.45312"
+       id="tspan217689"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217687">stride = (2, 1)
+</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3-9-1-6-7"
+     style="font-weight:bold;font-size:16px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51-3-9-2-4);fill:#575757;fill-opacity:1"
+     transform="translate(1324.6917,204.39752)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-700.45312"
+       id="tspan217693"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217691">channels = (256, 256)
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-680.45312"
+       id="tspan217697"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217695">kernel = 3x3
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-660.45312"
+       id="tspan217701"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217699">stride = (2, 1)
+</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-3-9-9"
+     style="font-weight:bold;font-size:16px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-51-3-1);fill:#575757;fill-opacity:1"
+     transform="translate(1324.548,107.46973)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-700.45312"
+       id="tspan217705"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217703">Adaptive Average Pooling
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-680.45312"
+       id="tspan217709"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217707">Flatten
+</tspan></tspan><tspan
+       x="-405.39844"
+       y="-660.45312"
+       id="tspan217713"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217711">Linear 521 x 1000</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-2-7-1-0-1"
+     style="font-weight:bold;font-size:26.6667px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-8-8-0-5-7);fill:#575757;fill-opacity:1"
+     transform="translate(1090.5272,122.97386)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-691.0156"
+       id="tspan217717"><tspan
+         style="fill:#353535"
+         id="tspan217715">Classifier</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-2-7-1-0-0"
+     style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-8-8-0-5-8);fill:#575757;fill-opacity:1"
+     transform="translate(984.0251,126.28728)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-645.55081"
+       id="tspan217721"><tspan
+         dx="0 19.759096 11.425772 22.493465 19.840473 19.840477 11.425774 14.501938 22.607399"
+         id="tspan217719">classifer</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7"
+     style="font-weight:bold;font-size:13.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-0);fill:#575757;fill-opacity:1"
+     transform="rotate(-77.332545,147.43745,-625.95132)"
+     x="70.244141"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-316.64258"
+       y="-702.81253"
+       id="tspan217725"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';text-align:end;text-anchor:end"
+         id="tspan217723">
+</tspan></tspan><tspan
+       x="-365.4185"
+       y="-686.1459"
+       id="tspan217729"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';text-align:end;text-anchor:end"
+         id="tspan217727">conv2d</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7-8"
+     style="font-weight:bold;font-size:13.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-0-9);fill:#575757;fill-opacity:1"
+     transform="rotate(-77.332545,32.742724,-483.5149)"
+     x="70.244141"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-316.64258"
+       y="-702.81253"
+       id="tspan217733"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';text-align:end;text-anchor:end"
+         id="tspan217731">
+</tspan></tspan><tspan
+       x="-365.4185"
+       y="-686.1459"
+       id="tspan217737"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic';text-align:end;text-anchor:end"
+         id="tspan217735">conv2d</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7-2"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-0-8);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,206.89471,-711.76555)"
+     x="119.7168"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-367.74609"
+       y="-696.91406"
+       id="tspan217741"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif;text-align:end;text-anchor:end"
+         id="tspan217739">tstep</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7-2-1"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;fill:#575757;fill-opacity:1;shape-inside:url(#rect41589-4-1-4-5-0-8-6)"
+     transform="rotate(-90,172.98381,-676.90249)"
+     x="195.32227"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-394.54297"
+       y="-696.91406"
+       id="tspan217745"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif;text-align:end;text-anchor:end"
+         id="tspan217743">addskip</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7-2-1-4"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-0-8-6-6);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,86.168677,-516.62308)"
+     x="195.32227"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-696.91406"
+       id="tspan217749"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif"
+         id="tspan217747">rconv</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-2"
+     style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif Italic';text-align:end;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-3);fill:#575757;fill-opacity:1"
+     transform="rotate(-80.157204,56.478625,-522.75244)"
+     x="128.10547"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-357.56044"
+       y="-702.81253"
+       id="tspan217751">nonlin</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-2-4"
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:sans-serif;text-align:end;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-3-1);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,236.91345,-742.24499)"
+     x="128.10547"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-378.01953"
+       y="-696.91406"
+       id="tspan217753">nonlin</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-2-4-9"
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:sans-serif;text-align:end;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-3-1-1);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,265.31585,-768.25814)"
+     x="128.10547"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-371.29102"
+       y="-696.91406"
+       id="tspan217755">delay</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-2-4-1"
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:sans-serif;text-align:end;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-3-1-7);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,299.67428,-805.52644)"
+     x="128.10547"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-359.36719"
+       y="-696.91406"
+       id="tspan217757">pool</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-2-4-1-1"
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:sans-serif;text-align:end;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-3-1-7-0);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,281.79823,-786.49242)"
+     x="128.10547"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-380.5293"
+       y="-696.91406"
+       id="tspan217759">record</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-5"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-8);fill:#575757;fill-opacity:1"
+     transform="translate(41.791451,280.79623)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-696.91406"
+       id="tspan217763"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217761">recurrent</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-5-7"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-8-0);fill:#575757;fill-opacity:1"
+     transform="translate(777.5203,276.76618)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-696.91406"
+       id="tspan217767"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217765">skip</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-5-7-7"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-8-0-6);fill:#575757;fill-opacity:1"
+     transform="translate(369.01478,318.28337)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-696.91406"
+       id="tspan217771"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217769">skip</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7-2-1-8"
+     style="font-weight:bold;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-0-8-6-8);fill:#575757;fill-opacity:1"
+     transform="rotate(-90,217.17708,-663.04906)"
+     x="323.58398"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-389.64453"
+       y="-696.91406"
+       id="tspan217775"><tspan
+         style="font-weight:normal;-inkscape-font-specification:sans-serif;text-align:end;text-anchor:end"
+         id="tspan217773">addfeedback</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-5-7-2-1-6"
+     style="font-weight:bold;font-size:13.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-5-0-8-6-7);fill:#575757;fill-opacity:1"
+     transform="rotate(-82.411358,-11.717456,-460.18311)"
+     x="195.32227"
+     y="0"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-702.81253"
+       id="tspan217779"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217777">rctarget = 'input'</tspan></tspan></text>
+  <g
+     aria-label="}"
+     transform="matrix(0,0.52191475,-3.647392,0,-1918.7116,-416.75584)"
+     id="text223-9-2"
+     style="font-size:144.226px;stroke-width:2.00179;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <path
+       d="m 594.7541,-437.83208 h 4.93506 c 6.58008,0 10.85713,-1.10602 12.83116,-3.31805 2.02102,-2.21203 3.03154,-6.99619 3.03154,-14.35247 v -19.13666 c 0,-8.02503 1.05752,-13.86376 3.17254,-17.51619 2.11502,-3.65242 5.78107,-6.1731 10.99814,-7.56205 -5.21707,-1.28607 -8.88312,-3.75532 -10.99814,-7.40774 -2.11502,-3.65243 -3.17254,-9.51687 -3.17254,-17.59337 v -19.13663 c 0,-7.30485 -1.01052,-12.06329 -3.03154,-14.27532 -1.97403,-2.26347 -6.25108,-3.39521 -12.83116,-3.39521 h -4.93506"
+       id="path32183"
+       sodipodi:nodetypes="cscssscssscsc"
+       style="fill:none;stroke:#444444;stroke-width:2.00179;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+  </g>
+  <circle
+     cx="860.70282"
+     cy="-478.82837"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="4.45603"
+     id="circle35-9"
+     r="29.706833"
+     style="stroke:#353535;stroke-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <rect
+     x="830.76495"
+     y="-589.01221"
+     width="60.389408"
+     height="23.833536"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="4.24161"
+     id="rect175-21-3-5"
+     style="fill:#e7e7e7;fill-opacity:1;stroke:#353535;stroke-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <circle
+     cx="860.70282"
+     cy="-362.61673"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="4.45603"
+     id="circle51-8"
+     r="29.706833"
+     style="stroke:#353535;stroke-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <circle
+     cx="860.70282"
+     cy="-246.40509"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="4.45603"
+     id="circle67-1"
+     r="29.706833"
+     style="stroke:#353535;stroke-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <circle
+     cx="860.70282"
+     cy="-130.19345"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="4.45603"
+     id="circle83-6"
+     r="29.706833"
+     style="stroke:#353535;stroke-opacity:1"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <rect
+     x="844.03815"
+     y="-653.35797"
+     width="33.918396"
+     height="33.918449"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="2.97069"
+     id="rect175-21"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <rect
+     x="828.53644"
+     y="-34.973907"
+     width="64.784309"
+     height="14.308007"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="2.97069"
+     id="rect175-21-3"
+     ry="3.8247931"
+     rx="3.8247931"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:2.09069;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-8-5-86)"
+     d="m 861.31348,-588.9782 v -25.88623"
+     id="path1874-7-7-5-5-51"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <text
+     xml:space="preserve"
+     id="text152104"
+     style="font-family:sans-serif;font-weight:bold;font-size:40px;line-height:1.25;letter-spacing:0px;word-spacing:0px;-inkscape-font-specification:'sans-serif, Bold';writing-mode:lr;white-space:pre;shape-inside:url(#rect152106)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <text
+     xml:space="preserve"
+     id="text162268"
+     style="font-family:sans-serif;font-weight:bold;font-size:40px;line-height:1.25;letter-spacing:0px;word-spacing:0px;-inkscape-font-specification:'sans-serif, Bold';writing-mode:lr;white-space:pre;shape-inside:url(#rect162270)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;stroke:#838383;stroke-width:2.368;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:4.736, 9.472;stroke-dashoffset:0;stroke-opacity:1"
+     d="M 832.8867,-148.43358 569.37073,-588.97821"
+     id="path188932"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;stroke:#838383;stroke-width:2.368;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:4.736, 9.472;stroke-dashoffset:0;stroke-opacity:1"
+     d="M 833.97292,-115.48372 569.37073,-21.396729"
+     id="path188932-8"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-2"
+     style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-8);fill:#353535;fill-opacity:1"
+     transform="translate(1122.8125,567.70336)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-685.11722"
+       id="tspan217781">V1</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-2-7"
+     style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-8-8);fill:#353535;fill-opacity:1"
+     transform="translate(1119.8628,451.21536)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-685.11722"
+       id="tspan217783">V2</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-2-7-1"
+     style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-8-8-0);fill:#353535;fill-opacity:1"
+     transform="translate(1120.0591,336.39636)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-685.11722"
+       id="tspan217785">V4</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-3-2-7-2-7-1-0"
+     style="font-weight:bold;font-size:33.3333px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-4-1-4-8-8-0-5);fill:#353535;fill-opacity:1"
+     transform="translate(1131.7979,218.7621)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-685.11722"
+       id="tspan217787">IT</tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-5-7-7-4"
+     style="font-weight:bold;font-size:12px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-8-0-6-6);fill:#575757;fill-opacity:1"
+     transform="translate(275.72366,593.7912)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-703.99219"
+       id="tspan217791"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217789">mid_channels</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     id="text41587-5-7-7-4-6"
+     style="font-weight:bold;font-size:12px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-8-0-6-6-6);fill:#575757;fill-opacity:1"
+     transform="translate(449.98952,593.63205)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-703.99219"
+       id="tspan217795"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217793">out_channels</tspan></tspan></text>
+  <g
+     id="g1395-7-2"
+     transform="matrix(1,0,0,0.65803717,645.44641,-109.15115)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g2952-4-7-2-0-6-8"
+       style="fill:#7e7e7e;fill-opacity:0;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+       transform="matrix(2.014811,0,0,3.7795276,-407.71758,-670.64441)">
+      <path
+         d="m 98.077847,92.933993 26.596093,4.235672 V 171.74405 L 98.077847,149.41893 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3150-1-5-2-8-3-8" />
+      <path
+         d="m 97.361923,92.730758 v 56.849592 l 0.715924,-0.16142 V 92.933993 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3152-1-4-3-7-7-7" />
+      <path
+         d="m 97.361923,149.58035 26.592017,22.56793 0.72,-0.40423 -26.596093,-22.32512 z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3154-3-4-9-6-6-5" />
+      <path
+         d="m 97.361923,92.730758 26.592017,4.206207 0.72,0.2327 -26.596093,-4.235672 z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3156-5-9-6-3-1-7" />
+      <path
+         d="m 123.95394,96.936965 v 75.211315 l 0.72,-0.40423 V 97.169665 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3158-9-6-5-5-5-0" />
+      <path
+         d="m 97.361923,92.730758 26.592017,4.206207 V 172.14828 L 97.361923,149.58035 Z"
+         style="fill:#7e7e7e;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.2"
+         id="path3160-3-7-7-0-0-2" />
+    </g>
+    <g
+       id="g2966-4-2-4-8-6-2"
+       style="fill:#7e7e7e;fill-opacity:0.03;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+       transform="matrix(2.014811,0,0,3.7795276,-416.61758,-670.64441)">
+      <path
+         d="m 109.84726,93.02433 29.22862,4.104966 v 74.569044 l -29.22862,-21.67557 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3136-1-1-3-0-5-9" />
+      <path
+         d="m 109.11596,92.792747 v 57.418943 l 0.7313,-0.18892 V 93.02433 Z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3138-5-0-9-4-0-1" />
+      <path
+         d="m 109.11596,150.21169 29.28375,21.94405 0.67617,-0.4574 -29.22862,-21.67557 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3140-0-1-4-1-8-3" />
+      <path
+         d="m 109.11596,92.792747 29.28375,4.072597 0.67617,0.263952 -29.22862,-4.104966 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3142-8-3-4-1-1-8" />
+      <path
+         d="m 138.39971,96.865344 v 75.290396 l 0.67617,-0.4574 V 97.129296 Z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3144-3-7-0-3-2-1" />
+      <path
+         d="m 109.11596,92.792747 29.28375,4.072597 v 75.290396 l -29.28375,-21.94405 z"
+         style="fill:#7e7e7e;fill-opacity:0.03;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.35"
+         id="path3146-5-7-6-5-2-3" />
+    </g>
+    <g
+       id="g2980-6-6-0-9-6-7"
+       style="fill:#7e7e7e;fill-opacity:0.06;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+       transform="matrix(2.014811,0,0,3.7795276,-425.51758,-670.64441)">
+      <path
+         d="m 122.96702,93.056372 30.30734,3.748086 V 171.4227 l -30.30734,-20.10673 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3122-5-3-2-3-9-6" />
+      <path
+         d="m 122.24397,92.792745 v 58.749375 l 0.72305,-0.22615 V 93.056372 Z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3124-9-9-2-4-1-1" />
+      <path
+         d="m 122.24397,151.54212 30.42922,20.38793 0.60117,-0.50735 -30.30734,-20.10673 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3126-9-1-8-1-0-4" />
+      <path
+         d="m 122.24397,92.792745 30.42922,3.713716 0.60117,0.297997 -30.30734,-3.748086 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3128-0-0-4-5-4-9" />
+      <path
+         d="m 152.67319,96.506461 v 75.423589 l 0.60117,-0.50735 V 96.804458 Z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3130-7-41-3-0-2-2" />
+      <path
+         d="m 122.24397,92.792745 30.42922,3.713716 v 75.423589 l -30.42922,-20.38793 z"
+         style="fill:#7e7e7e;fill-opacity:0.06;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.5"
+         id="path3132-6-1-1-8-7-0" />
+    </g>
+    <g
+       id="g2994-3-8-1-3-4-1"
+       style="fill:#7e7e7e;fill-opacity:0.09;stroke:#000000;stroke-width:0.8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+       transform="matrix(2.014811,0,0,3.7795276,-434.41757,-670.64441)">
+      <path
+         d="m 136.5542,93.089558 31.22883,3.43877 V 171.59249 L 136.5542,152.80754 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3108-7-6-1-5-0-8" />
+      <path
+         d="m 135.86801,92.792745 v 60.283815 l 0.68619,-0.26902 V 93.089558 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3110-6-4-9-6-3-6" />
+      <path
+         d="m 135.86801,153.07656 31.42323,19.07918 0.49179,-0.56325 -31.22883,-18.78495 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3112-1-3-0-5-2-3" />
+      <path
+         d="m 135.86801,92.792745 31.42323,3.402641 0.49179,0.332942 -31.22883,-3.43877 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3114-5-4-0-9-8-4" />
+      <path
+         d="m 167.29124,96.195386 v 75.960354 l 0.49179,-0.56325 V 96.528328 Z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3116-0-7-0-9-0-2" />
+      <path
+         d="m 135.86801,92.792745 31.42323,3.402641 v 75.960354 l -31.42323,-19.07918 z"
+         style="fill:#7e7e7e;fill-opacity:0.09;fill-rule:evenodd;stroke:#000000;stroke-width:0.8;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.65"
+         id="path3118-6-7-2-0-3-0" />
+    </g>
+  </g>
+  <text
+     xml:space="preserve"
+     id="text41587-5-7-7-4-6-5"
+     style="font-weight:bold;font-size:12px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect41589-8-0-6-6-6-6);fill:#575757;fill-opacity:1"
+     transform="translate(874.41834,593.93756)"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300"><tspan
+       x="-405.39844"
+       y="-703.99219"
+       id="tspan217799"><tspan
+         style="font-style:italic;font-weight:normal;-inkscape-font-specification:'sans-serif Italic'"
+         id="tspan217797">out_channels</tspan></tspan></text>
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3-2-6-4)"
+     d="m 344.82162,-219.78517 117.4057,0"
+     id="path1874-7-7-8-9-7-9"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#353535;stroke-width:3;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Mend-5-8-3-2-6-4-9)"
+     d="m 550.31327,-219.78517 h 48.42332"
+     id="path1874-7-7-8-9-7-9-4"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300" />
+  <g
+     id="g1982-9"
+     transform="matrix(0.75300042,0,0,0.70109931,592.80124,-44.65615)"
+     style="stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none"
+     inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_architecture.png"
+     inkscape:export-xdpi="300"
+     inkscape:export-ydpi="300">
+    <g
+       id="g13915"
+       transform="translate(160.96522,383.06885)">
+      <ellipse
+         style="fill:#ffffff;fill-opacity:1;stroke:#1d1d1d;stroke-width:3.44075;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path7754-4"
+         cx="-416.07263"
+         cy="-632.46106"
+         rx="27.187235"
+         ry="27.906727" />
+      <path
+         style="fill:none;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m -432.04863,-655.11338 41.68197,14.62864"
+         id="path7858-9-5"
+         inkscape:connector-type="polyline"
+         inkscape:connector-curvature="0"
+         sodipodi:nodetypes="cc" />
+      <path
+         style="fill:none;fill-rule:evenodd;stroke:#1d1d1d;stroke-width:3.44075;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m -432.04863,-609.95658 41.68197,-14.54965"
+         id="path7858-9-5-0"
+         inkscape:connector-type="polyline"
+         inkscape:connector-curvature="0"
+         sodipodi:nodetypes="cc" />
+    </g>
+  </g>
+</svg>

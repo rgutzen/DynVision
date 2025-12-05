@@ -1,0 +1,3077 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 1043.3581 370.23843"
+   version="1.1"
+   id="svg247"
+   sodipodi:docname="rcnn_unrolling_diagram.svg"
+   width="1043.3582"
+   height="370.23843"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   inkscape:export-filename="/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/reports/figures/sketches/rcnn_unrolling_diagram.png"
+   inkscape:export-xdpi="300"
+   inkscape:export-ydpi="300"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview249"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     showgrid="false"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:zoom="1.9818814"
+     inkscape:cx="563.10131"
+     inkscape:cy="190.98015"
+     inkscape:window-width="1920"
+     inkscape:window-height="1060"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg247">
+    <sodipodi:guide
+       position="813.41907,299.07295"
+       orientation="1,0"
+       id="guide2997" />
+    <sodipodi:guide
+       position="842.7414,333.94072"
+       orientation="0,-1"
+       id="guide10971" />
+    <sodipodi:guide
+       position="354.17577,273.94073"
+       orientation="0,-1"
+       id="guide10973" />
+    <sodipodi:guide
+       position="842.7414,213.94073"
+       orientation="0,-1"
+       id="guide10975" />
+    <sodipodi:guide
+       position="842.7414,153.94073"
+       orientation="0,-1"
+       id="guide10977" />
+    <sodipodi:guide
+       position="702.95522,-133.20686"
+       orientation="1,0"
+       id="guide12189" />
+  </sodipodi:namedview>
+  <defs
+     id="defs31">
+    <marker
+       style="overflow:visible"
+       id="Arrow2Lend"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Lend"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(-1.1,0,0,-1.1,-1.1,0)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path26219" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Lstart"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Lstart"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(1.1,0,0,1.1,1.1,0)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path26216" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Tail"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Tail"
+       inkscape:isstock="true">
+      <g
+         transform="scale(-1.2)"
+         id="g26246">
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -3.8048674,-3.9585227 0.54352094,0"
+           id="path26234" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -1.2866832,-3.9585227 3.0617053,0"
+           id="path26236" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M 1.3053582,-3.9585227 5.6537466,0"
+           id="path26238" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -3.8048674,4.1775838 0.54352094,0.21974226"
+           id="path26240" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -1.2866832,4.1775838 3.0617053,0.21974226"
+           id="path26242" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M 1.3053582,4.1775838 5.6537466,0.21974226"
+           id="path26244" />
+      </g>
+    </marker>
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternLavender"
+       id="pattern2863"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternLavender"
+       id="pattern2861"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPink"
+       id="pattern2859"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPink"
+       id="pattern2857"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPink"
+       id="pattern2855"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPink"
+       id="pattern2853"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern2851"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern2849"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern2847"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern2845"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern2843"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern2841"
+       patternTransform="translate(402.74143,-43.702304)" />
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#hashPatternPurple"
+       id="pattern1859"
+       patternTransform="translate(-159.8979,150.22399)" />
+    <!-- Regular arrow marker (smaller) -->
+    <marker
+       id="arrowhead"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="6,2 0,4 0,0 "
+         fill="#444444"
+         id="polygon2" />
+    </marker>
+    <!-- Circle marker for feedback (smaller) -->
+    <marker
+       id="circlehead"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <circle
+         cx="3"
+         cy="3"
+         r="2"
+         fill="none"
+         stroke="#666666"
+         stroke-width="1"
+         id="circle5" />
+    </marker>
+    <!-- Plus marker for recurrent (smaller) -->
+    <marker
+       id="plushead"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <path
+         d="m 1.5,3 h 3 M 3,1.5 v 3"
+         stroke="#888888"
+         stroke-width="1.5"
+         id="path8" />
+    </marker>
+    <!-- Square marker for skip (smaller) -->
+    <marker
+       id="squarehead"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <rect
+         x="1"
+         y="1"
+         width="4"
+         height="4"
+         fill="none"
+         stroke="#555555"
+         stroke-width="1"
+         id="rect11" />
+    </marker>
+    <!-- Hash patterns for inactive nodes with muted colors -->
+    <pattern
+       id="hashPatternPurple"
+       patternUnits="userSpaceOnUse"
+       width="4"
+       height="4">
+      <rect
+         width="4"
+         height="4"
+         fill="#d4c5d9"
+         id="rect14" />
+      <path
+         d="M 0 4 L 4 0 M -1 1 L 1 -1 M 3 5 L 5 3"
+         stroke="#bbb"
+         stroke-width="0.5"
+         id="path16" />
+    </pattern>
+    <pattern
+       id="hashPatternPink"
+       patternUnits="userSpaceOnUse"
+       width="4"
+       height="4">
+      <rect
+         width="4"
+         height="4"
+         fill="#f0c5d6"
+         id="rect19" />
+      <path
+         d="M 0 4 L 4 0 M -1 1 L 1 -1 M 3 5 L 5 3"
+         stroke="#bbb"
+         stroke-width="0.5"
+         id="path21" />
+    </pattern>
+    <pattern
+       id="hashPatternLavender"
+       patternUnits="userSpaceOnUse"
+       width="4"
+       height="4">
+      <rect
+         width="4"
+         height="4"
+         fill="#e6d5e6"
+         id="rect24" />
+      <path
+         d="M 0 4 L 4 0 M -1 1 L 1 -1 M 3 5 L 5 3"
+         stroke="#bbb"
+         stroke-width="0.5"
+         id="path26" />
+    </pattern>
+    <!-- Styles -->
+    <style
+       id="style29">
+      .recurrent { stroke-dasharray: 3,3; stroke: #888; stroke-width: 2; fill: none; }
+      .feedforward { stroke-width: 2; stroke: #444; }
+      .feedback { stroke-width: 2; stroke: #666; }
+      .skip { stroke-width: 2; stroke: #555; }
+      .dynamics { stroke-dasharray: 1,2; stroke: #999; stroke-width: 2; }
+      .inactive-purple { fill: url(#hashPatternPurple); }
+      .inactive-pink { fill: url(#hashPatternPink); }
+      .inactive-lavender { fill: url(#hashPatternLavender); }
+    </style>
+    <marker
+       id="arrowhead-3"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon2-4" />
+    </marker>
+    <marker
+       id="marker1545"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1543" />
+    </marker>
+    <marker
+       id="marker1549"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1547" />
+    </marker>
+    <marker
+       id="marker1553"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1551" />
+    </marker>
+    <marker
+       id="marker1557"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1555" />
+    </marker>
+    <marker
+       id="marker1561"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1559" />
+    </marker>
+    <marker
+       id="marker1565"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1563" />
+    </marker>
+    <marker
+       id="arrowhead-4"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon2-5" />
+    </marker>
+    <marker
+       id="marker1096"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1094" />
+    </marker>
+    <marker
+       id="marker1100"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1098" />
+    </marker>
+    <marker
+       id="squarehead-1"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <rect
+         x="1"
+         y="1"
+         width="4"
+         height="4"
+         fill="none"
+         stroke="#555555"
+         stroke-width="1"
+         id="rect11-7" />
+    </marker>
+    <marker
+       id="plushead-5"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <path
+         d="m 1.5,3 h 3 M 3,1.5 v 3"
+         stroke="#888888"
+         stroke-width="1.5"
+         id="path8-7" />
+    </marker>
+    <marker
+       id="marker1108"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <path
+         d="m 1.5,3 h 3 M 3,1.5 v 3"
+         stroke="#888888"
+         stroke-width="1.5"
+         id="path1106" />
+    </marker>
+    <marker
+       id="marker1112"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <path
+         d="m 1.5,3 h 3 M 3,1.5 v 3"
+         stroke="#888888"
+         stroke-width="1.5"
+         id="path1110" />
+    </marker>
+    <marker
+       id="circlehead-1"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <circle
+         cx="3"
+         cy="3"
+         r="2"
+         fill="none"
+         stroke="#666666"
+         stroke-width="1"
+         id="circle5-6" />
+    </marker>
+    <marker
+       id="marker1118"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <circle
+         cx="3"
+         cy="3"
+         r="2"
+         fill="none"
+         stroke="#666666"
+         stroke-width="1"
+         id="circle1116" />
+    </marker>
+    <marker
+       id="marker1122"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1120" />
+    </marker>
+    <marker
+       id="marker1126"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1124" />
+    </marker>
+    <marker
+       id="marker1130"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1128" />
+    </marker>
+    <marker
+       id="marker1134"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1132" />
+    </marker>
+    <marker
+       id="marker1138"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1136" />
+    </marker>
+    <marker
+       id="marker1142"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1140" />
+    </marker>
+    <marker
+       id="marker1146"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon1144" />
+    </marker>
+    <marker
+       id="arrowhead-47"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon2-9" />
+    </marker>
+    <marker
+       id="circlehead-7"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <circle
+         cx="3"
+         cy="3"
+         r="2"
+         fill="none"
+         stroke="#666666"
+         stroke-width="1"
+         id="circle5-2" />
+    </marker>
+    <marker
+       id="plushead-2"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <path
+         d="m 1.5,3 h 3 M 3,1.5 v 3"
+         stroke="#888888"
+         stroke-width="1.5"
+         id="path8-1" />
+    </marker>
+    <marker
+       id="squarehead-6"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <rect
+         x="1"
+         y="1"
+         width="4"
+         height="4"
+         fill="none"
+         stroke="#555555"
+         stroke-width="1"
+         id="rect11-3" />
+    </marker>
+    <marker
+       id="arrowhead-4-0"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-5-8" />
+    </marker>
+    <marker
+       id="marker11054"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon11052" />
+    </marker>
+    <marker
+       id="squarehead-69"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <rect
+         x="1"
+         y="1"
+         width="4"
+         height="4"
+         fill="none"
+         stroke="#555555"
+         stroke-width="1"
+         id="rect11-1" />
+    </marker>
+    <marker
+       id="arrowhead-4-9"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-5-0" />
+    </marker>
+    <marker
+       id="marker11397"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon11395" />
+    </marker>
+    <marker
+       id="arrowhead-8"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon2-45" />
+    </marker>
+    <marker
+       id="arrowhead-5"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,4 0,0 6,2 "
+         fill="#444444"
+         id="polygon2-6" />
+    </marker>
+    <marker
+       id="arrowhead-3-4"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-4-8" />
+    </marker>
+    <marker
+       id="marker11710"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon11708" />
+    </marker>
+    <marker
+       id="arrowhead-8-5"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-45-2" />
+    </marker>
+    <marker
+       id="arrowhead-4-5"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-5-05" />
+    </marker>
+    <marker
+       id="arrowhead-4-5-3"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="6,2 0,4 0,0 "
+         fill="#444444"
+         id="polygon2-5-05-2" />
+    </marker>
+    <marker
+       id="arrowhead-4-5-2"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="6,2 0,4 0,0 "
+         fill="#444444"
+         id="polygon2-5-05-1" />
+    </marker>
+    <marker
+       id="squarehead-1-4"
+       markerWidth="6"
+       markerHeight="6"
+       refX="3"
+       refY="3"
+       orient="auto">
+      <rect
+         x="1"
+         y="1"
+         width="4"
+         height="4"
+         fill="none"
+         stroke="#555555"
+         stroke-width="1"
+         id="rect11-7-9" />
+    </marker>
+    <marker
+       id="arrowhead-3-5"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon2-4-7" />
+    </marker>
+    <marker
+       id="marker12026"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon12024" />
+    </marker>
+    <marker
+       id="marker12030"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="0,0 6,2 0,4 "
+         fill="#444444"
+         id="polygon12028" />
+    </marker>
+    <marker
+       id="arrowhead-3-4-4"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="6,2 0,4 0,0 "
+         fill="#444444"
+         id="polygon2-4-8-1" />
+    </marker>
+    <marker
+       id="marker12036"
+       markerWidth="6"
+       markerHeight="4"
+       refX="5"
+       refY="2"
+       orient="auto">
+      <polygon
+         points="6,2 0,4 0,0 "
+         fill="#444444"
+         id="polygon12034" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Tail-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Tail"
+       inkscape:isstock="true">
+      <g
+         transform="scale(-1.2)"
+         id="g26246-5">
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -3.8048674,-3.9585227 0.54352094,0"
+           id="path26234-1" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -1.2866832,-3.9585227 3.0617053,0"
+           id="path26236-9" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M 1.3053582,-3.9585227 5.6537466,0"
+           id="path26238-7" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -3.8048674,4.1775838 0.54352094,0.21974226"
+           id="path26240-1" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M -1.2866832,4.1775838 3.0617053,0.21974226"
+           id="path26242-3" />
+        <path
+           style="fill:none;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.8;stroke-linecap:round"
+           d="M 1.3053582,4.1775838 5.6537466,0.21974226"
+           id="path26244-1" />
+      </g>
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Arrow2Lstart-0"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow2Lstart"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(1.1,0,0,1.1,1.1,0)"
+         d="M 8.7185878,4.0337352 -2.2072895,0.01601326 8.7185884,-4.0017078 c -1.7454984,2.3720609 -1.7354408,5.6174519 -6e-7,8.035443 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.625;stroke-linejoin:round"
+         id="path26216-6" />
+    </marker>
+  </defs>
+  <!-- Title -->
+  <!-- Define positions for 7 timesteps (removed t=7) -->
+  <!-- X positions: 100, 150, 200, 250, 300, 350, 400 -->
+  <!-- Y positions: IT=80, V4=140, V2=200, V1=260 -->
+  <!-- IT layer (top) - graying out t=0 through t=5 -->
+  <circle
+     cx="502.74142"
+     cy="36.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-purple"
+     id="circle35"
+     style="fill:url(#pattern2841)" />
+  <circle
+     cx="552.74146"
+     cy="36.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-purple"
+     id="circle37"
+     style="fill:url(#pattern2843)" />
+  <circle
+     cx="602.74146"
+     cy="36.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-purple"
+     id="circle39"
+     style="fill:url(#pattern2845)" />
+  <circle
+     cx="652.74146"
+     cy="36.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-purple"
+     id="circle41"
+     style="fill:url(#pattern2847)" />
+  <circle
+     cx="702.74146"
+     cy="36.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-purple"
+     id="circle43"
+     style="fill:url(#pattern2849)" />
+  <circle
+     cx="752.74146"
+     cy="36.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-purple"
+     id="circle45"
+     style="fill:url(#pattern2851)" />
+  <circle
+     cx="802.74146"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle47" />
+  <text
+     x="467.74142"
+     y="41.297699"
+     font-size="12px"
+     font-weight="bold"
+     id="text49">IT</text>
+  <!-- V4 layer - graying out t=0 through t=3 -->
+  <circle
+     cx="502.74142"
+     cy="96.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-pink"
+     id="circle51"
+     style="fill:url(#pattern2853)" />
+  <circle
+     cx="552.74146"
+     cy="96.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-pink"
+     id="circle53"
+     style="fill:url(#pattern2855)" />
+  <circle
+     cx="602.74146"
+     cy="96.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-pink"
+     id="circle55"
+     style="fill:url(#pattern2857)" />
+  <circle
+     cx="652.74146"
+     cy="96.297699"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-pink"
+     id="circle57"
+     style="fill:url(#pattern2859)" />
+  <circle
+     cx="702.74146"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle59" />
+  <circle
+     cx="752.74146"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle61" />
+  <circle
+     cx="802.74146"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle63" />
+  <text
+     x="467.74142"
+     y="101.2977"
+     font-size="12px"
+     font-weight="bold"
+     id="text65">V4</text>
+  <!-- V2 layer - graying out t=0 and t=1 -->
+  <circle
+     cx="502.74142"
+     cy="156.2977"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-lavender"
+     id="circle67"
+     style="fill:url(#pattern2861)" />
+  <circle
+     cx="552.74146"
+     cy="156.2977"
+     r="10"
+     stroke="#000000"
+     stroke-width="1.5"
+     class="inactive-lavender"
+     id="circle69"
+     style="fill:url(#pattern2863)" />
+  <circle
+     cx="602.74146"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle71" />
+  <circle
+     cx="652.74146"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle73" />
+  <circle
+     cx="702.74146"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle75" />
+  <circle
+     cx="752.74146"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle77" />
+  <circle
+     cx="802.74146"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle79" />
+  <text
+     x="467.74142"
+     y="161.2977"
+     font-size="12px"
+     font-weight="bold"
+     id="text81">V2</text>
+  <!-- V1 layer (bottom) - all active -->
+  <circle
+     cx="502.74142"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle83" />
+  <circle
+     cx="552.74146"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle85" />
+  <circle
+     cx="602.74146"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle87" />
+  <circle
+     cx="652.74146"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle89" />
+  <circle
+     cx="702.74146"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle91" />
+  <circle
+     cx="752.74146"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle93" />
+  <circle
+     cx="802.74146"
+     cy="216.2977"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle95" />
+  <text
+     x="467.74142"
+     y="221.2977"
+     font-size="12px"
+     font-weight="bold"
+     id="text97">V1</text>
+  <!-- Feedforward connections starting from V1 at t=0 -->
+  <!-- V1 at t=0 → V2 at t=2 -->
+  <line
+     x1="502.74142"
+     y1="206.2977"
+     x2="602.74146"
+     y2="166.2977"
+     stroke="#444"
+     marker-end="url(#arrowhead)"
+     class="feedforward"
+     id="line99" />
+  <!-- V2 at t=2 → V4 at t=4 -->
+  <line
+     x1="602.74146"
+     y1="146.2977"
+     x2="702.74146"
+     y2="106.2977"
+     stroke="#444"
+     marker-end="url(#arrowhead)"
+     class="feedforward"
+     id="line101" />
+  <line
+     x1="802.74146"
+     y1="146.2977"
+     x2="902.74146"
+     y2="106.2977"
+     stroke="#444"
+     marker-end="url(#arrowhead-8)"
+     class="feedforward"
+     id="line101-6"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-8)" />
+  <line
+     x1="702.74146"
+     y1="206.2977"
+     x2="802.74146"
+     y2="166.2977"
+     stroke="#444"
+     marker-end="url(#arrowhead-8-5)"
+     class="feedforward"
+     id="line101-6-4"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-8-5)" />
+  <line
+     x1="904.90955"
+     y1="86.297707"
+     x2="1004.9095"
+     y2="46.297699"
+     stroke="#444"
+     marker-end="url(#arrowhead-5)"
+     class="feedforward"
+     id="line101-8"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-5)" />
+  <!-- V4 at t=4 → IT at t=6 -->
+  <line
+     x1="702.74146"
+     y1="86.297699"
+     x2="802.74146"
+     y2="46.297699"
+     stroke="#444"
+     marker-end="url(#arrowhead)"
+     class="feedforward"
+     id="line103" />
+  <!-- Skip connection: V1 at t=0 → V4 at t=5 (right-turn bend, reaching from below) -->
+  <path
+     d="m 502.74143,206.2977 c 106.36874,-7.27582 190,-50 250,-100"
+     stroke="#555555"
+     stroke-width="2"
+     fill="none"
+     marker-end="url(#squarehead)"
+     id="path105"
+     sodipodi:nodetypes="cc" />
+  <!-- First three recurrent connections in V1, bending around intermediate circles -->
+  <!-- V1 at t=0 → V1 at t=2 (bending around t=1) -->
+  <path
+     d="m 512.74143,216.2977 q 15,20 40,20 25,0 40,-20"
+     stroke="#888"
+     class="recurrent"
+     marker-end="url(#plushead)"
+     id="path107" />
+  <!-- V1 at t=1 → V1 at t=3 (bending around t=2) -->
+  <path
+     d="m 562.74143,216.2977 q 15,20 40,20 25,0 40,-20"
+     stroke="#888"
+     class="recurrent"
+     marker-end="url(#plushead)"
+     id="path109" />
+  <!-- V1 at t=2 → V1 at t=4 (bending around t=3) -->
+  <path
+     d="m 612.74143,216.2977 q 15,20 40,20 25,0 40,-20"
+     stroke="#888"
+     class="recurrent"
+     marker-end="url(#plushead)"
+     id="path111" />
+  <!-- Feedback connections from V2 at t=2 and V4 at t=4 -->
+  <!-- V2 at t=2 → V1 at t=4 -->
+  <line
+     x1="602.74146"
+     y1="166.2977"
+     x2="702.74146"
+     y2="206.2977"
+     stroke="#666"
+     marker-end="url(#circlehead)"
+     class="feedback"
+     id="line113" />
+  <!-- V4 at t=4 → V2 at t=6 -->
+  <line
+     x1="702.74146"
+     y1="106.2977"
+     x2="802.74146"
+     y2="146.2977"
+     stroke="#666"
+     marker-end="url(#circlehead)"
+     class="feedback"
+     id="line115" />
+  <!-- More visible dotted horizontal lines between all circles in each layer (dynamics) -->
+  <!-- IT layer -->
+  <line
+     x1="512.74146"
+     y1="36.297699"
+     x2="542.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line117" />
+  <line
+     x1="562.74146"
+     y1="36.297699"
+     x2="592.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line119" />
+  <line
+     x1="612.74146"
+     y1="36.297699"
+     x2="642.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line121" />
+  <line
+     x1="662.74146"
+     y1="36.297699"
+     x2="692.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line123" />
+  <line
+     x1="712.74146"
+     y1="36.297699"
+     x2="742.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line125" />
+  <line
+     x1="762.74146"
+     y1="36.297699"
+     x2="792.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line127" />
+  <!-- Extension to indicate continuation -->
+  <line
+     x1="812.74146"
+     y1="36.297699"
+     x2="842.74146"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line129" />
+  <!-- V4 layer -->
+  <line
+     x1="512.74146"
+     y1="96.297699"
+     x2="542.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line131" />
+  <line
+     x1="562.74146"
+     y1="96.297699"
+     x2="592.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line133" />
+  <line
+     x1="612.74146"
+     y1="96.297699"
+     x2="642.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line135" />
+  <line
+     x1="662.74146"
+     y1="96.297699"
+     x2="692.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line137" />
+  <line
+     x1="712.74146"
+     y1="96.297699"
+     x2="742.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line139" />
+  <line
+     x1="762.74146"
+     y1="96.297699"
+     x2="792.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line141" />
+  <!-- Extension to indicate continuation -->
+  <line
+     x1="812.74146"
+     y1="96.297699"
+     x2="842.74146"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line143" />
+  <!-- V2 layer -->
+  <line
+     x1="512.74146"
+     y1="156.2977"
+     x2="542.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line145" />
+  <line
+     x1="562.74146"
+     y1="156.2977"
+     x2="592.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line147" />
+  <line
+     x1="612.74146"
+     y1="156.2977"
+     x2="642.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line149" />
+  <line
+     x1="662.74146"
+     y1="156.2977"
+     x2="692.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line151" />
+  <line
+     x1="712.74146"
+     y1="156.2977"
+     x2="742.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line153" />
+  <line
+     x1="762.74146"
+     y1="156.2977"
+     x2="792.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line155" />
+  <!-- Extension to indicate continuation -->
+  <line
+     x1="812.74146"
+     y1="156.2977"
+     x2="842.74146"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line157" />
+  <!-- V1 layer -->
+  <line
+     x1="512.74146"
+     y1="216.2977"
+     x2="542.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line159" />
+  <line
+     x1="562.74146"
+     y1="216.2977"
+     x2="592.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line161" />
+  <line
+     x1="612.74146"
+     y1="216.2977"
+     x2="642.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line163" />
+  <line
+     x1="662.74146"
+     y1="216.2977"
+     x2="692.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line165" />
+  <line
+     x1="712.74146"
+     y1="216.2977"
+     x2="742.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line167" />
+  <line
+     x1="762.74146"
+     y1="216.2977"
+     x2="792.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line169" />
+  <!-- Extension to indicate continuation -->
+  <line
+     x1="812.74146"
+     y1="216.2977"
+     x2="842.74146"
+     y2="216.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line171" />
+  <!-- Classifier outputs from IT at all timesteps with small boxes -->
+  <line
+     x1="502.74142"
+     y1="26.297699"
+     x2="502.74142"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line173" />
+  <rect
+     x="497.74142"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect175" />
+  <line
+     x1="552.74146"
+     y1="26.297699"
+     x2="552.74146"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line177" />
+  <rect
+     x="547.74146"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect179" />
+  <line
+     x1="602.74146"
+     y1="26.297699"
+     x2="602.74146"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line181" />
+  <rect
+     x="597.74146"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect183" />
+  <line
+     x1="652.74146"
+     y1="26.297699"
+     x2="652.74146"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line185" />
+  <rect
+     x="647.74146"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect187" />
+  <line
+     x1="702.74146"
+     y1="26.297699"
+     x2="702.74146"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line189" />
+  <rect
+     x="697.74146"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect191" />
+  <line
+     x1="752.74146"
+     y1="26.297699"
+     x2="752.74146"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line193" />
+  <rect
+     x="747.74146"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect195" />
+  <line
+     x1="802.74146"
+     y1="26.297699"
+     x2="802.74146"
+     y2="11.297699"
+     stroke="#444444"
+     marker-end="url(#arrowhead)"
+     id="line197" />
+  <line
+     x1="502.6987"
+     y1="242.91721"
+     x2="502.6987"
+     y2="227.91721"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3)"
+     id="line173-9"
+     style="marker-end:url(#arrowhead-3)" />
+  <line
+     x1="552.69873"
+     y1="242.91721"
+     x2="552.69873"
+     y2="227.91721"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3)"
+     id="line177-2"
+     style="marker-end:url(#arrowhead-3)" />
+  <line
+     x1="602.69873"
+     y1="242.91721"
+     x2="602.69873"
+     y2="227.91721"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3)"
+     id="line181-7"
+     style="marker-end:url(#arrowhead-3)" />
+  <rect
+     x="797.74146"
+     y="1.297699"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect199" />
+  <rect
+     x="497.74146"
+     y="243.11452"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect175-2" />
+  <rect
+     x="547.74146"
+     y="243.11452"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect179-3" />
+  <rect
+     x="597.74146"
+     y="243.11452"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect183-1" />
+  <line
+     x1="653.07886"
+     y1="242.92902"
+     x2="653.07886"
+     y2="227.92902"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-4)"
+     id="line177-2-8"
+     style="marker-end:url(#arrowhead-3-4)" />
+  <line
+     x1="703.07886"
+     y1="242.92902"
+     x2="703.07886"
+     y2="227.92902"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-4)"
+     id="line181-7-3"
+     style="marker-end:url(#arrowhead-3-4)" />
+  <rect
+     x="648.12158"
+     y="243.12633"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect179-3-8" />
+  <rect
+     x="698.12158"
+     y="243.12633"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect183-1-7" />
+  <!-- Classifier label -->
+  <text
+     x="431.38202"
+     y="9.1171875"
+     font-size="12px"
+     font-weight="bold"
+     id="text201">classifier</text>
+  <text
+     x="456.77087"
+     y="250.5284"
+     font-size="12px"
+     font-weight="bold"
+     id="text201-2">input</text>
+  <!-- Time labels -->
+  <text
+     x="502.74142"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text203">t=0</text>
+  <text
+     x="552.74146"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text205">t=1</text>
+  <text
+     x="602.74146"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text207">t=2</text>
+  <text
+     x="652.74146"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text209">t=3</text>
+  <text
+     x="702.74146"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text211">t=4</text>
+  <line
+     x1="71.172028"
+     y1="243.01874"
+     x2="71.172028"
+     y2="228.01874"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-5)"
+     id="line173-9-2"
+     style="marker-end:url(#arrowhead-3-5)" />
+  <line
+     x1="121.17206"
+     y1="243.01874"
+     x2="121.17206"
+     y2="228.01874"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-5)"
+     id="line177-2-2"
+     style="marker-end:url(#arrowhead-3-5)" />
+  <line
+     x1="171.17206"
+     y1="243.01874"
+     x2="171.17206"
+     y2="228.01874"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-5)"
+     id="line181-7-1"
+     style="marker-end:url(#arrowhead-3-5)" />
+  <rect
+     x="66.214783"
+     y="243.21606"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect175-2-6" />
+  <rect
+     x="116.21478"
+     y="243.21606"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect179-3-2" />
+  <rect
+     x="166.21478"
+     y="243.21606"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect183-1-0" />
+  <line
+     x1="221.55219"
+     y1="243.03052"
+     x2="221.55219"
+     y2="228.03052"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-4-4)"
+     id="line177-2-8-2"
+     style="marker-end:url(#arrowhead-3-4-4)" />
+  <line
+     x1="271.55219"
+     y1="243.03052"
+     x2="271.55219"
+     y2="228.03052"
+     stroke="#444444"
+     marker-end="url(#arrowhead-3-4-4)"
+     id="line181-7-3-2"
+     style="marker-end:url(#arrowhead-3-4-4)" />
+  <rect
+     x="216.59491"
+     y="243.22784"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect179-3-8-9" />
+  <rect
+     x="266.59491"
+     y="243.22784"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect183-1-7-7" />
+  <text
+     x="25.244232"
+     y="250.62994"
+     font-size="12px"
+     font-weight="bold"
+     id="text201-2-4">input</text>
+  <text
+     x="71.214752"
+     y="268.39923"
+     text-anchor="middle"
+     font-size="11px"
+     id="text203-3">t=0</text>
+  <text
+     x="121.21478"
+     y="268.39923"
+     text-anchor="middle"
+     font-size="11px"
+     id="text205-5">t=1</text>
+  <text
+     x="171.21478"
+     y="268.39923"
+     text-anchor="middle"
+     font-size="11px"
+     id="text207-6">t=2</text>
+  <text
+     x="221.21477"
+     y="268.39923"
+     text-anchor="middle"
+     font-size="11px"
+     id="text209-1">t=3</text>
+  <text
+     x="271.21478"
+     y="268.39923"
+     text-anchor="middle"
+     font-size="11px"
+     id="text211-4">t=4</text>
+  <text
+     x="752.74146"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text213">t=5</text>
+  <text
+     x="802.74146"
+     y="268.2977"
+     text-anchor="middle"
+     font-size="11px"
+     id="text215">t=6</text>
+  <text
+     x="855.04358"
+     y="267.73669"
+     text-anchor="middle"
+     font-size="11px"
+     id="text209-12">t=7</text>
+  <text
+     x="905.04358"
+     y="267.73669"
+     text-anchor="middle"
+     font-size="11px"
+     id="text211-7">t=8</text>
+  <text
+     x="955.04358"
+     y="267.73669"
+     text-anchor="middle"
+     font-size="11px"
+     id="text213-7">t=9</text>
+  <text
+     x="1005.0436"
+     y="267.73669"
+     text-anchor="middle"
+     font-size="11px"
+     id="text215-9">t=10</text>
+  <!-- Input label -->
+  <!-- Legend -->
+  <line
+     x1="304.10208"
+     y1="250.22398"
+     x2="334.10208"
+     y2="250.22398"
+     stroke="#444444"
+     stroke-width="2"
+     marker-end="url(#arrowhead)"
+     id="line221" />
+  <text
+     x="343.10208"
+     y="255.224"
+     font-size="11px"
+     id="text223">feedforward</text>
+  <text
+     x="829.27753"
+     y="306.69437"
+     font-size="11px"
+     id="text223-9">residual timesteps</text>
+  <g
+     aria-label="}"
+     transform="matrix(0,0.52369419,-2.1919893,0,-214.61968,-38.759211)"
+     id="text223-9-2"
+     style="font-size:144.226px;stroke-width:2.00179;stroke-miterlimit:4;stroke-dasharray:none">
+    <path
+       d="m 594.7541,-437.83208 h 4.93506 c 6.58008,0 10.85713,-1.10602 12.83116,-3.31805 2.02102,-2.21203 3.03154,-6.99619 3.03154,-14.35247 v -19.13666 c 0,-8.02503 1.05752,-13.86376 3.17254,-17.51619 2.11502,-3.65242 5.78107,-6.1731 10.99814,-7.56205 -5.21707,-1.28607 -8.88312,-3.75532 -10.99814,-7.40774 -2.11502,-3.65243 -3.17254,-9.51687 -3.17254,-17.59337 v -19.13663 c 0,-7.30485 -1.01052,-12.06329 -3.03154,-14.27532 -1.97403,-2.26347 -6.25108,-3.39521 -12.83116,-3.39521 h -4.93506"
+       id="path32183"
+       sodipodi:nodetypes="cscssscssscsc"
+       style="fill:none;stroke:#444444;stroke-width:2.00179;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+  </g>
+  <line
+     x1="304.10208"
+     y1="270.22397"
+     x2="334.10208"
+     y2="270.22397"
+     stroke="#666666"
+     stroke-width="2"
+     marker-end="url(#circlehead)"
+     id="line225" />
+  <text
+     x="343.10208"
+     y="275.22397"
+     font-size="11px"
+     id="text227">feedback</text>
+  <path
+     d="m 304.10211,290.22398 q 15,10 30,0"
+     stroke="#888888"
+     stroke-width="2"
+     stroke-dasharray="3, 3"
+     fill="none"
+     marker-end="url(#plushead)"
+     id="path229" />
+  <text
+     x="343.10208"
+     y="295.22397"
+     font-size="11px"
+     id="text231">recurrent</text>
+  <path
+     d="m 304.10211,310.22398 c 10.58652,7.32751 19.73447,6.68168 30,0"
+     stroke="#555555"
+     stroke-width="2"
+     fill="none"
+     marker-end="url(#squarehead)"
+     id="path233"
+     sodipodi:nodetypes="cc" />
+  <text
+     x="343.10208"
+     y="315.22397"
+     font-size="11px"
+     id="text235">skip connection</text>
+  <line
+     x1="304.10208"
+     y1="330.22397"
+     x2="334.10208"
+     y2="330.22397"
+     stroke="#999999"
+     stroke-width="2"
+     stroke-dasharray="1, 2"
+     id="line237" />
+  <text
+     x="343.10208"
+     y="335.22397"
+     font-size="11px"
+     id="text239">dynamics step</text>
+  <circle
+     cx="320.10208"
+     cy="350.22397"
+     r="8"
+     fill="url(#hashPatternPurple)"
+     stroke="#000000"
+     id="circle241"
+     style="fill:url(#pattern1859)" />
+  <text
+     x="343.10208"
+     y="355.22397"
+     font-size="11px"
+     id="text243">inactive (no input)</text>
+  <!-- Additional annotations -->
+  <circle
+     cx="71.484375"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle35-9" />
+  <circle
+     cx="121.48438"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle37-8" />
+  <circle
+     cx="171.48438"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle39-1" />
+  <circle
+     cx="221.48434"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle41-3" />
+  <circle
+     cx="271.48438"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle43-3" />
+  <text
+     x="36.484375"
+     y="41.297699"
+     font-size="12px"
+     font-weight="bold"
+     id="text49-9">IT</text>
+  <circle
+     cx="71.484375"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle51-8" />
+  <circle
+     cx="121.48438"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle53-6" />
+  <circle
+     cx="171.48438"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle55-7" />
+  <circle
+     cx="221.48434"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle57-0" />
+  <circle
+     cx="271.48438"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle59-4" />
+  <text
+     x="36.484375"
+     y="101.2977"
+     font-size="12px"
+     font-weight="bold"
+     id="text65-8">V4</text>
+  <circle
+     cx="71.484375"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle67-1" />
+  <circle
+     cx="121.48438"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle69-6" />
+  <circle
+     cx="171.48438"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle71-8" />
+  <circle
+     cx="221.48434"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle73-5" />
+  <circle
+     cx="271.48438"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle75-2" />
+  <text
+     x="36.484375"
+     y="161.2977"
+     font-size="12px"
+     font-weight="bold"
+     id="text81-9">V2</text>
+  <circle
+     cx="71.484375"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle83-6" />
+  <circle
+     cx="121.48438"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle85-0" />
+  <circle
+     cx="171.48438"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle87-6" />
+  <circle
+     cx="221.48434"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle89-4" />
+  <circle
+     cx="271.48438"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle91-9" />
+  <text
+     x="36.484375"
+     y="221.29773"
+     font-size="12px"
+     font-weight="bold"
+     id="text97-8">V1</text>
+  <line
+     x1="71.484375"
+     y1="206.29773"
+     x2="71.484375"
+     y2="166.2977"
+     stroke="#444"
+     marker-end="url(#arrowhead-4)"
+     class="feedforward"
+     id="line99-9"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-4)" />
+  <line
+     x1="271.48441"
+     y1="206.29773"
+     x2="271.48441"
+     y2="166.29773"
+     stroke="#444"
+     marker-end="url(#arrowhead-4-5)"
+     class="feedforward"
+     id="line99-9-7"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-4-5)" />
+  <line
+     x1="271.48438"
+     y1="146.2977"
+     x2="271.48438"
+     y2="106.29773"
+     stroke="#444"
+     marker-end="url(#arrowhead-4-5-3)"
+     class="feedforward"
+     id="line99-9-7-7"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-4-5-3)" />
+  <line
+     x1="271.4921"
+     y1="87.540924"
+     x2="271.4921"
+     y2="47.540924"
+     stroke="#444"
+     marker-end="url(#arrowhead-4-5-2)"
+     class="feedforward"
+     id="line99-9-7-3"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-4-5-2)" />
+  <line
+     x1="71.484375"
+     y1="146.2977"
+     x2="71.484375"
+     y2="106.2977"
+     stroke="#444"
+     marker-end="url(#arrowhead-4)"
+     class="feedforward"
+     id="line101-3"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-4)" />
+  <line
+     x1="71.484375"
+     y1="86.297699"
+     x2="71.484375"
+     y2="46.297699"
+     stroke="#444"
+     marker-end="url(#arrowhead-4)"
+     class="feedforward"
+     id="line103-1"
+     style="stroke:#444444;stroke-width:2;marker-end:url(#arrowhead-4)" />
+  <path
+     d="m 71.484364,206.29769 c 28.379656,-25.78882 38.080116,-68.25187 49.999996,-100"
+     stroke="#555555"
+     stroke-width="2"
+     fill="none"
+     marker-end="url(#squarehead-1)"
+     id="path105-4"
+     style="marker-end:url(#squarehead-1)"
+     sodipodi:nodetypes="cc" />
+  <path
+     d="m 170.08612,146.11811 c 28.37967,-25.78882 38.08012,-68.251867 50,-99.999997"
+     stroke="#555555"
+     stroke-width="2"
+     fill="none"
+     marker-end="url(#squarehead-1-4)"
+     id="path105-4-4"
+     style="marker-end:url(#squarehead-1-4)"
+     sodipodi:nodetypes="cc" />
+  <path
+     d="m 81.484364,216.29769 q 14.999996,20 39.999996,20 25,0 40,-20"
+     stroke="#888"
+     class="recurrent"
+     marker-end="url(#plushead-5)"
+     id="path107-8"
+     style="fill:none;stroke:#888888;stroke-width:2;stroke-dasharray:3, 3;marker-end:url(#plushead-5)" />
+  <path
+     d="m 131.48436,216.29769 q 15,20 40,20 25,0 40,-20"
+     stroke="#888"
+     class="recurrent"
+     marker-end="url(#plushead-5)"
+     id="path109-9"
+     style="fill:none;stroke:#888888;stroke-width:2;stroke-dasharray:3, 3;marker-end:url(#plushead-5)" />
+  <path
+     d="m 181.48436,216.29769 q 15,20 40,20 25,0 40,-20"
+     stroke="#888"
+     class="recurrent"
+     marker-end="url(#plushead-5)"
+     id="path111-6"
+     style="fill:none;stroke:#888888;stroke-width:2;stroke-dasharray:3, 3;marker-end:url(#plushead-5)" />
+  <line
+     x1="71.484375"
+     y1="166.2977"
+     x2="271.48441"
+     y2="206.29773"
+     stroke="#666"
+     marker-end="url(#circlehead-1)"
+     class="feedback"
+     id="line113-7"
+     style="stroke:#666666;stroke-width:2;marker-end:url(#circlehead-1)" />
+  <line
+     x1="71.484375"
+     y1="106.2977"
+     x2="271.48438"
+     y2="146.2977"
+     stroke="#666"
+     marker-end="url(#circlehead-1)"
+     class="feedback"
+     id="line115-7"
+     style="stroke:#666666;stroke-width:2;marker-end:url(#circlehead-1)" />
+  <line
+     x1="81.484375"
+     y1="36.297699"
+     x2="111.48438"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line117-3"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="131.48438"
+     y1="36.297699"
+     x2="161.48438"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line119-7"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="181.48438"
+     y1="36.297699"
+     x2="211.48434"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line121-1"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="231.48434"
+     y1="36.297699"
+     x2="261.48438"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line123-2"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="281.48438"
+     y1="36.297699"
+     x2="311.48438"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line125-2"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="81.484375"
+     y1="96.297699"
+     x2="111.48438"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line131-0"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="131.48438"
+     y1="96.297699"
+     x2="161.48438"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line133-9"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="181.48438"
+     y1="96.297699"
+     x2="211.48434"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line135-0"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="231.48434"
+     y1="96.297699"
+     x2="261.48438"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line137-4"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="281.48438"
+     y1="96.297699"
+     x2="311.48438"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line139-0"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="81.484375"
+     y1="156.2977"
+     x2="111.48438"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line145-7"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="131.48438"
+     y1="156.2977"
+     x2="161.48438"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line147-4"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="181.48438"
+     y1="156.2977"
+     x2="211.48434"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line149-1"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="231.48434"
+     y1="156.2977"
+     x2="261.48438"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line151-1"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="281.48438"
+     y1="156.2977"
+     x2="311.48438"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line153-3"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="81.484375"
+     y1="216.29773"
+     x2="111.48438"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line159-2"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="131.48438"
+     y1="216.29773"
+     x2="161.48438"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line161-1"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="181.48438"
+     y1="216.29773"
+     x2="211.48434"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line163-7"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="231.48434"
+     y1="216.29773"
+     x2="261.48438"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line165-5"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="281.48438"
+     y1="216.29773"
+     x2="311.48438"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line167-6"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="71.484375"
+     y1="26.297701"
+     x2="71.484375"
+     y2="11.2977"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4)"
+     id="line173-2"
+     style="marker-end:url(#arrowhead-4)" />
+  <rect
+     x="66.484375"
+     y="1.2977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect175-21" />
+  <line
+     x1="121.48438"
+     y1="26.297701"
+     x2="121.48438"
+     y2="11.2977"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4)"
+     id="line177-7"
+     style="marker-end:url(#arrowhead-4)" />
+  <rect
+     x="116.48438"
+     y="1.2977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect179-2" />
+  <line
+     x1="171.48438"
+     y1="26.297701"
+     x2="171.48438"
+     y2="11.2977"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4)"
+     id="line181-4"
+     style="marker-end:url(#arrowhead-4)" />
+  <rect
+     x="166.48438"
+     y="1.2977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect183-16" />
+  <line
+     x1="221.48434"
+     y1="26.297701"
+     x2="221.48434"
+     y2="11.2977"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4)"
+     id="line185-5"
+     style="marker-end:url(#arrowhead-4)" />
+  <rect
+     x="216.48434"
+     y="1.2977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect187-7" />
+  <line
+     x1="271.48438"
+     y1="26.297701"
+     x2="271.48438"
+     y2="11.2977"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4)"
+     id="line189-8"
+     style="marker-end:url(#arrowhead-4)" />
+  <rect
+     x="266.48438"
+     y="1.2977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect191-5" />
+  <circle
+     cx="953.35815"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle45-3-8" />
+  <circle
+     cx="1003.3582"
+     cy="36.297699"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle47-7-9" />
+  <circle
+     cx="953.35815"
+     cy="96.297707"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle61-8-88" />
+  <circle
+     cx="1003.3582"
+     cy="96.297707"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle63-4-0" />
+  <circle
+     cx="953.35815"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle77-1-3" />
+  <circle
+     cx="1003.3582"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle79-9-7" />
+  <circle
+     cx="953.35815"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle93-9-0" />
+  <circle
+     cx="1003.3582"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle95-0-6" />
+  <line
+     x1="963.35815"
+     y1="36.297699"
+     x2="993.35822"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line127-1-9"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="1013.3582"
+     y1="36.297699"
+     x2="1043.3582"
+     y2="36.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line129-5-2"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="963.35815"
+     y1="96.297707"
+     x2="993.35822"
+     y2="96.297707"
+     stroke="#999"
+     class="dynamics"
+     id="line141-1-1"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="1013.3582"
+     y1="96.297707"
+     x2="1043.3582"
+     y2="96.297707"
+     stroke="#999"
+     class="dynamics"
+     id="line143-3-77"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="963.35815"
+     y1="156.2977"
+     x2="993.35822"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line155-0-9"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="1013.3582"
+     y1="156.2977"
+     x2="1043.3582"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line157-3-7"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="963.35815"
+     y1="216.29773"
+     x2="993.35822"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line169-5-6"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="1013.3582"
+     y1="216.29773"
+     x2="1043.3582"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line171-4-2"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="953.35815"
+     y1="26.297701"
+     x2="953.35815"
+     y2="11.297702"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4-9)"
+     id="line193-9-7"
+     style="marker-end:url(#arrowhead-4-9)" />
+  <rect
+     x="948.35815"
+     y="1.2977012"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect195-2-1" />
+  <line
+     x1="1003.3582"
+     y1="26.297701"
+     x2="1003.3582"
+     y2="11.297702"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4-9)"
+     id="line197-7-5"
+     style="marker-end:url(#arrowhead-4-9)" />
+  <rect
+     x="998.35822"
+     y="1.2977012"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect199-3-8" />
+  <text
+     x="-0.515625"
+     y="9.2976999"
+     font-size="12px"
+     font-weight="bold"
+     id="text201-6">classifier</text>
+  <circle
+     cx="854.16296"
+     cy="36.297695"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle45-3-3" />
+  <circle
+     cx="904.16296"
+     cy="36.297695"
+     r="10"
+     fill="#ba55d3"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle47-7-7" />
+  <circle
+     cx="854.16296"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle61-8-8" />
+  <circle
+     cx="904.16296"
+     cy="96.297699"
+     r="10"
+     fill="#da70d6"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle63-4-2" />
+  <circle
+     cx="854.16296"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle77-1-1" />
+  <circle
+     cx="904.16296"
+     cy="156.2977"
+     r="10"
+     fill="#dda0dd"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle79-9-0" />
+  <circle
+     cx="854.16296"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle93-9-5" />
+  <circle
+     cx="904.16296"
+     cy="216.29773"
+     r="10"
+     fill="#ff69b4"
+     stroke="#000000"
+     stroke-width="1.5"
+     id="circle95-0-8" />
+  <line
+     x1="864.16296"
+     y1="36.297695"
+     x2="894.16296"
+     y2="36.297695"
+     stroke="#999"
+     class="dynamics"
+     id="line127-1-5"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="914.16296"
+     y1="36.297695"
+     x2="944.16302"
+     y2="36.297695"
+     stroke="#999"
+     class="dynamics"
+     id="line129-5-5"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="864.16296"
+     y1="96.297699"
+     x2="894.16296"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line141-1-0"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="914.16296"
+     y1="96.297699"
+     x2="944.16302"
+     y2="96.297699"
+     stroke="#999"
+     class="dynamics"
+     id="line143-3-7"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="864.16296"
+     y1="156.2977"
+     x2="894.16296"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line155-0-3"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="914.16296"
+     y1="156.2977"
+     x2="944.16302"
+     y2="156.2977"
+     stroke="#999"
+     class="dynamics"
+     id="line157-3-8"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="864.16296"
+     y1="216.29773"
+     x2="894.16296"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line169-5-2"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="914.16296"
+     y1="216.29773"
+     x2="944.16302"
+     y2="216.29773"
+     stroke="#999"
+     class="dynamics"
+     id="line171-4-3"
+     style="stroke:#999999;stroke-width:2;stroke-dasharray:1, 2" />
+  <line
+     x1="854.16296"
+     y1="26.297697"
+     x2="854.16296"
+     y2="11.297698"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4-0)"
+     id="line193-9-0"
+     style="marker-end:url(#arrowhead-4-0)" />
+  <rect
+     x="849.16296"
+     y="1.2976977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect195-2-7" />
+  <line
+     x1="904.16296"
+     y1="26.297697"
+     x2="904.16296"
+     y2="11.297698"
+     stroke="#444444"
+     marker-end="url(#arrowhead-4-0)"
+     id="line197-7-7"
+     style="marker-end:url(#arrowhead-4-0)" />
+  <rect
+     x="899.16296"
+     y="1.2976977"
+     width="10"
+     height="8"
+     fill="#f8f8f8"
+     stroke="#444444"
+     stroke-width="1"
+     id="rect199-3-7" />
+  <path
+     d="m 701.17826,146.2977 c 106.36874,-7.27582 190,-50 250,-100"
+     stroke="#555555"
+     stroke-width="2"
+     fill="none"
+     marker-end="url(#squarehead-69)"
+     id="path105-1"
+     sodipodi:nodetypes="cc"
+     style="marker-end:url(#squarehead-69)" />
+  <text
+     xml:space="preserve"
+     style="font-weight:bold;font-size:40px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb"
+     x="990.38947"
+     y="289.59119"
+     id="text15880"><tspan
+       sodipodi:role="line"
+       id="tspan15878"
+       x="990.38947"
+       y="289.59119" /></text>
+  <text
+     x="-204.04253"
+     y="430.13858"
+     font-size="12px"
+     font-weight="bold"
+     id="text201-1"
+     style="font-size:14.6667px"
+     transform="rotate(-90)"><tspan
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:14.6667px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold Italic'"
+       id="tspan22267">biological unrolling</tspan></text>
+  <text
+     x="-214.18417"
+     y="332.67249"
+     font-size="12px"
+     font-weight="bold"
+     id="text201-1-1"
+     style="font-size:14.6667px"
+     transform="rotate(-90)"><tspan
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:14.6667px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold Italic'"
+       id="tspan22267-0">engineering unrolling</tspan></text>
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-start:url(#Arrow2Lstart)"
+     d="m 358.17579,112.2977 26.22684,0.25158"
+     id="path26196-2"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:transform-center-x="-0.33628092"
+     inkscape:transform-center-y="-0.035230971" />
+  <path
+     style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow2Lend)"
+     d="m 377.39442,134.2977 25.63371,-0.0289"
+     id="path26196-2-8"
+     inkscape:connector-type="polyline"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="cc"
+     inkscape:transform-center-x="-0.33628092"
+     inkscape:transform-center-y="-0.035230971" />
+  <rect
+     style="fill:none;stroke:#6c6c6c;stroke-width:1.182;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+     id="rect27278"
+     width="153.24626"
+     height="128.81963"
+     x="293.99356"
+     y="236.8278"
+     rx="1.8840301e-06"
+     ry="1.8841901e-06" />
+</svg>
