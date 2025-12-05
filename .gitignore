@@ -1,6 +1,5 @@
 # manuscript files
-# /manuscript/
-# /manuscript/*
+/manuscript/
 *.sty
 *.bib
 *.aux
