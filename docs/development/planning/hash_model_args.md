@@ -1,8 +1,17 @@
-# Model Identifier Hashing for Filesystem Compatibility
+# Hierarchical File Organization and Model Identifier Hashing
 
 **Status:** Planning
 **Created:** 2025-01-06
 **Authors:** Robin Gutzen, Claude (AI Assistant)
+
+## Overview
+
+This document describes a comprehensive reorganization of the DynVision file structure to:
+1. **Solve filesystem limitations** through model identifier hashing
+2. **Improve conceptual clarity** by separating model and test attributes hierarchically
+3. **Enable scalability** for large parameter sweeps and experiments
+
+The new paradigm introduces **hierarchical path organization** where model attributes and test/data attributes are clearly separated at the directory level, making the workflow more maintainable and avoiding filename length issues.
 
 ## Problem Statement
 
@@ -23,31 +32,141 @@ skip=true+feedback=false+dloader=torch_6000_imagenette_trained-epoch=149_
 2. Long parameter combinations: Model + seed + data + status exceeds limits
 3. SLURM plugin uses wildcards for log paths
 
-### Previous Solutions (Partially Implemented)
+### Conceptual Issues with Flat Structure
 
-1. ✅ **Hierarchical output paths**: Split wildcards into directory structure
-   - `reports/{data_loader}/{model}_{seed}_{data}_{status}/{data_loader}{data_args}_{group}/file.csv`
-   - Keeps final filename short, but directory names can still be long
+The previous flat file organization mixed model and test attributes:
+```
+# Old structure (flat, mixed attributes)
+models/DyRCNNx8/DyRCNNx8:tsteps=20+..._{seed}_{data}_trained.pt
+                └─ model params, seed, data, status all in filename
 
-2. ✅ **Hierarchical log paths**: Explicit `log:` directive in rules
-   - Similar directory structure for SLURM logs
+reports/DyRCNNx8:tsteps=20+..._{seed}_{data}_trained_StimulusNoise:dsteps=20+...all_test_outputs.csv
+        └─ model params, seed, data, status, data_loader, data params, group all in one filename
+```
 
-3. ❌ **Still insufficient**: Combined identifier `{model_args}_{seed}_{data_name}` can exceed 255 chars
+**Problems:**
+1. Long filenames exceed 255-char filesystem limits
+2. Conceptually unclear: model attributes mixed with test attributes
+3. Difficult to navigate: all information in a single directory level
+4. Hard to query: finding all tests for a model requires parsing filenames
 
 ## Proposed Solution
 
-### Architecture: Checkpoint-Driven Folder Symlinks with Polymorphic Wildcards
+### New Paradigm: Hierarchical Separation of Concerns
 
-**Core innovation:** Use a polymorphic wildcard `{model_identifier}` that matches EITHER:
-- Full form: `args_seed_dataname` (e.g., `:tsteps=20+dt=2+...._42_imagenette`)
-- Hash form: `hash=XXXXXXXX` (e.g., `:hash=a7f3c9d4`)
+The solution introduces a **hierarchical file organization** that separates model attributes from test/data attributes at the directory structure level.
+
+#### Core Architectural Principles
+
+1. **Hierarchical organization**: Separate model attributes from test attributes via directory structure
+2. **Conceptual clarity**: Model properties in parent directories, test properties in subdirectories
+3. **Filesystem compatibility**: Short filenames, long information in directory paths
+4. **Polymorphic identifiers**: `{model_identifier}` matches full or hashed forms
+5. **Forward-only hashing**: Deterministic hash function, no reverse lookups needed
+
+#### Hierarchical Path Organization
+
+**Models: `{model_identifier}/{status}.pt`**
+```
+models/
+  DyRCNNx8:tsteps=20+dt=2+tau=5+...._42_imagenette/  ← Model identifier (full)
+    ├── init.pt                                       ← Status: initialization
+    ├── trained.pt                                    ← Status: trained
+    └── a7f3c9d4.hash                                ← Hash documentation
+
+  DyRCNNx8:hash=a7f3c9d4/                            ← Model identifier (hashed)
+    ├── init.pt                                       ← (symlink)
+    └── trained.pt                                    ← (symlink)
+```
+
+**Test Results: `{data_loader}/{model_identifier}_{status}/{data_loader}:{data_args}_{data_group}/<outputs>`**
+```
+reports/
+  StimulusNoise/                                      ← Data loader (level 1)
+    DyRCNNx8:hash=a7f3c9d4_trained/                  ← Model + status (level 2)
+      StimulusNoise:dsteps=20+noisetype=uniform+...all/  ← Data params + group (level 3)
+        ├── test_outputs.csv                         ← Test results
+        └── test_responses.pt                        ← Layer responses
+```
+
+**Processed Experiment Data: `{experiment}/{model_identifier}_{status}/{data_group}_test_data.csv`**
+```
+reports/
+  uniformnoise/                                       ← Experiment name (level 1)
+    DyRCNNx8:hash=a7f3c9d4_trained/                  ← Model + status (level 2)
+      ├── all_test_data.csv                          ← Processed for all samples
+      └── subset_test_data.csv                       ← Processed for subset
+```
+
+**Visualization: `{experiment}/{model_identifier}_{status}/{data_group}_<plot>.png`**
+```
+figures/
+  uniformnoise/                                       ← Experiment name (level 1)
+    DyRCNNx8:hash=a7f3c9d4_trained/                  ← Model + status (level 2)
+      ├── all_performance.png                        ← Plot for all samples
+      └── all_responses.png                          ← Response plot
+```
+
+#### Separation of Concerns
+
+The hierarchy cleanly separates:
+
+| Level | Contains | Represents |
+|-------|----------|------------|
+| **Models** | | |
+| 1. Model identifier | `model_name:model_args_seed_data` | What was trained |
+| 2. Status file | `init.pt`, `trained.pt` | Training stage |
+| **Test Results** | | |
+| 1. Data loader | `StimulusNoise`, `torch` | How data was loaded |
+| 2. Model + status | `model_identifier_status` | What model was tested |
+| 3. Data config | `data_loader:data_args_data_group` | What data was used |
+| 4. Output files | `test_outputs.csv` | Test results |
+| **Processed Data** | | |
+| 1. Experiment | `uniformnoise`, `rctarget` | What experiment |
+| 2. Model + status | `model_identifier_status` | What model |
+| 3. Data group | `{group}_test_data.csv` | What samples |
+| **Visualizations** | | |
+| 1. Experiment | `uniformnoise`, `rctarget` | What experiment |
+| 2. Model + status | `model_identifier_status` | What model |
+| 3. Plot files | `{group}_performance.png` | What visualization |
+
+#### Benefits of Hierarchical Organization
+
+1. **Conceptual clarity**:
+   - Model attributes (args, seed, data) separated from test attributes (data_loader, data_args)
+   - Natural grouping: "All tests for this model" or "All models in this experiment"
+
+2. **Filesystem compatibility**:
+   - Short filenames: `test_outputs.csv`, `all_test_data.csv`, `performance.png`
+   - Long identifiers in directory paths (not limited to 255 chars)
+
+3. **Navigability**:
+   - Browse by experiment: `reports/uniformnoise/*/`
+   - Browse by data loader: `reports/StimulusNoise/*/`
+   - Browse by model: `models/DyRCNNx8:hash=*/`
+
+4. **Queryability**:
+   - Find all tests for a model: `reports/*/DyRCNNx8:hash=a7f3c9d4_*/`
+   - Find all experiment results: `reports/uniformnoise/*/*.csv`
+
+5. **Scalability**:
+   - Adding new test configurations doesn't change model directories
+   - Adding new models doesn't pollute test result directories
+
+### Hash-Based Model Identifiers
+
+To handle long parameter combinations, model identifiers can use hash form:
+
+**Polymorphic `{model_identifier}` wildcard** matches EITHER:
+- Full form: `:tsteps=20+dt=2+tau=5+...._42_imagenette`
+- Hash form: `:hash=a7f3c9d4`
 
 **Key principles:**
-- Training creates folder symlink with hashed identifier
-- Downstream rules use `{model_identifier}` wildcard (accepts both forms)
-- Checkpoint ensures symlinks exist before downstream rules execute
-- Hash includes model_args + seed + data_name for uniqueness
-- No registry needed (forward-only hash transformation)
+- Training creates folder symlink: `hash=XXXXXXXX/` → `tsteps=20+...._42_imagenette/`
+- Downstream rules use `{model_identifier}` (accepts both forms)
+- Checkpoint ensures symlinks exist before downstream execution
+- Hash includes model_args + seed + data_name (unique per model)
+- No registry needed (forward-only transformation)
 
 ### Directory Structure
 
@@ -633,17 +752,146 @@ snakemake reports/DyRCNNx8:hash=*_trained/StimulusNoise:*/test_outputs.csv -n
 
 ## Migration from Current State
 
-### Backward Compatibility
+### Old vs New Structure Comparison
 
-1. **Existing models:** Continue to work with full identifiers
-2. **New models:** Get both full path and hashed symlink
-3. **No data migration needed:** Symlinks are non-destructive
+#### Models
 
-### Gradual Rollout
+**Old (flat):**
+```
+models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+..._{seed}_{data}_init.pt
+models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+..._{seed}_{data}_trained.pt
+```
 
-1. Implement and test with one experiment
-2. Expand to all experiments
-3. Eventually can remove full-form support (optional)
+**New (hierarchical):**
+```
+models/DyRCNNx8:tsteps=20+dt=2+tau=5+..._{seed}_{data}/init.pt
+models/DyRCNNx8:tsteps=20+dt=2+tau=5+..._{seed}_{data}/trained.pt
+models/DyRCNNx8:tsteps=20+dt=2+tau=5+..._{seed}_{data}/a7f3c9d4.hash
+models/DyRCNNx8:hash=a7f3c9d4/  → symlink
+```
+
+**Migration:** No migration needed - new structure independent of old
+
+#### Test Results
+
+**Old (flat, single directory):**
+```
+reports/torch/DyRCNNx8:tsteps=20+..._{seed}_{data}_trained_torch:_all/test_outputs.csv
+```
+
+**New (hierarchical, separated concerns):**
+```
+reports/torch/                                     ← Data loader
+  DyRCNNx8:hash=a7f3c9d4_trained/                 ← Model + status
+    torch:_all/                                    ← Data config
+      test_outputs.csv                             ← Result file
+```
+
+**Migration:** Existing files work; new files use hierarchical structure
+
+#### Processed Experiment Data
+
+**Old (mixed in with other reports):**
+```
+reports/uniformnoise/uniformnoise_DyRCNNx8:tsteps=20+..._{seed}_{data}_trained_all/test_data.csv
+```
+
+**New (clear experiment organization):**
+```
+reports/uniformnoise/                              ← Experiment
+  DyRCNNx8:hash=a7f3c9d4_trained/                 ← Model + status
+    all_test_data.csv                              ← Processed data
+```
+
+**Migration:** Process rules updated to use new paths
+
+#### Visualizations
+
+**Old:**
+```
+figures/uniformnoise/uniformnoise_DyRCNNx8:tsteps=20+..._{seed}_{data}_trained_all/performance.png
+```
+
+**New:**
+```
+figures/uniformnoise/                              ← Experiment
+  DyRCNNx8:hash=a7f3c9d4_trained/                 ← Model + status
+    all_performance.png                            ← Plot
+```
+
+**Migration:** Plotting rules updated to use new paths
+
+### Backward Compatibility Strategy
+
+1. **Existing data files:** No need to move or rename
+2. **New workflow runs:** Use new hierarchical structure
+3. **Coexistence:** Old and new structures can coexist
+4. **Gradual transition:**
+   - Implement hierarchical structure in rules
+   - New runs automatically use new structure
+   - Old data accessible but not reorganized
+   - Optional cleanup script to migrate old data if desired
+
+### Rule Changes Required
+
+#### Updated Rules
+
+1. **`init_model`**: Output to `{model_identifier}/init.pt` instead of `{model_identifier}_init.pt`
+2. **`train_model`**:
+   - Output to `{model_identifier}/trained.pt`
+   - Becomes checkpoint
+   - Creates hash symlink
+3. **`test_model`**:
+   - Output to `{data_loader}/{model_identifier}_{status}/{data_loader}:{data_args}_{data_group}/`
+   - Uses polymorphic `{model_identifier}` wildcard
+4. **`process_test_data`**:
+   - Input from `{data_loader}/{model_identifier}_{status}/...`
+   - Output to `{experiment}/{model_identifier}_{status}/{data_group}_test_data.csv`
+5. **Visualization rules**:
+   - Input from `{experiment}/{model_identifier}_{status}/{data_group}_test_data.csv`
+   - Output to `{experiment}/{model_identifier}_{status}/{data_group}_{plot}.png`
+
+#### Unchanged Rules
+
+- Data preparation rules (no model dependencies)
+- Utility rules
+
+### Gradual Rollout Plan
+
+**Phase 1: Core infrastructure (Week 1)**
+1. Implement `compute_hash()` utility
+2. Update model rules (init, train, test)
+3. Test with single model/experiment
+
+**Phase 2: Processing pipeline (Week 2)**
+1. Update `process_test_data` rule
+2. Update visualization rules
+3. Test full experiment workflow
+
+**Phase 3: Validation (Week 3)**
+1. Run parallel workflows (old vs new structure)
+2. Validate outputs match
+3. Performance testing
+
+**Phase 4: Full deployment (Week 4)**
+1. Update all experiment configurations
+2. Document new structure
+3. Optional: migrate existing data
+
+### Benefits Summary
+
+The hierarchical reorganization provides:
+
+**Immediate benefits:**
+- ✅ Solves filesystem length errors
+- ✅ Clearer separation of model vs test attributes
+- ✅ Easier navigation and file discovery
+
+**Long-term benefits:**
+- ✅ Scales to larger parameter sweeps
+- ✅ Simplifies result organization
+- ✅ Enables better experiment tracking
+- ✅ Facilitates automated analysis (all tests for model X)
 
 ## References
 
