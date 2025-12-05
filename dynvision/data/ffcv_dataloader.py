@@ -40,10 +40,6 @@ def _build_image_pipeline(
     if encoding == "tensor":
         pipeline = [NDArrayDecoder(), ToTensor()]
     elif encoding == "image":
-        # pipeline = [
-        #     SimpleRGBImageDecoder(),
-        #     RandomResizedCrop(scale=(1, 1), ratio=(1, 1), size=resolution),
-        # ]
         pipeline = [RandomResizedCropRGBImageDecoder((resolution, resolution))]
     else:
         raise ValueError(f"Unsupported encoding type: {encoding}")
@@ -142,20 +138,26 @@ def get_ffcv_dataloader(
 
     # Get target transforms
     if target_data_name:
-        target_transform = get_target_transform(
-            data_name=target_data_name,
-            data_group=target_data_group,
-        ) or []
+        target_transform = (
+            get_target_transform(
+                data_name=target_data_name,
+                data_group=target_data_group,
+            )
+            or []
+        )
     else:
         target_transform = []
 
     # Get data transforms
     if train:
-        data_transform = get_data_transform(
-            backend=transform_backend,
-            context=transform_context,
-            dataset_or_preset=transform_preset,
-        ) or []
+        data_transform = (
+            get_data_transform(
+                backend=transform_backend,
+                context=transform_context,
+                dataset_or_preset=transform_preset,
+            )
+            or []
+        )
     else:
         encoding = "image"
         data_transform = []

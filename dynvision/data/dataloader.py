@@ -581,13 +581,13 @@ class StimulusNoiseDataLoader(StandardDataLoader):
         self,
         *args,
         n_timesteps=20,
-        stimulus_duration=15,
-        intro_duration=1,
+        stimulus_duration=None,
+        intro_duration=0,
         noise_type="uniform",
         ssnr=0.5,
         noise_seed=None,
         noise_void=True,
-        temporal_mode="static",
+        temporal_mode="dynamic",
         noise_cache_size=50,
         non_label_index=-1,
         non_input_value=0,
@@ -596,7 +596,11 @@ class StimulusNoiseDataLoader(StandardDataLoader):
         super().__init__(*args, n_timesteps=n_timesteps, **kwargs)
 
         # Validate and store parameters
-        self.stimulus_duration = int(stimulus_duration)
+        self.stimulus_duration = (
+            int(n_timesteps - intro_duration)
+            if stimulus_duration is None
+            else int(stimulus_duration)
+        )
         self.intro_duration = int(intro_duration)
         self.noise_type = str(noise_type).lower()
         self.ssnr = float(ssnr)

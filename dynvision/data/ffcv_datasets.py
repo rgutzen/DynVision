@@ -12,19 +12,13 @@ Usage:
     python ffcv_datasets.py --input data/raw --output_train data/train.beton --output_val data/val.beton
 """
 
-import argparse
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
-
-import numpy as np
-import PIL
 import torch
-from ffcv.fields import IntField, RGBImageField, TorchTensorField
+from ffcv.fields import IntField, RGBImageField
 from ffcv.writer import DatasetWriter
 from torchvision import datasets
 from torchvision.datasets.folder import IMG_EXTENSIONS
-from torchvision.transforms import ToPILImage
 
 
 from dynvision.data.datasets import get_dataset, load_raw_data
@@ -55,25 +49,6 @@ def main() -> None:
         title="Data parameters",
         include_defaults=False,
     )
-
-    # data_path: Path,
-    # data_name: Optional[str] = None,
-    # # Transform interface
-    # transform_backend: str = "torch",
-    # transform_context: str = "train",
-    # transform_preset: Optional[str] = None,
-    # # Target transform interface
-    # target_data_name: Optional[str] = None,
-    # target_data_group: str = "all",
-    # # Other parameters
-    # dataset_class: Callable[..., Dataset] = PathFolder,
-    # normalize: Optional[Tuple[List[float], List[float]]] = None,
-    # dtype: Optional[torch.dtype] = None,
-    # pixel_range: str = "0-1",
-    # cache_size: int = 1000,
-    # pin_memory: bool = False,
-    # pil_to_tensor: bool = True,
-    # **kwargs: Any,
 
     # Load dataset
     dataset = get_dataset(

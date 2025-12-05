@@ -258,7 +258,8 @@ rule build_ffcv_datasets:
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-        ),    
+        ),
+        seed = get_param("seed")[0] if isinstance(get_param("seed"), list) else get_param("seed"),
     output:
         train = project_paths.data.processed / '{data_name}' / 'train_all' / 'train.beton',
         val = project_paths.data.processed / '{data_name}' / 'train_all' / 'val.beton'
@@ -273,7 +274,8 @@ rule build_ffcv_datasets:
             --output_val {output.val:q} \
             --train_ratio {params.train_ratio} \
             --data_name {wildcards.data_name} \
-            --max_resolution {params.max_resolution} 
+            --max_resolution {params.max_resolution} \
+            --seed {params.seed}
         """
 
 # Log workflow initialization
