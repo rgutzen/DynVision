@@ -1,7 +1,7 @@
 # Hierarchical File Organization and Model Identifier Hashing
 
 **Status:** Planning
-**Created:** 2025-01-06
+**Created:** 2025-12-06
 **Authors:** Robin Gutzen, Claude (AI Assistant)
 
 ## Overview
@@ -70,7 +70,7 @@ The solution introduces a **hierarchical file organization** that separates mode
 ```
 models/
   DyRCNNx8:tsteps=20+dt=2+tau=5+...._42/             ← Model identifier (full: args_seed)
-    imagenette:train_all/                            ← Training data specification
+    imagenette:all/                            ← Training data specification
       ├── init.pt                                    ← Status: initialization
       ├── trained.pt                                 ← Status: trained
       └── a7f3c9d4.hash                              ← Hash documentation
@@ -84,7 +84,7 @@ models/
 reports/
   uniformnoise/                                      ← Experiment (level 1)
     DyRCNNx8:hash=a7f3c9d4/                          ← Model identifier (level 2)
-      imagenette:train_all_trained_imagenette:test_all_tested/  ← Train+test spec (level 3)
+      imagenette:all_trained_imagenette:all_tested/  ← Train+test spec (level 3)
         StimulusNoise:dsteps=20+noisetype=uniform+.../ ← Data loader + params (level 4)
           ├── test_outputs.csv                       ← Test results
           └── test_responses.pt                      ← Layer responses
@@ -95,7 +95,7 @@ reports/
 reports/
   uniformnoise/                                      ← Experiment (level 1)
     DyRCNNx8:tsteps=20+...._42/                      ← Model identifier (level 2)
-      imagenette:train_all_trained_imagenette:test_all_tested/  ← Train+test spec (level 3)
+      imagenette:all_trained_imagenette:all_tested/  ← Train+test spec (level 3)
         └── test_data.csv                            ← Processed test data
 ```
 
@@ -104,7 +104,7 @@ reports/
 figures/
   uniformnoise/                                      ← Experiment (level 1)
     DyRCNNx8:tsteps=20+...._42/                      ← Model identifier (level 2)
-      imagenette:train_all_trained_imagenette:test_all_tested/  ← Train+test spec (level 3)
+      imagenette:all_trained_imagenette:all_tested/  ← Train+test spec (level 3)
         ├── performance.png                          ← Performance plot
         └── responses.png                            ← Response plot
 ```
@@ -180,20 +180,20 @@ To handle long parameter combinations, model identifiers can use hash form:
 ```
 models/
   DyRCNNx8:tsteps=20+dt=2+tau=5+...._42/
-    imagenette:train_all/
+    imagenette:all/
       ├── init.pt
       ├── trained.pt
       └── a7f3c9d4.hash         # Documents hash value
 
   DyRCNNx8:hash=a7f3c9d4/        # Symlink → DyRCNNx8:tsteps=20+...._42/
-    imagenette:train_all/        # (accessible via symlink)
+    imagenette:all/        # (accessible via symlink)
       ├── init.pt
       └── trained.pt
 
 reports/
   uniformnoise/                  # Experiment grouping
     DyRCNNx8:hash=a7f3c9d4/
-      imagenette:train_all_trained_imagenette:test_all_tested/
+      imagenette:all_trained_imagenette:all_tested/
         StimulusNoise:dsteps=20+.../
           test_outputs.csv
         test_data.csv            # Processed data (no data_loader subdir)
@@ -278,11 +278,11 @@ rule init_model:
     """
     input:
         script = SCRIPTS / 'runtime' / 'init_model.py',
-        dataset_ready = project_paths.data.interim / '{data_name}' / 'train_all.ready'
+        dataset_ready = project_paths.data.interim / '{data_name}' / 'all.ready'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        dataset_path = lambda w: project_paths.data.interim / w.data_name / 'train_all',
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / 'all',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -322,17 +322,17 @@ checkpoint train_model:
         model_state = project_paths.models \
             / '{model_name}{model_args}_{seed}_{data_name}' \
             / 'init.pt',
-        dataset_ready = project_paths.data.interim / '{data_name}' / 'train_all.ready',
+        dataset_ready = project_paths.data.interim / '{data_name}' / 'all.ready',
         dataset_train = lambda w: project_paths.data.processed \
-            / w.data_name / 'train_all' / 'train.beton' if config.use_ffcv else [],
+            / w.data_name / 'all' / 'train.beton' if config.use_ffcv else [],
         dataset_val = lambda w: project_paths.data.processed \
-            / w.data_name / 'train_all' / 'val.beton' if config.use_ffcv else [],
+            / w.data_name / 'all' / 'val.beton' if config.use_ffcv else [],
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
         data_group = "all",
         model_arguments = lambda w: parse_arguments(w, 'model_args'),
-        dataset_link = lambda w: project_paths.data.interim / w.data_name / 'train_all',
+        dataset_link = lambda w: project_paths.data.interim / w.data_name / 'all',
         resolution = lambda w: config.data_resolution[w.data_name],
         normalize = lambda w: json.dumps((
             config.data_statistics[w.data_name]['mean'],
@@ -955,7 +955,7 @@ output:
 - Change status from `_init.pt` to `/init.pt`
 
 **Wildcard mapping:**
-- **Added:** `{train_data_group}` (e.g., "train_all")
+- **Added:** `{train_data_group}` (e.g., "all")
 - **Removed from identifier:** `{data_name}` (moved to subdirectory)
 
 ---
@@ -1360,7 +1360,7 @@ def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_
 
 **New structure:**
 ```python
-def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, train_data_group="train_all", status=STATUS):
+def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, train_data_group="all", status=STATUS):
     return [(project_paths.models / f"{model_name}{args}_{seed}" / f"{data_name}:{train_data_group}" / f"{status}.pt")
             for seed in seeds for args in args_product(arg_dict)]
 ```
@@ -1370,7 +1370,7 @@ def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_
 - Remove data_name from model identifier folder
 - Add `{data_name}:{train_data_group}` subdirectory
 - Move status from filename to `/{status}.pt`
-- Add `train_data_group` parameter (default "train_all")
+- Add `train_data_group` parameter (default "all")
 
 ---
 
@@ -1391,7 +1391,7 @@ def result_path(experiment, category, ..., plot=None):
 
 **New structure:**
 ```python
-def result_path(experiment, category, ..., train_data_group="train_all", plot=None):
+def result_path(experiment, category, ..., train_data_group="all", plot=None):
     folder = project_paths.reports if plot is None else project_paths.figures
     file = "test_data.csv" if plot is None else f"{plot}.png"
     train_test_spec = f"{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested"
@@ -1453,7 +1453,7 @@ input:
         project_paths.reports
         / "{experiment}"
         / "DyRCNNx8:tsteps=20+...+idle=*_{seed}"
-        / "imagenette:train_all_{status}_imagenette:test_all_tested"
+        / "imagenette:all_{status}_imagenette:all_tested"
         / "test_data.csv",
         ...
     )
