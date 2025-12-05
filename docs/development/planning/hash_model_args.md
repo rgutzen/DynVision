@@ -891,7 +891,7 @@ figures/uniformnoise/                              ← Experiment
 **Phase 4: Full deployment (Week 4)**
 1. Update all experiment configurations
 2. Document new structure
-3. Optional: migrate existing data
+3. Migrate existing data locally and on the cluster
 
 ### Benefits Summary
 
