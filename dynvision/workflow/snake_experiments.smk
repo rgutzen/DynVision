@@ -2,6 +2,7 @@
 # SEED = ["2000", "2001", "2002"] # energy loss weight 0.2 & use_ffcv=True
 # SEED = ["3000", "3001", "3002"] # energy loss weight not applied? & use_ffcv=True
 # SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
+# SEED = ["5000"] #, "5001", "5002"] # ~not! uses shuffled patterns~
 
 # ###############
 # for cmd in \
@@ -26,29 +27,92 @@
 # # sh snakecharm.sh "imagenet --config use_distributed_mode=True batch_size=512"
 # ###############
 
-DEFAULT_MODEL_ARGS = OrderedDict(
-    tsteps=20, 
-    rctype="full", 
-    rctarget="output", 
-    dt=2, 
-    tau=5,
-    tff=0, 
-    trc=6,  
-    tsk=0, 
-    skip="true",
-    lossrt=4,
-)
-MODEL_NAME = "DyRCNNx8"
+# set in config_workflow.yaml
+DEFAULT_MODEL_ARGS = OrderedDict(**config.model_args)
+MODEL_NAME = config.model_name[0] if isinstance(config.model_name, list) else config.model_name
 MODEL_FMT = "{model_name}:{args}_{seed}_{data_name}_{status}.pt"
-DATA_NAME = "imagenette"
-SEED = ["5000"] #, "5001", "5002"] # uses shuffled patterns
+DATA_NAME = config.data_name
+DATA_GROUP = config.data_group
 STATUS = 'trained-best'
+SEED = config.seed if isinstance(config.seed, list) else [config.seed]
 
 def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, status=STATUS):
+    """Generate list of model file paths based on parameter combinations."""
     arg_dict = DEFAULT_MODEL_ARGS.copy()
     if override is not None:
         arg_dict.update(override)
-    return [project_paths.models / model_name / f"{model_name}{args}_{seed}_{data_name}_{status}.pt" for seed in seeds for args in args_product(arg_dict)]
+    return [(project_paths.models / model_name / f"{model_name}{args}_{seed}_{data_name}_{status}.pt") for seed in seeds for args in args_product(arg_dict)]
+
+def result_path(experiment, category, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, data_group=DATA_GROUP, status=STATUS, plot=None):
+    """Generate list of result file paths based on parameter combinations."""
+    experiments = [experiment] if isinstance(experiment, str) else list(experiment)
+    arg_dict = DEFAULT_MODEL_ARGS.copy()
+    arg_dict.update({category: "*"})
+    folder = project_paths.reports if plot is None else project_paths.reports
+    file = "test_data.csv" if plot is None else f"{plot}.png"
+    paths = []
+    seeds = seeds if isinstance(seeds, list) else [seeds]
+    for seed in seeds:
+        for exp in experiments:
+            for args in args_product(arg_dict):
+                paths.append(
+                    folder
+                    / exp
+                    / f"{exp}_{model_name}{args}_{seed}_{data_name}_{status}_{data_group}/{file}"
+                )
+    return paths
+
+rule train_model_variation:  # call with --config var=<variable_name>
+    input:
+        model_path(
+            override={config.var: config.experiment_config['categories'][config.var]} if hasattr(config, 'var') else None,
+            status='trained',
+        ) if hasattr(config, 'var') else [],
+
+rule test_model_variation:  # call with --config var=<variable_name>
+    input:
+        result_path(
+            experiment=config.experiment,
+            category=config.var if hasattr(config, 'var') else None,
+            status=STATUS,
+        ) if hasattr(config, 'var') else [],
+
+rule plot_model_variation:  # call with --config var=<variable_name>
+    input:
+        result_path(
+            experiment=config.experiment,
+            category=get_param('var', None),
+            status=STATUS,
+            plot=get_param('plot', 'responses'),
+        ) if hasattr(config, 'var') else [],
+
+rule run_noise_recreation_attempt:
+    input:
+        project_paths.figures / "uniformnoise" / "uniformnoise_DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.1+pattern=1+rctype=full+rctarget=output+skip=true+feedback=false+dloader=*_6000_imagenette_trained-epoch=149_all/performance.png",
+
+# rule run_pattern1_ffcv:
+#     input:
+#         model_path(
+#             override={config.var: config.experiment_config['categories'][config.var], "pattern": "1", "dloader": "ffcv"},
+#             status='trained',
+#         )
+
+# rule run_pattern1_torch: # call with --config use_ffcv=False
+#     input:
+#         model_path(
+#             override={config.var: config.experiment_config['categories'][config.var], "pattern": "1", "dloader": "torch"},
+#             status='trained')
+
+# rule run_pattern1011_torch: # call with --config use_ffcv=False
+#     input:
+#         model_path(
+#             override={config.var: config.experiment_config['categories'][config.var], "pattern": "1011", "dloader": "torch"},
+#             status='trained',
+#         )
+
+rule recreate_noise_results:  # run with --allowed-rules test_model process_test_data
+    input:
+        project_paths.reports / "uniformnoise" / "uniformnoise_DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040_imagenette_trained_all/test_data.csv",
 
 PARAM_VARIATIONS = [
     dict(lossrt=config.experiment_config['categories']['lossrt']),
@@ -68,14 +132,14 @@ TRAIN_VARIATIONS = [
     ),
 ]
 LOADER_VARIATIONS = [
-    dict(tsteps=20, dloader="*", dsteps=1, pattern="1"),  # unroll in model steps
-    dict(tsteps=1, dloader="*", dsteps=20, pattern="1"),  # unroll in data loader
-    dict(tff=0, trc=6, tsk=0, tfb=30),   # engineering time unrolling
-    dict(tff=10, trc=6, tsk=20, tfb=10), # biological time unrolling
+    dict(tsteps=20, dloader="{dloader}", dsteps=1, pattern="1"),  # unroll in model steps
+    dict(tsteps=1, dloader="{dloader}", dsteps=20, pattern="1"),  # unroll in data loader
+    # dict(tff=0, trc=6, tsk=0, tfb=30),   # engineering time unrolling
+    # dict(tff=10, trc=6, tsk=20, tfb=10), # biological time unrolling
 ]
 
+
 rule train_with_parameter_variations: # --config epochs=300
-    # default: DyRCNNx8:tsteps=20+rctype=full+rctarget=output+dt=2+tau=5+tff=0+trc=6+tsk=0+skip=true+lossrt=4
     input:
         [model_path(override=var, status='trained') for var in PARAM_VARIATIONS]
 
@@ -88,7 +152,18 @@ rule train_with_dataloader_variations: # --config epochs=100
     # and rename dloader=* in output filename to ffcv or torch respectively
     input:
         # dataloader variations
-        [model_path(override=var, status='trained', seeds=SEED[0]) for var in LOADER_VARIATIONS],
+        [model_path(override=var, status='trained', seeds=SEED[0] if isinstance(SEED, list) else SEED) for var in LOADER_VARIATIONS],
+    params:
+        dloader = "ffcv" if config.use_ffcv else "torch"
+    shell:
+        """
+        for file in {input}; do
+            target="${file//\\{dloader\\}/{params.dloader}}"
+            if [ "$file" != "$target" ]; then
+                mv "$file" "$target"
+            fi
+        done
+        """
 
 rule manuscript_figures: # manuscript figures  
 # sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"
@@ -321,12 +396,14 @@ rule unrolling:
         seed=SEED,
         status=STATUS)
 
-# rule energyloss:
-#     input:
-#         expand(project_paths.figures / 'stabilityintermediate' / 'stabilityintermediate_DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern=1011+shufflepattern=true+energyloss=*_{seeds}_imagenette_{status}_all' / 'responses.png',
-#                     seeds='.'.join(SEED),
-#                     status=STATUS,
-#                 ),
+rule energyloss:
+    input:
+        expand(project_paths.reports / '{experiment}' / '{experiment}_DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern={pattern}+energyloss=*_{seeds}_imagenette_{status}_all' / 'test_data.csv',
+            seeds='.'.join(SEED),
+            status="trained-epoch=149",
+            pattern=['1', '1011'],
+            experiment=['uniformnoise'] #, 'uniformnoiseffonly', 'duration', 'interval'],
+        ),
 
 rule training:
     input:

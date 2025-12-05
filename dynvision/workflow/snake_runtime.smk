@@ -178,10 +178,17 @@ rule test_model:
     output:
         responses = project_paths.reports \
             / '{data_loader}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}' / 'test_responses.pt',
+            / '{model_name}{model_args}_{seed}_{data_name}_{status}' \
+            / '{data_loader}{data_args}_{data_group}' / 'test_responses.pt',
         results = project_paths.reports \
             / '{data_loader}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}' / 'test_outputs.csv'
+            / '{model_name}{model_args}_{seed}_{data_name}_{status}' \
+            / '{data_loader}{data_args}_{data_group}' / 'test_outputs.csv'
+    log:
+        project_paths.logs / "slurm" / "rule_test_model" \
+            / '{data_loader}' \
+            / '{model_name}{model_args}_{seed}_{data_name}_{status}' \
+            / '{data_loader}{data_args}_{data_group}.log'
     shell:
         """
         {params.execution_cmd} \
@@ -263,7 +270,8 @@ rule process_test_data:
     input:
         responses = expand(project_paths.reports \
             / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
+            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}' \
+            / '{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
             category = lambda w: w.category_str.strip('*'),
             category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
@@ -272,7 +280,8 @@ rule process_test_data:
         ),
         test_outputs = expand(project_paths.reports \
             / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}_{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
+            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}' \
+            / '{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
             category = lambda w: w.category_str.strip('*'),
             category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
