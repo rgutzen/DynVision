@@ -66,45 +66,45 @@ The solution introduces a **hierarchical file organization** that separates mode
 
 #### Hierarchical Path Organization
 
-**Models: `{model_identifier}/{status}.pt`**
+**Models: `{model_identifier}/{data_name}:{train_data_group}/{status}.pt`**
 ```
 models/
-  DyRCNNx8:tsteps=20+dt=2+tau=5+...._42_imagenette/  ← Model identifier (full)
-    ├── init.pt                                       ← Status: initialization
-    ├── trained.pt                                    ← Status: trained
-    └── a7f3c9d4.hash                                ← Hash documentation
+  DyRCNNx8:tsteps=20+dt=2+tau=5+...._42/             ← Model identifier (full: args_seed)
+    imagenette:train_all/                            ← Training data specification
+      ├── init.pt                                    ← Status: initialization
+      ├── trained.pt                                 ← Status: trained
+      └── a7f3c9d4.hash                              ← Hash documentation
 
   DyRCNNx8:hash=a7f3c9d4/                            ← Model identifier (hashed)
-    ├── init.pt                                       ← (symlink)
-    └── trained.pt                                    ← (symlink)
+    → symlink to DyRCNNx8:tsteps=20+...._42/         ← Symlink at model level
 ```
 
-**Test Results: `{data_loader}/{model_identifier}_{status}/{data_name}-{data_group}/{data_loader}:{data_args}/<outputs>`**
+**Test Results: `{experiment}/{model_identifier}/{train+test_spec}/{data_loader}:{data_args}/test_outputs.csv`**
 ```
 reports/
-  StimulusNoise/                                      ← Data loader (level 1)
-    DyRCNNx8:hash=a7f3c9d4_trained/                  ← Model + status (level 2)
-      imagenette-all/                                 ← Dataset + group (level 3)
-        StimulusNoise:dsteps=20+noisetype=uniform+.../  ← Data params (level 4)
+  uniformnoise/                                      ← Experiment (level 1)
+    DyRCNNx8:hash=a7f3c9d4/                          ← Model identifier (level 2)
+      imagenette:train_all_trained_imagenette:test_all_tested/  ← Train+test spec (level 3)
+        StimulusNoise:dsteps=20+noisetype=uniform+.../ ← Data loader + params (level 4)
           ├── test_outputs.csv                       ← Test results
           └── test_responses.pt                      ← Layer responses
 ```
 
-**Processed Experiment Data: `{experiment}/{model_identifier}_{status}/{data_name}-{data_group}/test_data.csv`**
+**Processed Experiment Data: `{experiment}/{model_identifier}/{train+test_spec}/test_data.csv`**
 ```
 reports/
-  uniformnoise/                                       ← Experiment name (level 1)
-    DyRCNNx8:hash=a7f3c9d4_trained/                  ← Model + status (level 2)
-      imagenette-all/                                 ← Dataset + group (level 3)
+  uniformnoise/                                      ← Experiment (level 1)
+    DyRCNNx8:tsteps=20+...._42/                      ← Model identifier (level 2)
+      imagenette:train_all_trained_imagenette:test_all_tested/  ← Train+test spec (level 3)
         └── test_data.csv                            ← Processed test data
 ```
 
-**Visualization: `{experiment}/{model_identifier}_{status}/{data_name}-{data_group}/{plot}.png`**
+**Visualization: `{experiment}/{model_identifier}/{train+test_spec}/{plot}.png`**
 ```
 figures/
-  uniformnoise/                                       ← Experiment name (level 1)
-    DyRCNNx8:hash=a7f3c9d4_trained/                  ← Model + status (level 2)
-      imagenette-all/                                 ← Dataset + group (level 3)
+  uniformnoise/                                      ← Experiment (level 1)
+    DyRCNNx8:tsteps=20+...._42/                      ← Model identifier (level 2)
+      imagenette:train_all_trained_imagenette:test_all_tested/  ← Train+test spec (level 3)
         ├── performance.png                          ← Performance plot
         └── responses.png                            ← Response plot
 ```
@@ -116,23 +116,24 @@ The hierarchy cleanly separates:
 | Level | Contains | Represents |
 |-------|----------|------------|
 | **Models** | | |
-| 1. Model identifier | `model_name:model_args_seed_data` | What was trained |
-| 2. Status file | `init.pt`, `trained.pt` | Training stage |
+| 1. Model identifier | `model_name:model_args_seed` | Model architecture + training params |
+| 2. Training data | `data_name:train_data_group` | What data was used for training |
+| 3. Status file | `init.pt`, `trained.pt` | Training stage |
 | **Test Results** | | |
-| 1. Data loader | `StimulusNoise`, `torch` | How data was loaded |
-| 2. Model + status | `model_identifier_status` | What model was tested |
-| 3. Dataset + group | `imagenette-all` | What dataset, which samples |
-| 4. Data config | `data_loader:data_args` | Data loading parameters |
+| 1. Experiment | `uniformnoise`, `rctarget` | What experiment |
+| 2. Model identifier | `model_name:model_identifier` | Which model (full or hashed) |
+| 3. Train+test spec | `data:train_group_status_data:test_group_tested` | Training and testing context |
+| 4. Data loader config | `data_loader:data_args` | How test data was loaded |
 | 5. Output files | `test_outputs.csv` | Test results |
 | **Processed Data** | | |
 | 1. Experiment | `uniformnoise`, `rctarget` | What experiment |
-| 2. Model + status | `model_identifier_status` | What model |
-| 3. Dataset + group | `imagenette-all` | What dataset, which samples |
+| 2. Model identifier | `model_name:model_identifier` | Which model |
+| 3. Train+test spec | `data:train_group_status_data:test_group_tested` | Training and testing context |
 | 4. Output file | `test_data.csv` | Processed test data |
 | **Visualizations** | | |
 | 1. Experiment | `uniformnoise`, `rctarget` | What experiment |
-| 2. Model + status | `model_identifier_status` | What model |
-| 3. Dataset + group | `imagenette-all` | What dataset, which samples |
+| 2. Model identifier | `model_name:model_identifier` | Which model |
+| 3. Train+test spec | `data:train_group_status_data:test_group_tested` | Training and testing context |
 | 4. Plot files | `performance.png` | What visualization |
 
 #### Benefits of Hierarchical Organization
@@ -163,33 +164,39 @@ The hierarchy cleanly separates:
 To handle long parameter combinations, model identifiers can use hash form:
 
 **Polymorphic `{model_identifier}` wildcard** matches EITHER:
-- Full form: `:tsteps=20+dt=2+tau=5+...._42_imagenette`
+- Full form: `:tsteps=20+dt=2+tau=5+...._42`
 - Hash form: `:hash=a7f3c9d4`
 
 **Key principles:**
-- Training creates folder symlink: `hash=XXXXXXXX/` → `tsteps=20+...._42_imagenette/`
+- Training creates folder symlink at model level: `DyRCNNx8:hash=XXXXXXXX/` → `DyRCNNx8:tsteps=20+...._42/`
 - Downstream rules use `{model_identifier}` (accepts both forms)
 - Checkpoint ensures symlinks exist before downstream execution
-- Hash includes model_args + seed + data_name (unique per model)
+- Hash includes model_args + seed only (NOT data_name, since data is in subfolder)
 - No registry needed (forward-only transformation)
+- Symlink points to entire model folder (not data subfolder)
 
 ### Directory Structure
 
 ```
 models/
-  DyRCNNx8:tsteps=20+dt=2+tau=5+...._42_imagenette/
-    init.pt
-    trained.pt
-    a7f3c9d4.hash              # Documents hash value
+  DyRCNNx8:tsteps=20+dt=2+tau=5+...._42/
+    imagenette:train_all/
+      ├── init.pt
+      ├── trained.pt
+      └── a7f3c9d4.hash         # Documents hash value
 
-  DyRCNNx8:hash=a7f3c9d4/      # Symlink → DyRCNNx8:tsteps=20+...._42_imagenette/
-    init.pt                    # (accessible via symlink)
-    trained.pt                 # (accessible via symlink)
+  DyRCNNx8:hash=a7f3c9d4/        # Symlink → DyRCNNx8:tsteps=20+...._42/
+    imagenette:train_all/        # (accessible via symlink)
+      ├── init.pt
+      └── trained.pt
 
 reports/
-  DyRCNNx8:hash=a7f3c9d4_trained/
-    StimulusNoise:dsteps=20+.../
-      test_outputs.csv
+  uniformnoise/                  # Experiment grouping
+    DyRCNNx8:hash=a7f3c9d4/
+      imagenette:train_all_trained_imagenette:test_all_tested/
+        StimulusNoise:dsteps=20+.../
+          test_outputs.csv
+        test_data.csv            # Processed data (no data_loader subdir)
 ```
 
 ### Polymorphic Wildcard Pattern
@@ -198,13 +205,15 @@ The `{model_identifier}` wildcard in test/processing rules matches:
 
 ```python
 # Pattern 1: Full identifier (during DAG construction, before checkpoint)
-{model_identifier} = "tsteps=20+dt=2+tau=5+...._42_imagenette"
+{model_identifier} = "tsteps=20+dt=2+tau=5+...._42"
 
 # Pattern 2: Hashed identifier (after checkpoint creates symlink)
 {model_identifier} = "hash=a7f3c9d4"
 ```
 
 Snakemake's pattern matching handles both forms transparently.
+
+**Note:** The hash does NOT include `data_name` anymore, since training data is now specified in a subfolder `{data_name}:{train_data_group}` within the model directory.
 
 ## Implementation Details
 
@@ -220,14 +229,14 @@ def compute_hash(*args, length: int = 8) -> str:
     Idempotent - returns input unchanged if already a hash.
 
     Args:
-        *args: Components to hash (model_args, seed, data_name, etc.)
+        *args: Components to hash (model_args, seed - NOT data_name)
         length: Hash length in hex characters (default: 8 = 32 bits)
 
     Returns:
         Hash-prefixed string (e.g., ':hash=a7f3c9d4')
 
     Examples:
-        >>> compute_hash('tsteps=20+dt=2+...', '42', 'imagenette')
+        >>> compute_hash('tsteps=20+dt=2+...', '42')
         ':hash=a7f3c9d4'
 
         >>> compute_hash(':hash=a7f3c9d4')  # Idempotent
@@ -238,6 +247,7 @@ def compute_hash(*args, length: int = 8) -> str:
         - Deterministic (same inputs → same output)
         - 8 hex chars = ~4 billion combinations
         - Collision probability negligible for typical use (<1000 models)
+        - Hash does NOT include data_name (training data in subfolder)
     """
     import hashlib
 
@@ -933,18 +943,20 @@ output:
 ```python
 output:
     model_state = project_paths.models \
-        / '{model_name}{model_args}_{seed}_{data_name}' \
+        / '{model_name}{model_args}_{seed}' \
+        / '{data_name}:{train_data_group}' \
         / 'init.pt'
 ```
 
 **Changes:**
 - Remove `{model_name}/` parent directory level
-- Move model identifier into folder name
+- Move model identifier into folder name (without data_name)
+- Add `{data_name}:{train_data_group}` subdirectory level
 - Change status from `_init.pt` to `/init.pt`
 
 **Wildcard mapping:**
-- No new wildcards
-- No removed wildcards
+- **Added:** `{train_data_group}` (e.g., "train_all")
+- **Removed from identifier:** `{data_name}` (moved to subdirectory)
 
 ---
 
@@ -968,21 +980,27 @@ output:
 checkpoint train_model:
     input:
         model_state = project_paths.models \
-            / '{model_name}{model_args}_{seed}_{data_name}' \
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}:{train_data_group}' \
             / 'init.pt'
 
     params:
         model_folder = lambda w: project_paths.models \
-            / f'{w.model_name}{w.model_args}_{w.seed}_{w.data_name}',
+            / f'{w.model_name}{w.model_args}_{w.seed}',
+        train_data_folder = lambda w: project_paths.models \
+            / f'{w.model_name}{w.model_args}_{w.seed}' \
+            / f'{w.data_name}:{w.train_data_group}',
         symlink_folder = lambda w: project_paths.models \
-            / f'{w.model_name}{compute_hash(w.model_args, w.seed, w.data_name)}',
+            / f'{w.model_name}{compute_hash(w.model_args, w.seed)}',
         hash_file = lambda w: project_paths.models \
-            / f'{w.model_name}{w.model_args}_{w.seed}_{w.data_name}' \
-            / f'{compute_hash(w.model_args, w.seed, w.data_name).lstrip(":")}.hash'
+            / f'{w.model_name}{w.model_args}_{w.seed}' \
+            / f'{w.data_name}:{w.train_data_group}' \
+            / f'{compute_hash(w.model_args, w.seed).lstrip(":")}.hash'
 
     output:
         model_state = project_paths.models \
-            / '{model_name}{model_args}_{seed}_{data_name}' \
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}:{train_data_group}' \
             / 'trained.pt'
 
     shell:
@@ -990,9 +1008,9 @@ checkpoint train_model:
         # ... training command ...
 
         # Create hash documentation file
-        echo "{wildcards.model_args}_{wildcards.seed}_{wildcards.data_name}" > {params.hash_file}
+        echo "{wildcards.model_args}_{wildcards.seed}" > {params.hash_file}
 
-        # Create folder symlink (absolute path)
+        # Create folder symlink at model level (absolute path)
         ln -s {params.model_folder} {params.symlink_folder}
         """
 ```
@@ -1000,14 +1018,16 @@ checkpoint train_model:
 **Changes:**
 - Change from `rule` to `checkpoint`
 - Remove `{model_name}/` parent directory
-- Move model identifier into folder name
+- Move model identifier into folder name (without data_name)
+- Add `{data_name}:{train_data_group}` subdirectory level
 - Change status from `_trained.pt` to `/trained.pt`
-- Add params for symlink creation
+- Add params for symlink creation (symlink at model level, not data level)
+- Hash excludes data_name (only model_args + seed)
 - Add shell commands for hash file and symlink creation
 
 **Wildcard mapping:**
-- No new wildcards
-- No removed wildcards
+- **Added:** `{train_data_group}`
+- **Removed from identifier:** `{data_name}` (moved to subdirectory)
 
 ---
 
@@ -1044,44 +1064,50 @@ log:
 input:
     model_state = project_paths.models \
         / '{model_name}{model_identifier}' \
+        / '{data_name}:{train_data_group}' \
         / '{status}.pt'
 
 output:
     responses = project_paths.reports \
-        / '{data_loader}' \
-        / '{model_name}{model_identifier}_{status}' \
-        / '{data_name}-{data_group}' \
-        / '{data_loader}{data_args}' \
+        / '{experiment}' \
+        / '{model_name}{model_identifier}' \
+        / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested' \
+        / '{data_loader}:{data_args}' \
         / 'test_responses.pt',
     results = project_paths.reports \
-        / '{data_loader}' \
-        / '{model_name}{model_identifier}_{status}' \
-        / '{data_name}-{data_group}' \
-        / '{data_loader}{data_args}' \
+        / '{experiment}' \
+        / '{model_name}{model_identifier}' \
+        / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested' \
+        / '{data_loader}:{data_args}' \
         / 'test_outputs.csv'
 
 log:
     project_paths.logs / "slurm" / "rule_test_model" \
-        / '{data_loader}' \
-        / '{model_name}{model_identifier}_{status}' \
-        / '{data_name}-{data_group}' \
-        / '{data_loader}{data_args}.log'
+        / '{experiment}' \
+        / '{model_name}{model_identifier}' \
+        / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested' \
+        / '{data_loader}:{data_args}.log'
 ```
 
 **Changes:**
-- Remove `{model_name}/` parent directory from input
-- Replace `{model_args}_{seed}_{data_name}` with polymorphic `{model_identifier}` in input
-- Add `{data_name}-{data_group}` hierarchy level in output
-- Restructure output: move `{data_loader}{data_args}` into separate directory level
-- Update log paths to match new hierarchy
+- Input: Remove `{model_name}/` parent directory
+- Input: Replace `{model_args}_{seed}_{data_name}` with polymorphic `{model_identifier}`
+- Input: Add `{data_name}:{train_data_group}` subdirectory level
+- Output: **Add `{experiment}` as top-level grouping**
+- Output: Replace flat identifier with `{model_identifier}` (polymorphic)
+- Output: Add unified train+test specification layer: `{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested`
+- Output: Data loader params now use colon separator: `{data_loader}:{data_args}`
+- Log paths updated to match new hierarchy
 
 **Wildcard mapping:**
-- **Removed:** None (but `{model_args}`, `{seed}`, `{data_name}` now combined into `{model_identifier}`)
+- **Removed:** `{model_args}`, `{seed}` (combined into `{model_identifier}`)
 - **Added:** `{model_identifier}` (polymorphic: accepts full or hash form)
-- **Modified:** Output structure now has `{data_name}-{data_group}` level
+- **Added:** `{experiment}` (top-level grouping)
+- **Added:** `{train_data_group}` (training data specification)
+- **Modified:** Unified train+test spec replaces separate status/group wildcards
 
 **Note:** The `{model_identifier}` wildcard will match either:
-- Full form: `:tsteps=20+dt=2+...._42_imagenette`
+- Full form: `:tsteps=20+dt=2+...._42`
 - Hash form: `:hash=a7f3c9d4`
 
 ---
@@ -1120,23 +1146,23 @@ input:
     # Full-form model paths (triggers train_model checkpoint)
     models = expand(
         project_paths.models
-        / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}'
+        / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}'
+        / '{{data_name}}:{{train_data_group}}'
         / '{status}.pt',
         ...
     ),
 
     # Hashed model identifiers for test outputs
-    responses = expand(
+    test_outputs = expand(
         project_paths.reports
-        / '{{data_loader}}'
-        / '{{model_name}}{hashed_identifier}_{status}'
-        / '{{data_name}}-{{data_group}}'
-        / '{{data_loader}}{data_args}'
-        / 'test_responses.pt',
+        / '{{experiment}}'
+        / '{{model_name}}{hashed_identifier}'
+        / '{{data_name}}:{{train_data_group}}_{status}_{{data_name}}:{{data_group}}_tested'
+        / '{{data_loader}}:{data_args}'
+        / 'test_outputs.csv',
         hashed_identifier = lambda w: compute_hash(
-            f'{{args1}}{category}{category_value}{{args2}}',
-            w.seed,
-            w.data_name
+            f':{{args1}}{category}{category_value}{{args2}}',
+            w.seed
         ),
         ...
     )
@@ -1144,26 +1170,38 @@ input:
 output:
     test_data = project_paths.reports \
         / '{experiment}' \
-        / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}' \
-        / '{data_name}-{data_group}' \
+        / '{model_name}:{args1}{category_str}{args2}_{seed}' \
+        / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested' \
         / 'test_data.csv'
 ```
 
 **Changes:**
-- Models input: Remove `{model_name}/` parent, move identifier to folder name, status becomes `/trained.pt`
-- Responses input: Use `compute_hash()` to generate hashed identifier
-- Responses input: Add `{data_name}-{data_group}` hierarchy level
-- Responses input: Move `{data_loader}{data_args}` into separate directory level
-- Output: Add `{data_name}-{data_group}` hierarchy level
+- Models input: Remove `{model_name}/` parent directory
+- Models input: Move identifier to folder name (without data_name)
+- Models input: Add `{data_name}:{train_data_group}` subdirectory
+- Models input: Status becomes `/{status}.pt`
+- Test outputs input: Now organized by experiment (not data_loader)
+- Test outputs input: Use `compute_hash()` with only model_args + seed (not data_name)
+- Test outputs input: Add unified train+test spec layer
+- Test outputs input: Use colon separator for data_loader params
+- Output: Add unified train+test spec layer
+- Output: Remove `_{experiment}` prefix from folder name (already in path)
 - Output: Change filename from `test_data_{data_group}.csv` to `test_data.csv`
 
 **Wildcard mapping:**
-- **Added (computed):** `hashed_identifier` via `compute_hash()`
-- **Modified:** Output structure includes `{data_name}-{data_group}` level
+- **Added (computed):** `hashed_identifier` via `compute_hash(model_args, seed)`
+- **Added:** `{train_data_group}`
+- **Modified:** Unified train+test spec replaces separate wildcards
 
 ---
 
 ### snake_visualizations.smk
+
+**NOTE:** All visualization rules follow the new hierarchy. The main pattern of changes:
+- Input paths now read from `{experiment}/{model_identifier}/{train+test_spec}/test_data.csv`
+- Output paths mirror this structure in figures folder
+- Model identifier can be full form or hashed
+- Train+test spec is unified: `{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested`
 
 #### Rule: `plot_confusion_matrix`
 
@@ -1173,49 +1211,12 @@ output:
 
 #### Rule: `plot_classifier_responses`
 
-**Current structure:**
-```python
-input:
-    dataframe = project_paths.reports \
-        / '{data_loader}' \
-        / '{model_name}{data_identifier}' \
-        / 'test_outputs.csv'
+**Status:** Needs update for new hierarchy
 
-output:
-    directory(project_paths.figures \
-        / 'classifier_response' \
-        / '{model_name}{data_identifier}')
-```
-
-**New structure:**
-```python
-input:
-    dataframe = project_paths.reports \
-        / '{data_loader}' \
-        / '{model_name}{model_identifier}_{status}' \
-        / '{data_name}-{data_group}' \
-        / '{data_loader}{data_args}' \
-        / 'test_outputs.csv'
-
-output:
-    directory(project_paths.figures \
-        / 'classifier_response' \
-        / '{data_loader}' \
-        / '{model_name}{model_identifier}_{status}' \
-        / '{data_name}-{data_group}' \
-        / '{data_loader}{data_args}')
-```
-
-**Changes:**
-- Add `{data_loader}` level to input
-- Split `{data_identifier}` into `{model_identifier}_{status}`
-- Add `{data_name}-{data_group}` hierarchy level
-- Add `{data_loader}{data_args}` level
-- Update output structure to match
-
-**Wildcard mapping:**
-- **Removed:** `{data_identifier}` (replaced)
-- **Added:** `{model_identifier}`, `{status}`, `{data_name}`, `{data_group}`, `{data_args}`
+**Changes needed:**
+- Update to use experiment-based paths instead of data_loader-based
+- Add train+test spec layer
+- Use unified data_loader:data_args format
 
 ---
 
@@ -1227,11 +1228,6 @@ input:
     state = project_paths.models \
         / '{model_name}' \
         / '{model_name}{data_identifier}_{status}.pt'
-
-output:
-    plot = project_paths.figures \
-        / 'weight_distributions' \
-        / '{model_name}{data_identifier}_{status}_weights.{format}'
 ```
 
 **New structure:**
@@ -1239,27 +1235,35 @@ output:
 input:
     state = project_paths.models \
         / '{model_name}{model_identifier}' \
+        / '{data_name}:{train_data_group}' \
         / '{status}.pt'
-
-output:
-    plot = project_paths.figures \
-        / 'weight_distributions' \
-        / '{model_name}{model_identifier}_{status}_weights.{format}'
 ```
 
 **Changes:**
-- Remove `{model_name}/` parent directory from input
+- Remove `{model_name}/` parent directory
 - Replace `{data_identifier}` with `{model_identifier}`
-- Move status from `_{status}.pt` to `/{status}.pt` in input
-- Keep output unchanged (just wildcard rename)
+- Add `{data_name}:{train_data_group}` subdirectory
+- Move status from `_{status}.pt` to `/{status}.pt`
 
 **Wildcard mapping:**
 - **Removed:** `{data_identifier}`
-- **Added:** `{model_identifier}`
+- **Added:** `{model_identifier}`, `{data_name}`, `{train_data_group}`
 
 ---
 
-#### Rule: `plot_performance`
+#### All Experiment Plotting Rules
+
+**Rules affected:**
+- `plot_performance`
+- `plot_training_old`
+- `plot_training`
+- `plot_dynamics`
+- `plot_responses`
+- `plot_timeparams_tripytch`
+- `plot_timestep_tripytch`
+- `plot_connection_tripytch`
+
+**Pattern of changes (using `plot_performance` as example):**
 
 **Current structure:**
 ```python
@@ -1284,120 +1288,28 @@ input:
     data = expand(
         project_paths.reports
         / '{{experiment}}'
-        / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}'
-        / '{{data_name}}-{{data_group}}'
+        / '{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}'
+        / '{{data_name}}:{{train_data_group}}_{{status}}_{{data_name}}:{{data_group}}_tested'
         / 'test_data.csv',
         seeds=lambda w: w.seeds.split('.'),
     )
 
 output:
     project_paths.figures / '{experiment}'
-    / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}'
-    / '{data_name}-{data_group}'
+    / '{model_name}:{args1}{category_str}{args2}_{seeds}'
+    / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested'
     / 'performance.png'
 ```
 
 **Changes:**
-- Input: Add `{data_name}-{data_group}` hierarchy level
-- Input: Remove `_{data_group}` from experiment folder name
-- Output: Add `{data_name}-{data_group}` hierarchy level
-- Output: Remove `_{data_group}` from experiment folder name
-- Update `params.dataffonly` similarly
+- Input/Output: Remove `{experiment}_` prefix from folder names (redundant with path)
+- Input/Output: Remove `_{data_name}_{status}_{data_group}` from model folder
+- Input/Output: Add unified train+test spec layer as separate directory
+- Update `params` (like `dataffonly`, `accuracy_csv`, etc.) similarly
 
 **Wildcard mapping:**
-- No new wildcards
-- Structure reorganized
-
----
-
-#### Rule: `plot_training_old`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to input and output paths
-- Remove `_{data_group}` from folder names
-
----
-
-#### Rule: `plot_training`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to input and output paths
-- Remove `_{data_group}` from folder names
-
----
-
-#### Rule: `plot_dynamics`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to input and output paths
-- Remove `_{data_group}` from folder names
-
----
-
-#### Rule: `plot_responses`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to input and output paths
-- Remove `_{data_group}` from folder names
-
----
-
-#### Rule: `plot_timeparams_tripytch`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to all input paths (data1, data2, data3)
-- Add `{data_name}-{data_group}` level to output path
-- Remove `_{data_group}` from folder names
-- Update accuracy params similarly
-
----
-
-#### Rule: `plot_timestep_tripytch`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to all input paths
-- Add `{data_name}-{data_group}` level to output path
-- Remove `_{data_group}` from folder names
-
----
-
-#### Rule: `plot_connection_tripytch`
-
-**Status:** Same changes as `plot_performance` (hierarchical structure)
-
-**Changes:**
-- Add `{data_name}-{data_group}` level to all input paths
-- Add `{data_name}-{data_group}` level to output path
-- Remove `_{data_group}` from folder names
-
----
-
-#### Rule: `plot_experiment`
-
-**Status:** Minimal changes (generic wildcard)
-
-**Current structure:**
-```python
-input:
-    data = project_paths.reports / '{experiment}' / '{experiment}_{model_identifier}' / 'layer_power_small.csv'
-
-output:
-    project_paths.figures / '{experiment}' / '{experiment}_{model_identifier}' / 'experiment.png'
-```
-
-**New structure:** (No changes needed - `{model_identifier}` already polymorphic-compatible)
+- **Added:** `{train_data_group}`
+- **Modified:** Unified train+test spec layer replaces separated wildcards
 
 ---
 
@@ -1415,23 +1327,23 @@ input:
 ```python
 input:
     engineering_time_data = project_paths.reports \
-        / '{data_loader}' \
-        / '{model_name}:{args1}...{args2}+unrolled=false_{seed}_{data_name}_{status}' \
-        / '{data_name}-{data_group}' \
-        / '{data_loader}{data_args}' \
+        / '{experiment}' \
+        / '{model_name}:{args1}...{args2}+unrolled=false_{seed}' \
+        / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested' \
+        / '{data_loader}:{data_args}' \
         / 'test_responses.pt'
 ```
 
 **Changes:**
-- Move from `models/` to `reports/` (test responses are outputs of test_model)
-- Add `{data_loader}/` top level
-- Add `{data_name}-{data_group}` hierarchy
-- Move `{data_loader}{data_args}` to separate level
-- Update similar pattern for `biological_time_data`
+- Move from `models/` to `reports/` (test responses are test_model outputs)
+- Add `{experiment}/` top level
+- Remove data_name from model identifier
+- Add train+test spec layer
+- Use colon separator for data_loader params
 
 **Wildcard mapping:**
-- No new wildcards
-- Path structure corrected
+- **Added:** `{experiment}`, `{train_data_group}`
+- **Modified:** Model identifier structure
 
 ---
 
@@ -1448,15 +1360,17 @@ def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_
 
 **New structure:**
 ```python
-def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, status=STATUS):
-    return [(project_paths.models / f"{model_name}{args}_{seed}_{data_name}" / f"{status}.pt")
+def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, train_data_group="train_all", status=STATUS):
+    return [(project_paths.models / f"{model_name}{args}_{seed}" / f"{data_name}:{train_data_group}" / f"{status}.pt")
             for seed in seeds for args in args_product(arg_dict)]
 ```
 
 **Changes:**
 - Remove `{model_name}/` parent directory
-- Move identifier into folder name
+- Remove data_name from model identifier folder
+- Add `{data_name}:{train_data_group}` subdirectory
 - Move status from filename to `/{status}.pt`
+- Add `train_data_group` parameter (default "train_all")
 
 ---
 
@@ -1477,23 +1391,27 @@ def result_path(experiment, category, ..., plot=None):
 
 **New structure:**
 ```python
-def result_path(experiment, category, ..., plot=None):
+def result_path(experiment, category, ..., train_data_group="train_all", plot=None):
     folder = project_paths.reports if plot is None else project_paths.figures
     file = "test_data.csv" if plot is None else f"{plot}.png"
+    train_test_spec = f"{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested"
     ...
     paths.append(
         folder
         / exp
-        / f"{exp}_{model_name}{args}_{seed}_{data_name}_{status}"
-        / f"{data_name}-{data_group}"
+        / f"{model_name}{args}_{seed}"
+        / train_test_spec
         / file
     )
 ```
 
 **Changes:**
 - Fix folder selection (figures vs reports)
-- Add `{data_name}-{data_group}` hierarchy level
-- Remove `_{data_group}` from experiment folder name
+- Remove `{exp}_` prefix from model folder (redundant)
+- Remove data_name from model identifier
+- Add unified train+test spec layer
+- Add `train_data_group` parameter
+- Remove `_{data_group}` from folder names
 
 ---
 
@@ -1534,16 +1452,17 @@ input:
     expand(
         project_paths.reports
         / "{experiment}"
-        / "{experiment}_DyRCNNx8:tsteps=20+...+idle=*_{seed}_imagenette_{status}"
-        / "imagenette-all"
+        / "DyRCNNx8:tsteps=20+...+idle=*_{seed}"
+        / "imagenette:train_all_{status}_imagenette:test_all_tested"
         / "test_data.csv",
         ...
     )
 ```
 
 **Changes:**
-- Add `{data_name}-{data_group}` level (e.g., `imagenette-all`)
-- Remove `_{data_group}` from experiment folder name
+- Remove `{experiment}_` prefix from model folder (redundant with path)
+- Remove data_name from model identifier
+- Add unified train+test spec layer
 - Apply to ALL experiment rules
 
 **For figure outputs:**
@@ -1564,8 +1483,8 @@ expand(
 expand(
     project_paths.figures
     / "{experiment}"
-    / "{experiment}_DyRCNNx8:..._{seeds}_{data_name}_{status}"
-    / "{data_name}-{data_group}"
+    / "DyRCNNx8:..._{seeds}"
+    / "{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested"
     / 'performance.png',
     ...
 )
@@ -1597,16 +1516,18 @@ rule all:
         expand(
             project_paths.figures \
             / '{experiment}' \
-            / '{experiment}_{model_name}{model_args}_{seed}_{data_name}_{status}'
-            / '{data_name}-{data_group}'
+            / '{model_name}{model_args}_{seed}'
+            / '{data_name}:{train_data_group}_{status}_{data_name}:{data_group}_tested'
             / '{plot}.png',
             ...
         )
 ```
 
 **Changes:**
-- Add `{data_name}-{data_group}` hierarchy level
-- Remove `_{data_group}` from experiment folder name
+- Remove `{experiment}_` prefix from model folder (redundant)
+- Remove data_name from model identifier
+- Add unified train+test spec layer
+- Add `{train_data_group}` wildcard
 
 ---
 
@@ -1616,30 +1537,39 @@ rule all:
 
 ```
 OLD: models/{model_name}/{model_name}{args}_{seed}_{data}_{status}.pt
-NEW: models/{model_name}{args}_{seed}_{data}/{status}.pt
-     models/{model_name}:hash=XXXXXXXX/{status}.pt  (symlink)
+NEW: models/{model_name}{args}_{seed}/{data}:{train_group}/{status}.pt
+     models/{model_name}:hash=XXXXXXXX/  → symlink to models/{model_name}{args}_{seed}/
 ```
 
 ### Test Results
 
 ```
 OLD: reports/{data_loader}/{model_name}{args}_{seed}_{data}_{status}_{data_loader}{data_args}_{group}/test_outputs.csv
-NEW: reports/{data_loader}/{model_name}{identifier}_{status}/{data}-{group}/{data_loader}{data_args}/test_outputs.csv
+NEW: reports/{experiment}/{model_name}{identifier}/{data}:{train_group}_{status}_{data}:{test_group}_tested/{data_loader}:{data_args}/test_outputs.csv
 ```
 
 ### Processed Data
 
 ```
 OLD: reports/{experiment}/{experiment}_{model_name}{args}_{seed}_{data}_{status}_{group}/test_data.csv
-NEW: reports/{experiment}/{experiment}_{model_name}{args}_{seed}_{data}_{status}/{data}-{group}/test_data.csv
+NEW: reports/{experiment}/{model_name}{args}_{seed}/{data}:{train_group}_{status}_{data}:{test_group}_tested/test_data.csv
 ```
 
 ### Figures
 
 ```
 OLD: figures/{experiment}/{experiment}_{model_name}{args}_{seed}_{data}_{status}_{group}/{plot}.png
-NEW: figures/{experiment}/{experiment}_{model_name}{args}_{seed}_{data}_{status}/{data}-{group}/{plot}.png
+NEW: figures/{experiment}/{model_name}{args}_{seed}/{data}:{train_group}_{status}_{data}:{test_group}_tested/{plot}.png
 ```
+
+### Key Changes
+
+1. **Model identifier**: Now `{model_name}{args}_{seed}` (data_name removed, goes in subfolder)
+2. **Hash computation**: `compute_hash(model_args, seed)` - excludes data_name
+3. **Symlink level**: At model folder level, not data subfolder
+4. **Experiment grouping**: test_model and process_test_data outputs both in `{experiment}/`
+5. **Unified train+test spec**: `{data}:{train_group}_{status}_{data}:{test_group}_tested`
+6. **Colon separators**: Used for `data_name:group` and `data_loader:args`
 
 ## Change Log
 
@@ -1647,3 +1577,11 @@ NEW: figures/{experiment}/{experiment}_{model_name}{args}_{seed}_{data}_{status}
 - 2025-01-06: Updated with polymorphic wildcard approach and simplified checkpoint
 - 2025-01-06: Added `{data_name}-{data_group}` hierarchy layer to all path specifications
 - 2025-01-06: Added comprehensive detailed rule adaptation section
+- 2025-01-06: **MAJOR UPDATE** - Revised entire hierarchy structure:
+  - Hash now excludes data_name: `compute_hash(model_args, seed)` only
+  - Models organized as `{model_id}/{data_name}:{train_group}/{status}.pt`
+  - Symlink at model level (not data subfolder)
+  - All test/report outputs grouped by `{experiment}/`
+  - Unified train+test spec: `{data}:{train_group}_{status}_{data}:{test_group}_tested`
+  - Removed redundant prefixes from folder names
+  - Colon separators for data_name:group and data_loader:args
