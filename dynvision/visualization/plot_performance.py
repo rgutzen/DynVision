@@ -218,26 +218,15 @@ def _plot_accuracy_panel_with_ffonly(
         {"linestyle": "-", "marker": "D", "markersize": 3},
         {"linestyle": "-", "marker": "^", "markersize": 3},
     ]
-    accuracy_styles_ff = [
-        {"linestyle": "--", "marker": "^", "markersize": 3},
-        {"linestyle": "--", "marker": "v", "markersize": 3},
-        {"linestyle": "--", "marker": "<", "markersize": 3},
-    ]
     confidence_styles_full = [
         {"linestyle": ":", "marker": "s", "markersize": 2},
         {"linestyle": ":", "marker": "P", "markersize": 2},
         {"linestyle": ":", "marker": "X", "markersize": 2},
     ]
-    confidence_styles_ff = [
-        {"linestyle": "-.", "marker": "v", "markersize": 2},
-        {"linestyle": "-.", "marker": "<", "markersize": 2},
-        {"linestyle": "-.", "marker": ">", "markersize": 2},
-    ]
 
     plotted_accuracy_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
-    plotted_accuracy_ff: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
     plotted_confidence_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
-    plotted_confidence_ff: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
+    ff_accuracy_markers: Dict[str, bool] = {}
 
     def _plot_series(
         dataset: pd.DataFrame,
@@ -284,33 +273,96 @@ def _plot_accuracy_panel_with_ffonly(
         dataset_label="full-model accuracy",
     )
     _plot_series(
-        dataset=ffonly_data,
-        requested=requested_accuracy,
-        styles=accuracy_styles_ff,
-        storage=plotted_accuracy_ff,
-        dataset_label="feedforward accuracy",
-    )
-    _plot_series(
         dataset=full_data,
         requested=requested_confidence,
         styles=confidence_styles_full,
         storage=plotted_confidence_full,
         dataset_label="full-model confidence",
     )
-    _plot_series(
-        dataset=ffonly_data,
-        requested=requested_confidence,
-        styles=confidence_styles_ff,
-        storage=plotted_confidence_ff,
-        dataset_label="feedforward confidence",
-    )
 
-    if (
-        not plotted_accuracy_full
-        and not plotted_accuracy_ff
-        and not plotted_confidence_full
-        and not plotted_confidence_ff
-    ):
+    def _draw_ffonly_max_markers(
+        dataset: pd.DataFrame,
+        requested: List[str],
+    ) -> Dict[str, bool]:
+        markers_drawn: Dict[str, bool] = {}
+        if dataset.empty or not requested:
+            return markers_drawn
+
+        groups: List[Tuple[Optional[str], pd.DataFrame]]
+        if hue_key in dataset.columns and hue_var != "layers":
+            groups = [
+                (group_val, group_df)
+                for group_val, group_df in dataset.groupby(hue_key, observed=True)
+            ]
+        else:
+            groups = [(None, dataset)]
+
+        for column in requested:
+            resolved = _resolve_measure_column(dataset, column)
+            if not resolved or resolved not in dataset.columns:
+                continue
+
+            column_marked = False
+            for group_val, group_df in groups:
+                valid = group_df.dropna(subset=[resolved])
+                if valid.empty:
+                    continue
+                if "time_ms" not in valid.columns:
+                    continue
+                trace = valid.groupby("time_ms", observed=True)[resolved].mean()
+                if trace.empty:
+                    continue
+                max_val = trace.max()
+                if pd.isna(max_val) or not np.isfinite(max_val):
+                    continue
+                x_pos = valid["time_ms"].max()
+                if pd.isna(x_pos) or not np.isfinite(x_pos):
+                    continue
+
+                if group_val is None:
+                    color_key = None
+                else:
+                    color_key = _standardize_category_value(str(group_val))
+                if colors:
+                    color = (
+                        colors.get(color_key)
+                        or colors.get(str(color_key))
+                        or colors.get(str(color_key).lower())
+                    )
+                    if not color:
+                        # Fall back to the first palette color for visibility
+                        color = next(iter(colors.values()), "black")
+                else:
+                    color = "black"
+                ax.scatter(
+                    [x_pos],
+                    [max_val],
+                    color=color,
+                    s=fmt.get("markersize_large", 80),
+                    marker="*",
+                    edgecolors="none",
+                    zorder=5,
+                    alpha=fmt["alpha_line"],
+                )
+                logger.debug(
+                    "FF-only max marker for '%s' (hue=%s) at %.3f",
+                    resolved,
+                    group_val,
+                    max_val,
+                )
+                column_marked = True
+
+            if column_marked:
+                markers_drawn[column] = True
+
+        return markers_drawn
+
+    if has_ffonly:
+        ff_accuracy_markers = _draw_ffonly_max_markers(
+            dataset=ffonly_data, requested=requested_accuracy
+        )
+
+    if not plotted_accuracy_full and not plotted_confidence_full:
         logger.warning(
             "No valid accuracy or confidence columns found after filtering; skipping panel"
         )
@@ -356,13 +408,12 @@ def _plot_accuracy_panel_with_ffonly(
             column
             for column in requested_accuracy
             if any(entry[0] == column for entry in plotted_accuracy_full)
-            or any(entry[0] == column for entry in plotted_accuracy_ff)
+            or column in ff_accuracy_markers
         ]
         confidence_columns_in_plot = [
             column
             for column in requested_confidence
             if any(entry[0] == column for entry in plotted_confidence_full)
-            or any(entry[0] == column for entry in plotted_confidence_ff)
         ]
 
         single_accuracy = len(accuracy_columns_in_plot) <= 1
@@ -373,11 +424,6 @@ def _plot_accuracy_panel_with_ffonly(
                 (style for col, _, style in plotted_accuracy_full if col == column),
                 None,
             )
-            if style is None:
-                style = next(
-                    (style for col, _, style in plotted_accuracy_ff if col == column),
-                    {},
-                )
             label = (
                 "Accuracy"
                 if single_accuracy and len(accuracy_columns_in_plot) == 1
@@ -397,21 +443,17 @@ def _plot_accuracy_panel_with_ffonly(
                 )
             )
 
-            if has_ffonly and any(col == column for col, _, _ in plotted_accuracy_ff):
-                ff_style = next(
-                    (style for col, _, style in plotted_accuracy_ff if col == column),
-                    {},
-                )
+            if has_ffonly and column in ff_accuracy_markers:
                 legend_elements.append(
                     Line2D(
                         [0],
                         [0],
                         color="black",
-                        linewidth=fmt["linewidth_main"],
-                        linestyle=ff_style.get("linestyle", "-."),
-                        marker=ff_style.get("marker", "v"),
-                        markersize=ff_style.get("markersize", 4),
-                        label=_append_suffix_to_label(label, "FF-only"),
+                        linewidth=0,
+                        linestyle="none",
+                        marker="*",
+                        markersize=12,
+                        label=_append_suffix_to_label(label, "FF-only max"),
                         alpha=fmt["alpha_line"],
                     )
                 )
@@ -419,17 +461,8 @@ def _plot_accuracy_panel_with_ffonly(
         for column in confidence_columns_in_plot:
             style = next(
                 (style for col, _, style in plotted_confidence_full if col == column),
-                None,
+                {},
             )
-            if style is None:
-                style = next(
-                    (
-                        style
-                        for col, _, style in plotted_confidence_ff
-                        if col == column
-                    ),
-                    {},
-                )
             label = (
                 "Confidence"
                 if single_confidence and len(confidence_columns_in_plot) == 1
@@ -448,31 +481,6 @@ def _plot_accuracy_panel_with_ffonly(
                     alpha=fmt["alpha_line"],
                 )
             )
-
-            if has_ffonly and any(
-                col == column for col, _, _ in plotted_confidence_ff
-            ):
-                ff_style = next(
-                    (
-                        style
-                        for col, _, style in plotted_confidence_ff
-                        if col == column
-                    ),
-                    {},
-                )
-                legend_elements.append(
-                    Line2D(
-                        [0],
-                        [0],
-                        color="black",
-                        linewidth=fmt["linewidth_main"],
-                        linestyle=ff_style.get("linestyle", "-."),
-                        marker=ff_style.get("marker", "v"),
-                        markersize=ff_style.get("markersize", 4),
-                        label=_append_suffix_to_label(label, "FF-only"),
-                        alpha=fmt["alpha_line"],
-                    )
-                )
 
         if legend_elements:
             ax.legend(
@@ -1346,29 +1354,51 @@ def plot_performance_grid(
             f"Loaded {len(df)} rows for full model experiment '{experiment_name}'"
         )
 
-    # Load feedforward-only data if provided
+    # Load feedforward-only data if provided and available
     if data_ffonly_paths:
-        logger.info(
-            f"Loading data from {len(data_ffonly_paths)} feedforward-only files..."
-        )
-
-        for i, data_path in enumerate(data_ffonly_paths):
-            logger.info(
-                f"Loading feedforward-only file {i+1}/{len(data_ffonly_paths)}: {data_path}"
-            )
-            df = pd.read_csv(data_path)
-
-            # Add experiment identifier (should match the corresponding full model)
-            if experiment_names and i < len(experiment_names):
-                experiment_name = experiment_names[i]
+        valid_ffonly_paths: List[Tuple[Path, Optional[str]]] = []
+        for idx, raw_path in enumerate(data_ffonly_paths):
+            if raw_path is None:
+                continue
+            path_obj = Path(raw_path)
+            if path_obj.exists():
+                if experiment_names and idx < len(experiment_names):
+                    exp_name = experiment_names[idx]
+                else:
+                    exp_name = path_obj.stem
+                valid_ffonly_paths.append((path_obj, exp_name))
             else:
-                experiment_name = data_path.stem
+                logger.warning(
+                    "Feedforward-only data path '%s' does not exist; skipping",
+                    path_obj,
+                )
 
-            df["experiment"] = experiment_name
-            df["model_type"] = "ffonly"  # Mark as feedforward-only model
-            combined_data.append(df)
+        if valid_ffonly_paths:
             logger.info(
-                f"Loaded {len(df)} rows for feedforward-only experiment '{experiment_name}'"
+                "Loading data from %d feedforward-only files...",
+                len(valid_ffonly_paths),
+            )
+
+            for i, (data_path, experiment_name) in enumerate(valid_ffonly_paths):
+                logger.info(
+                    "Loading feedforward-only file %d/%d: %s",
+                    i + 1,
+                    len(valid_ffonly_paths),
+                    data_path,
+                )
+                df = pd.read_csv(data_path)
+
+                df["experiment"] = experiment_name
+                df["model_type"] = "ffonly"  # Mark as feedforward-only model
+                combined_data.append(df)
+                logger.info(
+                    "Loaded %d rows for feedforward-only experiment '%s'",
+                    len(df),
+                    experiment_name,
+                )
+        else:
+            logger.info(
+                "No existing feedforward-only data paths found; continuing without them"
             )
 
     # Combine all data
