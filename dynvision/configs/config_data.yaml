@@ -1,5 +1,5 @@
 data_timesteps: 1
-data_presentation_pattern: [1]
+# data_presentation_pattern: [1]  # use model default
 
 mounted_datasets:
     - imagenet

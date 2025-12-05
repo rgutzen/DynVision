@@ -54,7 +54,7 @@ set-resources:
 
   train_model:
     mem: 80G * attempt # use 80GB of memory
-    runtime: 600 * attempt # run for 10 hours
+    runtime: 800 * attempt # run for 10 hours
     ntasks: 1 # use one GPU
     # cpu: 32
     cpus_per_gpu: 16 # use 16 cores

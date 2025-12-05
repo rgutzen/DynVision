@@ -139,7 +139,7 @@ cache_size: 1000
 # Training run
 seed: 0
 train_ratio: 0.9
-epochs: 300
+epochs: 250
 check_val_every_n_epoch: 10
 log_every_n_steps: 20
 accumulate_grad_batches: 4
@@ -224,7 +224,7 @@ scheduler_kwargs:
   # max_epochs: 350
   # warmup_start_lr: 0.0000001
   # eta_min: 0.0000001
-  T_max: 300
+  T_max: 500
 scheduler_configs:
   interval: epoch
   frequency: 1

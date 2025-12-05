@@ -1,5 +1,5 @@
 # Workflow parameters - running rule all
-model_name:
+model_name: 
   # - AlexNet
   # - CorNetRT
   - DyRCNNx8
@@ -8,17 +8,21 @@ model_name:
   # - ResNet18
   # - ResNet1202
   # - ResNet44
-seed: "0000"
+seed: ["6000"] #, "6001", "6002"]
 model_args:
+  tsteps: 20
   dt: 2
-  # tsteps: 20
-  # rctype: 'full'
-  # tau: 5
-  # tff: 0
-  # trc: 6
-  # rctype: ['self', 'full', 'pointdepthwise', 'depthpointwise', 'local', 'localdepthwise']
-  # skip: 'true'
-  # feedback: 'false'
+  tau: 5
+  tff: 0
+  trc: 6
+  tsk: 0
+  lossrt: 4
+  energyloss: 0.2
+  pattern: '1011'
+  rctype: 'full'
+  rctarget: 'output'
+  skip: 'true'
+  feedback: 'false'
 
 # init_with_pretrained: False
 
