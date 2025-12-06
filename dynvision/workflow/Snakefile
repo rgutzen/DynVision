@@ -6,16 +6,22 @@ include: "snake_experiments.smk"
 
 
 rule all:
+    """Default target: generate all figures (hierarchical structure).
+
+    Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{plot}.png
+    """
     input:
         expand(project_paths.figures \
             / '{experiment}' \
-            / '{experiment}_{model_name}{model_args}_{seed}_{data_name}_{status}_{data_group}' / '{plot}.png',
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{plot}.png',
             experiment = config.experiment,
             model_name = config.model_name,
             seed = config.seed,
             model_args = args_product(config.model_args),
             data_name = config.data_name,
             data_group = config.data_group,
-            status = 'trained', 
+            status = 'trained',
             plot = ['responses'],
             )
