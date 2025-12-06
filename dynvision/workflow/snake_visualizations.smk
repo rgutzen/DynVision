@@ -131,18 +131,24 @@ rule plot_weight_distributions:
 
 
 rule plot_performance:
-    # experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'gaussiancorrnoise'] if w.experiment == 'noise' else w.experiment,
+    """Plot performance metrics (hierarchical structure).
+
+    Input/Output follow new pattern:
+    - Input: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
+    - Output: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/performance.png
+    """
     input:
         data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
-        dataffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.experiment}ffonly_{w.model_name}:{w.args1}{w.category_str}{w.args2}_{seed}_{w.data_name}_{w.status}_{w.data_group}' / 'test_data.csv' for seed in w.seeds.split('.')],
+        dataffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category_str}{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
         row = 'experiment',
         subplot = 'parameter',
         hue = 'category',
@@ -160,7 +166,7 @@ rule plot_performance:
             use_distributed=False,
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'performance.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance.png',
     shell:
         """
         {params.execution_cmd} \
@@ -182,11 +188,13 @@ rule plot_performance:
         """
 
 rule plot_training_old:
+    """Plot training metrics (hierarchical structure, old version)."""
     input:
         test_data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -216,7 +224,7 @@ rule plot_training_old:
         ordering = lambda w: json.dumps(config.ordering),
         dt = getattr(config, 'dt', 2),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'training_old.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training_old.png',
     shell:
         """
         {params.execution_cmd} \
@@ -235,11 +243,13 @@ rule plot_training_old:
         """
 
 rule plot_training:
+    """Plot training metrics (hierarchical structure)."""
     input:
         test_data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -267,7 +277,7 @@ rule plot_training:
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'training.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training.png',
     shell:
         """
         {params.execution_cmd} \
@@ -290,11 +300,13 @@ rule plot_training:
 
 
 rule plot_dynamics:
+    """Plot dynamics (hierarchical structure)."""
     input:
         data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}{{category}}=*{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -311,7 +323,7 @@ rule plot_dynamics:
             use_distributed=False,
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'dynamics_{focus_layer}.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'dynamics_{focus_layer}.png',
     # group: "visualization"
     shell:
         """
@@ -330,11 +342,13 @@ rule plot_dynamics:
 
 
 rule plot_responses:
+    """Plot responses (hierarchical structure)."""
     input:
         data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}{{category_str}}{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -356,7 +370,7 @@ rule plot_responses:
             use_distributed=False,
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'responses.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'responses.png',
     shell:
         """
         {params.execution_cmd} \
@@ -377,25 +391,29 @@ rule plot_responses:
         """
 
 rule plot_timeparams_tripytch:
+    """Plot time parameters tripytch (hierarchical structure)."""
     input:
         data1 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}tau=*+tff=0+trc=6+tsk=0{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}tau=*+tff=0+trc=6+tsk=0{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         data2 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}tau=5+tff=0+trc=*+tsk=0{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}tau=5+tff=0+trc=*+tsk=0{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         data3 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:{{args1}}tau=5+tff=0+trc=6+tsk=*{{args2}}_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}{{args1}}tau=5+tff=0+trc=6+tsk=*{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -415,7 +433,7 @@ rule plot_timeparams_tripytch:
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seeds}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
     # group: "visualization"
     shell:
         """
@@ -437,25 +455,29 @@ rule plot_timeparams_tripytch:
         """
 
 rule plot_timestep_tripytch:
+    """Plot timestep tripytch (hierarchical structure)."""
     input:
         data1 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:tsteps=*{{args1}}lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}tsteps=*{{args1}}lossrt=4_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         data2 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:tsteps=20{{args1}}skip=true+lossrt=*_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}tsteps=20{{args1}}skip=true+lossrt=*_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         data3 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:tsteps=20{{args1}}lossrt=4+idle=*_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}tsteps=20{{args1}}lossrt=4+idle=*_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -475,7 +497,7 @@ rule plot_timestep_tripytch:
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:tsteps=*{args1}lossrt=*+idle=*_{seeds}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{model_name}tsteps=*{args1}lossrt=*+idle=*_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
     # group: "visualization"
     shell:
         """
@@ -497,25 +519,29 @@ rule plot_timestep_tripytch:
         """
 
 rule plot_connection_tripytch:
+    """Plot connection tripytch (hierarchical structure)."""
     input:
         data1 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:tsteps=20+rctype=full+rctarget=*{{args2}}lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}tsteps=20+rctype=full+rctarget=*{{args2}}lossrt=4_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         data2 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:tsteps=20+rctype=full+rctarget=output{{args2}}skip=*+lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}tsteps=20+rctype=full+rctarget=output{{args2}}skip=*+lossrt=4_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         data3 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{experiment}}_{{model_name}}:tsteps=30+rctype=full+rctarget=output{{args2}}tfb=30+feedback=*+lossrt=4_{seeds}_{{data_name}}_{{status}}_{{data_group}}'
+            / '{{model_name}}tsteps=30+rctype=full+rctarget=output{{args2}}tfb=30+feedback=*+lossrt=4_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
@@ -536,7 +562,7 @@ rule plot_connection_tripytch:
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seeds}_{data_name}_{status}_{data_group}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{model_name}rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
     shell:
         """
         {params.execution_cmd} \
