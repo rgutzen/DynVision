@@ -289,44 +289,58 @@ checkpoint intermediate_checkpoint_to_statedict:
 
 rule process_test_data:
     """Process test data by combining layer responses and test performance metrics.
-    
-    This unified rule combines the functionality of process_plotting_data and 
+
+    This unified rule combines the functionality of process_plotting_data and
     process_test_performance to create a single comprehensive dataset.
-    
+
+    Uses hash-compressed model identifiers for category sweeps to avoid
+    filesystem length limitations.
+
     Input:
-        responses: Model layer response files (.pt)
-        test_outputs: Test output files (.csv)
+        models: Trained model files (triggers train_model checkpoint)
+        responses: Model layer response files (.pt) from test_model
+        test_outputs: Test output files (.csv) from test_model
         script: Processing script
-    
+
     Output:
         Unified test data CSV with layer metrics and performance metrics
+        Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
     """
     input:
-        responses = expand(project_paths.reports \
-            / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}' \
-            / '{data_loader}{data_args}_{{data_group}}' / 'test_responses.pt',
-            category = lambda w: w.category_str.strip('*'),
-            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+        # Trigger train_model checkpoint for all category values
+        models = lambda w: [project_paths.models \
+            / f"{{model_name}}{{args1}}{w.category_str.strip('*')}={cat_value}{{args2}}_{{seed}}" \
+            / "{{data_name}}" \
+            / f"{config.experiment_config[w.experiment].get('status', w.status)}.pt"
+            for cat_value in config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), [])],
+        # Use hash-compressed identifiers for test outputs
+        responses = lambda w: expand(project_paths.reports \
+            / '{{experiment}}' \
+            / f"{{{{model_name}}}}:{compute_hash(f'{{{{args1}}}}{w.category_str.strip('*')}={{cat_value}}{{{{args2}}}}', '{{seed}}')}" \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{data_loader}{data_args}' / 'test_responses.pt',
+            cat_value = config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), []),
+            status = config.experiment_config[w.experiment].get('status', w.status),
+            data_loader = config.experiment_config[w.experiment]['data_loader'],
+            data_args = args_product(config.experiment_config[w.experiment]['data_args']),
         ),
-        test_outputs = expand(project_paths.reports \
-            / '{data_loader}' \
-            / '{{model_name}}:{{args1}}{category}{category_value}{{args2}}_{{seed}}_{{data_name}}_{status}' \
-            / '{data_loader}{data_args}_{{data_group}}' / 'test_outputs.csv',
-            category = lambda w: w.category_str.strip('*'),
-            category_value = lambda w: config.experiment_config['categories'].get(w.category_str.strip('=*'), '') if w.category_str else "",
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+        test_outputs = lambda w: expand(project_paths.reports \
+            / '{{experiment}}' \
+            / f"{{{{model_name}}}}:{compute_hash(f'{{{{args1}}}}{w.category_str.strip('*')}={{cat_value}}{{{{args2}}}}', '{{seed}}')}" \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{data_loader}{data_args}' / 'test_outputs.csv',
+            cat_value = config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), []),
+            status = config.experiment_config[w.experiment].get('status', w.status),
+            data_loader = config.experiment_config[w.experiment]['data_loader'],
+            data_args = args_product(config.experiment_config[w.experiment]['data_args']),
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
         measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 'classifier_top5', 'label_confidence',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category_str.strip('=*'),
+        # Pass category values to script for proper labeling
+        cat_values = lambda w: config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), []),
         additional_parameters = 'epoch',
         batch_size = 1,
         remove_input_responses = True,
@@ -338,7 +352,11 @@ rule process_test_data:
         ),
     priority: 3,
     output:
-        test_data = project_paths.reports / '{experiment}' / '{experiment}_{model_name}:{args1}{category_str}{args2}_{seed}_{data_name}_{status}_{data_group}' / 'test_data.csv',
+        test_data = project_paths.reports \
+            / '{experiment}' \
+            / '{model_name}{args1}{category_str}{args2}_{seed}' \
+            / '{data_name}:{data_group}_{status}' \
+            / 'test_data.csv',
     shell:
         """
         {params.execution_cmd} \
