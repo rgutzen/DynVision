@@ -16,9 +16,9 @@ rule init_model:
     Input:
         script: Model initialization script
         dataset: Training dataset for shape inference
-    
+
     Output:
-        Initialized model state dict
+        Initialized model state dict (hierarchical: {model_identifier}/{data_name}/init.pt)
 
     Parameters:
         config_path: Path to configuration file
@@ -41,8 +41,9 @@ rule init_model:
     priority: 0
     output:
         model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_init.pt'
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}' \
+            / 'init.pt'
     shell:
         """
         {params.execution_cmd} \
@@ -55,22 +56,28 @@ rule init_model:
             {params.model_arguments}
         """
 
-rule train_model:
+checkpoint train_model:
     """Train a model on specified dataset.
+
+    This is a checkpoint rule that creates symlinks for hash-based access.
+    After training, creates:
+    - Hash documentation file: {model_identifier}/{data_name}/{hash}.hash
+    - Symlink: {model_name}:hash={hash} -> {model_name}{model_args}_{seed}
 
     Input:
         model_state: Initial model state
         dataset_train: Training dataset
         dataset_val: Validation dataset
         script: Training script
-    
+
     Output:
-        Trained model state dict
+        Trained model state dict (hierarchical: {model_identifier}/{data_name}/trained.pt)
     """
     input:
         model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_init.pt',
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}' \
+            / 'init.pt',
         dataset_ready = project_paths.data.interim \
             / '{data_name}' \
             / 'train_all.ready',
@@ -93,6 +100,10 @@ rule train_model:
             config.data_statistics[w.data_name]['mean'],
             config.data_statistics[w.data_name]['std']
         )),
+        # Symlink and hash parameters
+        model_folder = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}",
+        symlink_folder = lambda w: project_paths.models / f"{w.model_name}{compute_hash(w.model_args, w.seed)}",
+        hash_file = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}" / w.data_name / f"{compute_hash(w.model_args, w.seed).lstrip(':')}.hash",
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=get_param('use_distributed_mode', False)(w),
@@ -100,8 +111,9 @@ rule train_model:
     priority: 2
     output:
         model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_trained.pt'
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}' \
+            / 'trained.pt'
     shell:
         """
         {params.execution_cmd} \
@@ -118,26 +130,39 @@ rule train_model:
             --resolution {params.resolution} \
             --normalize {params.normalize:q} \
             {params.model_arguments}
+
+        # Document hash for this model
+        echo "{wildcards.model_args}_{wildcards.seed}" > {params.hash_file}
+
+        # Create symlink at model level (if not exists)
+        if [ ! -e {params.symlink_folder} ]; then
+            ln -s {params.model_folder} {params.symlink_folder}
+        fi
         """
 
 use rule train_model as train_model_distributed with:
     output:
         # todo: find more general fix to automatically switch slurm resource requests for distributed mode
         model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name,imagenet}_trained.pt'
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name,imagenet}' \
+            / 'trained.pt'
 
 rule test_model:
     """Evaluate a trained model on test data.
 
+    Uses polymorphic {model_identifier} wildcard that matches:
+    - Full form: {model_args}_{seed} (e.g., tsteps=20+dt=2_42)
+    - Hash form: hash={hash_id} (e.g., hash=a7f3c9d4)
+
     Input:
-        model_state: Trained model state
+        model_state: Trained model state (accessed via symlink if hashed)
         dataset: Test dataset
         script: Evaluation script
-    
+
     Output:
-        responses: Model responses
-        results: Evaluation results
+        Test results in hierarchical structure:
+        {experiment}/{model_name}:{model_identifier}/{data_name}:{data_group}_{status}/{data_loader}{data_args}/
 
     Parameters:
         config_path: Path to configuration file with wildcards and modes applied
@@ -150,15 +175,16 @@ rule test_model:
     """
     input:
         model_state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}.pt',
+            / '{model_name}:{model_identifier}' \
+            / '{data_name}' \
+            / '{status}.pt',
         dataset_ready = project_paths.data.interim \
             / '{data_name}' \
             / 'test_{data_group}.ready',
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
-        model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        model_arguments = lambda w: parse_arguments(w, 'model_args') if 'hash=' not in w.model_identifier else "",
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
         dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
         normalize = lambda w: (
@@ -177,18 +203,21 @@ rule test_model:
     priority: 1
     output:
         responses = project_paths.reports \
-            / '{data_loader}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}' \
-            / '{data_loader}{data_args}_{data_group}' / 'test_responses.pt',
+            / '{experiment}' \
+            / '{model_name}:{model_identifier}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{data_loader}{data_args}' / 'test_responses.pt',
         results = project_paths.reports \
-            / '{data_loader}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}' \
-            / '{data_loader}{data_args}_{data_group}' / 'test_outputs.csv'
+            / '{experiment}' \
+            / '{model_name}:{model_identifier}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{data_loader}{data_args}' / 'test_outputs.csv'
     log:
         project_paths.logs / "slurm" / "rule_test_model" \
-            / '{data_loader}' \
-            / '{model_name}{model_args}_{seed}_{data_name}_{status}' \
-            / '{data_loader}{data_args}_{data_group}.log'
+            / '{experiment}' \
+            / '{model_name}:{model_identifier}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{data_loader}{data_args}.log'
     shell:
         """
         {params.execution_cmd} \
@@ -210,9 +239,9 @@ rule test_model:
         """
 
 rule best_checkpoint_to_statedict:
-    """Convert Lightning checkpoints to state dictionaries."""
+    """Convert Lightning checkpoints to state dictionaries (hierarchical structure)."""
     input:
-        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        model = project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained.pt',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
         checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
@@ -221,7 +250,7 @@ rule best_checkpoint_to_statedict:
             use_distributed=False,
         ),
     output:
-        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-best.pt'
+        project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-best.pt'
     shell:
         """
         {params.execution_cmd} \
@@ -230,20 +259,20 @@ rule best_checkpoint_to_statedict:
         """
 
 checkpoint intermediate_checkpoint_to_statedict:
-    """Convert Lightning checkpoints to state dictionaries."""
+    """Convert Lightning checkpoints to state dictionaries (hierarchical structure)."""
     input:
-        # model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained.pt',
+        # model = project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained.pt',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
         checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
         checkpoint_globs = lambda w: f"{w.model_name}{w.model_args}_{w.seed}_{w.data_name}_trained*.ckpt",
-        output_dir = lambda w: project_paths.models / f"{w.model_name}",
+        output_dir = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}" / f"{w.data_name}",
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
     output:
-        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}_{data_name}_trained-epoch={epoch}.pt'
+        project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-epoch={epoch}.pt'
     shell:
         """
         {params.execution_cmd} \
