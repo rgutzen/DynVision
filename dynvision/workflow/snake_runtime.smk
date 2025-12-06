@@ -186,6 +186,11 @@ rule test_model:
         base_config_path = WORKFLOW_CONFIG_PATH,
         model_arguments = lambda w: parse_arguments(w, 'model_args') if 'hash=' not in w.model_identifier else "",
         data_arguments = lambda w: parse_arguments(w, 'data_args'),
+        # Extract seed from model_identifier (either from full form or hash file)
+        seed = lambda w: (
+            w.model_identifier.split('_')[-1] if 'hash=' not in w.model_identifier
+            else open(list(Path(f"{project_paths.models}/{w.model_name}:{w.model_identifier}/{w.data_name}").glob('*.hash'))[0]).read().strip().split('_')[-1]
+        ),
         dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
         normalize = lambda w: (
             # Allow override via --config normalize=null
@@ -230,7 +235,7 @@ rule test_model:
             --dataset_path {params.dataset_path:q} \
             --data_loader {wildcards.data_loader} \
             --data_group {wildcards.data_group} \
-            --seed {wildcards.seed} \
+            --seed {params.seed} \
             --normalize {params.normalize:q} \
             --enable_progress_bar {params.enable_progress_bar} \
             {params.model_arguments} \
