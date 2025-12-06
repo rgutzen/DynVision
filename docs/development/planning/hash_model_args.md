@@ -1,7 +1,8 @@
 # Hierarchical File Organization and Model Identifier Hashing
 
-**Status:** Planning
+**Status:** ✅ IMPLEMENTED
 **Created:** 2025-12-06
+**Completed:** 2025-12-05
 **Authors:** Robin Gutzen, Claude (AI Assistant)
 
 ## Overview
@@ -140,7 +141,7 @@ checkpoint train_model:
     params:
         model_folder = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}",
         symlink_folder = lambda w: project_paths.models / f"{w.model_name}:{compute_hash(w.model_args, w.seed)}",
-        hash_file = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}" / w.data_name / f"{compute_hash(w.model_args, w.seed).lstrip(':')}.hash"
+        hash_file = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}" / w.data_name / f"{compute_hash(w.model_args, w.seed)}.hash"
 
     output:
         project_paths.models / "{model_name}{model_args}_{seed}" / "{data_name}" / "trained.pt"
@@ -190,7 +191,9 @@ input:
         hash_id = lambda w: compute_hash(f"{{args1}}{category}={{value}}{{args2}}", w.seed),
         ...
     )
-
+params:
+    # when model_identifier is hash, we need to look up the category values to pass them to the script
+    cat_values = lambda w: config.experiment_config['categories'].get(w.category, ''),
 output:
     project_paths.reports / "{experiment}" / "{model_name}:{args1}{category}=*{args2}_{seed}" / "{data_name}:{data_group}_{status}" / "test_data.csv"
 ```
@@ -232,7 +235,7 @@ Pattern for all experiment rules (idle, feedback, skip, tsteps, etc.):
 ```python
 input:
     expand(
-        project_paths.reports / "{experiment}" / "DyRCNNx8:{params}_{seed}" / "{data_name}:{data_group}_{status}" / "test_data.csv",
+        project_paths.reports / "{experiment}" / "{model_name}:{params}_{seed}" / "{data_name}:{data_group}_{status}" / "test_data.csv",
         ...
     )
 ```
@@ -320,3 +323,10 @@ snakemake reports/uniformnoise/DyRCNNx8:hash=*/imagenette:all_trained/StimulusNo
 - 2025-12-06: Major restructure - comprehensive hierarchy
 - 2025-12-06: Updated to match temp.smk - simplified train+test spec, data_name in subfolder
 - 2025-12-06: **Condensed document** - removed verbose examples, streamlined for implementation
+- 2025-12-05: **✅ IMPLEMENTATION COMPLETE** - All 5 phases implemented successfully:
+  - Phase 1: compute_hash() utility and unit tests
+  - Phase 2: Model rules (init, train, test, process) with checkpoint and symlinks
+  - Phase 3: All visualization rules updated
+  - Phase 4: Experiment helper functions (model_path, result_path)
+  - Phase 5: Snakefile rule all updated
+  - Total commits: 10+ (see git log for details)
