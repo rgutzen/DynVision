@@ -30,25 +30,34 @@
 # set in config_workflow.yaml
 DEFAULT_MODEL_ARGS = OrderedDict(**config.model_args)
 MODEL_NAME = config.model_name[0] if isinstance(config.model_name, list) else config.model_name
-MODEL_FMT = "{model_name}:{args}_{seed}_{data_name}_{status}.pt"
+MODEL_FMT = "{model_name}{args}_{seed}/{data_name}/{status}.pt"  # Hierarchical format
 DATA_NAME = config.data_name
 DATA_GROUP = config.data_group
 STATUS = 'trained-best'
 SEED = config.seed if isinstance(config.seed, list) else [config.seed]
 
 def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, status=STATUS):
-    """Generate list of model file paths based on parameter combinations."""
+    """Generate list of model file paths based on parameter combinations.
+
+    Hierarchical structure: {model_name}{args}_{seed}/{data_name}/{status}.pt
+    """
     arg_dict = DEFAULT_MODEL_ARGS.copy()
     if override is not None:
         arg_dict.update(override)
-    return [(project_paths.models / model_name / f"{model_name}{args}_{seed}_{data_name}_{status}.pt") for seed in seeds for args in args_product(arg_dict)]
+    return [(project_paths.models / f"{model_name}{args}_{seed}" / data_name / f"{status}.pt")
+            for seed in seeds for args in args_product(arg_dict)]
 
 def result_path(experiment, category, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, data_group=DATA_GROUP, status=STATUS, plot=None):
-    """Generate list of result file paths based on parameter combinations."""
+    """Generate list of result file paths based on parameter combinations.
+
+    Hierarchical structure:
+    - Reports: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
+    - Figures: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{plot}.png
+    """
     experiments = [experiment] if isinstance(experiment, str) else list(experiment)
     arg_dict = DEFAULT_MODEL_ARGS.copy()
     arg_dict.update({category: "*"})
-    folder = project_paths.reports if plot is None else project_paths.reports
+    folder = project_paths.reports if plot is None else project_paths.figures
     file = "test_data.csv" if plot is None else f"{plot}.png"
     paths = []
     seeds = seeds if isinstance(seeds, list) else [seeds]
@@ -58,7 +67,9 @@ def result_path(experiment, category, model_name=MODEL_NAME, seeds=SEED, data_na
                 paths.append(
                     folder
                     / exp
-                    / f"{exp}_{model_name}{args}_{seed}_{data_name}_{status}_{data_group}/{file}"
+                    / f"{model_name}{args}_{seed}"
+                    / f"{data_name}:{data_group}_{status}"
+                    / file
                 )
     return paths
 
@@ -87,8 +98,9 @@ rule plot_model_variation:  # call with --config var=<variable_name>
         ) if hasattr(config, 'var') else [],
 
 rule run_noise_recreation_attempt:
+    """Recreate noise experiment (hierarchical structure)."""
     input:
-        project_paths.figures / "uniformnoise" / "uniformnoise_DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.1+pattern=1+rctype=full+rctarget=output+skip=true+feedback=false+dloader=*_6000_imagenette_trained-epoch=149_all/performance.png",
+        project_paths.figures / "uniformnoise" / "DyRCNNx8tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.1+pattern=1+rctype=full+rctarget=output+skip=true+feedback=false+dloader=*_6000" / "imagenette:all_trained-epoch=149" / "performance.png",
 
 # rule run_pattern1_ffcv:
 #     input:
