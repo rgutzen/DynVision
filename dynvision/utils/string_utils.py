@@ -37,7 +37,10 @@ def path_to_index(path: Union[str, Path], non_index: int = -1) -> int:
 
 
 def extract_param_from_string(
-    s: str, key: str = "contrast", value_type: Optional[type] = None
+    s: str,
+    key: str,
+    value_type: Optional[type] = None,
+    assigner: str = "=",
 ) -> Union[int, float, str, bool, None]:
     """Extract parameter value from string.
 
@@ -57,13 +60,13 @@ def extract_param_from_string(
         -> 0.5
     """
     if value_type == int:
-        match = re.search(rf"{key}=(\d+)", s)
+        match = re.search(rf"{key}{assigner}(\d+)", s)
     elif value_type == float:
-        match = re.search(rf"{key}=(\d+(\.\d+)?)", s)
+        match = re.search(rf"{key}{assigner}(\d+(\.\d+)?)", s)
     elif value_type == str:
-        match = re.search(rf"{key}=([a-z]+)", s)
+        match = re.search(rf"{key}{assigner}([a-z]+)", s)
     elif value_type is None:
-        match = re.search(rf"{key}=([\da-z\.]+)", s)
+        match = re.search(rf"{key}{assigner}([\da-z\.]+)", s)
         value_type = guess_type
     else:
         raise ValueError(f"Invalid value type: {value_type}")

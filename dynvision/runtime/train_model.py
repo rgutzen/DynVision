@@ -231,15 +231,28 @@ class CallbackManager:
 
     def _setup_checkpointing(self, callbacks: List[pl.Callback]) -> Path:
         """Setup model checkpointing with configuration."""
-        # Generate checkpoint path
-        checkpoint_path = (
-            self.config.output_model_state.parent
-            / "checkpoints"
-            / self.config.output_model_state.name
-        )
+        # Generate checkpoint path and base filename
+        if self.config.checkpoint_dir is not None:
+            # Use provided checkpoint directory (hierarchical structure)
+            # Checkpoints saved as: /models/{model_name}/{model_identifier}/{data_name}/{status}-{type}-{epoch}-{metric}.ckpt
+            dirpath = Path(self.config.checkpoint_dir)
+            # Use .name to get "trained.pt", then remove ".pt" suffix manually (preserves dots in model_identifier)
+            status = self.config.output_model_state.name.removesuffix('.pt')
+            base_stem = status
+        else:
+            # Legacy behavior: checkpoints in model-specific subdirectory
+            # Checkpoints saved as: /models/{model_name}/{model_identifier}/{data_name}/checkpoints/{status}-{type}-{epoch}-{metric}.ckpt
+            checkpoint_path = (
+                self.config.output_model_state.parent
+                / "checkpoints"
+                / self.config.output_model_state.name
+            )
+            dirpath = checkpoint_path.parent
+            # Use .name and remove suffix manually instead of .stem (preserves dots in filename)
+            base_stem = checkpoint_path.name.removesuffix('.pt')
 
         # Ensure the directory exists
-        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        dirpath.mkdir(parents=True, exist_ok=True)
 
         # Get checkpoint configuration
         checkpoint_kwargs = self.config.trainer.get_checkpoint_callback_kwargs()
@@ -261,8 +274,6 @@ class CallbackManager:
         metric_precision = 2
         metric_format = f":.{metric_precision}f"
         metric_suffix = "{epoch:02d}-{" + monitor_metric + metric_format + "}"
-        dirpath = checkpoint_path.parent
-        base_stem = checkpoint_path.stem
 
         # Handle save_last separately (custom callback ensures consistent naming)
         save_last = checkpoint_kwargs.pop("save_last", False)
@@ -316,6 +327,9 @@ class CallbackManager:
             save_last,
         )
 
+        # Return a representative checkpoint path for get_best_checkpoint
+        # The actual checkpoint filename will be determined by PyTorch Lightning
+        checkpoint_path = dirpath / f"{base_stem}.ckpt"
         return checkpoint_path
 
     def _create_callback_from_config(

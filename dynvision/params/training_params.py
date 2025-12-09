@@ -70,6 +70,9 @@ class TrainingParams(CompositeParams):
     # === SCRIPT-SPECIFIC PARAMETERS ===
     input_model_state: Path = Field(description="Path to initial model state")
     output_model_state: Path = Field(description="Path to save trained model")
+    checkpoint_dir: Optional[Path] = Field(
+        default=None, description="Directory to save training checkpoints"
+    )
     dataset_link: Optional[Path] = Field(
         default=None, description="Path to training dataset"
     )

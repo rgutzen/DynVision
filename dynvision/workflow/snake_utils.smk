@@ -174,18 +174,19 @@ wildcard_constraints:
     data_group = r'[a-z0-9]+',
     data_group_not_all = r'(?!all$)[a-z0-9]+',
     data_loader = r'[a-zA-Z]+',
-    status = r'(init|trained|trained-[a-z0-9\. =]+)',
+    status = r'(init|pretrained|trained|trained-[a-z0-9\. =]+)',
     seed = r'\d+',
     seeds = r'[\d\.]+',
     category_str = r'([a-z0-9]+=\*|\s?)',
     model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',
     data_args = r'(:[a-zTF,;:\+=\d\.]+|\s?)',
-    args = r'([a-z,;:\+=\d\.]+|\s?)',
-    args1 = r'([a-z,;:\+=\d\.]+[,;:\+]|\s?)',
-    args2 = r'([a-z,;:\+=\d\.]+|\s?)',
+    args = r'([a-z,;:\+\-=\d\.]+|\s?)',
+    args1 = r'([a-z,;:\+\-=\d\.]+[,;:\+]|\s?)',
+    args2 = r'([a-z,;:\+\-=\d\.]+|\s?)',
     experiment = r'[a-z]+',
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)',
-    model_identifier = r'([\w:+=,\*\#]+)'
+    model_identifier = r'(:[a-z0-9,;=_\-\+\*\.]+|\s?)',  # Allow periods for float values
+    test_identifier = r'([a-zA-Z0-9,;:=\-\+\.]+)',  # Polymorphic: hash or full spec, allows periods for floats
 
 localrules: all, symlink_data_subsets, symlink_data_groups
 ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model > process_test_data > test_model
@@ -250,13 +251,12 @@ def get_param(key, default=None) -> callable:
     """
     return lambda w: getattr(config, key, default)
 
-
 def parse_arguments(
-    wildcards: Any,
-    args_key: str = 'model_args',
+    args: str,
     delimiter: str = '+',
     assigner: str = '=',
-    prefix: str = ":"
+    prefix: str = ":",
+    separator: str = "_"
 ) -> str:
     """Parse argument string into command line arguments.
 
@@ -270,7 +270,7 @@ def parse_arguments(
     Returns:
         Formatted command line arguments string
     """
-    args = getattr(wildcards, args_key, '')
+    args = args.strip().split(separator)[0]  # Remove anything after separator character
     args = args.lstrip(prefix).split(delimiter)
 
     if len(args) == 1 and not args[0]:
@@ -416,7 +416,8 @@ def compute_hash(*args, length: int = 8) -> str:
     hash_obj = hashlib.md5(combined.encode())
     hash_val = hash_obj.hexdigest()[:length]
 
-    return f':hash={hash_val}'
+    return hash_val
+
 
 def get_conda_env() -> tuple[Optional[str], str]:
     """Get information about the current conda environment.
@@ -518,3 +519,123 @@ pylogger.info(f"Workflow config snapshot: {WORKFLOW_CONFIG_PATH}")
 SCRIPTS = project_paths.scripts_path
 
 setup_logger()
+
+
+# =============================================================================
+# Optional Test Spec Compression
+# =============================================================================
+# When enabled, compresses {data_loader}{data_args} wildcards to short hashes
+# to avoid filesystem path length limits in SLURM log files.
+# Usage: --config use_compressed_mode=True
+
+USE_COMPRESSED_MODE = _raw_config.get('use_compressed_mode', True)
+
+TEST_SPEC_HASH_MAP = {}
+
+if USE_COMPRESSED_MODE:
+    """
+    Build hash map at load time from experiment configs.
+    Maps: hash -> {experiment, loader, args, full_spec}
+    """
+    for exp_name, exp_config in _raw_config['experiment_config'].items():
+        if 'data_loader' not in exp_config:
+            continue  # Skip experiments without test data loaders
+
+        data_loader = exp_config['data_loader']
+        data_args_list = args_product(exp_config.get('data_args', {}))
+
+        for data_args in data_args_list:
+            # Compute hash (strip prefix to get just hash value)
+            full_hash = compute_hash(data_loader, data_args)  # Returns ':hash=abc123'
+            test_hash = full_hash.lstrip(':hash=')  # Just 'abc123'
+
+            # Collision detection
+            if test_hash in TEST_SPEC_HASH_MAP:
+                existing = TEST_SPEC_HASH_MAP[test_hash]
+                if existing['loader'] != data_loader or existing['args'] != data_args:
+                    raise ValueError(
+                        f"Hash collision detected for test spec hash '{test_hash}'!\n"
+                        f"  Experiment: {exp_name}\n"
+                        f"  Existing: {existing['loader']}{existing['args']} (from {existing['experiment']})\n"
+                        f"  Colliding: {data_loader}{data_args}\n"
+                        f"  Solution: Increase hash length in compute_hash() function."
+                    )
+            else:
+                # Store mapping
+                TEST_SPEC_HASH_MAP[test_hash] = {
+                    'experiment': exp_name,
+                    'loader': data_loader,
+                    'args': data_args,
+                    'full_spec': f"{data_loader}{data_args}"
+                }
+
+    print(f"[Compressed Mode] Enabled: {len(TEST_SPEC_HASH_MAP)} unique test specs hashed")
+
+
+def get_test_specs_for_experiment(experiment):
+    """
+    Get list of test spec identifiers for an experiment.
+
+    Returns appropriate format based on compression mode:
+    - Compressed: ['abc123', 'def456'] (hash values only)
+    - Uncompressed: ['StimulusNoise:dsteps=20+...', ...] (full specs)
+
+    Args:
+        experiment: Experiment name from config
+
+    Returns:
+        list: Test spec identifiers in appropriate format
+    """
+    exp_config = _raw_config['experiment_config'].get(experiment, {})
+
+    if 'data_loader' not in exp_config:
+        return []
+
+    data_loader = exp_config['data_loader']
+    data_args_list = args_product(exp_config.get('data_args', {}))
+
+    if USE_COMPRESSED_MODE:
+        # Return just hash values (strip ':hash=' prefix)
+        return [
+            compute_hash(data_loader, args).lstrip(':hash=')
+            for args in data_args_list
+        ]
+    else:
+        # Return full specs
+        return [f"{data_loader}{args}" for args in data_args_list]
+
+
+def parse_test_identifier(test_identifier):
+    """
+    Parse test_identifier wildcard to extract data loader and args.
+
+    Works in tandem with args_product - flexible to handle both:
+    - Compressed mode: Looks up hash in TEST_SPEC_HASH_MAP
+    - Uncompressed mode: Parses full spec directly
+
+    Args:
+        test_identifier: Either a hash value ('abc123') or full spec ('StimulusNoise:dsteps=20+...')
+
+    Returns:
+        tuple: (data_loader, data_args_string)
+
+    Examples:
+        >>> parse_test_identifier('abc123')  # Compressed
+        ('StimulusNoise', ':dsteps=20+noisetype=uniform+ssnr=0.2')
+
+        >>> parse_test_identifier('StimulusNoise:dsteps=20+noisetype=uniform')  # Uncompressed
+        ('StimulusNoise', ':dsteps=20+noisetype=uniform')
+    """
+    if USE_COMPRESSED_MODE and test_identifier in TEST_SPEC_HASH_MAP:
+        # Compressed mode: lookup hash
+        spec = TEST_SPEC_HASH_MAP[test_identifier]
+        return spec['loader'], spec['args']
+    else:
+        # Uncompressed mode: parse full spec
+        # Format: LoaderName:arg1=val1+arg2=val2
+        if ':' in test_identifier:
+            parts = test_identifier.split(':', 1)
+            return parts[0], ':' + parts[1]
+        else:
+            # Edge case: no args (e.g., just loader name)
+            return test_identifier, ''

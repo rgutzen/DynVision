@@ -19,7 +19,8 @@ experiment_config:
     dloader: ['ffcv', 'torch']
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
-    energyloss: [0, 0.1, 0.2, 0.3, 0.5] #, 1.0, 2.0] #0.3
+    energyloss: [0, 0.02, 0.05]
+    # energyloss: [0, 0.1, 0.2, 0.3, 0.5] #, 1.0, 2.0] #0.3
     # energyloss: [0, 0.1, 0.3, 0.5, 1.0] #0.3
     
   response:
@@ -148,27 +149,7 @@ experiment_config:
       idle: 20
       ffonly: 'true'
 
-  uniformnoiseiid:
-    parameter: noiselevel
-    data_loader: StimulusNoise
-    data_args:
-      dsteps: 20
-      noisetype: uniform
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      tempmode: 'dynamic'
-      idle: 20
-
   saltpeppernoise:
-    parameter: noiselevel
-    data_loader: StimulusNoise
-    data_args:
-      dsteps: 20
-      noisetype: saltpepper
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      tempmode: 'static'
-      idle: 20
-
-  saltpeppernoiseiid:
     parameter: noiselevel
     data_loader: StimulusNoise
     data_args:
@@ -199,27 +180,6 @@ experiment_config:
       idle: 20
       ffonly: 'true'
 
-  poissonnoiseiid:
-    parameter: noiselevel
-    data_loader: StimulusNoise
-    data_args:
-      dsteps: 20
-      noisetype: poisson
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      tempmode: 'dynamic'
-      idle: 20
-
-  poissonnoiseiidffonly:
-    parameter: ffonly
-    data_loader: StimulusNoise
-    data_args:
-      dsteps: 20
-      noisetype: poisson
-      noiselevel: [0.3]
-      tempmode: 'dynamic'
-      idle: 20
-      ffonly: ['true', 'false']
-
   gaussiannoise:
     parameter: ssnr
     data_loader: StimulusNoise
@@ -227,7 +187,7 @@ experiment_config:
       dsteps: 20
       noisetype: gaussian
       ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      # tempmode: 'dynamic'
+      tempmode: 'dynamic'
       idle: 20
 
   gaussiancorrnoise:
@@ -238,7 +198,7 @@ experiment_config:
       noisetype: gaussian
       spatialcorr: 'true'
       ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      # tempmode: 'dynamic'
+      tempmode: 'dynamic'
       idle: 20
 
   phasescramblednoise:
@@ -248,7 +208,7 @@ experiment_config:
       dsteps: 20
       noisetype: phasescrambled
       ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      # tempmode: 'dynamic'
+      tempmode: 'dynamic'
       idle: 20
 
   gaussiannoiseffonly:
@@ -258,7 +218,7 @@ experiment_config:
       dsteps: 20
       noisetype: gaussian
       ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      # tempmode: 'dynamic'
+      tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
 
@@ -270,7 +230,7 @@ experiment_config:
       noisetype: gaussian
       spatialcorr: 'true'
       ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      # tempmode: 'dynamic'
+      tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
 
@@ -281,7 +241,7 @@ experiment_config:
       dsteps: 20
       noisetype: phasescrambled
       ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
-      # tempmode: 'dynamic'
+      tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
 

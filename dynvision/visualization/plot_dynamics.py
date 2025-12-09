@@ -198,7 +198,7 @@ def calculate_metrics(df, focus_layer, parameter, category, metric, dt=None):
 
     df[metric_col] = np.nan
 
-    # Group by parameter, category, AND first_label_index to calculate metrics per stimulus
+    # Group by parameter, category, AND first_label_index to calculate metrics per stimulus set
     for group_key, group in df.groupby([parameter, category, "first_label_index"]):
         param_val, cat_val, pres_label = group_key
         logger.debug(f"Processing group: {param_val}, {cat_val}, {pres_label}")
@@ -210,27 +210,79 @@ def calculate_metrics(df, focus_layer, parameter, category, metric, dt=None):
         if response_col not in group.columns:
             continue
 
-        response_values = group[response_col].values
-        if len(response_values) == 0:
+        if len(group) == 0:
             continue
 
         try:
-            # Reshape as [1, n_timesteps] for single stimulus response
-            response_tensor = torch.tensor(response_values).reshape(1, -1)
+            entity_col = (
+                "sample_index" if "sample_index" in group.columns else "__entity__"
+            )
+            if entity_col == "__entity__":
+                group_with_entity = group.assign(__entity__=0)
+            else:
+                group_with_entity = group.assign(sample_index=group["sample_index"])
+
+            duplicates = (
+                group_with_entity.groupby([entity_col, "times_index"])[response_col]
+                .count()
+                .gt(1)
+            )
+            if duplicates.any():
+                duplicate_pairs = duplicates[duplicates].index.tolist()
+                logger.warning(
+                    "Multiple response values detected for %s | %s | %s at %d combinations; averaging",
+                    param_val,
+                    cat_val,
+                    pres_label,
+                    len(duplicate_pairs),
+                )
+
+            pivot = (
+                group_with_entity.pivot_table(
+                    index=entity_col,
+                    columns="times_index",
+                    values=response_col,
+                    aggfunc="mean",
+                )
+                .sort_index(axis=0)
+                .sort_index(axis=1)
+            )
+
+            pivot = pivot.dropna(how="all", axis=0)
+            pivot = pivot.dropna(how="all", axis=1)
+            if pivot.empty:
+                continue
+
+            response_array = pivot.to_numpy(dtype=np.float32)
+            if response_array.size == 0:
+                continue
+
+            if np.isnan(response_array).any():
+                response_array = np.nan_to_num(response_array, nan=0.0)
+
+            response_tensor = torch.from_numpy(response_array)
 
             if metric == "peak_ratio":
-                metric_value = float(peak_ratio(response_tensor, min_delay=5)[0])
+                metric_tensor = peak_ratio(response_tensor, min_delay=5)
             elif metric == "peak_time":
-                peak_idx = int(peak_time(response_tensor)[0].item())
-                metric_value = peak_idx * dt if dt is not None else peak_idx
+                metric_tensor = peak_time(response_tensor).float()
+                if dt is not None:
+                    metric_tensor = metric_tensor * dt
             elif metric == "peak_height":
-                metric_value = float(peak_height(response_tensor)[0].item())
+                metric_tensor = peak_height(response_tensor)
             else:
                 continue
 
-            # Assign the calculated metric to all rows in this group
-            for idx in group.index:
-                df.at[idx, metric_col] = metric_value
+            metric_vector = metric_tensor.detach().cpu().numpy()
+            entity_values = pivot.index.to_numpy()
+            metrics_map = {
+                entity: float(value) if np.isfinite(value) else np.nan
+                for entity, value in zip(entity_values, metric_vector)
+            }
+
+            df.loc[group.index, metric_col] = (
+                group_with_entity[entity_col].map(metrics_map).to_numpy()
+            )
 
         except Exception as e:
             logger.debug(

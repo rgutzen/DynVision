@@ -12,7 +12,6 @@ This module provides visualization-related utilities:
 import json
 import logging
 import sys
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -265,60 +264,84 @@ def peak_height(mean_response: torch.Tensor) -> torch.Tensor:
 
 
 def peak_ratio(mean_response: torch.Tensor, min_delay: int = 5) -> torch.Tensor:
-    """Calculate ratio between first and second peaks based on temporal order.
+    """Calculate ratio between the two strongest positive peaks.
 
     Args:
-        response: Layer response tensor of shape [batch_size, n_timesteps]
-        min_delay: Minimum separation between peaks
+        mean_response: Tensor of shape ``[batch, timesteps]`` containing temporal
+            responses (already averaged across spatial/channel dimensions).
+        min_delay: Minimum separation in index space between peaks. If no pair of
+            peaks satisfies this separation, the next-best peak is used so long as
+            it remains positive.
 
     Returns:
-        Tensor of peak ratios (later_peak / earlier_peak) for each feature
+        Tensor of peak ratios (later_peak / earlier_peak) for each sample. If
+        fewer than two positive peaks are found, the corresponding entry is zero.
     """
-    response_tensor = deepcopy(mean_response)
 
-    # Find highest peak
-    first_peak_index = mean_response.argmax(dim=1)
-    first_peak_value = torch.tensor(
-        [
-            response_tensor[channel, i].item()
-            for channel, i in enumerate(first_peak_index)
-        ]
+    if mean_response.ndim != 2:
+        raise ValueError(
+            f"mean_response must be 2D (batch, timesteps); got shape {mean_response.shape}"
+        )
+
+    min_delay = max(int(min_delay), 1)
+    batch_size, _ = mean_response.shape
+    ratios = torch.zeros(
+        batch_size, dtype=mean_response.dtype, device=mean_response.device
     )
 
-    # Suppress region around highest peak to second heighest peak
-    for channel, i in enumerate(first_peak_index):
-        start_idx = max(0, i - min_delay)
-        end_idx = min(response_tensor.shape[1], i + min_delay + 1)
-        response_tensor[channel, start_idx:end_idx] = float("-inf")
+    for batch_idx in range(batch_size):
+        signal = mean_response[batch_idx].detach().cpu()
+        timesteps = signal.numel()
+        if timesteps < 2:
+            continue
 
-    # Find second highest peak
-    second_peak_index = response_tensor.argmax(dim=1)
-    second_peak_value = torch.tensor(
-        [
-            response_tensor[channel, i].item()
-            for channel, i in enumerate(second_peak_index)
+        left = torch.empty_like(signal)
+        right = torch.empty_like(signal)
+        left[0] = signal[0]
+        left[1:] = signal[:-1]
+        right[-1] = signal[-1]
+        right[:-1] = signal[1:]
+
+        peak_mask = (signal >= left) & (signal >= right)
+        peak_mask[0] = timesteps == 1 or signal[0] >= signal[1]
+        peak_mask[-1] = timesteps == 1 or signal[-1] >= signal[-2]
+
+        peak_indices = [
+            idx
+            for idx in torch.nonzero(peak_mask, as_tuple=False).flatten().tolist()
+            if signal[idx].item() > 0
         ]
-    )
 
-    # Calculate ratio based on temporal order: later_peak / earlier_peak
-    # If first_peak comes before second_peak: second_peak / first_peak
-    # If second_peak comes before first_peak: first_peak / second_peak
-    ratio = torch.zeros_like(first_peak_value)
+        if len(peak_indices) < 2:
+            continue
 
-    for i in range(len(first_peak_index)):
-        first_idx = first_peak_index[i].item()
-        second_idx = second_peak_index[i].item()
-        first_val = first_peak_value[i].item()
-        second_val = second_peak_value[i].item()
+        peak_indices.sort(key=lambda idx: signal[idx].item(), reverse=True)
+
+        first_idx = peak_indices[0]
+        first_val = signal[first_idx].item()
+        if first_val <= 0:
+            continue
+
+        second_idx = None
+        for candidate in peak_indices[1:]:
+            if abs(candidate - first_idx) >= min_delay:
+                second_idx = candidate
+                break
+        if second_idx is None:
+            second_idx = peak_indices[1]
+
+        second_val = signal[second_idx].item()
+        if second_val <= 0:
+            continue
 
         if first_idx < second_idx:
-            # First peak comes earlier, ratio = later / earlier = second / first
-            ratio[i] = second_val / first_val if first_val > 0 else 0.0
+            ratio_value = second_val / first_val if first_val != 0 else 0.0
         else:
-            # Second peak comes earlier, ratio = later / earlier = first / second
-            ratio[i] = first_val / second_val if second_val > 0 else 0.0
+            ratio_value = first_val / second_val if second_val != 0 else 0.0
 
-    return ratio
+        ratios[batch_idx] = ratio_value
+
+    return ratios
 
 
 def spatial_variance(response: torch.Tensor) -> torch.Tensor:

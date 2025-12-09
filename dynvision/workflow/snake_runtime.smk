@@ -32,7 +32,7 @@ rule init_model:
             / 'train_all.ready'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
-        model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        model_arguments = lambda w: parse_arguments(w.model_args),
         dataset_path = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -41,6 +41,7 @@ rule init_model:
     priority: 0
     output:
         model_state = project_paths.models \
+            / '{model_name}' \
             / '{model_name}{model_args}_{seed}' \
             / '{data_name}' \
             / 'init.pt'
@@ -59,10 +60,7 @@ rule init_model:
 checkpoint train_model:
     """Train a model on specified dataset.
 
-    This is a checkpoint rule that creates symlinks for hash-based access.
-    After training, creates:
-    - Hash documentation file: {model_identifier}/{data_name}/{hash}.hash
-    - Symlink: {model_name}:hash={hash} -> {model_name}{model_args}_{seed}
+    This is a checkpoint rule that enables data-dependent DAG re-evaluation.
 
     Input:
         model_state: Initial model state
@@ -75,6 +73,7 @@ checkpoint train_model:
     """
     input:
         model_state = project_paths.models \
+            / '{model_name}' \
             / '{model_name}{model_args}_{seed}' \
             / '{data_name}' \
             / 'init.pt',
@@ -93,17 +92,14 @@ checkpoint train_model:
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
         data_group = "all",
-        model_arguments = lambda w: parse_arguments(w, 'model_args'),
+        model_arguments = lambda w: parse_arguments(w.model_args),
         dataset_link = lambda w: project_paths.data.interim / w.data_name / 'train_all',
         resolution = lambda w: config.data_resolution[w.data_name],
         normalize = lambda w: json.dumps((
             config.data_statistics[w.data_name]['mean'],
             config.data_statistics[w.data_name]['std']
         )),
-        # Symlink and hash parameters
-        model_folder = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}",
-        symlink_folder = lambda w: project_paths.models / f"{w.model_name}{compute_hash(w.model_args, w.seed)}",
-        hash_file = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}" / w.data_name / f"{compute_hash(w.model_args, w.seed).lstrip(':')}.hash",
+        checkpoint_dir = lambda w: project_paths.models / w.model_name / f'{w.model_name}{w.model_args}_{w.seed}' / w.data_name,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=get_param('use_distributed_mode', False)(w),
@@ -111,15 +107,17 @@ checkpoint train_model:
     priority: 2
     output:
         model_state = project_paths.models \
+            / '{model_name}' \
             / '{model_name}{model_args}_{seed}' \
             / '{data_name}' \
-            / 'trained.pt'
+            / 'trained.pt',
     shell:
         """
         {params.execution_cmd} \
             --config_path {params.base_config_path:q} \
             --input_model_state {input.model_state:q} \
             --output_model_state {output.model_state:q} \
+            --checkpoint_dir {params.checkpoint_dir:q} \
             --model_name {wildcards.model_name} \
             --dataset_link {params.dataset_link:q} \
             --dataset_train {input.dataset_train:q} \
@@ -130,52 +128,49 @@ checkpoint train_model:
             --resolution {params.resolution} \
             --normalize {params.normalize:q} \
             {params.model_arguments}
-
-        # Document hash for this model
-        echo "{wildcards.model_args}_{wildcards.seed}" > {params.hash_file}
-
-        # Create symlink at model level (if not exists)
-        if [ ! -e {params.symlink_folder} ]; then
-            ln -s {params.model_folder} {params.symlink_folder}
-        fi
         """
 
 use rule train_model as train_model_distributed with:
     output:
         # todo: find more general fix to automatically switch slurm resource requests for distributed mode
         model_state = project_paths.models \
+            / '{model_name}' \
             / '{model_name}{model_args}_{seed}' \
             / '{data_name,imagenet}' \
-            / 'trained.pt'
+            / 'trained.pt',
 
 rule test_model:
     """Evaluate a trained model on test data.
 
-    Uses polymorphic {model_identifier} wildcard that matches:
-    - Full form: {model_args}_{seed} (e.g., tsteps=20+dt=2_42)
-    - Hash form: hash={hash_id} (e.g., hash=a7f3c9d4)
+    Uses {model_identifier} wildcard in form: {model_args}_{seed} (e.g., :tsteps=20+dt=2_42_6000)
+
+    Uses polymorphic {test_identifier} wildcard that matches:
+    - Compressed mode: abc123 (hash of data_loader + data_args)
+    - Uncompressed mode: StimulusNoise:dsteps=20+... (full spec)
 
     Input:
-        model_state: Trained model state (accessed via symlink if hashed)
+        model_state: Trained model state
         dataset: Test dataset
         script: Evaluation script
 
     Output:
         Test results in hierarchical structure:
-        {experiment}/{model_name}:{model_identifier}/{data_name}:{data_group}_{status}/{data_loader}{data_args}/
+        {experiment}/{model_name}{model_identifier}/{data_name}:{data_group}_{status}/{test_identifier}/
 
     Parameters:
         config_path: Path to configuration file with wildcards and modes applied
         batch_size: Evaluation batch size
         data_group: Data grouping configuration
         model_arguments: Model-specific arguments
-        data_arguments: Data-specific arguments
+        data_loader: Parsed from test_identifier
+        data_arguments: Parsed from test_identifier
         loss: Loss function configuration
         enable_progress_bar: Whether to show progress bar
     """
     input:
         model_state = project_paths.models \
-            / '{model_name}:{model_identifier}' \
+            / '{model_name}' \
+            / '{model_name}{model_identifier}' \
             / '{data_name}' \
             / '{status}.pt',
         dataset_ready = project_paths.data.interim \
@@ -184,13 +179,12 @@ rule test_model:
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
-        model_arguments = lambda w: parse_arguments(w, 'model_args') if 'hash=' not in w.model_identifier else "",
-        data_arguments = lambda w: parse_arguments(w, 'data_args'),
-        # Extract seed from model_identifier (either from full form or hash file)
-        seed = lambda w: (
-            w.model_identifier.split('_')[-1] if 'hash=' not in w.model_identifier
-            else open(list(Path(f"{project_paths.models}/{w.model_name}:{w.model_identifier}/{w.data_name}").glob('*.hash'))[0]).read().strip().split('_')[-1]
-        ),
+        model_arguments = lambda w: parse_arguments(w.model_identifier),
+        # Parse test_identifier to get loader and args
+        data_loader = lambda w: parse_test_identifier(w.test_identifier)[0],
+        data_args_string = lambda w: parse_test_identifier(w.test_identifier)[1],
+        data_arguments = lambda w: parse_arguments(parse_test_identifier(w.test_identifier)[1]),
+        seed = lambda w: w.model_identifier.split('_')[-1],
         dataset_path = lambda w: project_paths.data.interim / w.data_name / f'test_{w.data_group}',
         normalize = lambda w: (
             # Allow override via --config normalize=null
@@ -209,20 +203,19 @@ rule test_model:
     output:
         responses = project_paths.reports \
             / '{experiment}' \
-            / '{model_name}:{model_identifier}' \
+            / '{model_name}{model_identifier}' \
             / '{data_name}:{data_group}_{status}' \
-            / '{data_loader}{data_args}' / 'test_responses.pt',
+            / '{test_identifier}' / 'test_responses.pt',
         results = project_paths.reports \
             / '{experiment}' \
-            / '{model_name}:{model_identifier}' \
+            / '{model_name}{model_identifier}' \
             / '{data_name}:{data_group}_{status}' \
-            / '{data_loader}{data_args}' / 'test_outputs.csv'
-    log:
-        project_paths.logs / "slurm" / "rule_test_model" \
+            / '{test_identifier}' / 'test_outputs.csv',
+        meta_data = project_paths.reports \
             / '{experiment}' \
-            / '{model_name}:{model_identifier}' \
+            / '{model_name}{model_identifier}' \
             / '{data_name}:{data_group}_{status}' \
-            / '{data_loader}{data_args}.log'
+            / '{test_identifier}' / 'test_outputs.csv.config.yaml'  # generated automatically by TestingParams
     shell:
         """
         {params.execution_cmd} \
@@ -233,7 +226,7 @@ rule test_model:
             --model_name {wildcards.model_name} \
             --data_name {wildcards.data_name} \
             --dataset_path {params.dataset_path:q} \
-            --data_loader {wildcards.data_loader} \
+            --data_loader {params.data_loader} \
             --data_group {wildcards.data_group} \
             --seed {params.seed} \
             --normalize {params.normalize:q} \
@@ -244,18 +237,18 @@ rule test_model:
         """
 
 rule best_checkpoint_to_statedict:
-    """Convert Lightning checkpoints to state dictionaries (hierarchical structure)."""
+    """Convert Lightning checkpoints to state dictionaries."""
     input:
-        model = project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained.pt',
+        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained.pt',
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
-        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
+        checkpoint_dir = lambda w: project_paths.models / w.model_name / f'{w.model_name}{w.model_args}_{w.seed}' / w.data_name,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
     output:
-        project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-best.pt'
+        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-best.pt'
     shell:
         """
         {params.execution_cmd} \
@@ -264,20 +257,21 @@ rule best_checkpoint_to_statedict:
         """
 
 checkpoint intermediate_checkpoint_to_statedict:
-    """Convert Lightning checkpoints to state dictionaries (hierarchical structure)."""
+    """Convert Lightning checkpoints to state dictionaries."""
     input:
-        # model = project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained.pt',
+        # model = project_paths.models / '{model_name}' / '{model_name}{model_identifier}' / '{data_name}' / 'trained.pt',   # comment out to retrieve checkpoints from unfinished trainings
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
-        checkpoint_dir = lambda w: project_paths.models / f"{w.model_name}" / 'checkpoints',
-        checkpoint_globs = lambda w: f"{w.model_name}{w.model_args}_{w.seed}_{w.data_name}_trained*.ckpt",
-        output_dir = lambda w: project_paths.models / f"{w.model_name}{w.model_args}_{w.seed}" / f"{w.data_name}",
+        checkpoint_dir = lambda w: project_paths.models / w.model_name / f'{w.model_name}{w.model_args}_{w.seed}' / w.data_name,
+        checkpoint_globs = lambda w: f"trained*.ckpt",
+        output_dir = lambda w: project_paths.models / w.model_name / f"{w.model_name}{w.model_args}_{w.seed}" / f"{w.data_name}",
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
     output:
-        project_paths.models / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-epoch={epoch}.pt'
+        project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-epoch={epoch}.pt'
+        # /scratch/rg5022/rhythmic_visual_attention/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern=1+energyloss=0.2_5000/imagenette/trained-epoch=149.pt
     shell:
         """
         {params.execution_cmd} \
@@ -307,40 +301,39 @@ rule process_test_data:
         Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
     """
     input:
-        # Trigger train_model checkpoint for all category values
-        models = lambda w: [project_paths.models \
-            / f"{{model_name}}{{args1}}{w.category_str.strip('*')}={cat_value}{{args2}}_{{seed}}" \
-            / "{{data_name}}" \
-            / f"{config.experiment_config[w.experiment].get('status', w.status)}.pt"
-            for cat_value in config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), [])],
-        # Use hash-compressed identifiers for test outputs
-        responses = lambda w: expand(project_paths.reports \
+        # Collect test outputs from all category values
+        test_responses = expand(project_paths.reports \
             / '{{experiment}}' \
-            / f"{{{{model_name}}}}:{compute_hash(f'{{{{args1}}}}{w.category_str.strip('*')}={{cat_value}}{{{{args2}}}}', '{{seed}}')}" \
+            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
             / '{{data_name}}:{{data_group}}_{status}' \
-            / '{data_loader}{data_args}' / 'test_responses.pt',
-            cat_value = config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), []),
-            status = config.experiment_config[w.experiment].get('status', w.status),
-            data_loader = config.experiment_config[w.experiment]['data_loader'],
-            data_args = args_product(config.experiment_config[w.experiment]['data_args']),
+            / '{test_identifier}' / 'test_responses.pt',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
         ),
-        test_outputs = lambda w: expand(project_paths.reports \
+        test_outputs = expand(project_paths.reports \
             / '{{experiment}}' \
-            / f"{{{{model_name}}}}:{compute_hash(f'{{{{args1}}}}{w.category_str.strip('*')}={{cat_value}}{{{{args2}}}}', '{{seed}}')}" \
+            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
             / '{{data_name}}:{{data_group}}_{status}' \
-            / '{data_loader}{data_args}' / 'test_outputs.csv',
-            cat_value = config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), []),
-            status = config.experiment_config[w.experiment].get('status', w.status),
-            data_loader = config.experiment_config[w.experiment]['data_loader'],
-            data_args = args_product(config.experiment_config[w.experiment]['data_args']),
+            / '{test_identifier}' / 'test_outputs.csv',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+        ),
+        test_configs = expand(project_paths.reports \
+            / '{{experiment}}' \
+            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{test_identifier}' / 'test_outputs.csv.config.yaml',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
         ),
         script = SCRIPTS / 'visualization' / 'process_test_data.py'
     params:
         measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 'classifier_top5', 'label_confidence',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        category = lambda w: w.category_str.strip('=*'),
         # Pass category values to script for proper labeling
-        cat_values = lambda w: config.experiment_config[w.experiment]['categories'].get(w.category_str.strip('=*'), []),
         additional_parameters = 'epoch',
         batch_size = 1,
         remove_input_responses = True,
@@ -354,17 +347,18 @@ rule process_test_data:
     output:
         test_data = project_paths.reports \
             / '{experiment}' \
-            / '{model_name}{args1}{category_str}{args2}_{seed}' \
+            / '{model_name}{args1}{category}=*{args2}_{seed}' \
             / '{data_name}:{data_group}_{status}' \
             / 'test_data.csv',
     shell:
         """
         {params.execution_cmd} \
-            --responses {input.responses:q} \
+            --responses {input.test_responses:q} \
             --test_outputs {input.test_outputs:q} \
+            --test_configs {input.test_configs:q} \
             --output {output.test_data:q} \
             --parameter {params.parameter} \
-            --category {params.category} \
+            --category {wildcards.category} \
             --measures {params.measures} \
             --batch_size {params.batch_size} \
             --sample_resolution {params.sample_resolution} \

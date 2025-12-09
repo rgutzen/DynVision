@@ -103,6 +103,13 @@ These visualizations show the distribution of weights in different parts of the 
 - **Layer Differences**: How weight distributions differ across layers
 - **Recurrence Weights**: Differences between feedforward and recurrent weights
 
+The revised `plot_weight_distributions.py` script can aggregate checkpoints from
+multiple seeds and compare groups by mapping dimensions to subplot rows,
+columns, and violin hues. Use `--row`, `--column`, and `--hue` to choose between
+`category` (e.g. recurrence type), `connection_type`, `status`, and `layer`;
+provide `--category-key` when you need to extract grouping information from
+checkpoint paths.
+
 **Interpretation Example**:
 
 When analyzing weight distributions, you can observe:

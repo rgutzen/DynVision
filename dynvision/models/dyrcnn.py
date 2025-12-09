@@ -32,7 +32,7 @@ from dynvision.model_components import (
 from dynvision.base import BaseModel
 from dynvision.utils import alias_kwargs, str_to_bool
 
-__all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8", "FourLayerCNN", "TwoLayerCNN"]
+__all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8"]
 
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class DyRCNN(BaseModel):
         feedback_mode: str = "additive",
         skip: bool = True,
         feedback: bool = False,
-        data_presentation_pattern: Union[str, List[int]] = "1011",
+        data_presentation_pattern: Union[str, List[int]] = "1",
         shuffle_presentation_pattern: bool = True,
         # DyRCNN-specific biological parameters
         train_tau: bool = False,
@@ -274,6 +274,15 @@ class DyRCNNx4(DyRCNN):
                 fixed_weight=self.input_adaption_weight
             )
 
+        self.delay_index_skip = (
+            int(round(float(self.t_skip) / float(self.dt))) if self.t_skip else 0
+        )
+        self.delay_index_feedback = (
+            int(round(float(self.t_feedback) / float(self.dt)))
+            if self.t_feedback
+            else 0
+        )
+
         # V1 layer
         in_channels = self.retina.out_channels if self.use_retina else self.n_channels
         self.V1 = RecurrentConnectedConv2d(
@@ -323,11 +332,14 @@ class DyRCNNx4(DyRCNN):
             self.addskip_V4 = Skip(
                 source=self.V1,
                 auto_adapt=True,
+                delay_index=self.delay_index_skip,
             )
         if self.feedback:
             self.addfeedback_V1 = Feedback(
                 source=self.V4,
                 auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
             )
         self.tau_V4 = torch.nn.Parameter(
             torch.tensor(self.tau),
@@ -356,6 +368,7 @@ class DyRCNNx4(DyRCNN):
             self.addfeedback_V2 = Feedback(
                 source=self.IT,
                 auto_adapt=True,
+                integration_strategy=self.feedback_mode,
                 delay_index=self.delay_index_feedback,
             )
         self.tau_IT = torch.nn.Parameter(
@@ -632,6 +645,17 @@ class DyRCNNx2(DyRCNN):
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
             recurrence_target=self.recurrence_target,
+            max_weight_init=self.max_weight_init,
+            feedforward_only=self.feedforward_only,
+        )
+
+        self.delay_index_skip = (
+            int(round(float(self.t_skip) / float(self.dt))) if self.t_skip else 0
+        )
+        self.delay_index_feedback = (
+            int(round(float(self.t_feedback) / float(self.dt)))
+            if self.t_feedback
+            else 0
         )
 
         # Define the convolutional layers
@@ -659,8 +683,19 @@ class DyRCNNx2(DyRCNN):
         )
         self.tstep_layer2 = EulerStep(dt=self.dt, tau=self.tau)
         self.nonlin_layer2 = nn.ReLU(inplace=False)
+        if self.skip:
+            self.addskip_layer2 = Skip(
+                source=self.layer1,
+                auto_adapt=True,
+                delay_index=self.delay_index_skip,
+            )
         if self.feedback:
-            self.addfeedback_layer1 = Feedback(source=self.layer2, autoadapt=True)
+            self.addfeedback_layer1 = Feedback(
+                source=self.layer2,
+                auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
+            )
 
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -683,10 +718,6 @@ class DyRCNNx2(DyRCNN):
         nn.init.trunc_normal_(self.classifier[-1].weight, **trunc_normal_params)
         nn.init.constant_(self.classifier[-1].bias, 0)
 
-
-# Aliases for backwards compatibility
-FourLayerCNN = DyRCNNx4
-TwoLayerCNN = DyRCNNx2
 
 if __name__ == "__main__":
     # Test configuration - using ImageNet input shape as default

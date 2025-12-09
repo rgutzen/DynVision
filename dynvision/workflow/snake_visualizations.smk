@@ -107,26 +107,44 @@ rule plot_weight_distributions:
         Weight distribution plot
     """
     input:
-        state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{data_identifier}_{status}.pt',
+        model = expand(project_paths.models \
+            / '{{model_name}}' \
+            / '{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{seeds}'
+            / '{{data_name}}' \
+            / '{{status}}.pt',
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            seeds=lambda w: w.seeds.split('.')
+            ),
         script = SCRIPTS / 'visualization' / 'plot_weight_distributions.py'
     params:
+        row = 'connection_type',  # status
+        column = None,
+        hue = 'category',  # connection_type
+        x_axis = 'layer',
+        category_key = lambda w: w.category,
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
     output:
-        plot = project_paths.figures \
-            / 'weight_distributions' \
-            / '{model_name}{data_identifier}_{status}_weights.{format}'
+        project_paths.figures / 'weights' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}_{status}' / 'weights.png',
     # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
-            --input {input.state:q} \
-            --output {output.plot:q} \
-            --format {wildcards.format} 
+            --input {input.model:q} \
+            --output {output:q} \
+            --row {params.row} \
+            --column {params.column} \
+            --hue {params.hue} \
+            --x_axis {params.x_axis} \
+            --category-key {params.category_key} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
         """
 
 
@@ -141,19 +159,19 @@ rule plot_performance:
         data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
         ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
-        dataffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category_str}{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
+        dataffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
         row = 'experiment',
         subplot = 'parameter',
         hue = 'category',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        category = lambda w: w.category_str.strip('=*'),
+        category = lambda w: w.category,
         experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'gaussiancorrnoise'] if w.experiment == 'noise' else w.experiment,
         confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
         dt = getattr(config, 'dt', 2),
@@ -166,7 +184,7 @@ rule plot_performance:
             use_distributed=False,
         ),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance.png',
     shell:
         """
         {params.execution_cmd} \
@@ -193,7 +211,7 @@ rule plot_training_old:
         test_data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
@@ -202,19 +220,19 @@ rule plot_training_old:
     params:
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
         memory_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
         epoch_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
         energy_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
         cross_entropy_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -224,7 +242,7 @@ rule plot_training_old:
         ordering = lambda w: json.dumps(config.ordering),
         dt = getattr(config, 'dt', 2),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training_old.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training_old.png',
     shell:
         """
         {params.execution_cmd} \
@@ -248,7 +266,7 @@ rule plot_training:
         test_data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
@@ -257,19 +275,19 @@ rule plot_training:
     params:
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_accuracy.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_accuracy.csv',
         loss_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category_str}{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_loss.csv',
+            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_loss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
-        column = getattr(config, 'column', 'parameter'),  
+        column = getattr(config, 'column', 'parameter'),
         subplot = getattr(config, 'subplot', 'layers'),
         hue = getattr(config, 'hue', 'category'),
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        category = lambda w: w.category_str.strip('=*'),
+        category = lambda w: w.category,
         dt = getattr(config, 'dt', 2),
         confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
         accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
@@ -277,7 +295,7 @@ rule plot_training:
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training.png',
     shell:
         """
         {params.execution_cmd} \
@@ -347,7 +365,7 @@ rule plot_responses:
         data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}{{category_str}}{{args2}}_{seeds}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
             seeds=lambda w: w.seeds.split('.'),
@@ -358,7 +376,7 @@ rule plot_responses:
         subplot = getattr(config, 'subplot', 'layers'),  # classifier_topk
         hue = getattr(config, 'hue', 'category'),
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        category = lambda w: w.category_str.strip('=*'),
+        category = lambda w: w.category,
         dt = getattr(config, 'dt', 2),
         confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
         accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
@@ -370,7 +388,7 @@ rule plot_responses:
             use_distributed=False,
         ),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}{category_str}{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'responses.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'responses.png',
     shell:
         """
         {params.execution_cmd} \

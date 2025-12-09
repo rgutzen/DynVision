@@ -175,7 +175,7 @@ order: "QUASI_RANDOM"
 os_cache: True
 # chunksize: 5000
 drop_last: True  # Ensure all batches are of the same size
-use_ffcv: True
+use_ffcv: False
 num_workers: 4
 persistent_workers: True
 pin_memory: False

@@ -10,6 +10,8 @@ palette:
   local: "#E91E63"  # Pink/red
   localdepthwise: "#FF6347" # Tomato
   accent: "#EC4899"  # Pink/magenta 
+  feedforward: "#D4A373"  # Muted orange
+  recurrence: "#9B59B6"  # Soft purple
   # Layers
   V1: "#ff69b4ff"
   V2: "#dda0ddff"
@@ -42,8 +44,13 @@ naming:
   add: "Additive"
   mul: "Multiplicative"
   ffonly: "Feedforward Only"
+  feedforward: "Feedforward"
+  recurrence: "Recurrent"
+  layer: "Layer"
+  status: "Status"
   true: "True"
   false: "False"
+  trained: "Trained"
   # Layers
   layer1: "V1"
   layer2: "V2"
@@ -78,3 +85,5 @@ ordering:
   rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise"]
   rctarget: ['input', 'middle', 'output']
   feedback: ['false', 'add', 'mul']
+  connection_type: ["feedforward", "recurrence"]
+  status: ["trained"]

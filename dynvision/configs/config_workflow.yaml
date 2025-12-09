@@ -17,13 +17,26 @@ model_args:
   trc: 6
   tsk: 0
   lossrt: 4
-  energyloss: 0.2
-  pattern: '1011'
+  energyloss: 0 #  #0.2
+  pattern: '1' #'1011'
   rctype: 'full'
   rctarget: 'output'
   skip: 'true'
   feedback: 'false'
+  # dloader: 'ffcv'
 
+category: [
+  # 'dsteps',
+  # 'idle',
+  # 'lossrt',
+  # 'tau',
+  # 'trc',
+  # 'tff',
+  # 'tsk',
+  # 'rctype',
+  # 'rctarget',
+  'pattern',
+]
 # init_with_pretrained: False
 
 # data_name: imagenet
