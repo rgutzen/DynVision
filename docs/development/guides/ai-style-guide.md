@@ -7,7 +7,7 @@
 **Default Workflow**:
 1. Start major tasks: Ask about roadmap and testing approach
 2. Investigation: Trace system, analyze dependencies, catalog existing code
-3. Analysis: Define constraints, apply solution hierarchy (config → params → composition → extension → new code)
+3. Analysis: Define constraints, work with tool grain, apply solution hierarchy (reorganize → tool-native → config → params → composition → extension → new code)
 4. Implementation: Build minimal, validate scientifically, commit at milestones
 5. Communication: Stay objective, present alternatives, provide technical rationale
 
@@ -147,6 +147,13 @@ Never propose solutions before fully tracing the existing system.
    - Can this be solved by composing existing building blocks?
    - Are there domain-standard packages addressing this?
 
+5. **Check what tools already provide**
+   - What does the primary tool (Snakemake, PyTorch Lightning, etc.) already support?
+   - How do the tool's designers expect this problem to be solved?
+   - What native features or patterns address similar challenges?
+   - Can reorganization leverage tool capabilities better than adding code?
+   - What would a tool expert recognize as the "standard" solution?
+
 ### Analysis Phase: Define Constraints, Find Minimal Solution
 
 1. **Define constraints explicitly**
@@ -156,15 +163,22 @@ Never propose solutions before fully tracing the existing system.
    - Priority trade-offs? (speed, maintainability, generality)
    - Should this be a reusable building block or specific integration?
 
-2. **Apply solution hierarchy** (always start from simplest)
-   - Level 1: Configuration only
-   - Level 2: Parameter modification
-   - Level 3: Compose existing blocks
-   - Level 4: Extend existing code
-   - Level 5: New building block
-   - Level 6: New abstraction
+2. **Work with the grain of existing tools**
+   - Before proposing new infrastructure ask: "What does this tool already do well?"
+   - Prefer native features over abstractions built on top
+   - Ask tool-centric questions
 
-3. **Evaluate reuse and modularity**
+3. **Apply solution hierarchy** (always start from simplest)
+   - **Level 0: Reorganization** - Can restructuring files/data solve this?
+   - **Level 1: Tool-native features** - Does existing tool already support this?
+   - **Level 2: Configuration only** - Can config file changes accomplish this?
+   - **Level 3: Parameter modification** - Can changing parameters solve this?
+   - **Level 4: Compose existing blocks** - Can existing components be combined?
+   - **Level 5: Extend existing code** - Minimal additions to current implementation?
+   - **Level 6: New building block** - New reusable component needed?
+   - **Level 7: New abstraction** - New layer/system required? (rarely needed)
+
+4. **Evaluate reuse and modularity**
    - Does similar functionality exist that can be adapted?
    - Can existing patterns be followed?
    - Would this duplicate logic elsewhere?
@@ -172,7 +186,7 @@ Never propose solutions before fully tracing the existing system.
    - Can this be designed as reusable building block?
    - What interfaces maximize composability?
 
-4. **Consider research software factors**
+5. **Consider research software factors**
    - Scientific correctness: Match theoretical foundations?
    - Performance: Where are bottlenecks?
    - Maintainability: Will domain scientists understand?
@@ -180,7 +194,7 @@ Never propose solutions before fully tracing the existing system.
    - Modularity: Can components be reused in different contexts?
    - Stability: Can components fail or be updated independently?
 
-5. **Present alternatives objectively**
+6. **Present alternatives objectively**
    - Propose 2-3 options ordered by complexity (simple → complex)
    - Explain trade-offs: effort, maintainability, generality, performance, reusability
    - Identify which existing components each approach leverages
@@ -190,10 +204,12 @@ Never propose solutions before fully tracing the existing system.
 
 ### Implementation Phase: Incremental and Validated
 
-- **Start minimal**: Simplest solution for immediate need
+- **Start minimal**: Simplest solution for immediate need; solve actual problem, not hypothetical futures
+- **Work with the grain**: Use tool-native features as intended; leverage existing ecosystem patterns
+- **Prefer transparency over abstraction**: In research contexts, explicit and visible > implicit and automated
 - **Design for composition**: Clean interfaces for future reuse
-- **Progressive enhancement**: Add generality when multiple use cases emerge
-- **Follow established patterns**: Maintain consistency with codebase
+- **Progressive enhancement**: Add generality when multiple use cases emerge (not before)
+- **Follow established patterns**: Maintain consistency with codebase and tool conventions
 - **Validate scientifically**: Test against known results, edge cases, boundaries
 - **Document rationale**: Why this approach over alternatives
 - **Add appropriate logging**: Warn about scientifically important events
@@ -516,7 +532,12 @@ After completing significant milestones, prepare git commit or remind user.
 - **Premature Abstraction**: General frameworks before understanding needs; abstractions for single use cases; wait for 2-3 similar cases
 - **Puzzle Piece Design**: Components only working with specific counterpart; tight coupling forcing single configuration; context-dependent utilities
 - **Bypassing Existing Systems**: Parallel implementations; custom parsers when framework handles it; reinventing config systems
+- **Fighting the Tool**: Building abstractions on top instead of using native features; working around tool limitations instead of with tool strengths; creating custom orchestration when tool provides it
 - **Over-Engineering**: Solving non-existent problems; adding flexibility "just in case"; complex architectures for simple tasks
+  - **Red flags**: "We should build a system that...", "This requires a registry/database/service...", "We need to handle the case where..." (for non-existent cases), "Let's add a layer that..."
+  - **Green flags**: "The tool already supports...", "We can reorganize...", "This uses standard [tool] patterns...", clear path from problem to solution
+- **Premature Generalization**: Solving hypothetical future needs; building for unknown use cases; optimizing for imagined requirements
+- **Abstraction Over Transparency**: Hidden behavior over explicit structure; databases/APIs over filesystem/configs; black boxes over visible workflows
 - **Hidden Complexity**: Burying behavior in unrelated modules; critical decisions in implementation details
 - **Investigation Shortcuts**: Proposing before tracing; assuming understanding without reading; creating patterns without checking conventions
 - **Configuration Neglect**: Hardcoding values; behavior changes requiring code modification
@@ -530,11 +551,15 @@ After completing significant milestones, prepare git commit or remind user.
 - [ ] Existing system traced and understood
 - [ ] Dependencies reviewed (files and imports analyzed)
 - [ ] Existing dependencies checked for needed functionality
+- [ ] Tool-native features investigated (what does the tool already do well?)
 - [ ] Similar functionality identified and considered for reuse
 - [ ] Constraints defined explicitly
-- [ ] Simplest solution chosen (config → parameter → composition → extension → new)
+- [ ] Reorganization considered before adding code
+- [ ] Tool-native solutions evaluated before abstractions
+- [ ] Simplest solution chosen (reorganize → tool-native → config → parameter → composition → extension → new)
 - [ ] Alternatives evaluated with trade-offs
 - [ ] Design follows building blocks philosophy
+- [ ] Solution works with tool grain, not against it
 - [ ] New dependencies justified
 
 ### Scientific Correctness
@@ -563,8 +588,11 @@ After completing significant milestones, prepare git commit or remind user.
 - [ ] Dependencies properly specified
 - [ ] Configuration options exposed appropriately
 - [ ] Backward compatibility maintained or deprecation documented
-- [ ] Behavior changes explicit and traceable
+- [ ] Behavior changes explicit and traceable (not hidden)
+- [ ] Solution transparent and visible (can inspect with standard tools)
+- [ ] Self-documenting through structure where possible
 - [ ] Integrates cleanly with existing workflow
+- [ ] Uses tool-native patterns and conventions
 - [ ] Components can be maintained independently
 
 ### Task Management and Version Control
@@ -584,13 +612,15 @@ After completing significant milestones, prepare git commit or remind user.
 **Quick Workflow**:
 1. **Start with context**: Read README, architecture docs
 2. **Initialize task**: Ask about roadmap and testing
-3. **Investigate first**: Trace flow, analyze dependencies, catalog infrastructure
-4. **Prefer simplicity**: Apply solution hierarchy, design building blocks
-5. **Maintain objectivity**: Neutral communication, technical rationale
-6. **Adapt to project**: Consider maturity, expertise, requirements, timeline
-7. **Prioritize intelligently**: Scientific correctness first
-8. **Communicate objectively**: Describe what exists, present alternatives, provide rationale
-9. **Document and commit**: Update roadmap, commit at milestones
+3. **Investigate first**: Trace flow, analyze dependencies, catalog infrastructure, check what tools provide
+4. **Work with the grain**: Use tool-native features; prefer reorganization and existing patterns
+5. **Prefer simplicity**: Apply solution hierarchy (reorganize → tool-native → config → compose → extend → new)
+6. **Design building blocks**: Modular, reusable, composable components
+7. **Maintain objectivity**: Neutral communication, technical rationale
+8. **Adapt to project**: Consider maturity, expertise, requirements, timeline
+9. **Prioritize intelligently**: Scientific correctness first
+10. **Communicate objectively**: Describe what exists, present alternatives, provide rationale
+11. **Document and commit**: Update roadmap, commit at milestones
 
 ### For Human Developers
 

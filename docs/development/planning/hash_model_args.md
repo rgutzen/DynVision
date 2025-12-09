@@ -1,9 +1,39 @@
 # Hierarchical File Organization and Model Identifier Hashing
 
-**Status:** ✅ IMPLEMENTED
+**Status:** ❌ SUPERSEDED - Model hashing was NOT implemented
 **Created:** 2025-12-06
-**Completed:** 2025-12-05
+**Superseded:** 2025-12-07
 **Authors:** Robin Gutzen, Claude (AI Assistant)
+
+---
+
+**IMPORTANT NOTE:** This document describes a PROPOSED system that was never fully implemented.
+
+**What WAS implemented:**
+- ✅ Hierarchical file organization
+- ✅ Models organized as `{model_name}/{model_identifier}/{data_name}/`
+- ✅ Experiment-based grouping for test outputs
+- ✅ Checkpoint coordination for model dependencies
+
+**What was NOT implemented:**
+- ❌ Model identifier hashing and symlinks
+- ❌ Polymorphic `{model_identifier}` wildcard matching full/hash forms
+- ❌ `.hash` documentation files for models
+
+**What WAS implemented instead:**
+- ✅ Optional test identifier compression (not model identifiers)
+- ✅ Config files (`.config.yaml`) for parameter preservation
+- ✅ Config-based parameter extraction in `process_test_data.py`
+
+**See instead:**
+- [Current Workflow Reference](../../reference/workflow.md)
+- [Current Developer Workflow Guide](../guides/workflow.md)
+
+---
+
+## Original Proposal (for historical reference)
+
+This section documents the original proposal. The actual implementation differs significantly.
 
 ## Overview
 
@@ -28,47 +58,96 @@ OSError: [Errno 36] File name too long: '/home/.../logs/slurm/rule_test_model/..
 
 ### Directory Structure
 
+#### Old Flat File Structure
+
 **Models: `{model_identifier}/{data_name}/{status}.pt`**
 ```
 models/
-  {model_name}{model_args}_{seed}/              ← Model identifier (args_seed)
-    {data_name}/                                ← Training data
-      ├── init.pt                               ← Initialization
-      ├── trained.pt                            ← Trained model
-      └── {hash_id}.hash                        ← Hash documentation
-
-  {model_name}:hash={hash_id}/                  ← Hashed identifier
-    → symlink to {model_name}{model_args}_{seed}/
+	{model_name}/
+		{model_name}:{model_args}_{seed}_{data_name}_{status}.pt
+        
+		checkpoints/
+			{model_name}:{model_args}_{seed}_{data_name}_{status}-<ckpt-info>.ckpt
 ```
 
-**Test Results: `{experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{data_loader}{data_args}/`**
+**Test Results: `{data_loader}/{model_name}{model_args}_{seed}_{data_name}_{status}_{data_group}_{data_loader}{data_args}_{data_group}/test_outputs.csv`**
 ```
 reports/
-  {experiment}/                                 ← Experiment
-    {model_name}:hash={hash_id}/                ← Model identifier
-      {data_name}:{data_group}_{status}/        ← Train+test spec
-        {data_loader}{data_args}/               ← Data loader config
-          ├── test_outputs.csv
-          └── test_responses.pt
+	{data_loader}/
+		{model_name}{model_args}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}/
+			test_outputs.csv
+			test_responses.pt
 ```
 
-**Processed Data: `{experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv`**
+**Processed Experiment Data: `{experiment}/{model_name}:{model_args}_{seed}_{data_name}_{status}_{data_group}/test_data.csv`**
 ```
 reports/
-  {experiment}/
-    {model_name}{model_args}_{seed}/
-      {data_name}:{data_group}_{status}/
-        └── test_data.csv
+	{experiment}/
+		{model_name}:{model_args}_{seed}_{data_name}_{status}_{data_group}/
+			test_data.csv
 ```
 
-**Figures: `{experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{plot}.png`**
+**Visualization: `{experiment}/{model_name}:{model_args}_{seed}_{data_name}_{status}_{data_group}/{plot}.png`**
 ```
 figures/
-  {experiment}/
-    {model_name}{model_args}_{seed}/
-      {data_name}:{data_group}_{status}/
-        ├── performance.png
-        └── responses.png
+	{experiment}/
+		{model_name}:{model_args}_{seed}_{data_name}_{status}_{data_group}/
+			performance.png
+			responses.png
+```
+
+#### New Hierarchical File Structure
+
+Note {model_args} and {data_args} are either empty or start with a colon ':'
+
+**Models: `{model_identifier}/{data_name}/{status}.pt`**
+```
+models/
+  {model_name}/                                      	← Model (level 1)
+	{model_name}{model_args}_{seed}/         			← Model identifier (full: args_seed)
+		{data_name}/                           			← Training data specification
+		├── init.pt                         			← Status: initialization
+		├── trained.pt                              	← Status: trained
+		└── a7f3c9d4.hash                             	← Hash documentation
+
+	{model_name}:hash={hash_id}/                      	← Model identifier (hashed)
+		→ symlink to {model_name}{model_args}_{seed}/   ← Symlink at model level
+
+	checkpoints/
+		{model_name}{model_args}_{seed}/         		← Model identifier (full: args_seed)
+			{data_name}/                           		← Training data specification
+			├── trained-<ckpt-info>.ckpt   				← Checkpoint files
+			└── trained-<ckpt-info>.ckpt	  			  ckpt-info e.g. "epoch-149-2.30"
+```
+
+**Test Results: `{experiment}/{model_identifier}/{train+test_spec}/{data_loader}{data_args}/test_outputs.csv`**
+```
+reports/
+  {experiment}/                                      	← Experiment (level 1)
+    {model_name}:hash={hash_id}/                        ← Model identifier (level 2)
+      {data_name}:{data_group}_{status}/  				← Train+test spec (level 3)
+        {data_loader}{data_args}/ 						← Data loader + params (level 4)
+          ├── test_outputs.csv                       	← Test results
+          └── test_responses.pt                      	← Layer responses
+```
+
+**Processed Experiment Data: `{experiment}/{model_identifier}/{train+test_spec}/test_data.csv`**
+```
+reports/
+  {experiment}/                                      	← Experiment (level 1)
+    {model_name}{model_args}_{seed}/                	← Model identifier (level 2)
+      {data_name}:{data_group}_{status}/  				← Train+test spec (level 3)
+        └── test_data.csv                           	← Processed test data
+```
+
+**Visualization: `{experiment}/{model_identifier}/{train+test_spec}/{plot}.png`**
+```
+figures/
+  {experiment}/                                      	← Experiment (level 1)
+    {model_name}{model_args}_{seed}/                	← Model identifier (level 2)
+      {data_name}:{data_group}_{status}/  				← Train+test spec (level 3)
+        ├── performance.png                         	← Performance plot
+        └── responses.png                           	← Response plot
 ```
 
 ### Key Principles
