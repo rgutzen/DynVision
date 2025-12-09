@@ -1,14 +1,21 @@
 # Workflow parameters - running rule all
 model_name: 
+  - DyRCNNx8
+  # - DyRCNNx4
+  # - DyRCNNx2
   # - AlexNet
   # - CorNetRT
-  - DyRCNNx8
   # - CordsNet
   # - ResNet20
   # - ResNet18
   # - ResNet1202
   # - ResNet44
+
 seed: ["6000"] #, "6001", "6002"]
+init_with_pretrained: False
+
+status: trained-best
+
 model_args:
   tsteps: 20
   dt: 2
@@ -23,9 +30,10 @@ model_args:
   rctarget: 'output'
   skip: 'true'
   feedback: 'false'
-  # dloader: 'ffcv'
 
-category: [
+category: 
+  - pattern
+  - energyloss
   # 'dsteps',
   # 'idle',
   # 'lossrt',
@@ -35,32 +43,29 @@ category: [
   # 'tsk',
   # 'rctype',
   # 'rctarget',
-  'pattern',
-]
-# init_with_pretrained: False
 
+data_name: imagenette
 # data_name: imagenet
 # data_name: tinyimagenet
-data_name: imagenette
 # data_name: cifar100
 # data_name: cifar10
 # data_name: mnist
-# data_name: snakenet
 
+data_group: "all"
 # data_group: "snakes"  # imagenet
 # data_group: "imagenette"  # imagenet
 # data_group: "89"  # mnist
 # data_group: "mollusks"  # tinyimagenet
 # data_group: "invertebrates"  # cifar100
-data_group: "all"
 
 experiment: 
-  - response
-  - responseffonly
-  - duration
-  - stability
+  - uniformnoise
   - contrast
+  - duration
   - interval
+  - response
+  # - responseffonly
+  # - stability
 
 # Training parameters
 loss: 

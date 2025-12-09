@@ -11,25 +11,13 @@ rule all:
     Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{plot}.png
     """
     input:
-        [result_path(
+        [expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment=config.experiment,
-            category=category,
-            status=STATUS,
-            plot=getattr(config, "plot", "responses"),
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: "*"}),
+            seed=config.seed,
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            plot='responses',
         ) for category in config.category]
-
-
-        # expand(project_paths.figures \
-        #     / '{experiment}' \
-        #     / '{model_name}{model_args}_{seed}' \
-        #     / '{data_name}:{data_group}_{status}' \
-        #     / '{plot}.png',
-        #     experiment = get_param("experiment"),
-        #     model_name = MODEL_NAME,
-        #     seed = SEED,
-        #     model_args = args_product(DEFAULT_MODEL_ARGS.copy() | {CATEGORY[0]: '*'}),
-        #     data_name = DATA_NAME,
-        #     data_group = DATA_GROUP,
-        #     status = STATUS,
-        #     plot = get_param('plot', 'responses'),
-        #     )

@@ -29,177 +29,109 @@
 
 # set in config_workflow.yaml
 DEFAULT_MODEL_ARGS = OrderedDict(**config.model_args)
-MODEL_NAME = config.model_name[0] if isinstance(config.model_name, list) else config.model_name
-MODEL_FMT = "{model_name}{args}_{seed}/{data_name}/{status}.pt"  # Hierarchical format
-DATA_NAME = config.data_name
-DATA_GROUP = config.data_group
 STATUS = ['trained-best']
 SEED = config.seed if isinstance(config.seed, list) else [config.seed]
-CATEGORY = config.category if isinstance(config.category, list) else [config.category]
 
-def model_path(override=None, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, status=STATUS):
-    """Generate list of model file paths based on parameter combinations.
 
-    Hierarchical structure: {model_name}/{model_name}{args}_{seed}/{data_name}/{status}.pt
-    """
-    arg_dict = DEFAULT_MODEL_ARGS.copy()
-    if override is not None:
-        arg_dict.update(override)
-    return [(project_paths.models / model_name / f"{model_name}{args}_{seed}" / data_name / f"{status}.pt")
-            for seed in seeds for args in args_product(arg_dict)]
-
-def result_path(experiment, category, model_name=MODEL_NAME, seeds=SEED, data_name=DATA_NAME, data_group=DATA_GROUP, status=STATUS, plot=None):
-    """Generate list of result file paths based on parameter combinations.
-
-    Hierarchical structure:
-    - Reports: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
-    - Figures: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{plot}.png
-    """
-    experiments = experiment if isinstance(experiment, list) else [experiment]
-    status = status if isinstance(status, list) else [status]
-    data_group = data_group if isinstance(data_group, list) else [data_group]
-    arg_dict = DEFAULT_MODEL_ARGS.copy()
-    arg_dict.update({category: "*"})
-    folder = project_paths.reports if plot is None else project_paths.figures
-    file = "test_data.csv" if plot is None else f"{plot}.png"
-    paths = []
-    seeds = seeds if isinstance(seeds, list) else [seeds]
-    for seed in seeds:
-        for exp in experiments:
-            for stat in status:
-                for group in data_group:
-                    group = f":{group}" if group else ""
-                    for args in args_product(arg_dict):
-                        paths.append(
-                            folder
-                            / exp
-                            / f"{model_name}{args}_{seed}"
-                            / f"{data_name}{group}_{stat}"
-                            / file
-                        )
-    return paths
-
-rule train_model_variation:  # call with --config var=<variable_name>
+rule train_model_variations:  # call with --config category=<category_name>
     input:
-        [model_path(
-            override={category: config.experiment_config['categories'][category]},
-            status='trained')
-        for category in config.category]
+        [expand(project_paths.models / "{model_name}" / "{model_name}{model_args}_{seed}" / "{data_name}" / "{status}.pt",
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: config.experiment_config['categories'][category]}),
+            seed=config.seed,
+            data_name=config.data_name,
+            status=config.status,
+        ) for category in config.category]
+    # params:
+    #     symlink_with_dataloader_name=True,
+    #     dloader="ffcv" if config.use_ffcv else "torch"
+    # shell:
+    #     """
+    #     if [ "{params.symlink_with_dataloader_name}" = "True" ]; then
+    #         for file in {input}; do
+    #             model_seed_dir=$(dirname "$(dirname "$file")")
+    #             parent_dir=$(dirname "$model_seed_dir")
+    #             base_name=$(basename "$model_seed_dir")
+    #             seed=${base_name##*_}
+    #             prefix=${base_name%_*}
+    #             symlink_path="${{parent_dir}}/${{prefix}}+dloader={params.dloader}_${{seed}}"
+    #             if [ ! -e "$symlink_path" ]; then
+    #                 ln -s "$model_seed_dir" "$symlink_path"
+    #             fi
+    #         done
+    #     fi
+    #     """
 
-rule test_model_variation:  # call with --config var=<variable_name>
+rule test_model_variations:  # call with --config category=<category_name>
     input:
-        [result_path(
+        [expand(project_paths.reports / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "test_data.csv",
             experiment=config.experiment,
-            category=category,
-            status=STATUS,
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: "*"}),
+            seed=config.seed,
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
         ) for category in config.category]
 
-rule plot_model_variation:  # call with --config category=<variable_name>
+rule plot_model_variations:  # call with --config category=<category_name> experiment=<experiment_name> plot=<plot_name>
     input:
-        [result_path(
+        [expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment=config.experiment,
-            category=category,
-            status=getattr(config, 'status', STATUS),
-            plot=getattr(config, 'plot', 'dynamics_V1'),
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: "*"}),
+            seed=config.seed,
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            plot=getattr(config, 'plot', 'responses'),
         ) for category in config.category]
-
-# sh snakecharm.sh "train_model_variation -n --config category=['energyloss','pattern'] experiment=['interval','uniformnoise','response'] epochs=500"
 
 rule plot_model_variation_weights:  # call with --config category=<variable_name>
     input:
-        [result_path(
-            experiment='weights',
-            category=category,
-            data_group=None,
-            status=getattr(config, 'status', STATUS),
-            plot='weights',
+        [expand(project_paths.figures / "weights" / "{model_name}{model_args}_{seed}" / "{data_name}_{status}" / "weights.png",
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: "*"}),
+            seed=config.seed,
+            data_name=config.data_name,
+            status=config.status,
         ) for category in config.category]
 
-
-rule run_noise_recreation_attempt:
-    """Recreate noise experiment (hierarchical structure)."""
-    input:
-        [result_path(
-            experiment=["uniformnoise"],
-            category=category,
-            status=["trained-best", "trained-epoch=149"],
-            plot='performance',
-        ) for category in ["energyloss"]]
-
-rule run_pattern1_ffcv:
-    input:
-        [model_path(
-            override={category: config.experiment_config['categories'][category], "pattern": "1", "dloader": "ffcv"},
-            status='trained',
-        ) for category in config.category]
-
-rule run_pattern1_torch: # call with --config use_ffcv=False
-    input:
-        [model_path(
-            override={category: config.experiment_config['categories'][category], "pattern": "1", "dloader": "torch"},
-            status='trained') for category in config.category]
-
-rule run_pattern1011_torch: # call with --config use_ffcv=False
-    input:
-        [model_path(
-            override={category: config.experiment_config['categories'][category], "pattern": "1011", "dloader": "torch"},
-            status='trained',
-        ) for category in config.category]
 
 rule recreate_noise_results:  # run with --allowed-rules test_model process_test_data
     input:
         project_paths.reports / "uniformnoise" / "DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040" / "imagenette:all_trained" / "test_data.csv",
 
-PARAM_VARIATIONS = [
-    dict(lossrt=config.experiment_config['categories']['lossrt']),
-    dict(tsteps=config.experiment_config['categories']['tsteps']),
-    dict(idle=config.experiment_config['categories']['idle']),
-    dict(tau=config.experiment_config['categories']['tau']),
-    dict(trc=config.experiment_config['categories']['trc']),
-    dict(tsk=config.experiment_config['categories']['tsk']),
-    dict(skip=config.experiment_config['categories']['skip']),
-    dict(feedback=config.experiment_config['categories']['feedback']),
-    dict(rctarget=config.experiment_config['categories']['rctarget']),
-    dict(rctype=config.experiment_config['categories']['rctype']),
-]
-TRAIN_VARIATIONS = [
-    dict(energyloss=config.experiment_config['categories']['energyloss'], 
-        pattern=config.experiment_config['categories']['pattern'], 
-    ),
-]
-LOADER_VARIATIONS = [
-    dict(tsteps=20, dloader="{dloader}", dsteps=1, pattern="1"),  # unroll in model steps
-    dict(tsteps=1, dloader="{dloader}", dsteps=20, pattern="1"),  # unroll in data loader
-    # dict(tff=0, trc=6, tsk=0, tfb=30),   # engineering time unrolling
-    # dict(tff=10, trc=6, tsk=20, tfb=10), # biological time unrolling
-]
 
+# LOADER_VARIATIONS = [
+#     dict(tsteps=20, dloader="{dloader}", dsteps=1, pattern="1"),  # unroll in model steps
+#     dict(tsteps=1, dloader="{dloader}", dsteps=20, pattern="1"),  # unroll in data loader
+#     # dict(tff=0, trc=6, tsk=0, tfb=30),   # engineering time unrolling
+#     # dict(tff=10, trc=6, tsk=20, tfb=10), # biological time unrolling
+# ]
 
-rule train_with_parameter_variations: # --config epochs=300
-    input:
-        [model_path(override=var, status='trained') for var in PARAM_VARIATIONS]
-
-rule train_with_loss_variations: # --config epochs=500
-    input:
-        [model_path(override=var, status='trained') for var in TRAIN_VARIATIONS]
-
-rule train_with_dataloader_variations: # --config epochs=100
-    # run both with --config use_ffcv=True & --config use_ffcv=False
-    # and rename dloader=* in output filename to ffcv or torch respectively
-    input:
-        # dataloader variations
-        [model_path(override=var, status='trained', seeds=SEED[0] if isinstance(SEED, list) else SEED) for var in LOADER_VARIATIONS],
-    params:
-        dloader = "ffcv" if config.use_ffcv else "torch"
-    shell:
-        """
-        for file in {input}; do
-            target="${file//\\{dloader\\}/{params.dloader}}"
-            if [ "$file" != "$target" ]; then
-                mv "$file" "$target"
-            fi
-        done
-        """
+# rule train_with_dataloader_variations: # --config epochs=100
+#     # run both with --config use_ffcv=True & --config use_ffcv=False
+#     # and rename dloader=* in output filename to ffcv or torch respectively
+#     input:
+#         [expand(project_paths.models / "{model_name}" / "{model_name}{model_args}_{seed}" / "{data_name}" / "{status}.pt",
+#             model_name=config.model_name,
+#             model_args=args_product(DEFAULT_MODEL_ARGS | {category: config.experiment_config['categories'][category]}),
+#             seed=config.seed,
+#             data_name=config.data_name,
+#             status=config.status,
+#         ) for category in config.category]
+#     params:
+#         dloader = "ffcv" if config.use_ffcv else "torch"
+#     shell:
+#         """
+#         for file in {input}; do
+#             target="${file//\\{dloader\\}/{params.dloader}}"
+#             if [ "$file" != "$target" ]; then
+#                 mv "$file" "$target"
+#             fi
+#         done
+#         """
 
 rule manuscript_figures: # manuscript figures
 # sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"

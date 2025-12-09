@@ -201,11 +201,11 @@ class CallbackManager:
         callbacks = []
 
         # Add model-specific callbacks when temporal depth is active
-        n_timesteps = self.config.model.n_timesteps
-        if n_timesteps is not None and n_timesteps > 1:
-            callbacks.append(custom_callbacks.MonitorClassifierResponses())
+        # n_timesteps = self.config.model.n_timesteps
+        # if n_timesteps is not None and n_timesteps > 1:
+        #     callbacks.append(custom_callbacks.MonitorClassifierResponses())
 
-        callbacks.append(custom_callbacks.MonitorWeightDistributions())
+        # callbacks.append(custom_callbacks.MonitorWeightDistributions())
 
         # Setup checkpointing
         checkpoint_path = self._setup_checkpointing(callbacks)
@@ -237,7 +237,7 @@ class CallbackManager:
             # Checkpoints saved as: /models/{model_name}/{model_identifier}/{data_name}/{status}-{type}-{epoch}-{metric}.ckpt
             dirpath = Path(self.config.checkpoint_dir)
             # Use .name to get "trained.pt", then remove ".pt" suffix manually (preserves dots in model_identifier)
-            status = self.config.output_model_state.name.removesuffix('.pt')
+            status = self.config.output_model_state.name.removesuffix(".pt")
             base_stem = status
         else:
             # Legacy behavior: checkpoints in model-specific subdirectory
@@ -249,7 +249,7 @@ class CallbackManager:
             )
             dirpath = checkpoint_path.parent
             # Use .name and remove suffix manually instead of .stem (preserves dots in filename)
-            base_stem = checkpoint_path.name.removesuffix('.pt')
+            base_stem = checkpoint_path.name.removesuffix(".pt")
 
         # Ensure the directory exists
         dirpath.mkdir(parents=True, exist_ok=True)
@@ -586,7 +586,12 @@ class TrainingOrchestrator:
         """
         with self.training_context():
             try:
-                model_name = self.config.output_model_state.name.removesuffix(".pt")
+                output_path = self.config.output_model_state
+                try:
+                    relative_path = output_path.relative_to(output_path.parents[2])
+                    model_name = str(relative_path.with_suffix(""))
+                except (IndexError, ValueError):
+                    model_name = output_path.name.removesuffix(output_path.suffix)
 
                 # Initialize logger
                 pl_logger = pl.loggers.WandbLogger(
