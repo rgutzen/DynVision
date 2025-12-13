@@ -284,6 +284,16 @@ checkpoint intermediate_checkpoint_to_statedict:
 rule process_test_data:
     """Process test data by combining layer responses and test performance metrics.
 
+    ⚠️  DEPRECATED: This rule will be removed in a future release.
+    Use the two-stage approach instead:
+    - process_single_test (Stage 1): Process individual tests in parallel
+    - aggregate_experiment_data (Stage 2): Aggregate into experiment dataset
+
+    Benefits of new approach:
+    - Parallel processing (faster)
+    - Reduced disk pressure (files deleted sooner)
+    - Better scalability for large experiments
+
     This unified rule combines the functionality of process_plotting_data and
     process_test_performance to create a single comprehensive dataset.
 
@@ -366,6 +376,150 @@ rule process_test_data:
             --remove_input_responses {params.remove_input_responses} \
             --fail_on_missing_inputs {params.fail_on_missing_inputs}
         """
+
+rule process_single_test:
+    """Process individual test output to extract metrics (Stage 1 of experiment processing).
+
+    This rule runs immediately after each test_model execution completes,
+    enabling parallel processing and reducing disk pressure.
+
+    Input:
+        test_responses: Model layer responses (large, 30GB+)
+        test_outputs: Test performance metrics (small)
+        script: Processing script
+
+    Output:
+        test_data: Processed metrics at sample-level (no metadata, no resolution applied)
+
+    Processing:
+        - Calculate layer metrics (response_avg, response_std, etc.)
+        - Calculate classifier metrics (confidence, top-k accuracy)
+        - Process test performance (add first_label_index, accuracy)
+        - Save sample-level CSV (metadata added in Stage 2)
+        - Optionally delete test_responses.pt to free disk space
+
+    Parameters:
+        measures: List of metrics to compute
+        memory_limit_gb: Soft memory limit
+        remove_input_responses: Whether to delete test_responses.pt after processing
+    """
+    input:
+        test_responses = project_paths.reports \
+            / '{experiment}' \
+            / '{model_name}{model_identifier}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{test_identifier}' / 'test_responses.pt',
+        test_outputs = project_paths.reports \
+            / '{experiment}' \
+            / '{model_name}{model_identifier}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{test_identifier}' / 'test_outputs.csv',
+        script = SCRIPTS / 'visualization' / 'process_single_test.py'
+    params:
+        measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'],
+        memory_limit_gb = 68.0,
+        remove_input_responses = True,  # Delete large test_responses.pt after processing
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    priority: 4,  # Higher than aggregation
+    output:
+        test_data = project_paths.reports \
+            / '{experiment}' \
+            / '{model_name}{model_identifier}' \
+            / '{data_name}:{data_group}_{status}' \
+            / '{test_identifier}' / 'test_data.csv',
+    shell:
+        """
+        {params.execution_cmd} \
+            --response {input.test_responses:q} \
+            --test_output {input.test_outputs:q} \
+            --output {output.test_data:q} \
+            --measures {params.measures} \
+            --memory_limit_gb {params.memory_limit_gb} \
+            --remove_input_responses {params.remove_input_responses}
+        """
+
+
+rule aggregate_experiment_data:
+    """Aggregate individual test data into experiment-level dataset (Stage 2 of experiment processing).
+
+    This rule runs after all process_single_test rules for an experiment complete.
+    It performs lightweight aggregation and metadata extraction.
+
+    Input:
+        test_data_files: All test_data.csv files from Stage 1 (across category sweep)
+        test_configs: Corresponding .config.yaml files for metadata extraction
+        script: Aggregation script
+
+    Output:
+        experiment_data: Aggregated CSV with metadata columns added
+
+    Processing:
+        - Load all test_data.csv files
+        - Extract metadata from .config.yaml files (parameter, category, additional_parameters)
+        - Add metadata columns to each dataframe
+        - Concatenate into single dataframe
+        - Optionally apply class-level aggregation
+        - Sort and save
+
+    Parameters:
+        parameter: Parameter key to extract (e.g., 'dsteps', 'stim')
+        category: Category key to extract (e.g., 'rctype', 'tsteps')
+        additional_parameters: Extra parameters to extract
+        sample_resolution: 'sample' or 'class'
+        fail_on_missing_inputs: Error handling mode
+    """
+    input:
+        test_data_files = expand(project_paths.reports \
+            / '{{experiment}}' \
+            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{test_identifier}' / 'test_data.csv',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+        ),
+        test_configs = expand(project_paths.reports \
+            / '{{experiment}}' \
+            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{test_identifier}' / 'test_outputs.csv.config.yaml',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+        ),
+        script = SCRIPTS / 'visualization' / 'aggregate_experiment_data.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        additional_parameters = 'epoch',
+        sample_resolution = 'sample',  # 'sample' or 'class'
+        fail_on_missing_inputs = False,
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    priority: 3,  # Lower than process_single_test
+    output:
+        experiment_data = project_paths.reports \
+            / '{experiment}' \
+            / '{model_name}{args1}{category}=*{args2}_{seed}' \
+            / '{data_name}:{data_group}_{status}' \
+            / 'test_data.csv',  # Keep same name for backward compatibility
+    shell:
+        """
+        {params.execution_cmd} \
+            --test_data {input.test_data_files:q} \
+            --test_configs {input.test_configs:q} \
+            --output {output.experiment_data:q} \
+            --parameter {params.parameter} \
+            --category {wildcards.category} \
+            --additional_parameters {params.additional_parameters} \
+            --sample_resolution {params.sample_resolution} \
+            --fail_on_missing_inputs {params.fail_on_missing_inputs}
+        """
+
 
 rule process_wandb_data:
     input:
