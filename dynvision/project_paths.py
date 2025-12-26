@@ -32,15 +32,19 @@ class project_paths_class:
         if self.iam_on_cluster():
             # move large folders to scratch partition
             self.data.raw = Path("/scratch") / self.user_name / "data" / "raw"
+            self.data.interim = Path("/scratch") / self.user_name / "data" / "interim"
             self.data.processed = (
                 Path("/scratch") / self.user_name / "data" / "processed"
             )
+
             self.models = (
                 Path("/scratch") / self.user_name / self.project_name / "models"
             )
+
             self.reports = (
                 Path("/scratch") / self.user_name / self.project_name / "reports"
             )
+
             self.large_logs = (
                 Path("/scratch") / self.user_name / self.project_name / "logs"
             )
