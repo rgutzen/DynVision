@@ -788,10 +788,11 @@ def export_summary(df: pd.DataFrame, output_path: Path) -> None:
 def main() -> None:
     args = parse_args()
 
-    if not logging.getLogger().handlers:
-        logging.basicConfig(
-            level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s"
-        )
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s:%(name)s:%(message)s",
+        force=True,
+    )
 
     config = load_config_from_args(
         palette_str=args.palette,
