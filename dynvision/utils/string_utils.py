@@ -78,7 +78,7 @@ def extract_param_from_string(
 
 def replace_param_in_string(
     s: str,
-    key: str = "contrast",
+    key: str,
     value_type: Optional[type] = None,
     new_value: str = "*",
 ) -> str:
