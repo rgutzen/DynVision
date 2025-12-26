@@ -149,8 +149,8 @@ rule symlink_data_subsets:
     input:
         subset_folder = lambda w: _raw_subset_path(w.data_name, w.data_subset)
     output:
-        subset_dir = directory(project_paths.data.interim / '{data_name}' / '{data_subset}_all'),
-        ready = project_paths.data.interim / '{data_name}' / '{data_subset}_all.ready'
+        subset_dir = directory(project_paths.data.interim / '{data_name}' / '{data_subset}'),
+        ready = project_paths.data.interim / '{data_name}' / '{data_subset}.ready'
     group: "dataprep"
     run:
         raw_subset = Path(input.subset_folder)
@@ -178,11 +178,11 @@ rule symlink_data_subsets:
 rule symlink_data_groups:
     """Create group directories by selecting classes from canonical subsets."""
     input:
-        subset_dir = project_paths.data.interim / '{data_name}' / '{data_subset}_all',
-        subset_ready = project_paths.data.interim / '{data_name}' / '{data_subset}_all.ready'
+        subset_dir = project_paths.data.interim / '{data_name}' / '{data_subset}',
+        subset_ready = project_paths.data.interim / '{data_name}' / '{data_subset}.ready'
     output:
-        group_dir = directory(project_paths.data.interim / '{data_name}' / '{data_subset}_{data_group_not_all}'),
-        ready = project_paths.data.interim / '{data_name}' / '{data_subset}_{data_group_not_all}.ready'
+        group_dir = directory(project_paths.data.interim / '{data_name}' / '{data_subset}_{data_group}'),
+        ready = project_paths.data.interim / '{data_name}' / '{data_subset}_{data_group}.ready'
     group: "dataprep"
     run:
         subset_dir = Path(input.subset_dir)
@@ -192,10 +192,14 @@ rule symlink_data_groups:
         group_dir.mkdir(parents=True, exist_ok=True)
         ready_file.parent.mkdir(parents=True, exist_ok=True)
 
-        defined_groups = _to_dict(config.data_groups)
-        group_entries = None
-        if defined_groups and wildcards.data_name in defined_groups:
-            group_entries = defined_groups[wildcards.data_name].get(wildcards.data_group_not_all)
+        # Special case: "all" means all classes from canonical subset
+        if wildcards.data_group == "all":
+            group_entries = None
+        else:
+            defined_groups = _to_dict(config.data_groups)
+            group_entries = None
+            if defined_groups and wildcards.data_name in defined_groups:
+                group_entries = defined_groups[wildcards.data_name].get(wildcards.data_group)
 
         if group_entries:
             class_names = []
@@ -259,7 +263,7 @@ rule build_ffcv_datasets:
             script_path=input.script,
             use_distributed=False,
         ),
-        seed = get_param("seed")[0] if isinstance(get_param("seed"), list) else get_param("seed"),
+        seed = 0,
     output:
         train = project_paths.data.processed / '{data_name}' / 'train_all' / 'train.beton',
         val = project_paths.data.processed / '{data_name}' / 'train_all' / 'val.beton'

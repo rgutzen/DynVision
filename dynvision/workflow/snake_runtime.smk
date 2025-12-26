@@ -57,7 +57,7 @@ rule init_model:
             {params.model_arguments}
         """
 
-checkpoint train_model:
+rule train_model:
     """Train a model on specified dataset.
 
     This is a checkpoint rule that enables data-dependent DAG re-evaluation.
@@ -281,101 +281,101 @@ checkpoint intermediate_checkpoint_to_statedict:
         """
 
 
-rule process_test_data:
-    """Process test data by combining layer responses and test performance metrics.
+# rule process_test_data:
+#     """Process test data by combining layer responses and test performance metrics.
 
-    ⚠️  DEPRECATED: This rule will be removed in a future release.
-    Use the two-stage approach instead:
-    - process_single_test (Stage 1): Process individual tests in parallel
-    - aggregate_experiment_data (Stage 2): Aggregate into experiment dataset
+#     ⚠️  DEPRECATED: This rule will be removed in a future release.
+#     Use the two-stage approach instead:
+#     - process_single_test (Stage 1): Process individual tests in parallel
+#     - aggregate_experiment_data (Stage 2): Aggregate into experiment dataset
 
-    Benefits of new approach:
-    - Parallel processing (faster)
-    - Reduced disk pressure (files deleted sooner)
-    - Better scalability for large experiments
+#     Benefits of new approach:
+#     - Parallel processing (faster)
+#     - Reduced disk pressure (files deleted sooner)
+#     - Better scalability for large experiments
 
-    This unified rule combines the functionality of process_plotting_data and
-    process_test_performance to create a single comprehensive dataset.
+#     This unified rule combines the functionality of process_plotting_data and
+#     process_test_performance to create a single comprehensive dataset.
 
-    Uses hash-compressed model identifiers for category sweeps to avoid
-    filesystem length limitations.
+#     Uses hash-compressed model identifiers for category sweeps to avoid
+#     filesystem length limitations.
 
-    Input:
-        models: Trained model files (triggers train_model checkpoint)
-        responses: Model layer response files (.pt) from test_model
-        test_outputs: Test output files (.csv) from test_model
-        script: Processing script
+#     Input:
+#         models: Trained model files (triggers train_model checkpoint)
+#         responses: Model layer response files (.pt) from test_model
+#         test_outputs: Test output files (.csv) from test_model
+#         script: Processing script
 
-    Output:
-        Unified test data CSV with layer metrics and performance metrics
-        Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
-    """
-    input:
-        # Collect test outputs from all category values
-        test_responses = expand(project_paths.reports \
-            / '{{experiment}}' \
-            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
-            / '{{data_name}}:{{data_group}}_{status}' \
-            / '{test_identifier}' / 'test_responses.pt',
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
-            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
-        ),
-        test_outputs = expand(project_paths.reports \
-            / '{{experiment}}' \
-            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
-            / '{{data_name}}:{{data_group}}_{status}' \
-            / '{test_identifier}' / 'test_outputs.csv',
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
-            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
-        ),
-        test_configs = expand(project_paths.reports \
-            / '{{experiment}}' \
-            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
-            / '{{data_name}}:{{data_group}}_{status}' \
-            / '{test_identifier}' / 'test_outputs.csv.config.yaml',
-            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
-            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
-            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
-        ),
-        script = SCRIPTS / 'visualization' / 'process_test_data.py'
-    params:
-        measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 'classifier_top5', 'label_confidence',
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        # Pass category values to script for proper labeling
-        additional_parameters = 'epoch',
-        batch_size = 1,
-        remove_input_responses = True,
-        fail_on_missing_inputs = False,
-        sample_resolution = 'sample',  # 'sample' or 'class'
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-        ),
-    priority: 3,
-    output:
-        test_data = project_paths.reports \
-            / '{experiment}' \
-            / '{model_name}{args1}{category}=*{args2}_{seed}' \
-            / '{data_name}:{data_group}_{status}' \
-            / 'test_data.csv',
-    shell:
-        """
-        {params.execution_cmd} \
-            --responses {input.test_responses:q} \
-            --test_outputs {input.test_outputs:q} \
-            --test_configs {input.test_configs:q} \
-            --output {output.test_data:q} \
-            --parameter {params.parameter} \
-            --category {wildcards.category} \
-            --measures {params.measures} \
-            --batch_size {params.batch_size} \
-            --sample_resolution {params.sample_resolution} \
-            --additional_parameters {params.additional_parameters} \
-            --remove_input_responses {params.remove_input_responses} \
-            --fail_on_missing_inputs {params.fail_on_missing_inputs}
-        """
+#     Output:
+#         Unified test data CSV with layer metrics and performance metrics
+#         Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
+#     """
+#     input:
+#         # Collect test outputs from all category values
+#         test_responses = expand(project_paths.reports \
+#             / '{{experiment}}' \
+#             / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+#             / '{{data_name}}:{{data_group}}_{status}' \
+#             / '{test_identifier}' / 'test_responses.pt',
+#             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+#             cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+#             test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+#         ),
+#         test_outputs = expand(project_paths.reports \
+#             / '{{experiment}}' \
+#             / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+#             / '{{data_name}}:{{data_group}}_{status}' \
+#             / '{test_identifier}' / 'test_outputs.csv',
+#             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+#             cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+#             test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+#         ),
+#         test_configs = expand(project_paths.reports \
+#             / '{{experiment}}' \
+#             / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+#             / '{{data_name}}:{{data_group}}_{status}' \
+#             / '{test_identifier}' / 'test_outputs.csv.config.yaml',
+#             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+#             cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+#             test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+#         ),
+#         script = SCRIPTS / 'visualization' / 'process_test_data.py'
+#     params:
+#         measures = ['response_avg', 'response_std', 'guess_confidence', 'first_label_confidence', 'accuracy_top3', 'accuracy_top5'], # 'spatial_variance', 'feature_variance', 'classifier_top5', 'label_confidence',
+#         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+#         # Pass category values to script for proper labeling
+#         additional_parameters = 'epoch',
+#         batch_size = 1,
+#         remove_input_responses = True,
+#         fail_on_missing_inputs = False,
+#         sample_resolution = 'sample',  # 'sample' or 'class'
+#         execution_cmd = lambda w, input: build_execution_command(
+#             script_path=input.script,
+#             use_distributed=False,
+#         ),
+#     priority: 3,
+#     output:
+#         test_data = project_paths.reports \
+#             / '{experiment}' \
+#             / '{model_name}{args1}{category}=*{args2}_{seed}' \
+#             / '{data_name}:{data_group}_{status}' \
+#             / 'test_data.csv',
+#     shell:
+#         """
+#         {params.execution_cmd} \
+#             --responses {input.test_responses:q} \
+#             --test_outputs {input.test_outputs:q} \
+#             --test_configs {input.test_configs:q} \
+#             --output {output.test_data:q} \
+#             --parameter {params.parameter} \
+#             --category {wildcards.category} \
+#             --measures {params.measures} \
+#             --batch_size {params.batch_size} \
+#             --sample_resolution {params.sample_resolution} \
+#             --additional_parameters {params.additional_parameters} \
+#             --remove_input_responses {params.remove_input_responses} \
+#             --fail_on_missing_inputs {params.fail_on_missing_inputs}
+#         """
 
 rule process_single_test:
     """Process individual test output to extract metrics (Stage 1 of experiment processing).
@@ -472,9 +472,9 @@ rule aggregate_experiment_data:
         fail_on_missing_inputs: Error handling mode
     """
     input:
-        test_data_files = expand(project_paths.reports \
+        test_data = expand(project_paths.reports \
             / '{{experiment}}' \
-            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+            / "{{model_name}}:{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
             / '{{data_name}}:{{data_group}}_{status}' \
             / '{test_identifier}' / 'test_data.csv',
             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
@@ -483,7 +483,7 @@ rule aggregate_experiment_data:
         ),
         test_configs = expand(project_paths.reports \
             / '{{experiment}}' \
-            / "{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
+            / "{{model_name}}:{{args1}}{{category}}={cat_value}{{args2}}_{{seed}}" \
             / '{{data_name}}:{{data_group}}_{status}' \
             / '{test_identifier}' / 'test_outputs.csv.config.yaml',
             status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
@@ -493,7 +493,7 @@ rule aggregate_experiment_data:
         script = SCRIPTS / 'visualization' / 'aggregate_experiment_data.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        additional_parameters = 'epoch',
+        additional_parameters = ['epoch', 'seed', 'experiment'],
         sample_resolution = 'sample',  # 'sample' or 'class'
         fail_on_missing_inputs = False,
         execution_cmd = lambda w, input: build_execution_command(
@@ -504,13 +504,13 @@ rule aggregate_experiment_data:
     output:
         experiment_data = project_paths.reports \
             / '{experiment}' \
-            / '{model_name}{args1}{category}=*{args2}_{seed}' \
+            / '{model_name}:{args1}{category}=*{args2}_{seed}' \
             / '{data_name}:{data_group}_{status}' \
-            / 'test_data.csv',  # Keep same name for backward compatibility
+            / 'test_data.csv',
     shell:
         """
         {params.execution_cmd} \
-            --test_data {input.test_data_files:q} \
+            --test_data {input.test_data:q} \
             --test_configs {input.test_configs:q} \
             --output {output.experiment_data:q} \
             --parameter {params.parameter} \

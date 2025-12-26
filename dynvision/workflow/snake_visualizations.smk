@@ -159,15 +159,15 @@ rule plot_performance:
         data = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
+            seed=lambda w: w.seeds.split('.'),
         ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
         dataffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
-        row = 'experiment',
+        row = None,
         subplot = 'parameter',
         hue = 'category',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
@@ -205,60 +205,60 @@ rule plot_performance:
             --subplot-filter {params.subplot_filter}
         """
 
-rule plot_training_old:
-    """Plot training metrics (hierarchical structure, old version)."""
-    input:
-        test_data = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        script = SCRIPTS / 'visualization' / 'plot_training_old.py'
-    params:
-        accuracy_csv = lambda w: project_paths.reports \
-            / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        memory_csv = lambda w: project_paths.reports \
-            / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
-        epoch_csv = lambda w: project_paths.reports \
-            / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
-        energy_csv= lambda w: project_paths.reports \
-            / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
-        cross_entropy_csv= lambda w: project_paths.reports \
-            / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-        ),
-        palette = lambda w: json.dumps(config.palette),
-        naming = lambda w: json.dumps(config.naming),
-        ordering = lambda w: json.dumps(config.ordering),
-        dt = getattr(config, 'dt', 2),
-    output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training_old.png',
-    shell:
-        """
-        {params.execution_cmd} \
-            --test_data {input.test_data:q} \
-            --accuracy_csv {params.accuracy_csv:q} \
-            --memory_csv {params.memory_csv:q} \
-            --epoch_csv {params.epoch_csv:q} \
-            --energy_csv {params.energy_csv:q} \
-            --cross_entropy_csv {params.cross_entropy_csv:q} \
-            --palette {params.palette:q} \
-            --naming {params.naming:q} \
-            --ordering {params.ordering:q} \
-            --category {wildcards.category} \
-            --dt {params.dt} \
-            --output {output:q} 
-        """
+# rule plot_training_old:
+#     """Plot training metrics (hierarchical structure, old version)."""
+#     input:
+#         test_data = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         script = SCRIPTS / 'visualization' / 'plot_training_old.py'
+#     params:
+#         accuracy_csv = lambda w: project_paths.reports \
+#             / 'wandb' \
+#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         memory_csv = lambda w: project_paths.reports \
+#             / 'wandb' \
+#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
+#         epoch_csv = lambda w: project_paths.reports \
+#             / 'wandb' \
+#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
+#         energy_csv= lambda w: project_paths.reports \
+#             / 'wandb' \
+#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
+#         cross_entropy_csv= lambda w: project_paths.reports \
+#             / 'wandb' \
+#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
+#         execution_cmd = lambda w, input: build_execution_command(
+#             script_path=input.script,
+#             use_distributed=False,
+#         ),
+#         palette = lambda w: json.dumps(config.palette),
+#         naming = lambda w: json.dumps(config.naming),
+#         ordering = lambda w: json.dumps(config.ordering),
+#         dt = getattr(config, 'dt', 2),
+#     output:
+#         project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training_old.png',
+#     shell:
+#         """
+#         {params.execution_cmd} \
+#             --test_data {input.test_data:q} \
+#             --accuracy_csv {params.accuracy_csv:q} \
+#             --memory_csv {params.memory_csv:q} \
+#             --epoch_csv {params.epoch_csv:q} \
+#             --energy_csv {params.energy_csv:q} \
+#             --cross_entropy_csv {params.cross_entropy_csv:q} \
+#             --palette {params.palette:q} \
+#             --naming {params.naming:q} \
+#             --ordering {params.ordering:q} \
+#             --category {wildcards.category} \
+#             --dt {params.dt} \
+#             --output {output:q} 
+#         """
 
 rule plot_training:
     """Plot training metrics (hierarchical structure)."""
@@ -275,10 +275,10 @@ rule plot_training:
     params:
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_accuracy.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{w.seeds}_accuracy.csv',
         loss_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status.split("-")[0]}_loss.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{w.seeds}_loss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -408,50 +408,90 @@ rule plot_responses:
             --ordering {params.ordering:q}
         """
 
-rule plot_timeparams_tripytch:
-    """Plot time parameters tripytch (hierarchical structure)."""
+def _get_triptych_value(category: str) -> str:
+    """Resolve the fixed value for one triptych axis."""
+    model_args = getattr(config, "model_args", {})
+
+    if isinstance(model_args, dict) and category in model_args:
+        return str(model_args[category])
+
+    if hasattr(model_args, category):
+        return str(getattr(model_args, category))
+
+    categories = getattr(config, "experiment_config", {}).get("categories", {})
+    if category in categories and categories[category]:
+        return str(categories[category][0])
+
+    raise ValueError(f"No default value available for triptych category '{category}'.")
+
+
+def _build_triptych_identifier(wildcards, star_slot: int) -> str:
+    values = [
+        '*' if star_slot == 1 else _get_triptych_value(wildcards.cat1),
+        '*' if star_slot == 2 else _get_triptych_value(wildcards.cat2),
+        '*' if star_slot == 3 else _get_triptych_value(wildcards.cat3),
+    ]
+    return (
+        f"{wildcards.a1}{wildcards.cat1}={values[0]}"
+        f"{wildcards.a2}{wildcards.cat2}={values[1]}"
+        f"{wildcards.a3}{wildcards.cat3}={values[2]}"
+        f"{wildcards.a4}"
+    )
+
+rule plot_responses_tripytch:
     input:
         data1 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}tau=*+tff=0+trc=6+tsk=0{{args2}}_{seeds}'
+            / '{{model_name}}:{model_identifier}_{seed}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
+            model_identifier=lambda w: _build_triptych_identifier(w, star_slot=1),
+            seed=lambda w: w.seeds.split('.'),
         ),
         data2 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}tau=5+tff=0+trc=*+tsk=0{{args2}}_{seeds}'
+            / '{{model_name}}:{model_identifier}_{seed}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
+            model_identifier=lambda w: _build_triptych_identifier(w, star_slot=2),
+            seed=lambda w: w.seeds.split('.'),
         ),
         data3 = expand(
             project_paths.reports
             / '{{experiment}}'
-            / '{{model_name}}{{args1}}tau=5+tff=0+trc=6+tsk=*{{args2}}_{seeds}'
+            / '{{model_name}}:{model_identifier}_{seed}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
+            model_identifier=lambda w: _build_triptych_identifier(w, star_slot=3),
+            seed=lambda w: w.seeds.split('.'),
         ),
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
-        accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=*+tff=0+trc=6+tsk=0{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=5+tff=0+trc=*+tsk=0{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=5+tff=0+trc=6+tsk=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_{w.seeds}_accuracy.csv",
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_{w.seeds}_accuracy.csv",
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_{w.seeds}_accuracy.csv",
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
-        category = ' '.join(['tau', 'trc', 'tsk']),
+        category = lambda w: ' '.join([w.cat1, w.cat2, w.cat3]),
         dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{model_name}:{a1}{cat1}=*{a2}{cat2}=*{a3}{cat3}=*{a4}_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
+    wildcard_constraints:
+        a1 = r'([a-z,;\+\-=\d\.]*?)',
+        a2 = r'([a-z,;\+\-=\d\.]*?)',
+        a3 = r'([a-z,;\+\-=\d\.]*?)',
+        a4 = r'([a-z,;\+\-=\d\.]+|\s?)',
+        cat1 = r'[a-z]+',
+        cat2 = r'[a-z]+',
+        cat3 = r'[a-z]+',
     # group: "visualization"
     shell:
         """
@@ -472,134 +512,198 @@ rule plot_timeparams_tripytch:
             --ordering {params.ordering:q}
         """
 
-rule plot_timestep_tripytch:
-    """Plot timestep tripytch (hierarchical structure)."""
-    input:
-        data1 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}tsteps=*{{args1}}lossrt=4_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        data2 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}tsteps=20{{args1}}skip=true+lossrt=*_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        data3 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}tsteps=20{{args1}}lossrt=4+idle=*_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
-    params:
-        accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=*{w.args1}lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20{w.args1}skip=true+lossrt=*_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20{w.args1}lossrt=4+idle=*_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-        ),
-        category = ' '.join(['tsteps', 'lossrt', 'idle']),
-        dt = getattr(config, 'dt', 2),
-        palette = lambda w: json.dumps(config.palette),
-        naming = lambda w: json.dumps(config.naming),
-        ordering = lambda w: json.dumps(config.ordering),
-    output:
-        project_paths.figures / '{experiment}' / '{model_name}tsteps=*{args1}lossrt=*+idle=*_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
-    # group: "visualization"
-    shell:
-        """
-        {params.execution_cmd} \
-            --data {input.data1:q} \
-            --data2 {input.data2:q} \
-            --data3 {input.data3:q} \
-            --accuracy1 {params.accuracy1:q} \
-            --accuracy2 {params.accuracy2:q} \
-            --accuracy3 {params.accuracy3:q} \
-            --output {output:q} \
-            --parameter {params.parameter} \
-            --experiment {wildcards.experiment} \
-            --category {params.category:q} \
-            --dt {params.dt} \
-            --palette {params.palette:q} \
-            --naming {params.naming:q} \
-            --ordering {params.ordering:q}
-        """
+# rule plot_timeparams_tripytch:
+#     """Plot time parameters tripytch (hierarchical structure)."""
+#     input:
+#         data1 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}{{args1}}tau=*+tff=0+trc=6+tsk=0{{args2}}_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         data2 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}{{args1}}tau=5+tff=0+trc=*+tsk=0{{args2}}_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         data3 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}{{args1}}tau=5+tff=0+trc=6+tsk=*{{args2}}_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+#     params:
+#         accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=*+tff=0+trc=6+tsk=0{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=5+tff=0+trc=*+tsk=0{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:{w.args1}tau=5+tff=0+trc=6+tsk=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+#         execution_cmd = lambda w, input: build_execution_command(
+#             script_path=input.script,
+#             use_distributed=False,
+#         ),
+#         category = ' '.join(['tau', 'trc', 'tsk']),
+#         dt = getattr(config, 'dt', 2),
+#         palette = lambda w: json.dumps(config.palette),
+#         naming = lambda w: json.dumps(config.naming),
+#         ordering = lambda w: json.dumps(config.ordering),
+#     output:
+#         project_paths.figures / '{experiment}' / '{model_name}{args1}tau=*+tff=0+trc=*+tsk=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
+#     # group: "visualization"
+#     shell:
+#         """
+#         {params.execution_cmd} \
+#             --data {input.data1:q} \
+#             --data2 {input.data2:q} \
+#             --data3 {input.data3:q} \
+#             --accuracy1 {params.accuracy1:q} \
+#             --accuracy2 {params.accuracy2:q} \
+#             --accuracy3 {params.accuracy3:q} \
+#             --output {output:q} \
+#             --parameter {params.parameter} \
+#             --experiment {wildcards.experiment} \
+#             --category {params.category:q} \
+#             --dt {params.dt} \
+#             --palette {params.palette:q} \
+#             --naming {params.naming:q} \
+#             --ordering {params.ordering:q}
+#         """
 
-rule plot_connection_tripytch:
-    """Plot connection tripytch (hierarchical structure)."""
-    input:
-        data1 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}tsteps=20+rctype=full+rctarget=*{{args2}}lossrt=4_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        data2 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}tsteps=20+rctype=full+rctarget=output{{args2}}skip=*+lossrt=4_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        data3 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}tsteps=30+rctype=full+rctarget=output{{args2}}tfb=30+feedback=*+lossrt=4_{seeds}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seeds=lambda w: w.seeds.split('.'),
-        ),
-        script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
-    params:
-        accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20+rctype=full+rctarget=*{w.args2}lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20+rctype=full+rctarget=output{w.args2}skip=*+lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=30+rctype=full+rctarget=output{w.args2}tfb=30+feedback=*+lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-        ),
-        category = ' '.join(['rctarget', 'skip', 'feedback']),
-        dt = getattr(config, 'dt', 2),
-        outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
-        palette = lambda w: json.dumps(config.palette),
-        naming = lambda w: json.dumps(config.naming),
-        ordering = lambda w: json.dumps(config.ordering),
-    output:
-        project_paths.figures / '{experiment}' / '{model_name}rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
-    shell:
-        """
-        {params.execution_cmd} \
-            --data {input.data1:q} \
-            --data2 {input.data2:q} \
-            --data3 {input.data3:q} \
-            --accuracy1 {params.accuracy1:q} \
-            --accuracy2 {params.accuracy2:q} \
-            --accuracy3 {params.accuracy3:q} \
-            --output {output:q} \
-            --parameter {params.parameter} \
-            --experiment {wildcards.experiment} \
-            --category {params.category:q} \
-            --dt {params.dt} \
-            --palette {params.palette:q} \
-            --naming {params.naming:q} \
-            --ordering {params.ordering:q}
-        """
-            # --outlier_threshold {params.outlier_threshold} \
+# rule plot_timestep_tripytch:
+#     """Plot timestep tripytch (hierarchical structure)."""
+#     input:
+#         data1 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}tsteps=*{{args1}}lossrt=4_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         data2 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}tsteps=20{{args1}}skip=true+lossrt=*_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         data3 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}tsteps=20{{args1}}lossrt=4+idle=*_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+#     params:
+#         accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=*{w.args1}lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20{w.args1}skip=true+lossrt=*_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20{w.args1}lossrt=4+idle=*_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+#         execution_cmd = lambda w, input: build_execution_command(
+#             script_path=input.script,
+#             use_distributed=False,
+#         ),
+#         category = ' '.join(['tsteps', 'lossrt', 'idle']),
+#         dt = getattr(config, 'dt', 2),
+#         palette = lambda w: json.dumps(config.palette),
+#         naming = lambda w: json.dumps(config.naming),
+#         ordering = lambda w: json.dumps(config.ordering),
+#     output:
+#         project_paths.figures / '{experiment}' / '{model_name}tsteps=*{args1}lossrt=*+idle=*_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
+#     # group: "visualization"
+#     shell:
+#         """
+#         {params.execution_cmd} \
+#             --data {input.data1:q} \
+#             --data2 {input.data2:q} \
+#             --data3 {input.data3:q} \
+#             --accuracy1 {params.accuracy1:q} \
+#             --accuracy2 {params.accuracy2:q} \
+#             --accuracy3 {params.accuracy3:q} \
+#             --output {output:q} \
+#             --parameter {params.parameter} \
+#             --experiment {wildcards.experiment} \
+#             --category {params.category:q} \
+#             --dt {params.dt} \
+#             --palette {params.palette:q} \
+#             --naming {params.naming:q} \
+#             --ordering {params.ordering:q}
+#         """
+
+# rule plot_connection_tripytch:
+#     """Plot connection tripytch (hierarchical structure)."""
+#     input:
+#         data1 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}tsteps=20+rctype=full+rctarget=*{{args2}}lossrt=4_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         data2 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}tsteps=20+rctype=full+rctarget=output{{args2}}skip=*+lossrt=4_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         data3 = expand(
+#             project_paths.reports
+#             / '{{experiment}}'
+#             / '{{model_name}}tsteps=30+rctype=full+rctarget=output{{args2}}tfb=30+feedback=*+lossrt=4_{seeds}'
+#             / '{{data_name}}:{{data_group}}_{{status}}'
+#             / 'test_data.csv',
+#             seeds=lambda w: w.seeds.split('.'),
+#         ),
+#         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+#     params:
+#         accuracy1 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20+rctype=full+rctarget=*{w.args2}lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         accuracy2 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=20+rctype=full+rctarget=output{w.args2}skip=*+lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         accuracy3 = lambda w: project_paths.reports / 'wandb' / f'{w.model_name}:tsteps=30+rctype=full+rctarget=output{w.args2}tfb=30+feedback=*+lossrt=4_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
+#         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+#         execution_cmd = lambda w, input: build_execution_command(
+#             script_path=input.script,
+#             use_distributed=False,
+#         ),
+#         category = ' '.join(['rctarget', 'skip', 'feedback']),
+#         dt = getattr(config, 'dt', 2),
+#         outlier_threshold = 10,  # Exclude yscale limits beyond this threshold
+#         palette = lambda w: json.dumps(config.palette),
+#         naming = lambda w: json.dumps(config.naming),
+#         ordering = lambda w: json.dumps(config.ordering),
+#     output:
+#         project_paths.figures / '{experiment}' / '{model_name}rctype=full{args2}rctarget=*+skip=*+feedback=*+lossrt=4_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
+#     shell:
+#         """
+#         {params.execution_cmd} \
+#             --data {input.data1:q} \
+#             --data2 {input.data2:q} \
+#             --data3 {input.data3:q} \
+#             --accuracy1 {params.accuracy1:q} \
+#             --accuracy2 {params.accuracy2:q} \
+#             --accuracy3 {params.accuracy3:q} \
+#             --output {output:q} \
+#             --parameter {params.parameter} \
+#             --experiment {wildcards.experiment} \
+#             --category {params.category:q} \
+#             --dt {params.dt} \
+#             --palette {params.palette:q} \
+#             --naming {params.naming:q} \
+#             --ordering {params.ordering:q}
+#         """
+#             # --outlier_threshold {params.outlier_threshold} \
 
 rule plot_experiment:
     input:

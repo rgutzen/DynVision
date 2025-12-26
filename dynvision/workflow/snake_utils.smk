@@ -172,7 +172,6 @@ wildcard_constraints:
     data_name = r'[a-z0-9]+',
     data_subset = r'[a-z]+',
     data_group = r'[a-z0-9]+',
-    data_group_not_all = r'(?!all$)[a-z0-9]+',
     data_loader = r'[a-zA-Z]+',
     status = r'(init|pretrained|trained|trained-[a-z0-9\. =]+)',
     seed = r'\d+',
@@ -189,7 +188,7 @@ wildcard_constraints:
     test_identifier = r'([a-zA-Z0-9,;:=\-\+\.]+)',  # Polymorphic: hash or full spec, allows periods for floats
 
 localrules: all, symlink_data_subsets, symlink_data_groups
-ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model > process_test_data > test_model
+ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model #> process_test_data > test_model
 
 def _write_base_config_file(config_payload: Dict[str, Any]) -> Path:
     """Persist the fully merged Snakemake config for reuse by runtime scripts.
