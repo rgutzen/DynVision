@@ -339,7 +339,7 @@ class DataBuffer:
 
         return strategies[strategy]()
 
-    def _preprocess_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+    def _preprocess_tensor(self, tensor: torch.Tensor, defer_cache_clear: bool = False) -> torch.Tensor:
         """Enhanced preprocessing with immediate GPU memory release."""
         # Detach from computation graph
         if self.detach_tensors and tensor.requires_grad:
@@ -352,7 +352,8 @@ class DataBuffer:
 
             # Force immediate GPU memory release
             del tensor
-            if torch.cuda.is_available():
+            # Only clear cache if not deferring (for batch efficiency)
+            if not defer_cache_clear and torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
             tensor = cpu_tensor
@@ -363,14 +364,19 @@ class DataBuffer:
 
         return tensor
 
-    def _preprocess_data(self, data: Any) -> Any:
+    def _preprocess_data(self, data: Any, defer_cache_clear: bool = False) -> Any:
         """Recursively preprocess data."""
         if isinstance(data, torch.Tensor):
-            return self._preprocess_tensor(data)
+            return self._preprocess_tensor(data, defer_cache_clear=defer_cache_clear)
         elif isinstance(data, dict):
-            return {k: self._preprocess_data(v) for k, v in data.items()}
+            # Defer cache clearing for dict processing to batch GPU cleanup
+            result = {k: self._preprocess_data(v, defer_cache_clear=True) for k, v in data.items()}
+            # Clear GPU cache once after processing all dict items
+            if self.cpu_offload and not defer_cache_clear and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            return result
         elif isinstance(data, (list, tuple)):
-            return type(data)(self._preprocess_data(item) for item in data)
+            return type(data)(self._preprocess_data(item, defer_cache_clear=defer_cache_clear) for item in data)
         else:
             return data
 
@@ -611,7 +617,9 @@ class DataBuffer:
     def _detach_impl(self) -> None:
         """Internal detach implementation."""
         for i in range(len(self._storage)):
-            if self._storage[i] is not None and isinstance(self._storage[i], torch.Tensor):
+            if self._storage[i] is not None and isinstance(
+                self._storage[i], torch.Tensor
+            ):
                 # Detach ALL tensors, not just those with requires_grad=True
                 # Even tensors without requires_grad can hold references to the computation graph
                 self._storage[i] = self._storage[i].detach()
@@ -636,7 +644,9 @@ class DataBuffer:
     def _detach_and_reenable_grad_impl(self) -> None:
         """Internal implementation of detach and re-enable grad."""
         for i in range(len(self._storage)):
-            if self._storage[i] is not None and isinstance(self._storage[i], torch.Tensor):
+            if self._storage[i] is not None and isinstance(
+                self._storage[i], torch.Tensor
+            ):
                 # Detach (remove computation graph) and re-enable gradients
                 self._storage[i] = self._storage[i].detach().requires_grad_(True)
 
@@ -671,7 +681,9 @@ class DataBuffer:
         else:
             self._initialize_from_values_impl(values)
 
-    def _initialize_from_values_impl(self, values: List[Optional[torch.Tensor]]) -> None:
+    def _initialize_from_values_impl(
+        self, values: List[Optional[torch.Tensor]]
+    ) -> None:
         """Internal implementation of initialize from values.
 
         Note: This method does NOT preprocess values. The values are expected to
@@ -960,17 +972,26 @@ class StorageBuffer:
         Returns:
             bool: True if data was stored, False otherwise
         """
-        # Convert tensors to specified precision
+        # Convert tensors to specified precision with immediate GPU cleanup
         processed_dict = {}
         for key, tensor in response_dict.items():
             if precision == 16 and tensor.dtype != torch.float16:
-                processed_dict[key] = tensor.to(dtype=torch.float16)
+                # Convert precision and immediately detach from original
+                converted = tensor.to(dtype=torch.float16)
+                processed_dict[key] = converted
             elif precision == 32 and tensor.dtype != torch.float32:
-                processed_dict[key] = tensor.to(dtype=torch.float32)
+                # Convert precision and immediately detach from original
+                converted = tensor.to(dtype=torch.float32)
+                processed_dict[key] = converted
             else:
                 processed_dict[key] = tensor
 
-        return self.responses.append(processed_dict)
+        # Clear original response_dict references to allow GPU memory release
+        # before CPU offload in append() - critical for preventing OOM
+        result = self.responses.append(processed_dict)
+        del processed_dict
+
+        return result
 
     def store_records(
         self,
@@ -1229,8 +1250,8 @@ class StorageBufferMixin(LightningModule):
     }
 
     testing_storage_config: Dict[str, Any] = {
-        "max_responses": 5,  # Enabled by default for analysis
-        "max_records": 40,  # Much larger for detailed analysis
+        "max_responses": 8,  # Enabled by default for analysis
+        "max_records": 50,  # Much larger for detailed analysis
         "response_strategy": "fixed",  # Keep recent responses
         "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,

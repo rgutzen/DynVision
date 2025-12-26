@@ -486,7 +486,9 @@ class TemporalBase(nn.Module):
             # Initialize hidden states with converged values from idle period
             # These become the initial conditions for real timesteps
             for name, layer in self.named_modules():
-                if name in initial_states and hasattr(layer, "initialize_hidden_states"):
+                if name in initial_states and hasattr(
+                    layer, "initialize_hidden_states"
+                ):
                     layer.initialize_hidden_states(initial_states[name])
 
             # Clear cache to free memory
@@ -949,11 +951,16 @@ class TemporalBase(nn.Module):
                     f"Setting ignore_index={self.non_label_index} for {criterion_name}"
                 )
 
-            logger.info(
-                f"Criterion: {criterion_name} with weight: {criterion_weight} and config: {criterion_config}"
-            )
+            if criterion_weight <= 0:
+                logger.info(
+                    f"Skipping criterion {criterion_name} because weight={criterion_weight}"
+                )
+                continue
 
             if hasattr(losses, criterion_name):
+                logger.info(
+                    f"Criterion: {criterion_name} with weight: {criterion_weight} and config: {criterion_config}"
+                )
                 criterion_fn = getattr(losses, criterion_name)(**criterion_config)
                 self.criterion += [(criterion_fn, criterion_weight)]
             else:
