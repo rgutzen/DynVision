@@ -11,7 +11,7 @@ model_name:
   # - ResNet1202
   # - ResNet44
 
-seed: ["6000"] #, "6001", "6002"]
+seed: ["6000", "6001", "6002", "6003", "6004", "6005"]
 init_with_pretrained: False
 
 status: trained-best
@@ -24,16 +24,17 @@ model_args:
   trc: 6
   tsk: 0
   lossrt: 4
-  energyloss: 0 #  #0.2
-  pattern: '1' #'1011'
+  energyloss: 0.0002 
+  pattern: '1'
+  # pattern: ['1', '1011']
   rctype: 'full'
   rctarget: 'output'
   skip: 'true'
   feedback: 'false'
 
-category: 
-  - pattern
+category:
   - energyloss
+  # - pattern
   # 'dsteps',
   # 'idle',
   # 'lossrt',
@@ -60,6 +61,7 @@ data_group: "all"
 
 experiment: 
   - uniformnoise
+  - uniformnoiseffonly
   - contrast
   - duration
   - interval

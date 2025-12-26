@@ -39,7 +39,7 @@ set-resources:
 
   init_model:
     mem: 16G # use 32GB of memory
-    runtime: 60 # run for 60 minutes
+    runtime: 160 # run for 60 minutes
     cpus_per_task: 16
     cpu: 16
 
@@ -53,13 +53,14 @@ set-resources:
     slurm_extra: "'--gres=gpu:1'"
 
   train_model:
-    mem: 80G * attempt # use 80GB of memory
-    runtime: 800 * attempt # run for 10 hours
+    mem: 80G # use 80GB of memory
+    runtime: 800 # run for 10 hours
     ntasks: 1 # use one GPU
     # cpu: 32
+    # gpus_per_task: 1
     cpus_per_gpu: 16 # use 16 cores
     constraint: "a100" # limit to fastest GPU
-    slurm_extra: "'--gres=gpu:1'"
+    slurm_extra: "'--gres=gpu:1' '--exclude=ga028,ga025'"
 
   train_model_distributed:
     mem: 120G               
@@ -93,6 +94,16 @@ set-resources:
     runtime: 360 # run for 6 hours
     cpus_per_task: 16
     
+  process_single_test:
+    mem: 120G # use 64GB of memory
+    runtime: 45 # run for 1 hour
+    cpus_per_task: 16
+
+  aggregate_test_results:
+    mem: 64G # use 16GB of memory
+    runtime: 60 # run for 30 minutes
+    cpus_per_task: 4
+
   best_checkpoint_to_statedict:
     mem: 16G # use 16GB of memory
     runtime: 15 # run for 30 minutes
