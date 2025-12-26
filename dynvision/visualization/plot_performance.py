@@ -81,6 +81,20 @@ FORMATTING = {
     "fontsize_panel_label": 18,
 }
 
+_NONE_DIMENSION_TOKENS = {"", "none", "null"}
+
+
+def _coerce_optional_dimension(value: Optional[str]) -> Optional[str]:
+    """Normalize optional dimension strings allowing textual None tokens."""
+
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if text.lower() in _NONE_DIMENSION_TOKENS:
+        return None
+    return text
+
 
 def _resolve_measure_column(df: pd.DataFrame, requested: str) -> Optional[str]:
     """Resolve a requested metric name to an available dataframe column."""
@@ -115,8 +129,8 @@ def _append_suffix_to_label(label: str, suffix: str) -> str:
 
 def _filter_data_for_cell(
     df: pd.DataFrame,
-    row_key: str,
-    row_value: str,
+    row_key: Optional[str],
+    row_value: Optional[str],
     subplot_key: str,
     subplot_value: str,
 ) -> pd.DataFrame:
@@ -124,8 +138,8 @@ def _filter_data_for_cell(
 
     Args:
         df: Input DataFrame
-        row_key: Column name for row dimension
-        row_value: Value for row dimension
+        row_key: Column name for row dimension (optional)
+        row_value: Value for row dimension (optional)
         subplot_key: Column name for subplot dimension
         subplot_value: Value for subplot dimension
 
@@ -136,10 +150,10 @@ def _filter_data_for_cell(
     cell_data = df.copy()
 
     # Filter by row dimension
-    if row_key in cell_data.columns:
+    if row_key and row_key in cell_data.columns and row_value is not None:
         cell_data[row_key] = cell_data[row_key].apply(_standardize_category_value)
-    row_value_std = _standardize_category_value(str(row_value))
-    cell_data = cell_data[cell_data[row_key] == row_value_std]
+        row_value_std = _standardize_category_value(str(row_value))
+        cell_data = cell_data[cell_data[row_key] == row_value_std]
 
     # Filter by subplot dimension
     if subplot_key in cell_data.columns:
@@ -498,8 +512,8 @@ def _plot_accuracy_panel_with_ffonly(
 def _plot_peak_height_panel(
     ax: plt.Axes,
     data: pd.DataFrame,
-    row_key: str,
-    row_value: str,
+    row_key: Optional[str],
+    row_value: Optional[str],
     subplot_key: str,
     subplot_values: List[str],
     hue_key: str,
@@ -537,10 +551,10 @@ def _plot_peak_height_panel(
         return
 
     row_data = data.copy()
-    if row_key in row_data.columns:
+    if row_key and row_key in row_data.columns and row_value is not None:
         row_data[row_key] = row_data[row_key].apply(_standardize_category_value)
-    row_value_std = _standardize_category_value(str(row_value))
-    row_data = row_data[row_data[row_key] == row_value_std]
+        row_value_std = _standardize_category_value(str(row_value))
+        row_data = row_data[row_data[row_key] == row_value_std]
 
     if len(row_data) == 0:
         ax.text(0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes)
@@ -876,8 +890,8 @@ def _plot_peak_height_panel(
 def _plot_peak_time_panel(
     ax: plt.Axes,
     data: pd.DataFrame,
-    row_key: str,
-    row_value: str,
+    row_key: Optional[str],
+    row_value: Optional[str],
     subplot_key: str,
     subplot_values: List[str],
     hue_key: str,
@@ -915,10 +929,10 @@ def _plot_peak_time_panel(
         return
 
     row_data = data.copy()
-    if row_key in row_data.columns:
+    if row_key and row_key in row_data.columns and row_value is not None:
         row_data[row_key] = row_data[row_key].apply(_standardize_category_value)
-    row_value_std = _standardize_category_value(str(row_value))
-    row_data = row_data[row_data[row_key] == row_value_std]
+        row_value_std = _standardize_category_value(str(row_value))
+        row_data = row_data[row_data[row_key] == row_value_std]
 
     if len(row_data) == 0:
         ax.text(0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes)
@@ -1261,7 +1275,7 @@ def plot_performance_grid(
     data_paths: List[Path],
     output: Path,
     subplot_var: str,
-    row_var: str,
+    row_var: Optional[str],
     hue_var: str,
     category_key: Optional[str] = None,
     parameter_key: Optional[str] = None,
@@ -1284,9 +1298,13 @@ def plot_performance_grid(
     raw_row_var = row_var
     raw_hue_var = hue_var
 
-    subplot_var, subplot_limit = _normalize_dimension(subplot_var)
-    row_var, row_limit = _normalize_dimension(row_var)
-    hue_var, hue_limit = _normalize_dimension(hue_var)
+    subplot_clean = _coerce_optional_dimension(subplot_var)
+    row_clean = _coerce_optional_dimension(row_var)
+    hue_clean = _coerce_optional_dimension(hue_var)
+
+    subplot_var, subplot_limit = _normalize_dimension(subplot_clean)
+    row_var, row_limit = _normalize_dimension(row_clean)
+    hue_var, hue_limit = _normalize_dimension(hue_clean)
 
     logger.info(
         "Dimension mapping: subplot=%s (base=%s, limit=%s), row=%s (base=%s, limit=%s), hue=%s (base=%s, limit=%s)",
@@ -1301,8 +1319,8 @@ def plot_performance_grid(
         hue_limit,
     )
 
-    if subplot_var is None or row_var is None or hue_var is None:
-        raise ValueError("subplot, row, and hue dimensions cannot be empty")
+    if subplot_var is None or hue_var is None:
+        raise ValueError("subplot and hue dimensions cannot be empty")
 
     _validate_dimension_choices(
         subplot_var=subplot_var, hue_var=hue_var, column_var=row_var
@@ -1337,18 +1355,40 @@ def plot_performance_grid(
     logger.info(f"Loading data from {len(data_paths)} full model files...")
     combined_data = []
 
+    experiment_names = experiment_names or []
+    use_experiment_dimension = "experiment" in {
+        dim for dim in (subplot_var, row_var, hue_var) if dim is not None
+    }
+    if not use_experiment_dimension and len(data_paths) > 1:
+        logger.info(
+            "Dimension selection excludes 'experiment'; combining %d inputs as replicates",
+            len(data_paths),
+        )
+
+    combined_label = (
+        experiment_names[0]
+        if experiment_names
+        else (data_paths[0].stem if data_paths else "combined")
+    )
+
     for i, data_path in enumerate(data_paths):
         logger.info(f"Loading full model file {i+1}/{len(data_paths)}: {data_path}")
         df = pd.read_csv(data_path)
 
         # Add experiment identifier
-        if experiment_names and i < len(experiment_names):
-            experiment_name = experiment_names[i]
+        if use_experiment_dimension:
+            if experiment_names and i < len(experiment_names):
+                experiment_name = experiment_names[i]
+            elif experiment_names:
+                experiment_name = experiment_names[0]
+            else:
+                experiment_name = data_path.stem
         else:
-            experiment_name = data_path.stem
+            experiment_name = combined_label
 
         df["experiment"] = experiment_name
         df["model_type"] = "full"  # Mark as full model
+        df["source_file"] = data_path.stem
         combined_data.append(df)
         logger.info(
             f"Loaded {len(df)} rows for full model experiment '{experiment_name}'"
@@ -1362,10 +1402,15 @@ def plot_performance_grid(
                 continue
             path_obj = Path(raw_path)
             if path_obj.exists():
-                if experiment_names and idx < len(experiment_names):
-                    exp_name = experiment_names[idx]
+                if use_experiment_dimension:
+                    if experiment_names and idx < len(experiment_names):
+                        exp_name = experiment_names[idx]
+                    elif experiment_names:
+                        exp_name = experiment_names[0]
+                    else:
+                        exp_name = path_obj.stem
                 else:
-                    exp_name = path_obj.stem
+                    exp_name = combined_label
                 valid_ffonly_paths.append((path_obj, exp_name))
             else:
                 logger.warning(
@@ -1390,6 +1435,7 @@ def plot_performance_grid(
 
                 df["experiment"] = experiment_name
                 df["model_type"] = "ffonly"  # Mark as feedforward-only model
+                df["source_file"] = data_path.stem
                 combined_data.append(df)
                 logger.info(
                     "Loaded %d rows for feedforward-only experiment '%s'",
@@ -1409,8 +1455,12 @@ def plot_performance_grid(
     subplot_key = _get_dimension_key(
         dimension=subplot_var, category_key=category_key, parameter_key=parameter_key
     )
-    row_key = _get_dimension_key(
-        dimension=row_var, category_key=category_key, parameter_key=parameter_key
+    row_key = (
+        _get_dimension_key(
+            dimension=row_var, category_key=category_key, parameter_key=parameter_key
+        )
+        if row_var is not None
+        else None
     )
     hue_key = _get_dimension_key(
         dimension=hue_var, category_key=category_key, parameter_key=parameter_key
@@ -1427,13 +1477,16 @@ def plot_performance_grid(
         config=config,
         dimension_limit=subplot_limit,
     )
-    row_values = _extract_dimension_values(
-        df=df,
-        dimension=row_var,
-        dimension_key=row_key,
-        config=config,
-        dimension_limit=row_limit,
-    )
+    if row_var is None:
+        row_values = [None]
+    else:
+        row_values = _extract_dimension_values(
+            df=df,
+            dimension=row_var,
+            dimension_key=row_key,
+            config=config,
+            dimension_limit=row_limit,
+        )
     hue_values = _extract_dimension_values(
         df=df,
         dimension=hue_var,
@@ -1656,28 +1709,33 @@ def plot_performance_grid(
                 )
                 ax.set_title(title_text, fontsize=FORMATTING["fontsize_axis"], pad=10)
 
-        # Get experiment name from the row value based on row_var
-        if row_var == "experiment":
-            experiment_name = row_value
-        else:
-            # If row is not experiment, try to get experiment from first data file
-            experiment_name = experiment_names[0] if experiment_names else "Experiment"
+        if row_var is not None:
+            # Get experiment name from the row value based on row_var
+            if row_var == "experiment":
+                experiment_name = row_value
+            else:
+                experiment_name = (
+                    experiment_names[0]
+                    if experiment_names
+                    else get_display_name(row_key or "row", config)
+                )
 
-        row_label_text = get_display_name(f"{experiment_name}_experiment", config)
-        if not row_label_text or row_label_text == f"{experiment_name}_experiment":
-            row_label_text = experiment_name.replace("_", " ").title()
+            row_label_text = get_display_name(f"{experiment_name}_experiment", config)
+            if not row_label_text or row_label_text == f"{experiment_name}_experiment":
+                formatted_name = str(experiment_name) if experiment_name else ""
+                row_label_text = formatted_name.replace("_", " ").title()
 
-        perf_axes[row_idx][0].text(
-            -0.5,
-            0.5,
-            row_label_text,
-            rotation=90,
-            ha="center",
-            va="center",
-            fontsize=FORMATTING["fontsize_axis"],
-            fontweight="bold",
-            transform=perf_axes[row_idx][0].transAxes,
-        )
+            perf_axes[row_idx][0].text(
+                -0.5,
+                0.5,
+                row_label_text,
+                rotation=90,
+                ha="center",
+                va="center",
+                fontsize=FORMATTING["fontsize_axis"],
+                fontweight="bold",
+                transform=perf_axes[row_idx][0].transAxes,
+            )
 
     # Plot peak height panels (using all subplot values for analysis)
     for row_idx, row_value in enumerate(row_values):
@@ -1848,8 +1906,7 @@ def main():
         "--row",
         type=str,
         required=True,
-        choices=["category", "parameter", "experiment"],
-        help="Variable for vertical rows",
+        help="Variable for vertical rows (use 'none' to collapse all data)",
     )
     parser.add_argument(
         "--hue",
