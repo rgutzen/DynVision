@@ -557,8 +557,10 @@ class TemporalBase(nn.Module):
             output_list.append(x)
 
             if store_responses and len(responses_t):
+                # Move responses to CPU immediately to prevent GPU memory accumulation
+                # Critical for long sequences (60+ timesteps) with multiple layers
                 t_responses = {
-                    k: v.unsqueeze(1) if v is not None else None
+                    k: v.unsqueeze(1).cpu().detach() if v is not None else None
                     for k, v in responses_t.items()
                 }
                 responses.append(t_responses)
