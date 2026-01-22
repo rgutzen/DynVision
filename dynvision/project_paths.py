@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class project_paths_class:
 
     this_file = Path(inspect.getfile(lambda: None)).resolve()
-    project_name = "rhythmic_visual_attention"
+    project_name = "Modeling_Dynamical_Vision"
     toolbox_name = "DynVision"
     user_name = "rg5022"
 
@@ -20,7 +20,7 @@ class project_paths_class:
             toolbox_dir = Path().home() / self.toolbox_name / self.toolbox_name.lower()
 
         if working_dir is None:
-            working_dir = Path("/home/rgutzen/01_PROJECTS/rhythmic_visual_attention")
+            working_dir = Path("/home/rgutzen/01_PROJECTS/Modeling_Dynamical_Vision")
         if toolbox_dir is None:
             toolbox_dir = self.this_file.parents[0].resolve()
 
@@ -35,6 +35,9 @@ class project_paths_class:
             self.data.interim = Path("/scratch") / self.user_name / "data" / "interim"
             self.data.processed = (
                 Path("/scratch") / self.user_name / "data" / "processed"
+            )
+            self.data.external = (
+                Path("/scratch") / self.user_name / "data" / "external"
             )
 
             self.models = (

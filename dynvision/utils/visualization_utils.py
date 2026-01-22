@@ -40,6 +40,30 @@ def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
 
 logger = logging.getLogger(__name__)
 
+# Parameters that need dt conversion from timesteps to milliseconds
+DT_CONVERT_PARAMS = ["tau", "trc", "tsk", "lossrt", "duration", "interval"]
+
+
+def format_parameter_value(value, parameter, dt=None):
+    """Format parameter values with appropriate units.
+
+    Args:
+        value: Parameter value to format
+        parameter: Parameter name
+        dt: Optional temporal resolution for converting timesteps to ms
+
+    Returns:
+        Formatted string with value and unit
+    """
+    if dt is not None and parameter.lower() in DT_CONVERT_PARAMS:
+        return f"{int(float(value) * dt)} ms"
+    elif str(value).lower() in ["true", "false"]:
+        return str(value).capitalize()
+    elif parameter.lower() in ["contrast", "noiselevel"]:
+        return f"{float(value):.2f}"
+    else:
+        return str(value).capitalize()
+
 
 def standardize_category_value(value: Any) -> str:
     """Normalize categorical labels (booleans, whitespace, casing)."""
@@ -238,26 +262,126 @@ def layer_response_std(response: torch.Tensor) -> torch.Tensor:
     return response.abs().std(dim=list(range(2, response.dim())))
 
 
-def peak_time(mean_response: torch.Tensor) -> torch.Tensor:
-    """Calculate peak time for each feature.
+def time_averaged_response(mean_response: torch.Tensor) -> torch.Tensor:
+    """Calculate time-averaged response for each sample.
 
     Args:
         response: Layer response tensor
 
     Returns:
-        Tensor of peak times for each feature
+        Tensor of response sums for each sample
+    """
+    return mean_response.mean(dim=1)
+
+
+def normalized_temporal_summation(
+    response_dict: dict,
+    parameter_name: str,
+    subtract_baseline: bool = False,
+) -> dict:
+    """Calculate normalized summed response for temporal summation analysis.
+
+    Matches methodology from Groen et al. (2022) for human ECoG data:
+    1. Sum broadband power over time window
+    2. (Optional) Subtract minimum summed value as baseline
+    3. Normalize to maximum summed value
+
+    This reveals compressive temporal integration (subadditive summation).
+
+    Args:
+        response_dict: Dictionary with structure:
+            {
+                parameter_value: {
+                    'response_tensor': torch.Tensor (samples × time),
+                    'entity_values': array of sample indices
+                }
+            }
+        parameter_name: Name of the parameter (for logging)
+        subtract_baseline: If True, subtract minimum response value before
+            normalization. Set to False to match Groen et al. exactly
+            (they don't have duration=0 condition). Default True.
+
+    Returns:
+        Dictionary mapping (parameter_value, entity) -> normalized metric value
+    """
+    metrics_map = {}
+
+    # Get all parameter values
+    param_values = sorted(response_dict.keys())
+
+    # Process each parameter value: sum over time
+    summed_responses = {}  # {entity: {param_val: summed_value}}
+
+    for param_val in param_values:
+        param_data = response_dict[param_val]
+        param_traces = param_data["response_tensor"]  # (n_samples, n_timepoints)
+        param_entities = param_data["entity_values"]
+
+        for i, entity in enumerate(param_entities):
+            entity = int(entity)
+
+            if entity not in summed_responses:
+                summed_responses[entity] = {}
+
+            # Sum over time
+            param_trace = param_traces[i, :]
+            summed_value = param_trace.sum().item()
+            summed_responses[entity][param_val] = summed_value
+
+    # Normalize each entity independently
+    for entity, param_sums in summed_responses.items():
+        # Get all summed values for this entity
+        sum_values = list(param_sums.values())
+
+        if subtract_baseline:
+            # Find minimum summed response (baseline)
+            baseline = min(sum_values)
+
+            # Subtract baseline from all values
+            baseline_corrected = {
+                param_val: summed_val - baseline
+                for param_val, summed_val in param_sums.items()
+            }
+
+            # Find maximum after baseline correction
+            max_sum = max(baseline_corrected.values())
+
+            # Normalize: (sum - baseline) / (max - baseline)
+            for param_val, corrected_val in baseline_corrected.items():
+                normalized_value = corrected_val / max_sum
+                metrics_map[(param_val, entity)] = normalized_value
+        else:
+            # Groen et al. approach: normalize to max without baseline subtraction
+            max_sum = max(sum_values)
+
+            # Normalize: sum / max_sum
+            for param_val, summed_val in param_sums.items():
+                normalized_value = summed_val / max_sum
+                metrics_map[(param_val, entity)] = normalized_value
+
+    return metrics_map
+
+
+def peak_time(mean_response: torch.Tensor) -> torch.Tensor:
+    """Calculate peak time for each sample.
+
+    Args:
+        response: Layer response tensor
+
+    Returns:
+        Tensor of peak times for each sample
     """
     return mean_response.argmax(dim=1)
 
 
 def peak_height(mean_response: torch.Tensor) -> torch.Tensor:
-    """Calculate peak height for each feature.
+    """Calculate peak height for each sample.
 
     Args:
         response: Layer response tensor
 
     Returns:
-        Tensor of peak heights for each feature
+        Tensor of peak heights for each sample
     """
     max_values, max_indices = mean_response.max(dim=1)
     return max_values

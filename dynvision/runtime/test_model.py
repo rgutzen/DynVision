@@ -291,6 +291,9 @@ class TestingOrchestrator:
                 logger.info(f"Results shape: {results_df.shape}")
             else:
                 logger.warning("No test results to save (empty DataFrame)")
+
+            # Free memory from results_df
+            del results_df
         except Exception as e:
             logger.error(f"Failed to save test results: {e}")
 
@@ -301,8 +304,7 @@ class TestingOrchestrator:
 
                 # Check if we have any responses
                 if not response_data or len(response_data) == 0:
-                    logger.warning("No model responses recorded, saving empty dict")
-                    torch.save({}, self.config.output_responses)
+                    logger.warning("No model responses recorded - skipping response file")
                     return
 
                 logger.info(
@@ -318,7 +320,9 @@ class TestingOrchestrator:
                     layer_responses = [item[layer] for item in response_data]
                     tensor = torch.cat(layer_responses, dim=0)
 
-                    # Convert precision if needed
+                    # Move to CPU and convert precision if needed
+                    if tensor.is_cuda:
+                        tensor = tensor.cpu()
                     if tensor.dtype != target_dtype:
                         tensor = tensor.to(dtype=target_dtype)
 
@@ -329,16 +333,34 @@ class TestingOrchestrator:
                         f"  Layer {layer}: {responses[layer].shape}, {responses[layer].dtype} -> {size_mb:.2f} MB"
                     )
 
+                # Save responses
+                logger.info("Writing response tensors to disk...")
                 torch.save(responses, self.config.output_responses)
                 logger.info(f"Model responses saved to {self.config.output_responses}")
                 logger.info(f"Total response size: {total_size_mb:.2f} MB")
+
+                # Explicit cleanup to prevent OOM and resource leaks
+                logger.debug("Cleaning up response tensors from memory...")
+                del responses
+                del response_data
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                logger.debug("Response cleanup completed")
             else:
-                logger.warning("No storage or responses available, saving empty dict")
-                torch.save({}, self.config.output_responses)
+                logger.warning("No storage or responses available - skipping response file")
+        except MemoryError as e:
+            logger.error(f"Out of memory while saving model responses: {e}")
+            logger.error("Consider reducing store_responses or batch_size")
+            # Don't save empty dict - let Snakemake detect failure by missing output
+            raise
         except Exception as e:
             logger.error(f"Failed to save model responses: {e}")
-            # Save empty dict on error to ensure file exists
-            torch.save({}, self.config.output_responses)
+            if "CUDA out of memory" in str(e) or "out of memory" in str(e).lower():
+                logger.error("GPU/CPU out of memory - reduce batch_size or store_responses")
+            # Don't save empty dict - let Snakemake detect failure by missing output
+            raise
 
     def run_testing(self) -> int:
         """Run the complete testing pipeline with comprehensive error handling."""
@@ -413,6 +435,20 @@ class TestingOrchestrator:
                 # Save results - will happen even if testing was stopped early
                 self.save_results(model)
 
+                # Cleanup model, trainer, and dataloader to free memory and prevent resource leaks
+                del model
+                del trainer
+                del dataloader
+                import gc
+                import time
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                # Small delay to allow multiprocessing workers to clean up properly
+                time.sleep(0.5)
+
+                logger.debug("Cleaned up model, trainer, and dataloader resources")
                 logger.info("Testing completed successfully!")
                 return 0
 

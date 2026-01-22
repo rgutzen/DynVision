@@ -803,7 +803,7 @@ if __name__ == "__main__":
         print("Creating SSNR-based noise visualization...")
 
         # Try to load the specific test image
-        test_image_path = "/home/rgutzen/01_PROJECTS/rhythmic_visual_attention/data/interim/imagenette/test_all/n03394916/n03394916_24420.JPEG"
+        test_image_path = "/home/rgutzen/01_PROJECTS/Modeling_Dynamical_Vision/data/interim/imagenette/test_all/n03394916/n03394916_24420.JPEG"
 
         if os.path.exists(test_image_path):
             print(f"Loading test image from: {test_image_path}")

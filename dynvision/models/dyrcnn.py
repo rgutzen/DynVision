@@ -147,7 +147,6 @@ class DyRCNN(BaseModel):
             self.feedback = True
         else:
             self.feedback = str_to_bool(feedback)
-        return self.feedback
 
     def setup(self, stage: Optional[str]) -> None:
         """Set up model for training or evaluation."""
@@ -456,8 +455,14 @@ class DyRCNNx8(DyRCNNx4):
                 bias=self.bias,
             )
 
-        self.delay_index_skip = self.t_skip // self.dt
-        self.delay_index_feedback = self.t_feedback // self.dt
+        self.delay_index_skip = (
+            int(round(float(self.t_skip) / float(self.dt))) if self.t_skip else 0
+        )
+        self.delay_index_feedback = (
+            int(round(float(self.t_feedback) / float(self.dt)))
+            if self.t_feedback
+            else 0
+        )
 
         # Common layer parameters
         layer_params = dict(

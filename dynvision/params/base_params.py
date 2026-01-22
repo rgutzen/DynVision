@@ -19,6 +19,9 @@ from typing import (
     Sequence,
     ClassVar,
     Tuple,
+    Literal,
+    get_args,
+    get_origin,
 )
 from pathlib import Path
 import argparse
@@ -667,9 +670,33 @@ class BaseParams(BaseModel):
 
     @classmethod
     def _convert_string_value(cls, value: str, field_name: str = None) -> Any:
-        """Convert a single string value to appropriate type."""
+        """Convert a single string value to appropriate type.
 
-        # Handle None representations
+        Special handling for fields with Literal types:
+        - If "none" is a valid Literal value, preserve it as string
+        - Otherwise, convert "none"/"null" to Python None
+        """
+
+        # Check if this field has Literal type with "none" as valid value
+        if field_name and field_name in cls.model_fields:
+            field_info = cls.model_fields[field_name]
+            expected_type = getattr(field_info, "annotation", str)
+
+            # Unwrap Optional to get inner type
+            if get_origin(expected_type) is Union:
+                args = get_args(expected_type)
+                if len(args) == 2 and type(None) in args:
+                    expected_type = args[0] if args[1] is type(None) else args[1]
+
+            # Check if it's a Literal type with "none" as valid option
+            if get_origin(expected_type) is Literal:
+                literal_values = get_args(expected_type)
+                # If "none" is a valid literal, preserve it as string
+                if value.lower() in [str(v).lower() for v in literal_values]:
+                    # Return the value as-is to match the literal exactly
+                    return value.lower()
+
+        # Handle None representations (only if NOT a valid Literal value)
         if value.lower() in ("none", "null", ""):
             return None
 
