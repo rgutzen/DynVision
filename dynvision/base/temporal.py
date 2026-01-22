@@ -714,51 +714,96 @@ class TemporalBase(nn.Module):
     def _expand_timesteps(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Expand single-timestep inputs to match model's n_timesteps.
+
+        When input has a single timestep but the model expects multiple timesteps,
+        this method expands the input and applies temporal masking based on
+        data_presentation_pattern and loss_reaction_time.
+
+        Args:
+            batch: Tuple of (inputs, label_indices, *extra)
+
+        Returns:
+            Tuple of (expanded_inputs, expanded_labels, *extra) with masking applied
+        """
         inputs, label_indices, *extra = batch
         inputs = _adjust_data_dimensions(inputs)
         label_indices = _adjust_label_dimensions(label_indices)
 
         if inputs.size(1) == 1 and self.n_timesteps > 1:
-
+            # Expand single timestep to all timesteps (creates views, not copies)
             inputs = inputs.expand(-1, self.n_timesteps, -1, -1, -1)
             label_indices = label_indices.expand(-1, self.n_timesteps)
 
-            # optionally modify based on data_presentation pattern
-            if (
-                hasattr(self, "data_presentation_pattern")
-                and len(self.data_presentation_pattern) > 1
-            ):
-                # Get patterns (already on correct device if cached)
-                presentation_pattern = self._get_presentation_pattern()
-
-                # Move patterns to correct device if needed (only on first call)
-                if presentation_pattern.device != inputs.device:
-                    presentation_pattern = presentation_pattern.to(inputs.device)
-
-                # Compute reaction mask (fully vectorized, no sync)
-                reaction_mask = self._compute_reaction_mask(presentation_pattern)
-
-                # Combine masks efficiently
-                zero_mask = ~presentation_pattern
-                combined_mask = zero_mask | reaction_mask
-
-                # Check if any masking needed (use count instead of any() to avoid sync)
-                # For patterns with nulls or reaction time, we always need to clone
-                needs_masking = (
-                    len(self.data_presentation_pattern) > 1
-                    and "0" in str(self.data_presentation_pattern)
-                ) or self.loss_reaction_time > 0
-
-                if needs_masking:
-                    # Expanded tensors are views; clone before in-place mutation
-                    inputs = inputs.clone()
-                    label_indices = label_indices.clone()
-
-                    # Apply masks in single pass
-                    inputs[:, zero_mask] = self.non_input_value
-                    label_indices[:, combined_mask] = self.non_label_index
+            # Apply temporal masking (pattern zeros and reaction time)
+            inputs, label_indices = self._apply_temporal_masking(inputs, label_indices)
 
         return (inputs, label_indices, *extra)
+
+    def _apply_temporal_masking(
+        self, inputs: torch.Tensor, label_indices: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Apply data presentation pattern and loss reaction time masking.
+
+        Two independent masking operations:
+
+        1. **Pattern masking** (when pattern contains zeros):
+           - Inputs: Set to non_input_value where pattern is 0 (no stimulus)
+           - Labels: Set to non_label_index where pattern is 0 (ignore in loss)
+
+        2. **Reaction time masking** (when loss_reaction_time > 0):
+           - Labels only: Set to non_label_index for the first N timesteps after
+             each stimulus onset, giving the model time to "react" before evaluation
+
+        For a static image (pattern="1"), reaction time masking still applies:
+        the first N timesteps after t=0 are masked for loss computation.
+
+        Args:
+            inputs: Input tensor of shape (batch, timesteps, channels, height, width)
+            label_indices: Label tensor of shape (batch, timesteps)
+
+        Returns:
+            Tuple of (masked_inputs, masked_labels)
+        """
+        # Quick check using string inspection to avoid GPU-CPU sync
+        pattern_has_zeros = "0" in str(self.data_presentation_pattern)
+        has_reaction_time = self.loss_reaction_time > 0
+
+        # Early exit if no masking needed
+        if not pattern_has_zeros and not has_reaction_time:
+            return inputs, label_indices
+
+        # Get presentation pattern and ensure correct device
+        presentation_pattern = self._get_presentation_pattern()
+        if presentation_pattern.device != inputs.device:
+            presentation_pattern = presentation_pattern.to(inputs.device)
+
+        # Compute masks (only if needed)
+        pattern_mask = ~presentation_pattern if pattern_has_zeros else None
+        reaction_mask = (
+            self._compute_reaction_mask(presentation_pattern)
+            if has_reaction_time
+            else None
+        )
+
+        # Apply input masking (only pattern zeros affect inputs)
+        if pattern_mask is not None:
+            inputs = inputs.clone()  # Clone since expanded tensors are views
+            inputs[:, pattern_mask] = self.non_input_value
+
+        # Apply label masking (both pattern zeros and reaction time affect labels)
+        if pattern_mask is not None or reaction_mask is not None:
+            label_indices = label_indices.clone()
+            # Combine masks
+            if pattern_mask is not None and reaction_mask is not None:
+                label_mask = pattern_mask | reaction_mask
+            elif pattern_mask is not None:
+                label_mask = pattern_mask
+            else:
+                label_mask = reaction_mask
+            label_indices[:, label_mask] = self.non_label_index
+
+        return inputs, label_indices
 
     def _cache_presentation_pattern(self) -> None:
         """Cache the base presentation pattern for reuse and shuffling."""
