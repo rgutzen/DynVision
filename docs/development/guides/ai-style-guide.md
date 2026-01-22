@@ -5,7 +5,7 @@
 **Core Principles**: Investigate → Analyze → Implement → Document → Commit
 
 **Default Workflow**:
-1. Start major tasks: Ask about roadmap and testing approach
+1. Start major tasks: Ask about roadmap, testing approach, and version control setup
 2. Investigation: Trace system, analyze dependencies, catalog existing code
 3. Analysis: Define constraints, work with tool grain, apply solution hierarchy (reorganize → tool-native → config → params → composition → extension → new code)
 4. Implementation: Build minimal, validate scientifically, commit at milestones
@@ -34,41 +34,14 @@ You're assisting with development of open-source Python research software. Proje
 
 ## Research Software Principles
 
-### Scientific Integrity
-- Correctness matching mathematical/theoretical foundations
-- Numerical stability and appropriate precision handling
-- Reproducibility through deterministic computation and comprehensive logging
-- Validation against benchmarks, analytical solutions, or published results
-- Clear separation between scientific assumptions and engineering choices
+These principles guide all development decisions. Each is detailed in dedicated sections below.
 
-### Performance & Scalability
-- Efficient execution on local workstations and HPC clusters
-- Optimized GPU utilization and memory management
-- Profiling-guided optimization focusing on actual bottlenecks
-- Memory-efficient handling of large datasets
-
-### Maintainability & Extensibility
-- Modular architecture with independent components (building blocks, not puzzle pieces)
-- Clear separation of concerns (data, models, training, evaluation, visualization)
-- Code designed for extension by domain scientists with varying expertise
-- Adaptability to evolving research questions
-
-### Quality & Reliability
-- Comprehensive error handling with scientific context
-- Defensive programming for edge cases in scientific computations
-- Multi-level testing (unit, integration, scientific correctness)
-- Type hints and runtime validation for critical parameters
-
-### Documentation & Accessibility
-- Multi-level: API reference, conceptual guides, tutorials, examples
-- Scientific background explaining methods and assumptions
-- Inline comments for non-obvious implementation choices
-
-### Reproducibility & Workflow
-- Automated workflow orchestration (Snakemake, Nextflow, etc.)
-- Version-controlled configuration (YAML, JSON)
-- Experiment tracking and result organization
-- Clear dependency specification with pinned versions
+- **Scientific Integrity**: Correctness, numerical stability, reproducibility, validation (see [Scientific Correctness](#scientific-correctness))
+- **Performance & Scalability**: Efficient GPU/HPC execution, profiling-guided optimization (see [Performance and Efficiency](#performance-and-efficiency))
+- **Maintainability & Extensibility**: Modular architecture, domain scientist accessibility (see [Building Blocks Philosophy](#building-blocks-philosophy), [Code Organization](#code-organization))
+- **Quality & Reliability**: Error handling, defensive programming, multi-level testing (see [Error Handling](#error-handling), [Testing Strategy](#testing-strategy))
+- **Documentation & Accessibility**: Multi-level docs, scientific background (see [Documentation](#documentation))
+- **Reproducibility & Workflow**: Automated orchestration, version-controlled config (see [Version Control Practices](#version-control-practices))
 
 ---
 
@@ -101,7 +74,7 @@ Design flexible, reusable components rather than rigid, tightly-coupled integrat
 
 ### Task Initialization (Start of Every Major Task)
 
-Ask user two questions:
+Ask user three questions:
 
 1. **"Would you like me to maintain a detailed roadmap document for this implementation?"**
    - If yes: Create markdown roadmap tracking design decisions, progress, issues, resolutions, API changes, benchmarks, test results
@@ -112,6 +85,11 @@ Ask user two questions:
    - **Test-Last**: Implement features, then write tests
    - **No Tests**: Skip tests (justify why)
    - Follow-up: Test scope? Test data? Coverage expectations?
+
+3. **"What version control setup would you like before starting?"**
+   - **Feature Branch**: Create a new branch for this task (recommended for larger changes)
+   - **Checkpoint Commit**: Create a commit to record current state before changes
+   - **No Action**: Proceed without version control setup (for quick fixes or exploration)
 
 ### Investigation Phase: Understand Before Acting
 
@@ -187,12 +165,7 @@ Never propose solutions before fully tracing the existing system.
    - What interfaces maximize composability?
 
 5. **Consider research software factors**
-   - Scientific correctness: Match theoretical foundations?
-   - Performance: Where are bottlenecks?
-   - Maintainability: Will domain scientists understand?
-   - Reproducibility: Does this affect experimental reproducibility?
-   - Modularity: Can components be reused in different contexts?
-   - Stability: Can components fail or be updated independently?
+   - Review against [Research Software Principles](#research-software-principles): correctness, performance, maintainability, reproducibility, modularity
 
 6. **Present alternatives objectively**
    - Propose 2-3 options ordered by complexity (simple → complex)
@@ -215,16 +188,36 @@ Never propose solutions before fully tracing the existing system.
 - **Add appropriate logging**: Warn about scientifically important events
 - **Ensure visibility**: Make behavior changes explicit (not hidden)
 - **Enable reuse**: Extract reusable utilities even in task-specific code
-- **Commit at milestones**: After each significant milestone, prepare git commit or remind user
+- **Commit at milestones**: After each significant milestone, prepare git commit or remind user (see [Version Control Practices](#version-control-practices) for when to commit)
 
-**Implementation Milestones** (warrant commits):
-- Completion of discrete feature/component
-- All tests passing after implementation or bug fix
-- Resolution of specific bug/issue
-- Completion of refactoring task
-- Achievement of working state before next phase
-- Addition of documentation for completed feature
-- Successful integration of new dependency
+### Completion Phase: Finalize Based on User Preferences
+
+After implementation is successfully concluded, follow up based on Task Initialization choices:
+
+1. **If Test-Last was chosen**:
+   - "The implementation is complete. Would you like me to write tests now?"
+   - Follow-up: Test scope, edge cases to cover, test data requirements
+
+2. **If Roadmap was maintained**:
+   - "Would you like me to compile the roadmap into permanent documentation?"
+   - Options: Developer guide section, user guide section, or archive roadmap
+
+3. **Version control finalization** (based on initial choice):
+   - **If Feature Branch**: "Would you like me to create a pull request, merge to main, or leave for manual review?"
+   - **If Checkpoint Commit or No Action**: "Would you like me to create a commit with all changes?"
+   - Follow-up if PR requested: Target branch, reviewers, PR description
+
+4. **Documentation check**:
+   - "Are there any documentation updates needed?" (API docs, user guides, changelog)
+   - Only if significant public API changes or new features
+
+**Completion Checklist**:
+- [ ] All tests passing (if applicable)
+- [ ] Documentation updated (if applicable)
+- [ ] Roadmap compiled or archived (if maintained)
+- [ ] Changes committed with clear message
+- [ ] PR created (if feature branch)
+- [ ] User informed of any follow-up tasks
 
 ---
 
@@ -257,29 +250,15 @@ Never propose solutions before fully tracing the existing system.
 - **AI provides**: Technical info, implementation assistance, critical feedback, objective evaluation, issue detection
 - **Researcher provides**: Scientific judgment, research direction, assessment of validity, final decisions, results evaluation
 
-**Example Exchange**:
-
-Poor:
-> User: "I think we should use approach X."
-> AI: "You're absolutely right! That's an excellent choice."
-
-Good:
-> User: "I think we should use approach X."
-> AI: "Approach X provides [advantage] for this use case. However, it also has [limitation]. Approach Y offers [alternative trade-off]. The choice depends on whether [criterion A] or [criterion B] is more important for your research goals."
-
 ---
 
 ## Code Organization
 
 ### Modularity and Structure
+
+Apply [Building Blocks Philosophy](#building-blocks-philosophy) guidelines. Additionally:
 - Separate scientific logic from infrastructure code
-- Create focused modules with single, clear responsibilities
-- Design components as reusable building blocks, not puzzle pieces
-- Use composition over inheritance
 - Avoid circular dependencies; establish clear hierarchies
-- Prefer narrow, focused interfaces over monolithic classes
-- Separate data structures from algorithms
-- Design utilities that solve one thing well
 
 ### Project Structure
 - Understand and maintain existing package organization
@@ -384,10 +363,8 @@ Follow the **Diátaxis framework** (https://diataxis.fr/)
 - Note where performance prioritized over clarity
 
 ### Building Block Documentation
-- Document components by independent purpose
-- Describe interfaces and composition patterns
-- Provide examples showing different ways to combine
-- Avoid documenting only in specific workflow context
+
+Apply [Building Blocks Philosophy](#building-blocks-philosophy) to documentation: document by independent purpose, not workflow context.
 
 ---
 
@@ -516,15 +493,6 @@ After completing significant milestones, prepare git commit or remind user.
 - Integrate with existing scientific ecosystems
 - Consider community adoption and long-term maintenance
 
-### Project Dependency Awareness
-
-**Before implementing, analyze existing dependencies:**
-
-1. **Review dependency files**: `requirements.txt`, `pyproject.toml`, `environment.yml`, `setup.py`
-2. **Analyze import statements**: Which libraries actively used and how
-3. **Incorporate into planning**: Use existing dependencies; follow their patterns; ensure compatibility
-4. **Respect constraints**: Maintain pinned version compatibility; prefer stable APIs; avoid dependencies for trivial functionality
-
 ---
 
 ## Common Anti-Patterns to Avoid
@@ -609,18 +577,10 @@ After completing significant milestones, prepare git commit or remind user.
 
 ### For AI Assistants
 
-**Quick Workflow**:
-1. **Start with context**: Read README, architecture docs
-2. **Initialize task**: Ask about roadmap and testing
-3. **Investigate first**: Trace flow, analyze dependencies, catalog infrastructure, check what tools provide
-4. **Work with the grain**: Use tool-native features; prefer reorganization and existing patterns
-5. **Prefer simplicity**: Apply solution hierarchy (reorganize → tool-native → config → compose → extend → new)
-6. **Design building blocks**: Modular, reusable, composable components
-7. **Maintain objectivity**: Neutral communication, technical rationale
-8. **Adapt to project**: Consider maturity, expertise, requirements, timeline
-9. **Prioritize intelligently**: Scientific correctness first
-10. **Communicate objectively**: Describe what exists, present alternatives, provide rationale
-11. **Document and commit**: Update roadmap, commit at milestones
+Follow the [Quick Reference](#quick-reference) workflow. Key additions:
+- **Start with context**: Read README, architecture docs before any task
+- **Adapt to project**: Consider maturity, expertise, requirements, timeline
+- **Prioritize scientifically**: Correctness > Performance > Maintainability
 
 ### For Human Developers
 
@@ -639,14 +599,3 @@ Projects can extend by:
 - Documenting architectural decisions and rationale
 - Maintaining project-specific style guide
 - Establishing project-specific testing and documentation standards
-
----
-
-## Specialized Domain Knowledge
-
-- Computational neuroscience and biological modeling
-- Machine learning and neural network architectures
-- Computer vision and signal processing
-- Scientific data analysis and visualization
-- High-performance computing and optimization
-- Numerical methods and scientific computing
