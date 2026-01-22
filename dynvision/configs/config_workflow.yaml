@@ -11,10 +11,10 @@ model_name:
   # - ResNet1202
   # - ResNet44
 
-seed: ["6000", "6001", "6002", "6003", "6004", "6005"]
+seed: ["6000", "6001", "6002"] #, "6003", "6004", "6005"]
 init_with_pretrained: False
 
-status: trained-best
+status: [trained-best] #, trained-epoch=299]
 
 model_args:
   tsteps: 20
@@ -35,15 +35,17 @@ model_args:
 category:
   - energyloss
   # - pattern
-  # 'dsteps',
-  # 'idle',
-  # 'lossrt',
-  # 'tau',
-  # 'trc',
-  # 'tff',
-  # 'tsk',
-  # 'rctype',
-  # 'rctarget',
+  - tsteps
+  # - idle
+  - lossrt
+  # - tau
+  # - trc
+  # - tff
+  - tsk
+  - skip
+  # - feedback
+  - rctype
+  - rctarget
 
 data_name: imagenette
 # data_name: imagenet

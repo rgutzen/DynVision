@@ -9,6 +9,8 @@ palette:
   pointdepthwise: "#3B82F6"  # Bright blue
   local: "#E91E63"  # Pink/red
   localdepthwise: "#FF6347" # Tomato
+  none: "#808080"  # Gray
+  nan: "#808080"  # Gray
   accent: "#EC4899"  # Pink/magenta 
   feedforward: "#D4A373"  # Muted orange
   recurrence: "#9B59B6"  # Soft purple
@@ -34,7 +36,7 @@ naming:
   trc: "$\\Delta_{RC}$"
   tsk: "$\\Delta_{SK}$"
   rctarget: "Recurrence Target"
-  rctype: "Recurrence"
+  rctype: "Recurrence Type"
   lossrt: "$t_{loss}$"
   idle: "$t_{idle}$"
   energyloss: "Energy Loss Weight"
@@ -43,6 +45,8 @@ naming:
   skip: "Skip"
   add: "Additive"
   mul: "Multiplicative"
+  nan: "None"
+  none: "None"
   ffonly: "Feedforward Only"
   feedforward: "Feedforward"
   recurrence: "Recurrent"
@@ -64,9 +68,9 @@ naming:
   peak_ratio: "Peak Ratio"
   power: "Power"
   # Experiments
-  duration_experiment: "Duration"
-  contrast_experiment: "Contrast"
-  interval_experiment: "Interval"
+  duration_experiment: "Stimulus Duration"
+  contrast_experiment: "Stimulus Contrast"
+  interval_experiment: "Stimulus Interval"
   stability_experiment: "Stability"
   response_experiment: "Response"
   responseintermediate_experiment: "Intermediate Responses"
@@ -82,8 +86,8 @@ naming:
 # Ordering dictionaries for consistent display order
 ordering:
   layers: ["IT", "V4", "V2", "V1", 'layer8', 'layer7', 'layer6', 'layer5', 'layer4', 'layer3', 'layer2', 'layer1']
-  rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise"]
-  rctarget: ['input', 'middle', 'output']
+  rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise", "none"]
+  rctarget: ['input', 'middle', 'output', 'null']
   feedback: ['false', 'add', 'mul']
   connection_type: ["feedforward", "recurrence"]
   status: ["trained"]

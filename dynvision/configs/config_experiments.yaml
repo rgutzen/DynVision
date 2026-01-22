@@ -1,11 +1,11 @@
 experiment_config:
 
   categories:
-    rctype: ['depthpointwise', 'pointdepthwise', 'self', 'full', 'local', 'localdepthwise']
+    rctype: ['depthpointwise', 'pointdepthwise', 'self', 'full', 'local', 'localdepthwise', 'none']  # Recurrent connection type
     rctarget: ['output', 'input', 'middle']  # Target for recurrent connections
-    pattern: ['1011', '1']
+    pattern: ['1', '1011', '1001', '1000']
     dsteps: [1, 20]
-    tsteps: [8, 14, 20, 26]
+    tsteps: [4, 8, 14, 20, 26]
     dt: [2]
     tau: [3, 5, 9]
     tff: [0, 10]
@@ -14,15 +14,13 @@ experiment_config:
     # lossrt: [0, 4, 8, 20, 38]  # for pattern=1
     lossrt: [0, 4, 8, 18, 28]  # for pattern=1011 + shuffle
     idle: [0, 1, 5, 10, 20]
-    feedback: ['add','false', 'mul']
+    feedback: ['false', 'add', 'mul']
     skip: ['true', 'false']
     dloader: ['ffcv', 'torch']
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
-    # energyloss: ['0', '0.00002', '0.0002', '0.002', '0.005', '0.02', '0.05'] #
-    # energyloss: [0, 0.1, 0.2, 0.3, 0.5] #, 1.0, 2.0] #0.3
-    # energyloss: [0, 0.1, 0.3, 0.5, 1.0] #0.3
-    energyloss: ['0', '0.00002', '0.0002', '0.002', '0.02', '0.2']
+    # energyloss: ['0', '0.0002', '0.002', '0.02', '0.2', '1.0']  # '0.00002',
+    energyloss: ['0', '0.0002', '0.2', '0.5', '1.0'] # '0.002',
     pretrained: ['true']
     
   response:
@@ -44,7 +42,7 @@ experiment_config:
       ffonly: ['true', 'false']
 
   responseintermediate:
-    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=249, trained-epoch=299, trained-epoch=349]
+    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=299, trained-epoch=399, trained-epoch=499]
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -97,7 +95,7 @@ experiment_config:
     data_args:
       dsteps: 30
       intro: 1
-      stim: [1, 2, 4, 6, 8]
+      stim: [1, 2, 3, 4, 5, 10, 15, 20]
       idle: 20
 
   contrast:
@@ -107,7 +105,7 @@ experiment_config:
       dsteps: 30
       intro: 1
       stim: 20
-      contrast: [0.1, 0.3, 0.5, 0.7, 0.9]
+      contrast: [0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]
       idle: 20
 
   interval:
@@ -117,7 +115,7 @@ experiment_config:
       dsteps: 40
       intro: 1
       stim: 5
-      interval: [1, 2, 4, 6, 8]
+      interval: [1, 2, 3, 4, 6, 8, 10]
       idle: 20
 
   uniformnoise:
@@ -167,7 +165,7 @@ experiment_config:
     data_args:
       dsteps: 20
       noisetype: poisson
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
       tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
@@ -178,7 +176,7 @@ experiment_config:
     data_args:
       dsteps: 20
       noisetype: gaussian
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
       tempmode: 'dynamic'
       idle: 20
 
@@ -189,7 +187,7 @@ experiment_config:
       dsteps: 20
       noisetype: gaussian
       spatialcorr: 'true'
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
       tempmode: 'dynamic'
       idle: 20
 
@@ -199,7 +197,7 @@ experiment_config:
     data_args:
       dsteps: 20
       noisetype: phasescrambled
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
       tempmode: 'dynamic'
       idle: 20
 
@@ -209,7 +207,7 @@ experiment_config:
     data_args:
       dsteps: 20
       noisetype: gaussian
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
       tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
@@ -221,7 +219,7 @@ experiment_config:
       dsteps: 20
       noisetype: gaussian
       spatialcorr: 'true'
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
       tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
@@ -232,7 +230,7 @@ experiment_config:
     data_args:
       dsteps: 20
       noisetype: phasescrambled
-      ssnr: [0.2, 0.4, 0.6, 0.8, 1.0]
+      ssnr: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
       tempmode: 'dynamic'
       idle: 20
       ffonly: 'true'
