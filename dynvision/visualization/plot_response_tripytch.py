@@ -29,8 +29,12 @@ from dynvision.visualization.plot_responses import (
     LAYOUT as RESPONSES_LAYOUT,
     FORMATTING as RESPONSES_FORMATTING,
 )
+from dynvision.visualization.plot_training import (
+    _parse_accuracy_data,
+    _standardize_category_value,
+)
 
-# Configure logging
+# Configure logging #
 logger = logging.getLogger(__name__)
 
 # Triptych-specific layout configuration with relative positioning
@@ -183,6 +187,32 @@ def _add_panel_letters(
             )
 
 
+def _extract_numerical_sort_key(value: str) -> Tuple[bool, float, str]:
+    """Extract numerical sort key from a value that may have units.
+
+    Args:
+        value: Value string, possibly with units (e.g., "0.05 ms", "10", "true")
+
+    Returns:
+        Tuple of (is_numeric, numeric_value, original_string)
+        Used for sorting: numeric values sort before strings, then by value
+    """
+    value_str = str(value).strip()
+
+    # Try to extract numerical value (first token)
+    try:
+        # Split on whitespace to separate value from units
+        tokens = value_str.split()
+        if tokens:
+            numeric_value = float(tokens[0])
+            return (True, numeric_value, value_str)
+    except (ValueError, TypeError):
+        pass
+
+    # Not numeric, return as string for string sorting
+    return (False, float('inf'), value_str)
+
+
 def _filter_first_parameter_value(
     df: pd.DataFrame, parameter_key: str
 ) -> pd.DataFrame:
@@ -219,79 +249,6 @@ def _filter_first_parameter_value(
     return df
 
 
-def _standardize_category_value(value: str) -> str:
-    """Standardize category value formatting consistently across all processing."""
-    value_str = str(value).strip()
-    # Handle boolean-like values consistently
-    if value_str.lower() in ["true", "false"]:
-        return value_str.lower()
-    return value_str
-
-
-def _extract_training_accuracy_data(
-    accuracy_df: pd.DataFrame, category_key: str
-) -> pd.DataFrame:
-    """Extract training accuracy data for the specified category variation."""
-    if accuracy_df is None or accuracy_df.empty:
-        return pd.DataFrame()
-
-    logger.debug(f"Extracting training accuracy for category '{category_key}'")
-    logger.debug(f"Available columns: {list(accuracy_df.columns)}")
-
-    accuracy_data = []
-
-    try:
-        # Find training and validation accuracy columns (exclude MIN/MAX)
-        for acc_type, pattern in [
-            ("Training", "train_accuracy"),
-            ("Validation", "val_accuracy"),
-        ]:
-            matching_cols = [
-                col
-                for col in accuracy_df.columns
-                if pattern in col and not any(x in col for x in ["__MIN", "__MAX"])
-            ]
-
-            logger.debug(
-                f"Found {len(matching_cols)} {acc_type.lower()} accuracy columns"
-            )
-
-            for col in matching_cols:
-                # Extract parameter value from column name using regex
-                import re
-
-                pattern_regex = f"{category_key}=([^+_]+)"
-                match = re.search(pattern_regex, col, re.IGNORECASE)
-
-                if match:
-                    param_value = _standardize_category_value(match.group(1))
-                    logger.debug(f"Column '{col}' -> parameter value: '{param_value}'")
-
-                    # Add data points for this column
-                    for idx, row in accuracy_df.iterrows():
-                        if not pd.isna(row[col]):
-                            accuracy_data.append(
-                                {
-                                    "epoch": row["epoch"],
-                                    "accuracy": row[col],
-                                    "type": acc_type,
-                                    category_key: param_value,
-                                }
-                            )
-
-    except Exception as e:
-        logger.error(f"Error extracting training accuracy data: {e}")
-        return pd.DataFrame()
-
-    if accuracy_data:
-        result_df = pd.DataFrame(accuracy_data)
-        logger.info(f"Extracted {len(accuracy_data)} training accuracy data points")
-        return result_df
-    else:
-        logger.warning(
-            f"No training accuracy data extracted for category '{category_key}'"
-        )
-        return pd.DataFrame()
 
 
 def _plot_training_accuracy_panel(
@@ -306,8 +263,15 @@ def _plot_training_accuracy_panel(
     colors: Dict[str, str],
     show_ylabel: bool = False,
     show_legend: bool = False,
+    max_epoch: Optional[float] = None,
 ) -> None:
-    """Plot training and validation accuracy panel."""
+    """Plot training and validation accuracy panel.
+
+    Args:
+        accuracy_df: DataFrame with columns: epoch, category_value, train_accuracy, val_accuracy
+                     (as returned by _parse_accuracy_data from plot_training.py)
+        max_epoch: Maximum epoch to display (None for no limit)
+    """
     ax = fig.add_axes([column_left, bottom, column_width, height])
     ax.patch.set_alpha(0)
 
@@ -323,49 +287,49 @@ def _plot_training_accuracy_panel(
         )
         logger.warning("No training accuracy data to plot")
     else:
+        # Filter by max_epoch if specified
+        if max_epoch is not None:
+            original_len = len(accuracy_df)
+            accuracy_df = accuracy_df[accuracy_df["epoch"] <= max_epoch].copy()
+            if len(accuracy_df) < original_len:
+                logger.info(f"Filtered accuracy data to epochs <= {max_epoch}: {len(accuracy_df)} rows (was {original_len})")
+
         logger.info(f"Plotting training accuracy data with {len(accuracy_df)} rows")
 
         try:
-            # Ensure category values are standardized and match hue_values
-            if category_key in accuracy_df.columns:
-                accuracy_df = accuracy_df.copy()
-                accuracy_df[category_key] = accuracy_df[category_key].apply(
-                    _standardize_category_value
-                )
+            # Note: accuracy_df["category_value"] is already standardized by _parse_accuracy_data
+            # Standardize hue_values for comparison
+            hue_values_std = [_standardize_category_value(v) for v in hue_values]
 
             # Plot training accuracy (solid lines)
-            train_data = accuracy_df[accuracy_df["type"] == "Training"]
-            if not train_data.empty:
-                sns.lineplot(
-                    data=train_data,
-                    x="epoch",
-                    y="accuracy",
-                    hue=category_key,
-                    hue_order=hue_values,
-                    palette=colors,
-                    ax=ax,
-                    legend=False,
-                    linewidth=TRIPTYCH_FORMATTING["linewidth_main"],
-                    linestyle="-",
-                    alpha=TRIPTYCH_FORMATTING["alpha_line"],
-                )
+            for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+                cat_data = accuracy_df[accuracy_df["category_value"] == cat_val_std]
+                if not cat_data.empty:
+                    train_data = cat_data.dropna(subset=["train_accuracy"])
+                    if not train_data.empty:
+                        ax.plot(
+                            train_data["epoch"],
+                            train_data["train_accuracy"],
+                            color=colors.get(cat_val_orig, TRIPTYCH_FORMATTING["greyscale_color"]),
+                            linewidth=TRIPTYCH_FORMATTING["linewidth_main"],
+                            linestyle="-",
+                            alpha=TRIPTYCH_FORMATTING["alpha_line"],
+                        )
 
             # Plot validation accuracy (dotted lines)
-            val_data = accuracy_df[accuracy_df["type"] == "Validation"]
-            if not val_data.empty:
-                sns.lineplot(
-                    data=val_data,
-                    x="epoch",
-                    y="accuracy",
-                    hue=category_key,
-                    hue_order=hue_values,
-                    palette=colors,
-                    ax=ax,
-                    legend=False,
-                    linewidth=TRIPTYCH_FORMATTING["linewidth_main"],
-                    linestyle=":",
-                    alpha=TRIPTYCH_FORMATTING["alpha_line"],
-                )
+            for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+                cat_data = accuracy_df[accuracy_df["category_value"] == cat_val_std]
+                if not cat_data.empty:
+                    val_data = cat_data.dropna(subset=["val_accuracy"])
+                    if not val_data.empty:
+                        ax.plot(
+                            val_data["epoch"],
+                            val_data["val_accuracy"],
+                            color=colors.get(cat_val_orig, TRIPTYCH_FORMATTING["greyscale_color"]),
+                            linewidth=TRIPTYCH_FORMATTING["linewidth_main"],
+                            linestyle=":",
+                            alpha=TRIPTYCH_FORMATTING["alpha_line"],
+                        )
 
         except Exception as e:
             logger.error(f"Error plotting training accuracy: {e}")
@@ -435,8 +399,24 @@ def create_triptych_plot(
     accuracy_paths: Optional[List[Path]] = None,
     experiment: Optional[str] = None,
     config: Optional[Dict] = None,
+    accuracy_measure: str = "accuracy",
+    confidence_measure: str = "first_label_confidence",
+    max_epoch: Optional[float] = None,
 ) -> plt.Figure:
-    """Create a triptych plot using plot_responses.py functionality."""
+    """Create a triptych plot using plot_responses.py functionality.
+
+    Args:
+        data_paths: List of paths to response data files (one per column)
+        category_list: List of category keys (one per column)
+        parameter_key: Parameter name for ridge subplots
+        dt: Temporal resolution in ms per timestep
+        accuracy_paths: Optional list of paths to training accuracy files
+        experiment: Optional experiment name for panel labels
+        config: Optional configuration dict with palette, naming, ordering
+        accuracy_measure: Column name for accuracy metric
+        confidence_measure: Column name for confidence metric
+        max_epoch: Maximum epoch to display in accuracy panels (None for no limit)
+    """
 
     logger.info("=" * 60)
     logger.info("Creating triptych plot")
@@ -502,7 +482,7 @@ def create_triptych_plot(
             except Exception as e:
                 logger.error(f"Error loading data: {e}")
 
-        # Load training accuracy data
+        # Load training accuracy data using plot_training.py parser
         accuracy_df = None
         if (
             accuracy_paths
@@ -510,12 +490,14 @@ def create_triptych_plot(
             and accuracy_paths[col_idx]
         ):
             try:
-                accuracy_df = pd.read_csv(accuracy_paths[col_idx])
                 logger.info(
-                    f"Loaded training accuracy data from {accuracy_paths[col_idx]}"
+                    f"Parsing training accuracy data from {accuracy_paths[col_idx]}"
                 )
-                accuracy_df = _extract_training_accuracy_data(
-                    accuracy_df, category_key
+                accuracy_df, detected_category_key = _parse_accuracy_data(
+                    accuracy_paths[col_idx], category_key
+                )
+                logger.info(
+                    f"Parsed {len(accuracy_df)} accuracy rows for category key: {detected_category_key}"
                 )
             except Exception as e:
                 logger.error(f"Error loading training accuracy data: {e}")
@@ -578,6 +560,7 @@ def create_triptych_plot(
         title_ax.axis("off")
 
         # Plot training accuracy panel
+        # Note: accuracy_df uses "category_value" column from _parse_accuracy_data
         acc_ax = _plot_training_accuracy_panel(
             fig=fig,
             column_left=column_left,
@@ -585,11 +568,12 @@ def create_triptych_plot(
             bottom=training_bottom,
             height=layout["training_accuracy_height"],
             accuracy_df=accuracy_df,
-            category_key=category_key,
+            category_key="category_value",  # Column name used by _parse_accuracy_data
             hue_values=hue_values,
             colors=colors,
             show_ylabel=(col_idx == 0),
             show_legend=(col_idx == 0),
+            max_epoch=max_epoch,
         )
         all_accuracy_axes.append(acc_ax)
 
@@ -612,6 +596,8 @@ def create_triptych_plot(
             dt=dt,
             show_ylabel=(col_idx == 0),
             show_legend=(col_idx == 0),
+            accuracy_cols=[accuracy_measure],
+            confidence_cols=[confidence_measure],
         )
         performance_ax.set_ylim(-0.005, 1)
 
@@ -624,27 +610,34 @@ def create_triptych_plot(
         legend_ax.axis("off")
         legend_ax.patch.set_alpha(0)
 
-        # Create legend elements using the ordered hue_values
-        legend_elements = []
-        legend_labels = []
-
+        # Create legend elements and labels
+        # Build tuples of (value, formatted_label) first, then sort
+        legend_items = []
         for val in hue_values:
             if val in colors:
-                legend_elements.append(
-                    plt.Line2D(
-                        [0],
-                        [0],
-                        color=colors[val],
-                        linewidth=fmt["linewidth_main"],
-                        marker=".",
-                        markersize=8,
-                        alpha=fmt["alpha_line"],
-                    )
+                formatted_label = _format_legend_label(category_key, val, config or {}, dt)
+                legend_items.append((val, formatted_label))
+
+        # Sort by numerical value if possible (labels may have units)
+        # The sort key extracts numeric part from formatted label
+        legend_items_sorted = sorted(legend_items, key=lambda x: _extract_numerical_sort_key(x[1]))
+
+        # Build final legend elements and labels in sorted order
+        legend_elements = []
+        legend_labels = []
+        for val, formatted_label in legend_items_sorted:
+            legend_elements.append(
+                plt.Line2D(
+                    [0],
+                    [0],
+                    color=colors[val],
+                    linewidth=fmt["linewidth_main"],
+                    marker=".",
+                    markersize=8,
+                    alpha=fmt["alpha_line"],
                 )
-                # Use the same formatting function as the main plot_responses module
-                legend_labels.append(
-                    _format_legend_label(category_key, val, config or {}, dt)
-                )
+            )
+            legend_labels.append(formatted_label)
 
         if legend_elements:
             n_cols = min(len(legend_elements), 5)
@@ -806,6 +799,24 @@ def main():
         "--ordering", type=str, help="JSON formatted ordering dictionary"
     )
     parser.add_argument(
+        "--accuracy-measure",
+        type=str,
+        default="accuracy",
+        help="Column name for accuracy measure (default: accuracy)",
+    )
+    parser.add_argument(
+        "--confidence-measure",
+        type=str,
+        default="first_label_confidence",
+        help="Column name for confidence measure (default: first_label_confidence)",
+    )
+    parser.add_argument(
+        "--max-epoch",
+        type=float,
+        default=300,
+        help="Maximum epoch to display in training accuracy panels (default: 300)",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -883,6 +894,9 @@ def main():
             accuracy_paths=accuracy_paths,
             experiment=args.experiment,
             config=config,
+            accuracy_measure=args.accuracy_measure,
+            confidence_measure=args.confidence_measure,
+            max_epoch=args.max_epoch,
         )
 
         # Save the plot

@@ -46,24 +46,26 @@ TRAINING_LAYOUT = {
     # Column layout (relative coordinates 0-1)
     "left_column_width": 0.45,  # Configurable
     "right_column_width": 0.50,
-    "column_spacing": 0.08,
+    "column_spacing": 0.12,
     "left_margin": 0.06,
     "right_margin": 0.02,
-    # Left column vertical layout
+    # Left column vertical layout (A:legend:B:C ~ 0.3:0.1:0.3:0.3)
     "top_margin": 0.05,
-    "accuracy_height": 0.35,
-    "accuracy_bottom_margin": 0.02,
-    "legend_height": 0.1,
-    "legend_top_margin": 0.02,  # Space above legend
-    "legend_bottom_margin": 0.02,  # Space below legend (increased to move legend down)
-    "loss_height": 0.35,
-    "loss_bottom_margin": 0.05,
-    # Right column follows plot_responses layout
-    "performance_height": 0.2,
+    "accuracy_height": 0.27,
+    "accuracy_bottom_margin": 0.015,
+    "legend_height": 0.09,
+    "legend_top_margin": 0.015,  # Space above legend
+    "legend_bottom_margin": 0.015,  # Space below legend
+    "energy_loss_height": 0.27,
+    "energy_loss_bottom_margin": 0.015,
+    "ce_loss_height": 0.27,
+    "ce_loss_bottom_margin": 0.02,
+    # Right column - panel D aligned to panel A with same height
+    "performance_height": 0.27,
     "performance_pad": 0.05,
     "ridge_legend_height": 0.08,
     "ridge_legend_pad": 0.01,
-    "ridge_overlap": 0.15,  # Overlap fraction between ridge plots
+    "ridge_overlap": 0.0,  # No overlap between ridge plots
     # Panel letters
     "panel_letter_offset_x": -0.05,
     "panel_letter_offset_y": 0.015,
@@ -73,7 +75,7 @@ TRAINING_LAYOUT = {
 TRAINING_FORMATTING = {
     **RESPONSES_FORMATTING,
     "fontsize_panel_label": 18,
-    "max_global_ymax": 1.5,  # Increased from 1.5 to accommodate higher response values
+    "max_global_ymax": 5.5,  # Increased from 1.5 to accommodate higher response values
 }
 
 
@@ -250,16 +252,21 @@ def _parse_accuracy_data(
     return result_df, actual_category_key
 
 
-def _parse_loss_data(loss_csv: Path, category_key: str) -> Tuple[pd.DataFrame, str]:
+def _parse_loss_data(
+    loss_csv: Path, category_key: str, validation_frequency: int = 10
+) -> Tuple[pd.DataFrame, str]:
     """Parse loss CSV from W&B export.
 
     Args:
         loss_csv: Path to loss CSV file
         category_key: Category key to look for (may be auto-detected)
+        validation_frequency: Frequency of validation epochs (default: 10).
+            Validation epochs are identified as (epoch + 1) % validation_frequency == 0,
+            i.e., epochs 9, 19, 29, ... for frequency 10.
 
     Returns:
         Tuple of (processed DataFrame, actual category_key used)
-        DataFrame has columns: epoch, category_value, cross_entropy_loss, energy_loss
+        DataFrame has columns: epoch, category_value, cross_entropy_loss, energy_loss, is_validation
     """
     df = pd.read_csv(loss_csv)
 
@@ -336,12 +343,17 @@ def _parse_loss_data(loss_csv: Path, category_key: str) -> Tuple[pd.DataFrame, s
             )
 
             if ce_loss is not None or energy_loss is not None:
+                epoch = row["epoch"]
+                # Validation epochs: (epoch + 1) % validation_frequency == 0
+                # i.e., epochs 9, 19, 29, ... for frequency 10
+                is_validation = (epoch + 1) % validation_frequency == 0
                 processed_data.append(
                     {
-                        "epoch": row["epoch"],
+                        "epoch": epoch,
                         "category_value": _standardize_category_value(cat_val),
                         "cross_entropy_loss": ce_loss,
                         "energy_loss": energy_loss,
+                        "is_validation": is_validation,
                     }
                 )
 
@@ -498,7 +510,107 @@ def _plot_training_accuracy_panel(
     sns.despine(ax=ax, left=True, bottom=True)
 
 
-def _plot_loss_panel(
+def _plot_energy_loss_panel(
+    fig: plt.Figure,
+    column_left: float,
+    column_width: float,
+    bottom: float,
+    height: float,
+    loss_df: pd.DataFrame,
+    category_key: str,
+    hue_values: List[str],
+    colors: Dict[str, str],
+    show_ylabel: bool = True,
+    xlim: Optional[Tuple[float, float]] = None,
+    **kwargs,
+) -> None:
+    """Plot energy loss panel (training only).
+
+    Energy loss validation values are not properly computed (always 0),
+    so only training loss is shown.
+
+    Args:
+        fig: Matplotlib figure
+        column_left: Left position of panel
+        column_width: Width of panel
+        bottom: Bottom position of panel
+        height: Height of panel
+        loss_df: DataFrame with loss data including is_validation column
+        category_key: Column name for category dimension
+        hue_values: Ordered list of category values
+        colors: Color mapping for category values
+        show_ylabel: Whether to show y-axis label
+        xlim: X-axis limits (min, max)
+        **kwargs: Override FORMATTING defaults
+    """
+    fmt = {**TRAINING_FORMATTING, **kwargs}
+
+    ax = fig.add_axes([column_left, bottom, column_width, height])
+    ax.patch.set_alpha(0)
+
+    if loss_df.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No energy loss data",
+            ha="center",
+            va="center",
+            fontsize=14,
+            alpha=0.6,
+        )
+        return
+
+    # Standardize hue_values for comparison
+    hue_values_std = [_standardize_category_value(v) for v in hue_values]
+
+    # Filter to training data only (validation energy loss is always 0)
+    train_df = loss_df[~loss_df["is_validation"]]
+
+    # Plot energy loss (training only, solid lines)
+    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
+        cat_data = train_df[train_df["category_value"] == cat_val_std]
+        if not cat_data.empty:
+            energy_data = cat_data.dropna(subset=["energy_loss"])
+            if not energy_data.empty:
+                ax.plot(
+                    energy_data["epoch"],
+                    energy_data["energy_loss"],
+                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                    linewidth=fmt["linewidth_main"],
+                    linestyle="-",
+                    alpha=fmt["alpha_line"],
+                )
+
+    # Set x-axis limits
+    if xlim is not None:
+        ax.set_xlim(xlim[0], xlim[1])
+    else:
+        ax.margins(x=0)
+
+    # Log axis limits
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    logger.info(f"Energy loss panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
+
+    # Styling
+    if show_ylabel:
+        ax.set_ylabel("Energy Loss", fontsize=fmt["fontsize_axis"], fontweight="bold")
+    else:
+        ax.set_ylabel("")
+        ax.set_yticklabels([])
+
+    # No xlabel - shared x-axis with CE loss panel below
+    ax.set_xlabel("")
+    ax.tick_params(labelsize=fmt["fontsize_tick"])
+    ax.set_xticklabels([])
+
+    # No legend needed (only training is shown)
+
+    ax.grid(True, alpha=0.3)
+    sns.despine(ax=ax, left=True, bottom=True)
+
+
+def _plot_ce_loss_panel(
     fig: plt.Figure,
     column_left: float,
     column_width: float,
@@ -511,10 +623,9 @@ def _plot_loss_panel(
     show_ylabel: bool = True,
     show_legend: bool = True,
     xlim: Optional[Tuple[float, float]] = None,
-    energy_loss_scale: float = 10.0,
     **kwargs,
 ) -> None:
-    """Plot cross-entropy and energy loss panel.
+    """Plot cross-entropy loss panel (training and validation).
 
     Args:
         fig: Matplotlib figure
@@ -522,14 +633,13 @@ def _plot_loss_panel(
         column_width: Width of panel
         bottom: Bottom position of panel
         height: Height of panel
-        loss_df: DataFrame with loss data
+        loss_df: DataFrame with loss data including is_validation column
         category_key: Column name for category dimension
         hue_values: Ordered list of category values
         colors: Color mapping for category values
         show_ylabel: Whether to show y-axis label
-        show_legend: Whether to show legend
+        show_legend: Whether to show legend for train/val distinction
         xlim: X-axis limits (min, max)
-        energy_loss_scale: Scale factor for energy loss (default: 10.0)
         **kwargs: Override FORMATTING defaults
     """
     fmt = {**TRAINING_FORMATTING, **kwargs}
@@ -539,17 +649,26 @@ def _plot_loss_panel(
 
     if loss_df.empty:
         ax.text(
-            0.5, 0.5, "No loss data", ha="center", va="center", fontsize=14, alpha=0.6
+            0.5,
+            0.5,
+            "No cross-entropy loss data",
+            ha="center",
+            va="center",
+            fontsize=14,
+            alpha=0.6,
         )
         return
 
-    # Note: loss_df["category_value"] is already standardized to numeric/string
     # Standardize hue_values for comparison
     hue_values_std = [_standardize_category_value(v) for v in hue_values]
 
-    # Plot cross-entropy loss (solid lines)
+    # Separate training and validation data
+    train_df = loss_df[~loss_df["is_validation"]]
+    val_df = loss_df[loss_df["is_validation"]]
+
+    # Plot training cross-entropy loss (solid lines)
     for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = loss_df[loss_df["category_value"] == cat_val_std]
+        cat_data = train_df[train_df["category_value"] == cat_val_std]
         if not cat_data.empty:
             ce_data = cat_data.dropna(subset=["cross_entropy_loss"])
             if not ce_data.empty:
@@ -562,61 +681,20 @@ def _plot_loss_panel(
                     alpha=fmt["alpha_line"],
                 )
 
-    # Plot energy loss (dashed lines) - scaled and smoothed
-    # Energy loss is 0 during validation steps, causing periodic drops to 0
-    # We smooth the data to remove these outliers while preserving truly zero series
+    # Plot validation cross-entropy loss (dotted lines)
     for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = loss_df[loss_df["category_value"] == cat_val_std]
+        cat_data = val_df[val_df["category_value"] == cat_val_std]
         if not cat_data.empty:
-            energy_data = cat_data.dropna(subset=["energy_loss"]).copy()
-            if not energy_data.empty:
-                energy_values = energy_data["energy_loss"].values
-                epochs = energy_data["epoch"].values
-
-                # Check if energy loss is all zeros (disabled energy loss)
-                if np.all(energy_values == 0):
-                    # Plot as-is for truly disabled energy loss
-                    ax.plot(
-                        epochs,
-                        energy_values * energy_loss_scale,
-                        color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                        linewidth=fmt["linewidth_main"],
-                        linestyle=":",
-                        alpha=fmt["alpha_line"],
-                    )
-                else:
-                    # Apply smoothing to remove validation step outliers
-                    # Use median filter to remove isolated zeros while preserving trends
-                    from scipy.ndimage import median_filter
-
-                    # Apply median filter with window size 3 to remove isolated outliers
-                    # This preserves the general trend better than simple interpolation
-                    smoothed_values = median_filter(
-                        energy_values, size=3, mode="nearest"
-                    )
-
-                    # For any remaining zeros (edges or consecutive zeros), interpolate
-                    smoothed_values_clean = smoothed_values.copy().astype(float)
-                    smoothed_values_clean[smoothed_values_clean == 0] = np.nan
-
-                    import pandas as pd
-
-                    series = pd.Series(smoothed_values_clean, index=epochs)
-                    series_interpolated = series.interpolate(
-                        method="linear", limit_direction="both"
-                    )
-
-                    # Fill any remaining NaNs (e.g., all zeros at start/end)
-                    series_interpolated = series_interpolated.fillna(0)
-
-                    ax.plot(
-                        epochs,
-                        series_interpolated.values * energy_loss_scale,
-                        color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                        linewidth=fmt["linewidth_main"],
-                        linestyle=":",
-                        alpha=fmt["alpha_line"],
-                    )
+            ce_data = cat_data.dropna(subset=["cross_entropy_loss"])
+            if not ce_data.empty:
+                ax.plot(
+                    ce_data["epoch"],
+                    ce_data["cross_entropy_loss"],
+                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
+                    linewidth=fmt["linewidth_main"],
+                    linestyle=":",
+                    alpha=fmt["alpha_line"],
+                )
 
     # Set x-axis limits
     if xlim is not None:
@@ -627,11 +705,13 @@ def _plot_loss_panel(
     # Log axis limits
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
-    logger.info(f"Loss panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
+    logger.info(f"CE loss panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
 
     # Styling
     if show_ylabel:
-        ax.set_ylabel("Loss", fontsize=fmt["fontsize_axis"], fontweight="bold")
+        ax.set_ylabel(
+            "Cross-Entropy Loss", fontsize=fmt["fontsize_axis"], fontweight="bold"
+        )
     else:
         ax.set_ylabel("")
         ax.set_yticklabels([])
@@ -639,21 +719,9 @@ def _plot_loss_panel(
     ax.set_xlabel("Epoch", fontsize=fmt["fontsize_axis"])
     ax.tick_params(labelsize=fmt["fontsize_tick"])
 
-    # Add legend for line styles
+    # Add legend for line styles (training vs validation)
     if show_legend:
         from matplotlib.lines import Line2D
-
-        # Format energy loss scale for legend
-        if energy_loss_scale == 1.0:
-            energy_label = "Energy"
-        else:
-            # Format scale: show as integer if whole number, otherwise with decimals
-            scale_str = (
-                f"{int(energy_loss_scale)}"
-                if energy_loss_scale == int(energy_loss_scale)
-                else f"{energy_loss_scale:.1f}"
-            )
-            energy_label = f"Energy × {scale_str}"
 
         legend_handles = [
             Line2D(
@@ -662,7 +730,7 @@ def _plot_loss_panel(
                 color="black",
                 linewidth=fmt["linewidth_main"],
                 linestyle="-",
-                label="Cross Entropy",
+                label="Training",
                 alpha=fmt["alpha_line"],
             ),
             Line2D(
@@ -671,7 +739,7 @@ def _plot_loss_panel(
                 color="black",
                 linewidth=fmt["linewidth_main"],
                 linestyle=":",
-                label=energy_label,
+                label="Validation",
                 alpha=fmt["alpha_line"],
             ),
         ]
@@ -691,20 +759,22 @@ def _add_panel_letters(
     left_col_left: float,
     right_col_left: float,
     accuracy_top: float,
-    loss_top: float,
+    energy_loss_top: float,
+    ce_loss_top: float,
     performance_top: float,
     ridge_top: float,
     layout: Dict,
     fmt: Dict,
 ) -> None:
-    """Add panel letters A-D to identify plot sections.
+    """Add panel letters A-E to identify plot sections.
 
     Args:
         fig: Matplotlib figure
         left_col_left: Left position of left column
         right_col_left: Left position of right column
         accuracy_top: Top position of accuracy panel
-        loss_top: Top position of loss panel
+        energy_loss_top: Top position of energy loss panel
+        ce_loss_top: Top position of cross-entropy loss panel
         performance_top: Top position of performance panel
         ridge_top: Top position of ridge plots
         layout: Layout configuration dict
@@ -712,9 +782,10 @@ def _add_panel_letters(
     """
     panel_letters = [
         ("A)", left_col_left, accuracy_top),  # Training/validation accuracy
-        ("B)", left_col_left, loss_top),  # Loss panel
-        ("C)", right_col_left, performance_top),  # Performance panel
-        ("D)", right_col_left, ridge_top),  # Ridge plots
+        ("B)", left_col_left, energy_loss_top),  # Energy loss panel
+        ("C)", left_col_left, ce_loss_top),  # Cross-entropy loss panel
+        ("D)", right_col_left, performance_top),  # Performance panel
+        ("E)", right_col_left, ridge_top),  # Ridge plots
     ]
 
     for letter, x_pos, y_pos in panel_letters:
@@ -821,7 +892,7 @@ def plot_training_overview(
     confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
     accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
-    energy_loss_scale: float = 10.0,
+    validation_frequency: int = 10,
     config: Optional[Dict] = None,
     **kwargs,
 ) -> plt.Figure:
@@ -840,7 +911,8 @@ def plot_training_overview(
         confidence_measure: Column name(s) for confidence metrics
         accuracy_measure: Column name(s) for accuracy metrics
         dt: Temporal resolution in ms per timestep
-        energy_loss_scale: Scale factor for energy loss display (default: 10.0)
+        validation_frequency: Frequency of validation epochs (default: 10).
+            Validation epochs are (epoch + 1) % validation_frequency == 0.
         config: Configuration dict with palette, naming, ordering
         **kwargs: Override LAYOUT and FORMATTING defaults
 
@@ -894,7 +966,9 @@ def plot_training_overview(
     )
 
     logger.info(f"Parsing loss data from: {loss_csv}")
-    loss_df, _ = _parse_loss_data(loss_csv, detected_category_key)
+    loss_df, _ = _parse_loss_data(
+        loss_csv, detected_category_key, validation_frequency
+    )
 
     # Use original category_key for test data lookups (may be alias like "energyloss")
     # Use detected_category_key for W&B CSV parsing (full name like "energy_loss_weight")
@@ -1063,16 +1137,35 @@ def plot_training_overview(
         **fmt,
     )
 
-    # Loss panel
+    # Energy loss panel (Panel B)
     current_top = legend_bottom - layout["legend_bottom_margin"]
-    loss_bottom = current_top - layout["loss_height"]
-    logger.info("Creating loss panel...")
-    _plot_loss_panel(
+    energy_loss_bottom = current_top - layout["energy_loss_height"]
+    logger.info("Creating energy loss panel...")
+    _plot_energy_loss_panel(
         fig=fig,
         column_left=left_col_left,
         column_width=left_col_width,
-        bottom=loss_bottom,
-        height=layout["loss_height"],
+        bottom=energy_loss_bottom,
+        height=layout["energy_loss_height"],
+        loss_df=loss_df,
+        category_key="category_value",
+        hue_values=hue_values,
+        colors=colors,
+        show_ylabel=True,
+        xlim=(left_xmin, left_xmax),
+        **fmt,
+    )
+
+    # Cross-entropy loss panel (Panel C)
+    current_top = energy_loss_bottom - layout["energy_loss_bottom_margin"]
+    ce_loss_bottom = current_top - layout["ce_loss_height"]
+    logger.info("Creating cross-entropy loss panel...")
+    _plot_ce_loss_panel(
+        fig=fig,
+        column_left=left_col_left,
+        column_width=left_col_width,
+        bottom=ce_loss_bottom,
+        height=layout["ce_loss_height"],
         loss_df=loss_df,
         category_key="category_value",
         hue_values=hue_values,
@@ -1080,7 +1173,6 @@ def plot_training_overview(
         show_ylabel=True,
         show_legend=True,
         xlim=(left_xmin, left_xmax),
-        energy_loss_scale=energy_loss_scale,
         **fmt,
     )
 
@@ -1144,44 +1236,27 @@ def plot_training_overview(
     logger.info(f"Performance panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
 
     # Ridge plots - align bottom with left column loss panel
-    # Calculate required ridge_height to align bottoms properly
     ridge_top = performance_bottom - layout["performance_pad"]
 
-    # The ridge plot function calculates:
-    # spacing = ridge_height / n_subplots * (1 - ridge_overlap)
-    # plot_height = ridge_height / n_subplots * 1.4
-    # bottom_position = ridge_top - (n_subplots - 1) * spacing - plot_height
-    #
-    # We want: bottom_position = loss_bottom
+    # Calculate ridge_height to align bottom with ce_loss_bottom
+    # The ridge plot function uses (with overlap=0):
+    #   spacing = ridge_height / n_subplots
+    #   plot_height = ridge_height / n_subplots * 1.4
+    #   bottom = ridge_top - (n_subplots - 1) * spacing - plot_height
+    #          = ridge_top - ridge_height * (n_subplots + 0.4) / n_subplots
     # Solving for ridge_height:
-    # loss_bottom = ridge_top - (n_subplots - 1) * (ridge_height / n_subplots * (1 - ridge_overlap)) - (ridge_height / n_subplots * 1.4)
-    # loss_bottom = ridge_top - ridge_height * [(n_subplots - 1) * (1 - ridge_overlap) / n_subplots + 1.4 / n_subplots]
-    # ridge_height = (ridge_top - loss_bottom) / [(n_subplots - 1) * (1 - ridge_overlap) / n_subplots + 1.4 / n_subplots]
-
+    #   ridge_height = (ridge_top - ce_loss_bottom) * n_subplots / (n_subplots + 0.4)
     n_subplots = len(subplot_values)
     if n_subplots > 0:
-        denominator = (n_subplots - 1) * (
-            1 - layout["ridge_overlap"]
-        ) / n_subplots + 1.4 / n_subplots
-        ridge_height = (ridge_top - loss_bottom) / denominator
+        ridge_height = (ridge_top - ce_loss_bottom) * n_subplots / (n_subplots + 0.4)
     else:
-        ridge_height = ridge_top - loss_bottom
+        ridge_height = ridge_top - ce_loss_bottom
 
     logger.info("Creating ridge plots...")
     logger.info(f"Subplot values for ridges: {subplot_values}")
     logger.info(
-        f"Ridge plot: top={ridge_top}, bottom target={loss_bottom}, height={ridge_height:.4f}"
+        f"Ridge plot: top={ridge_top}, bottom target={ce_loss_bottom}, height={ridge_height:.4f}, n_subplots={n_subplots}"
     )
-    logger.info(f"Ridge overlap: {layout['ridge_overlap']}, n_subplots: {n_subplots}")
-
-    # Calculate actual bottom position for verification
-    if n_subplots > 0:
-        spacing = ridge_height / n_subplots * (1 - layout["ridge_overlap"])
-        plot_height = ridge_height / n_subplots * 1.4
-        calculated_bottom = ridge_top - (n_subplots - 1) * spacing - plot_height
-        logger.info(
-            f"Calculated ridge bottom: {calculated_bottom:.6f}, target: {loss_bottom:.6f}, diff: {calculated_bottom - loss_bottom:.6f}"
-        )
 
     ridge_axes = _plot_response_ridges(
         fig=fig,
@@ -1225,7 +1300,7 @@ def plot_training_overview(
         # Get actual position of bottommost ridge plot
         bottom_pos = bottom_ax.get_position()
         logger.info(
-            f"Ridge plot actual bottom: {bottom_pos.y0:.4f}, target: {loss_bottom:.4f}, diff: {(bottom_pos.y0 - loss_bottom):.4f}"
+            f"Ridge plot actual bottom: {bottom_pos.y0:.4f}, target: {ce_loss_bottom:.4f}, diff: {(bottom_pos.y0 - ce_loss_bottom):.4f}"
         )
 
     # Align y-labels
@@ -1239,7 +1314,8 @@ def plot_training_overview(
         left_col_left=left_col_left,
         right_col_left=right_col_left,
         accuracy_top=1 - layout["top_margin"],
-        loss_top=legend_bottom - layout["legend_bottom_margin"],
+        energy_loss_top=legend_bottom - layout["legend_bottom_margin"],
+        ce_loss_top=energy_loss_bottom - layout["energy_loss_bottom_margin"],
         performance_top=1 - layout["top_margin"],
         ridge_top=ridge_top,
         layout=layout,
@@ -1321,10 +1397,10 @@ def main():
         help="Temporal resolution in ms per timestep",
     )
     parser.add_argument(
-        "--energy-loss-scale",
-        type=float,
-        default=10.0,
-        help="Scale factor for energy loss display (default: 10.0)",
+        "--validation-frequency",
+        type=int,
+        default=10,
+        help="Frequency of validation epochs (default: 10). Validation epochs are (epoch + 1) %% freq == 0.",
     )
     parser.add_argument(
         "--confidence-measure",
@@ -1396,7 +1472,7 @@ def main():
         confidence_measure=args.confidence_measure,
         accuracy_measure=args.accuracy_measure,
         dt=args.dt,
-        energy_loss_scale=args.energy_loss_scale,
+        validation_frequency=args.validation_frequency,
         config=config,
     )
 

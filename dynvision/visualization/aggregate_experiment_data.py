@@ -48,6 +48,7 @@ def extract_metadata_for_aggregation(
     data_arg_key: str,
     category: str,
     extra_parameters: Sequence[str],
+    extract_status: bool = False,
 ) -> FileMetadata:
     """Extract metadata from config file for a test.
 
@@ -59,9 +60,10 @@ def extract_metadata_for_aggregation(
         data_arg_key: Parameter key to extract
         category: Category key to extract
         extra_parameters: Additional parameter names
+        extract_status: If True, extract status from file path
 
     Returns:
-        FileMetadata with parameter, category, and extra values
+        FileMetadata with parameter, category, extra values, and status
     """
     try:
         return _extract_metadata(
@@ -69,11 +71,10 @@ def extract_metadata_for_aggregation(
             data_arg_key=data_arg_key,
             category=category,
             extra_parameters=extra_parameters,
+            extract_status=extract_status,
         )
     except Exception as exc:
-        logger.error(
-            f"Failed to extract metadata for {test_data_file.name}: {exc}"
-        )
+        logger.error(f"Failed to extract metadata for {test_data_file.name}: {exc}")
         raise
 
 
@@ -84,6 +85,7 @@ def load_test_data_with_metadata(
     category: str,
     extra_parameters: Sequence[str],
     fail_on_missing: bool = True,
+    extract_status: bool = False,
 ) -> Optional[pd.DataFrame]:
     """Load a single test_data.csv file and add metadata columns.
 
@@ -94,6 +96,7 @@ def load_test_data_with_metadata(
         category: Category key to extract
         extra_parameters: Additional parameter names
         fail_on_missing: Whether to raise error on missing files
+        extract_status: If True, extract status from file path
 
     Returns:
         DataFrame with metadata columns added, or None if file missing and fail_on_missing=False
@@ -131,6 +134,7 @@ def load_test_data_with_metadata(
             data_arg_key=data_arg_key,
             category=category,
             extra_parameters=extra_parameters,
+            extract_status=extract_status,
         )
     except Exception as exc:
         msg = f"Failed to extract metadata for {test_data_file}: {exc}"
@@ -141,7 +145,10 @@ def load_test_data_with_metadata(
 
     # Add metadata columns
     df[data_arg_key] = metadata.parameter_value
-    df[category] = metadata.category_value
+    if category:  # Only add category column if category is provided
+        df[category] = metadata.category_value
+    if metadata.status_value is not None:
+        df["status"] = metadata.status_value
     for param_name, param_value in metadata.extra_values.items():
         if param_value is not None:
             df[param_name] = param_value
@@ -157,6 +164,7 @@ def aggregate_test_data(
     extra_parameters: Sequence[str],
     resolution: str = "sample",
     fail_on_missing: bool = True,
+    extract_status: bool = False,
 ) -> tuple[pd.DataFrame, List[Path]]:
     """Aggregate multiple test_data.csv files into single experiment dataset.
 
@@ -168,6 +176,7 @@ def aggregate_test_data(
         extra_parameters: Additional parameter names to extract
         resolution: 'sample' (keep sample-level) or 'class' (aggregate to class-level)
         fail_on_missing: Whether to raise error on missing files
+        extract_status: If True, extract status from file paths
 
     Returns:
         (aggregated_df, successful_files) tuple
@@ -181,9 +190,10 @@ def aggregate_test_data(
     logger.info(f"Aggregating {len(test_data_files)} test data files...")
     logger.info(f"Resolution: {resolution}")
     logger.info(f"Parameter: {data_arg_key}")
-    logger.info(f"Category: {category}")
+    logger.info(f"Category: {category or '(none - single config aggregation)'}")
     if extra_parameters:
         logger.info(f"Additional parameters: {extra_parameters}")
+    logger.info(f"Extract status: {extract_status}")
 
     dfs = []
     successful_files = []
@@ -198,6 +208,7 @@ def aggregate_test_data(
             category=category,
             extra_parameters=extra_parameters,
             fail_on_missing=fail_on_missing,
+            extract_status=extract_status,
         )
 
         if df is not None:
@@ -230,16 +241,32 @@ def aggregate_test_data(
         logger.info("Keeping sample-level resolution (no aggregation)")
 
     # Sort by metadata and time
-    sort_cols = [category, data_arg_key, "times_index"]
-    if resolution == "sample" and "sample_index" in combined.columns:
-        sort_cols.insert(2, "sample_index")
-    elif resolution == "class" and "first_label_index" in combined.columns:
-        sort_cols.insert(2, "first_label_index")
+    # Status sorts first if present, then category, parameter, extra parameters, identifiers, time
+    sort_cols = []
 
-    # Add extra parameters to sort if they exist
+    # Add status first if extracted
+    if extract_status and "status" in combined.columns:
+        sort_cols.append("status")
+
+    # Add category (if provided) and parameter
+    if category:
+        sort_cols.extend([category, data_arg_key])
+    else:
+        sort_cols.append(data_arg_key)
+
+    # Add extra parameters (including auto-extracted epoch from status)
     for param in extra_parameters:
         if param in combined.columns:
-            sort_cols.insert(2, param)
+            sort_cols.append(param)
+
+    # Add identifier columns based on resolution
+    if resolution == "sample" and "sample_index" in combined.columns:
+        sort_cols.append("sample_index")
+    elif resolution == "class" and "first_label_index" in combined.columns:
+        sort_cols.append("first_label_index")
+
+    # Add time index last
+    sort_cols.append("times_index")
 
     logger.info(f"Sorting by: {sort_cols}")
     combined = combined.sort_values(sort_cols).reset_index(drop=True)
@@ -275,7 +302,7 @@ def validate_aggregated_data(df: pd.DataFrame, resolution: str) -> None:
     for col in required_cols:
         nan_count = df[col].isna().sum()
         if nan_count > 0:
-            logger.warning(f"  ⚠️  Column '{col}' has {nan_count} NaN values")
+            logger.warning(f"    Column '{col}' has {nan_count} NaN values")
 
     # Summary statistics
     logger.info(f"  Shape: {df.shape}")
@@ -320,8 +347,8 @@ parser.add_argument(
 parser.add_argument(
     "--category",
     type=str,
-    required=True,
-    help="Category key to extract from file paths (e.g., 'rctype', 'tsteps')",
+    default="",
+    help="Category key to extract from file paths (e.g., 'rctype', 'tsteps'). Empty string for single config aggregation.",
 )
 parser.add_argument(
     "--additional_parameters",
@@ -350,6 +377,9 @@ if __name__ == "__main__":
     # Create output directory
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
+    # Determine if status extraction is requested based on additional_parameters
+    extract_status = 'status' in (args.additional_parameters or [])
+
     # Log configuration
     logger.info("=" * 80)
     logger.info("STAGE 2: EXPERIMENT DATA AGGREGATION")
@@ -362,6 +392,8 @@ if __name__ == "__main__":
     if args.additional_parameters:
         logger.info(f"Additional parameters: {args.additional_parameters}")
     logger.info(f"Resolution: {args.sample_resolution}")
+    if extract_status:
+        logger.info("Extract status: True (detected from additional_parameters)")
     logger.info(f"Fail on missing inputs: {args.fail_on_missing_inputs}")
 
     try:
@@ -384,6 +416,7 @@ if __name__ == "__main__":
             extra_parameters=args.additional_parameters or [],
             resolution=args.sample_resolution,
             fail_on_missing=args.fail_on_missing_inputs,
+            extract_status=extract_status,
         )
 
         # Validate
@@ -393,12 +426,12 @@ if __name__ == "__main__":
         logger.info(f"\nSaving aggregated data to: {args.output}")
         args.output.parent.mkdir(parents=True, exist_ok=True)
         aggregated_df.to_csv(args.output, index=False)
-        logger.info(f"✅ Successfully saved {len(aggregated_df)} rows")
+        logger.info(f" Successfully saved {len(aggregated_df)} rows")
 
         # Report on skipped files if any
         skipped_count = len(args.test_data) - len(successful_files)
         if skipped_count > 0:
-            logger.warning(f"\n⚠️  Skipped {skipped_count} files due to errors")
+            logger.warning(f"\n  Skipped {skipped_count} files due to errors")
             logger.warning("See warnings above for details")
 
     except Exception as e:
@@ -417,9 +450,13 @@ if __name__ == "__main__":
     logger.info(f"Columns: {len(aggregated_df.columns)}")
 
     if args.category in aggregated_df.columns:
-        logger.info(f"Unique {args.category} values: {aggregated_df[args.category].unique()}")
+        logger.info(
+            f"Unique {args.category} values: {aggregated_df[args.category].unique()}"
+        )
     if args.parameter in aggregated_df.columns:
-        logger.info(f"Unique {args.parameter} values: {aggregated_df[args.parameter].unique()}")
+        logger.info(
+            f"Unique {args.parameter} values: {aggregated_df[args.parameter].unique()}"
+        )
     if "times_index" in aggregated_df.columns:
         logger.info(f"Time steps: {sorted(aggregated_df['times_index'].unique())}")
 
@@ -430,5 +467,3 @@ if __name__ == "__main__":
         logger.info(
             f"Presentation labels: {sorted(aggregated_df['first_label_index'].unique())}"
         )
-
-    logger.info("\n✅ Stage 2 aggregation completed successfully!")

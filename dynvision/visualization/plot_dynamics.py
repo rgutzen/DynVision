@@ -33,6 +33,8 @@ from dynvision.utils.visualization_utils import (
     peak_ratio,
     peak_time,
     peak_height,
+    format_parameter_value,
+    DT_CONVERT_PARAMS,
 )
 
 # Import functions from plot_responses.py
@@ -48,12 +50,14 @@ from dynvision.visualization.plot_responses import (
 )
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
-)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Layout parameters for the 4-panel figure
 DYNAMICS_LAYOUT = {
@@ -83,57 +87,59 @@ DYNAMICS_STYLE = {
 }
 
 
-def determine_experiment_info(experiment):
-    """Determine experiment type and corresponding labels from experiment name."""
+def determine_experiment_info(experiment, config=None):
+    """Determine experiment type and corresponding labels from experiment name.
+
+    Args:
+        experiment: Experiment name (e.g., 'duration', 'contrast', 'interval')
+        config: Optional config dict containing 'naming' for display names
+
+    Returns:
+        Dictionary with experiment info including type, labels, and metric
+    """
+    # Get naming dict from config
+    naming = config.get("naming", {}) if config else {}
+
     if "duration" in experiment.lower():
+        param_name = naming.get("duration", "Duration")
+        experiment_name = naming.get(f"duration_experiment", param_name)
         return {
             "type": "duration",
-            "label": "$D$",
-            "full_label": "Duration ($D$)",
-            "metric": "peak_height",
-            "y_label": "Peak Response",
+            "label": param_name,
+            "full_label": f"{experiment_name} ({param_name})",
+            "metric": "summed_response",
+            "y_label": "Summed Response",
         }
     elif "contrast" in experiment.lower():
+        param_name = naming.get("contrast", "Contrast")
+        experiment_name = naming.get(f"contrast_experiment", param_name)
         return {
             "type": "contrast",
-            "label": "$C$",
-            "full_label": "Contrast ($C$)",
+            "label": param_name,
+            "full_label": f"{experiment_name} ({param_name})",
             "metric": "peak_time",
             "y_label": "Peak Time",
         }
     elif "interval" in experiment.lower():
+        param_name = naming.get("interval", "Interval")
+        experiment_name = naming.get(f"interval_experiment", param_name)
         return {
             "type": "interval",
-            "label": "$I$",
-            "full_label": "Interval ($I$)",
+            "label": param_name,
+            "full_label": f"{experiment_name} ({param_name})",
             "metric": "peak_ratio",
             "y_label": "Peak Ratio",
         }
     else:
+        param_name = naming.get(experiment.lower(), experiment.capitalize())
+        experiment_name = naming.get(f"{experiment.lower()}_experiment", param_name)
         return {
             "type": "unknown",
-            "label": "$\\Delta_s$",
-            "full_label": f"$\\Delta_s$ ({experiment})",
+            "label": param_name,
+            "full_label": f"{experiment_name} ({param_name})",
             "metric": "peak_height",
             "y_label": "Peak Height",
         }
-
-
-def format_parameter_value(value, parameter, dt=None):
-    """Format parameter values with appropriate units."""
-    timestep_params = ["tsteps", "idle"]
-    ms_params = ["tau", "trc", "tsk", "lossrt", "duration", "interval"]
-
-    if dt is not None and parameter.lower() in timestep_params:
-        return f"{int(float(value) * dt)} ms"
-    elif parameter.lower() in ms_params:
-        return f"{int(float(value))} ms"
-    elif str(value).lower() in ["true", "false"]:
-        return str(value).capitalize()
-    elif parameter.lower() in ["contrast", "noiselevel"]:
-        return f"{float(value):.2f}"
-    else:
-        return str(value).capitalize()
 
 
 def add_panel_labels(fig):
@@ -167,7 +173,7 @@ def add_panel_labels(fig):
     )
 
     # Right side panel labels (C and D)
-    right_x = plots_start + left_width + gap_width + panel_x_offset
+    right_x = plots_start + left_width + gap_width + 1.5 * panel_x_offset
     fig.text(
         x=right_x,
         y=upper_top + panel_y_offset,
@@ -189,7 +195,17 @@ def add_panel_labels(fig):
 
 
 def calculate_metrics(df, focus_layer, parameter, category, metric, dt=None):
-    """Calculate metrics (peak ratio, peak time, peak height) for summary plot."""
+    """Calculate metrics for summary plot.
+
+    Each metric is calculated independently for each (category, sample_index, seed)
+    combination across all parameter values, producing one metric value per parameter value.
+
+    If sample_index is not available, first_label_index is used as a fallback.
+    If seed column exists, metrics are calculated separately for each seed.
+
+    For 'summed_response', normalization (divide by max) and baseline subtraction
+    (subtract min) are applied after calculation to each group independently.
+    """
     df = df.copy()
     metric_col = f"{focus_layer}_{metric}"
 
@@ -198,96 +214,149 @@ def calculate_metrics(df, focus_layer, parameter, category, metric, dt=None):
 
     df[metric_col] = np.nan
 
-    # Group by parameter, category, AND first_label_index to calculate metrics per stimulus set
-    for group_key, group in df.groupby([parameter, category, "first_label_index"]):
-        param_val, cat_val, pres_label = group_key
-        logger.debug(f"Processing group: {param_val}, {cat_val}, {pres_label}")
+    # Log dataset statistics
+    response_col = f"{focus_layer}_response_avg"
+    n_samples = df["sample_index"].nunique() if "sample_index" in df.columns else 1
+    n_times = df["times_index"].nunique()
+    n_categories = df[category].nunique()
+    n_params = df[parameter].nunique()
+    n_seeds = df["seed"].nunique() if "seed" in df.columns else 1
+    n_first_label = (
+        df["first_label_index"].nunique() if "first_label_index" in df.columns else 1
+    )
 
-        # Sort by times_index to ensure correct temporal order
-        group = group.sort_values("times_index")
+    logger.info(
+        f"Calculating {metric} for {focus_layer}: "
+        f"{n_samples} samples (from {n_first_label} classes) × {n_times} timesteps × {n_categories} categories × "
+        f"{n_params} parameter values × {n_seeds} seeds"
+    )
 
-        response_col = f"{focus_layer}_response_avg"
-        if response_col not in group.columns:
-            continue
+    # Build groupby columns: category + sample identifier + seed (if available)
+    groupby_cols = [category]
 
-        if len(group) == 0:
-            continue
+    # Use sample_index if available, otherwise fallback to first_label_index
+    if "sample_index" in df.columns:
+        groupby_cols.append("sample_index")
+        entity_col = "sample_index"
+    else:
+        groupby_cols.append("first_label_index")
+        entity_col = "first_label_index"
 
-        try:
-            entity_col = (
-                "sample_index" if "sample_index" in group.columns else "__entity__"
-            )
-            if entity_col == "__entity__":
-                group_with_entity = group.assign(__entity__=0)
-            else:
-                group_with_entity = group.assign(sample_index=group["sample_index"])
+    # Add seed to group by if available (metrics calculated separately per seed)
+    if "seed" in df.columns:
+        groupby_cols.append("seed")
+        has_seed = True
+    else:
+        has_seed = False
 
-            duplicates = (
-                group_with_entity.groupby([entity_col, "times_index"])[response_col]
-                .count()
-                .gt(1)
-            )
-            if duplicates.any():
-                duplicate_pairs = duplicates[duplicates].index.tolist()
-                logger.warning(
-                    "Multiple response values detected for %s | %s | %s at %d combinations; averaging",
-                    param_val,
-                    cat_val,
-                    pres_label,
-                    len(duplicate_pairs),
-                )
-
-            pivot = (
-                group_with_entity.pivot_table(
-                    index=entity_col,
-                    columns="times_index",
-                    values=response_col,
-                    aggfunc="mean",
-                )
-                .sort_index(axis=0)
-                .sort_index(axis=1)
-            )
-
-            pivot = pivot.dropna(how="all", axis=0)
-            pivot = pivot.dropna(how="all", axis=1)
-            if pivot.empty:
-                continue
-
-            response_array = pivot.to_numpy(dtype=np.float32)
-            if response_array.size == 0:
-                continue
-
-            if np.isnan(response_array).any():
-                response_array = np.nan_to_num(response_array, nan=0.0)
-
-            response_tensor = torch.from_numpy(response_array)
-
-            if metric == "peak_ratio":
-                metric_tensor = peak_ratio(response_tensor, min_delay=5)
-            elif metric == "peak_time":
-                metric_tensor = peak_time(response_tensor).float()
-                if dt is not None:
-                    metric_tensor = metric_tensor * dt
-            elif metric == "peak_height":
-                metric_tensor = peak_height(response_tensor)
-            else:
-                continue
-
-            metric_vector = metric_tensor.detach().cpu().numpy()
-            entity_values = pivot.index.to_numpy()
-            metrics_map = {
-                entity: float(value) if np.isfinite(value) else np.nan
-                for entity, value in zip(entity_values, metric_vector)
-            }
-
-            df.loc[group.index, metric_col] = (
-                group_with_entity[entity_col].map(metrics_map).to_numpy()
-            )
-
-        except Exception as e:
+    for group_key, group in df.groupby(groupby_cols):
+        # Unpack group_key based on what columns we grouped by
+        if has_seed:
+            cat_val, entity_val, seed_val = group_key
             logger.debug(
-                f"Error calculating {metric} for {param_val}, {cat_val}, {pres_label}: {e}"
+                f"Processing {metric}: category={cat_val}, {entity_col}={entity_val}, seed={seed_val}"
             )
+        else:
+            cat_val, entity_val = group_key
+            logger.debug(
+                f"Processing {metric}: category={cat_val}, {entity_col}={entity_val}"
+            )
+
+        # For each parameter value in this group, calculate the metric
+        for param_val in group[parameter].unique():
+            param_group = group[group[parameter] == param_val].sort_values(
+                "times_index"
+            )
+
+            if len(param_group) == 0 or response_col not in param_group.columns:
+                continue
+
+            try:
+                time_series_grouped = param_group.groupby("times_index")[
+                    response_col
+                ].mean()
+
+                # Get values in sorted order by times_index
+                time_series = time_series_grouped.sort_index().values
+
+                if len(time_series) == 0 or np.isnan(time_series).all():
+                    continue
+
+                # Convert to tensor (shape: [1, n_timepoints])
+                response_tensor = torch.from_numpy(
+                    np.array([time_series], dtype=np.float32)
+                )
+
+                # Calculate metric
+                if metric == "peak_ratio":
+                    if param_val == 0:
+                        # Skip interval=0 for peak_ratio (ill-defined with single/overlapping pulses)
+                        continue
+                    metric_value = peak_ratio(response_tensor, min_delay=5)[0].item()
+                    # Debug logging for peak_ratio
+                    if metric_value == 0:
+                        logger.info(
+                            f"peak_ratio={metric_value:.3f} for {parameter}={param_val}, {category}={cat_val}, "
+                            f"{entity_col}={entity_val}. Response shape: {response_tensor.shape}, "
+                            f"range: [{time_series.min():.3f}, {time_series.max():.3f}]"
+                        )
+                        logger.warning(
+                            f"peak_ratio=0 for {parameter}={param_val}, {category}={cat_val}, {entity_col}={entity_val}. "
+                            f"Possible causes: (1) <2 positive peaks, or (2) peaks <5 timesteps apart"
+                        )
+                        # breakpoint()
+                elif metric == "peak_time":
+                    metric_value = peak_time(response_tensor)[0].item()
+                    if dt is not None:
+                        metric_value *= dt
+                elif metric == "peak_height":
+                    metric_value = peak_height(response_tensor)[0].item()
+                elif metric == "summed_response":
+                    # Sum over time (no normalization yet)
+                    metric_value = response_tensor.sum().item()
+                else:
+                    continue
+
+                # Store metric value for all rows in this param_group
+                df.loc[param_group.index, metric_col] = metric_value
+
+            except Exception as e:
+                logger.debug(
+                    f"Error calculating {metric} for param={param_val}, "
+                    f"category={cat_val}, entity={entity_val}: {e}"
+                )
+
+    # Post-process summed_response: normalize by max and optionally subtract baseline
+    if metric == "summed_response":
+        logger.info(
+            f"Normalizing {metric} for each (category, {entity_col}, seed) combination"
+        )
+
+        # Group by category, entity, and seed (if available) to normalize across parameter values
+        norm_groupby_cols = [category, entity_col]
+        if "seed" in df.columns:
+            norm_groupby_cols.append("seed")
+
+        for norm_key, norm_group in df.groupby(norm_groupby_cols):
+            # Get all metric values for this combination
+            metric_values = norm_group[metric_col].dropna()
+
+            if len(metric_values) == 0:
+                continue
+
+            # Subtract minimum (baseline correction)
+            min_val = 0  # metric_values.min()
+            baseline_corrected = metric_values - min_val
+
+            # Normalize by maximum
+            max_val = baseline_corrected.max()
+
+            if max_val > 0:
+                normalized = baseline_corrected / max_val
+                df.loc[metric_values.index, metric_col] = normalized
+            else:
+                # All values at or below baseline
+                df.loc[metric_values.index, metric_col] = 0.0
 
     return df
 
@@ -347,13 +416,21 @@ def create_panel_a(
         **RESPONSES_FORMATTING,
     )
 
+    # Remove x-axis margins for all ridge plot axes
+    for ax in ridge_axes:
+        if hasattr(ax, "get_xlim"):
+            xlim = ax.get_xlim()
+            # Set xlim to data range with no margins
+            ax.set_xlim(left=0, right=xlim[1])
+            ax.margins(x=0)
+
     # Add custom Y-axis label for the panel
-    exp_info = determine_experiment_info(parameter)
+    exp_info = determine_experiment_info(parameter, config)
     param_display = format_parameter_value(param_value, parameter, dt)
     fig.text(
         x=DYNAMICS_LAYOUT["y_label_x_position"],
         y=(upper_top + upper_bottom) / 2,
-        s=f"Layer Responses ({exp_info['label']} = {param_display})",
+        s=f"Layer Response ({exp_info['label']} = {param_display})",
         rotation=90,
         verticalalignment="center",
         fontsize=RESPONSES_FORMATTING["fontsize_label"],
@@ -429,12 +506,20 @@ def create_panel_b(
         **RESPONSES_FORMATTING,
     )
 
+    # Remove x-axis margins for all ridge plot axes
+    for ax in ridge_axes:
+        if hasattr(ax, "get_xlim"):
+            xlim = ax.get_xlim()
+            # Set xlim to data range with no margins
+            ax.set_xlim(left=0, right=xlim[1])
+            ax.margins(x=0)
+
     # Add custom Y-axis label
     layer_display = get_display_name(focus_layer, config) or focus_layer.upper()
     fig.text(
         x=DYNAMICS_LAYOUT["y_label_x_position"],
         y=(lower_top + lower_bottom) / 2,
-        s=f"Layer {layer_display} Response",
+        s=f"Layer Response ({layer_display})",
         rotation=90,
         verticalalignment="center",
         fontsize=RESPONSES_FORMATTING["fontsize_label"],
@@ -482,9 +567,18 @@ def create_panel_d(
     lower_top = DYNAMICS_LAYOUT["lower_top"]
     lower_bottom = DYNAMICS_LAYOUT["lower_bottom"]
 
-    summary_height = (lower_top - lower_bottom) * 0.6
-    summary_center = lower_bottom + (lower_top - lower_bottom) / 2
-    summary_bottom = summary_center - summary_height / 2
+    # Calculate the actual visual height of Panel B ridge plots to match alignment
+    # Ridge plots use overlap, so actual bottom is different from panel bottom
+    n_param_values = len(df[parameter].unique())
+    panel_height = lower_top - lower_bottom
+    ridge_overlap = 0.2
+    spacing = panel_height / n_param_values * (1 - ridge_overlap)
+    plot_height = panel_height / n_param_values * 1.4
+    actual_bottom = lower_top - (n_param_values - 1) * spacing - plot_height
+
+    # Use the ridge plots visual area for Panel D
+    summary_height = lower_top - actual_bottom
+    summary_bottom = actual_bottom
     summary_left = plots_start + left_width + gap_width
 
     summary_ax = fig.add_axes(
@@ -537,18 +631,38 @@ def create_panel_d(
             line.set_markeredgewidth(DYNAMICS_STYLE["marker_edge_width"])
 
         param_values = df[parameter].unique()
-        summary_ax.set_xticks(sorted(param_values))
+        param_values_sorted = sorted(param_values)
+        summary_ax.set_xticks(param_values_sorted)
 
-        if dt is not None and parameter.lower() in ["tau", "interval", "duration"]:
-            summary_ax.set_xticklabels(
-                [f"{int(x * dt)}" for x in sorted(param_values)]
-            )
+        # Remove x-axis and y-axis margins
+        if len(param_values_sorted) > 0:
+            summary_ax.set_xlim(min(param_values_sorted), max(param_values_sorted))
+        summary_ax.margins(y=0)
+
+        # Convert tick labels to ms if parameter needs dt conversion
+        if dt is not None and parameter.lower() in DT_CONVERT_PARAMS:
+            summary_ax.set_xticklabels([f"{int(x * dt)}" for x in param_values_sorted])
 
         summary_ax.grid(True, which="major", linestyle=":", alpha=0.3)
 
         if exp_info["metric"] == "peak_ratio":
             summary_ax.axhline(
                 y=1, color="gray", linestyle="--", linewidth=1, alpha=0.7
+            )
+        elif exp_info["metric"] == "summed_response":
+            # Add linear prediction reference line
+            # Linear prediction: normalized value = parameter / max_parameter
+            param_values_unique = sorted(param_values)
+            max_param = max(param_values_unique)
+            linear_prediction = [p / max_param for p in param_values_unique]
+            summary_ax.plot(
+                param_values_unique,
+                linear_prediction,
+                "k--",
+                linewidth=1.5,
+                alpha=0.5,
+                label="Linear prediction",
+                zorder=1,
             )
     else:
         summary_ax.text(
@@ -561,9 +675,11 @@ def create_panel_d(
             alpha=0.7,
         )
 
-    summary_ax.set_xlabel(
-        exp_info["full_label"], fontsize=RESPONSES_FORMATTING["fontsize_label"]
-    )
+    # Add unit to x-axis label if parameter was dt-converted
+    xlabel = exp_info["full_label"]
+    if dt is not None and parameter.lower() in DT_CONVERT_PARAMS:
+        xlabel = f"{xlabel} (ms)"
+    summary_ax.set_xlabel(xlabel, fontsize=RESPONSES_FORMATTING["fontsize_label"])
     summary_ax.set_ylabel(
         exp_info["y_label"],
         fontsize=RESPONSES_FORMATTING["fontsize_label"],
@@ -572,7 +688,7 @@ def create_panel_d(
     summary_ax.tick_params(
         axis="both", labelsize=RESPONSES_FORMATTING["fontsize_tick"]
     )
-    sns.despine(ax=summary_ax, left=True)
+    sns.despine(ax=summary_ax, left=True, bottom=True)
 
     return summary_ax
 
@@ -605,7 +721,7 @@ def plot_unified_dynamics(
 
     # Determine experiment info
     experiment = experiment or parameter
-    exp_info = determine_experiment_info(experiment)
+    exp_info = determine_experiment_info(experiment, config)
 
     # Extract dimension values using plot_responses functions
     layer_names = _extract_dimension_values(df, "layers", "layers", config)
@@ -709,6 +825,7 @@ def plot_unified_dynamics(
                 "legend_height": legend_height,
                 "left_margin": legend_left,
                 "column_width": legend_width,
+                "max_elements": 4,
             }
         ),
     )

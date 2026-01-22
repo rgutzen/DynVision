@@ -71,6 +71,9 @@ def identify_metric_columns(
         parts = col.split(" - ")
         metric_name = parts[-1].strip() if len(parts) >= 2 else col
 
+        if metric_name.startswith("_"):
+            continue
+
         metric_groups.setdefault(metric_name, []).append(col)
 
     return metric_groups
@@ -125,8 +128,11 @@ def calculate_statistics(
     Returns:
         Dictionary of statistics (slope = dy/dx, inverse_slope = dx/dy)
     """
+    # Convert series to numeric, coercing errors to NaN
+    series_numeric = pd.to_numeric(series, errors="coerce")
+
     # Remove NaN values from y series
-    clean_series = series.dropna()
+    clean_series = series_numeric.dropna()
 
     if len(clean_series) == 0:
         return {
@@ -154,15 +160,23 @@ def calculate_statistics(
 
     # Calculate slope using actual x-values (not indices)
     if len(clean_series) > 1 and x_series is not None:
+        # Convert x_series to numeric as well
+        x_series_numeric = pd.to_numeric(x_series, errors="coerce")
+
         # Align x and y by removing NaN from both
         # Get x values at the same indices as clean y values
-        clean_x_series = x_series.loc[clean_series.index].dropna()
+        clean_x_series = x_series_numeric.loc[clean_series.index].dropna()
         # Get y values at the same indices as clean x values
         clean_series_aligned = clean_series.loc[clean_x_series.index]
 
         if len(clean_x_series) > 1 and len(clean_series_aligned) > 1:
             x_values = clean_x_series.values
             y_values = clean_series_aligned.values
+
+            # Remove any remaining NaN values
+            mask = ~(np.isnan(x_values) | np.isnan(y_values))
+            x_values = x_values[mask]
+            y_values = y_values[mask]
 
             # Check for constant x or y (would make slope infinite or zero)
             if np.std(x_values) > 1e-10 and np.std(y_values) > 1e-10:
@@ -369,6 +383,7 @@ def process_wandb_csv(
     metric_filter: Optional[List[str]] = None,
     category_hints: Optional[List[str]] = None,
     add_transforms: bool = True,
+    max_epoch: int = 300,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Process W&B CSV export and calculate statistics.
@@ -378,6 +393,7 @@ def process_wandb_csv(
         metric_filter: Optional list of metrics to include
         category_hints: Optional hints for category parameter keys
         add_transforms: Add unit transformations (bytes→GB, seconds→minutes)
+        max_epoch: Maximum epoch value to include (default: 300)
 
     Returns:
         (processed_dataframe, statistics_summary)
@@ -391,6 +407,35 @@ def process_wandb_csv(
     logger.info(
         f"X variable: '{x_var}'" + (f" ({x_unit_type})" if x_unit_type else "")
     )
+
+    # Filter epoch values by max_epoch (set values > max_epoch to NaN)
+    if max_epoch is not None:
+        # Find all epoch columns
+        epoch_cols = [col for col in df.columns if "epoch" in col.lower()]
+        if epoch_cols:
+            total_filtered = 0
+            for epoch_col in epoch_cols:
+                # Count values that will be filtered
+                filtered_count = (df[epoch_col] > max_epoch).sum()
+                total_filtered += filtered_count
+                # Set epoch values > max_epoch to NaN
+                df.loc[df[epoch_col] > max_epoch, epoch_col] = np.nan
+
+            if total_filtered > 0:
+                logger.info(
+                    f"Filtered {total_filtered} epoch values > {max_epoch} across {len(epoch_cols)} epoch column(s)"
+                )
+
+            # Remove rows where ALL values are NaN (optional cleanup)
+            initial_rows = len(df)
+            df = df.dropna(how="all", subset=epoch_cols)
+            if len(df) < initial_rows:
+                logger.info(
+                    f"Removed {initial_rows - len(df)} rows with no valid epoch data"
+                )
+            logger.info(
+                f"Shape after filtering: {df.shape[0]} rows × {df.shape[1]} columns"
+            )
 
     metric_groups = identify_metric_columns(df)
     if metric_filter:
@@ -416,14 +461,17 @@ def process_wandb_csv(
             for _, row in df.iterrows():
                 # Only include rows where both x and y values are not NaN
                 if pd.notna(row[col]) and pd.notna(row[x_var]):
-                    processed_data.append(
-                        {
-                            x_var: row[x_var],
-                            "metric": metric_name,
-                            "value": row[col],
-                            **category_values,
-                        }
-                    )
+                    # Create separate rows for each category
+                    for cat_name, cat_value in category_values.items():
+                        processed_data.append(
+                            {
+                                x_var: row[x_var],
+                                "metric": metric_name,
+                                "value": row[col],
+                                "category": cat_name,
+                                "category_values": cat_value,
+                            }
+                        )
 
     processed_df = pd.DataFrame(processed_data)
     logger.info(f"Processed shape: {processed_df.shape}")
@@ -435,10 +483,12 @@ def process_wandb_csv(
         logger.error("  2. All values are NaN")
         logger.error(f"Sample column names from CSV: {list(df.columns[:5])}")
         logger.error(f"Looking for categories: {category_keys}")
-        raise ValueError("No data extracted - check category parameter names match column naming pattern")
+        raise ValueError(
+            "No data extracted - check category parameter names match column naming pattern"
+        )
 
     # Warn if any category has very few data points
-    group_cols = ["metric"] + [k for k in category_keys if k in processed_df.columns]
+    group_cols = ["metric", "category", "category_values"]
     for group_key, group_df in processed_df.groupby(group_cols):
         if len(group_df) < 2:
             logger.warning(
@@ -446,7 +496,7 @@ def process_wandb_csv(
             )
 
     # Calculate statistics
-    group_cols = ["metric"] + [k for k in category_keys if k in processed_df.columns]
+    group_cols = ["metric", "category", "category_values"]
     stats_data = []
 
     for group_key, group_df in processed_df.groupby(group_cols):
@@ -464,10 +514,11 @@ def process_wandb_csv(
         stats_df = add_unit_transformations(stats_df, x_unit_type)
 
     # Log category values
-    for cat_key in category_keys:
-        if cat_key in processed_df.columns:
-            unique_vals = processed_df[cat_key].unique()
-            logger.info(f"  {cat_key}: {list(unique_vals)}")
+    if "category" in processed_df.columns:
+        for cat_name in processed_df["category"].unique():
+            cat_df = processed_df[processed_df["category"] == cat_name]
+            unique_vals = cat_df["category_values"].unique()
+            logger.info(f"  {cat_name}: {list(unique_vals)}")
 
     return processed_df, stats_df
 
@@ -482,6 +533,7 @@ Examples:
   %(prog)s --data training_metrics.csv
   %(prog)s --data metrics.csv --output stats.csv --metrics train_accuracy val_accuracy
   %(prog)s --data metrics.csv --categories feedback rctype --verbose
+  %(prog)s --data metrics.csv --max-epoch 100         # Only use first 100 epochs
   %(prog)s --data memory_data.csv --output stats.csv  # Auto-converts bytes→GB
   %(prog)s --data timing_data.csv --no-transform      # Disable auto-conversion
 
@@ -489,6 +541,7 @@ Notes:
   - Automatically detects and transforms memory metrics (bytes→GB)
   - Automatically detects and transforms time metrics (seconds→minutes)
   - Detects x-axis units and adjusts slopes accordingly
+  - Filters data by --max-epoch if x-axis contains 'epoch' (default: 300)
   - Example: if x="time (seconds)" and y="epoch", slope is epochs/sec
     - slope_per_min gives epochs/minute
   - Example: if x="time (seconds)" and y="memory (bytes)":
@@ -525,6 +578,12 @@ Notes:
         help="Disable automatic unit transformations (bytes→GB, seconds→minutes)",
     )
     parser.add_argument(
+        "--max-epoch",
+        type=int,
+        default=300,
+        help="Maximum epoch value to include in statistics (default: 300)",
+    )
+    parser.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress info logging"
     )
 
@@ -545,6 +604,7 @@ Notes:
             metric_filter=args.metrics,
             category_hints=args.categories,
             add_transforms=not args.no_transform,
+            max_epoch=args.max_epoch,
         )
     except Exception as e:
         logger.error(f"Processing failed: {e}", exc_info=not args.quiet)

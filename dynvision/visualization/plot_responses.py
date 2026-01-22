@@ -1069,9 +1069,11 @@ def _plot_response_ridges(
                     f"No valid response columns found for any hue value in subplot {subplot_value}"
                 )
 
-            # Add parameter label
+            # Add parameter label with unit formatting
+            from dynvision.utils.visualization_utils import format_parameter_value
             display_name = get_display_name(subplot_key, config)
-            label_text = f"{display_name}={subplot_value}"
+            formatted_value = format_parameter_value(subplot_value, subplot_key, dt)
+            label_text = f"{display_name}={formatted_value}"
             ax.text(
                 0.95,
                 0.25,
@@ -1191,6 +1193,7 @@ def _add_horizontal_legend(
     config: Dict,
     legend_bot: float = None,
     dt: float = 2.0,
+    max_elements: int = 7,
     **kwargs,
 ) -> None:
     """Add horizontal legend for hue dimension.
@@ -1257,7 +1260,7 @@ def _add_horizontal_legend(
         # Get symbol for title
         symbol = get_display_name(hue_key, config)
 
-        n_cols = min(len(legend_elements), 7)
+        n_cols = min(len(legend_elements), max_elements)
         logger.debug(
             f"Adding legend with {len(legend_elements)} elements in {n_cols} columns"
         )
@@ -1274,6 +1277,9 @@ def _add_horizontal_legend(
             title=symbol if hue_var != "layers" else None,
             title_fontsize=fmt["fontsize_legend"],
         )
+        # Make legend title bold
+        if legend.get_title() is not None:
+            legend.get_title().set_fontweight("bold")
     else:
         logger.warning("No legend elements to display")
 

@@ -107,8 +107,8 @@ def _resolve_measure_column(df: pd.DataFrame, requested: str) -> Optional[str]:
 
 # Errorbar configuration for lineplot
 ERRORBAR_CONFIG = {
-    "errorbar": None,  # ("ci", 99.999),  # Default: no errorbars
-    "err_style": "bars",  # Style when errorbars are used
+    "errorbar": None,  # ("se", 1),  # Standard error of mean with shaded area
+    "err_style": "band",  # Shaded band style for errorbars
 }
 
 
@@ -215,6 +215,10 @@ def _plot_accuracy_panel_with_ffonly(
         "model_type" in data_plot.columns
         and "ffonly" in data_plot["model_type"].values
     )
+    has_feedforward = (
+        "model_type" in data_plot.columns
+        and "feedforward" in data_plot["model_type"].values
+    )
 
     full_data = (
         data_plot[data_plot.get("model_type", "full") == "full"]
@@ -224,6 +228,11 @@ def _plot_accuracy_panel_with_ffonly(
     ffonly_data = (
         data_plot[data_plot.get("model_type", "full") == "ffonly"]
         if has_ffonly
+        else pd.DataFrame()
+    )
+    feedforward_data = (
+        data_plot[data_plot.get("model_type", "full") == "feedforward"]
+        if has_feedforward
         else pd.DataFrame()
     )
 
@@ -237,9 +246,14 @@ def _plot_accuracy_panel_with_ffonly(
         {"linestyle": ":", "marker": "P", "markersize": 2},
         {"linestyle": ":", "marker": "X", "markersize": 2},
     ]
+    # Feedforward models (trained without recurrence) shown as dashed grey lines
+    accuracy_styles_feedforward = [
+        {"linestyle": "--", "marker": "", "markersize": 0, "color": "grey"},
+    ]
 
     plotted_accuracy_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
     plotted_confidence_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
+    plotted_accuracy_feedforward: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
     ff_accuracy_markers: Dict[str, bool] = {}
 
     def _plot_series(
@@ -248,6 +262,7 @@ def _plot_accuracy_panel_with_ffonly(
         styles: List[Dict[str, Union[str, float]]],
         storage: List[Tuple[str, str, Dict[str, Union[str, float]]]],
         dataset_label: str,
+        use_errorbars: bool = True,
     ) -> None:
         if len(dataset) == 0:
             return
@@ -263,21 +278,43 @@ def _plot_accuracy_panel_with_ffonly(
                 column,
                 resolved,
             )
-            sns.lineplot(
-                data=dataset,
-                x="time_ms",
-                y=resolved,
-                hue=hue_key if hue_var != "layers" else None,
-                hue_order=hue_values if hue_var != "layers" else None,
-                palette=colors if hue_var != "layers" else None,
-                ax=ax,
-                legend=False,
-                linewidth=fmt["linewidth_main"],
-                alpha=fmt["alpha_line"],
-                **style,
-                **errorbar_settings,
-            )
-            storage.append((column, resolved, style))
+
+            # Only apply errorbar settings if requested (e.g., for accuracy, not confidence)
+            plot_errorbar_settings = errorbar_settings if use_errorbars else {"errorbar": None}
+
+            if "seed_id" in dataset.columns:
+                for seed_val, seed_data in dataset.groupby("seed_id"):
+                    sns.lineplot(
+                        data=seed_data,
+                        x="time_ms",
+                        y=resolved,
+                        hue=hue_key if hue_var != "layers" else None,
+                        hue_order=hue_values if hue_var != "layers" else None,
+                        palette=colors if hue_var != "layers" else None,
+                        ax=ax,
+                        legend=False,
+                        linewidth=fmt["linewidth_main"],
+                        alpha=fmt["alpha_line"],
+                        **style,
+                        **plot_errorbar_settings,
+                    )
+                    storage.append((column, resolved, style))
+            else:
+                sns.lineplot(
+                    data=dataset,
+                    x="time_ms",
+                    y=resolved,
+                    hue=hue_key if hue_var != "layers" else None,
+                    hue_order=hue_values if hue_var != "layers" else None,
+                    palette=colors if hue_var != "layers" else None,
+                    ax=ax,
+                    legend=False,
+                    linewidth=fmt["linewidth_main"],
+                    alpha=fmt["alpha_line"],
+                    **style,
+                    **plot_errorbar_settings,
+                )
+                storage.append((column, resolved, style))
 
     _plot_series(
         dataset=full_data,
@@ -285,6 +322,7 @@ def _plot_accuracy_panel_with_ffonly(
         styles=accuracy_styles_full,
         storage=plotted_accuracy_full,
         dataset_label="full-model accuracy",
+        use_errorbars=True,
     )
     _plot_series(
         dataset=full_data,
@@ -292,12 +330,32 @@ def _plot_accuracy_panel_with_ffonly(
         styles=confidence_styles_full,
         storage=plotted_confidence_full,
         dataset_label="full-model confidence",
+        use_errorbars=False,  # Don't show error bars for confidence traces
     )
+
+    # Plot feedforward-trained models as full time traces (dashed grey lines)
+    if has_feedforward and not feedforward_data.empty:
+        _plot_series(
+            dataset=feedforward_data,
+            requested=requested_accuracy,
+            styles=accuracy_styles_feedforward,
+            storage=plotted_accuracy_feedforward,
+            dataset_label="feedforward-trained accuracy",
+            use_errorbars=True,
+        )
 
     def _draw_ffonly_max_markers(
         dataset: pd.DataFrame,
         requested: List[str],
+        force_color: Optional[str] = None,
     ) -> Dict[str, bool]:
+        """Draw star markers at max accuracy positions.
+
+        Parameters
+        ----------
+        force_color : str, optional
+            If provided, use this color for all markers instead of hue colors.
+        """
         markers_drawn: Dict[str, bool] = {}
         if dataset.empty or not requested:
             return markers_drawn
@@ -329,31 +387,49 @@ def _plot_accuracy_panel_with_ffonly(
                 max_val = trace.max()
                 if pd.isna(max_val) or not np.isfinite(max_val):
                     continue
-                x_pos = valid["time_ms"].max()
+
+                # Place marker at horizontal center of subplot
+                x_min = valid["time_ms"].min()
+                x_max = valid["time_ms"].max()
+                x_pos = (x_min + x_max) / 2
                 if pd.isna(x_pos) or not np.isfinite(x_pos):
                     continue
 
-                if group_val is None:
+                # Determine marker color
+                if force_color:
+                    color = force_color
+                elif group_val is None:
                     color_key = None
+                    if colors:
+                        color = (
+                            colors.get(color_key)
+                            or colors.get(str(color_key))
+                            or colors.get(str(color_key).lower())
+                        )
+                        if not color:
+                            # Fall back to the first palette color for visibility
+                            color = next(iter(colors.values()), "black")
+                    else:
+                        color = "black"
                 else:
                     color_key = _standardize_category_value(str(group_val))
-                if colors:
-                    color = (
-                        colors.get(color_key)
-                        or colors.get(str(color_key))
-                        or colors.get(str(color_key).lower())
-                    )
-                    if not color:
-                        # Fall back to the first palette color for visibility
-                        color = next(iter(colors.values()), "black")
-                else:
-                    color = "black"
+                    if colors:
+                        color = (
+                            colors.get(color_key)
+                            or colors.get(str(color_key))
+                            or colors.get(str(color_key).lower())
+                        )
+                        if not color:
+                            # Fall back to the first palette color for visibility
+                            color = next(iter(colors.values()), "black")
+                    else:
+                        color = "black"
                 ax.scatter(
                     [x_pos],
                     [max_val],
                     color=color,
-                    s=fmt.get("markersize_large", 80),
-                    marker="*",
+                    s=fmt.get("markersize_large", 120),  # Increased from 80 to 120
+                    marker="^",
                     edgecolors="none",
                     zorder=5,
                     alpha=fmt["alpha_line"],
@@ -374,6 +450,13 @@ def _plot_accuracy_panel_with_ffonly(
     if has_ffonly:
         ff_accuracy_markers = _draw_ffonly_max_markers(
             dataset=ffonly_data, requested=requested_accuracy
+        )
+
+    # Also draw star markers for feedforward-trained models (grey to match dashed line)
+    feedforward_accuracy_markers: Dict[str, bool] = {}
+    if has_feedforward and not feedforward_data.empty:
+        feedforward_accuracy_markers = _draw_ffonly_max_markers(
+            dataset=feedforward_data, requested=requested_accuracy, force_color="grey"
         )
 
     if not plotted_accuracy_full and not plotted_confidence_full:
@@ -409,7 +492,7 @@ def _plot_accuracy_panel_with_ffonly(
                 )
 
     if show_ylabel:
-        ax.set_ylabel("Performance", fontsize=fmt["fontsize_axis"], fontweight="bold")
+        ax.set_ylabel("Accuracy", fontsize=fmt["fontsize_axis"], fontweight="bold")
     else:
         ax.set_ylabel("")
 
@@ -423,6 +506,7 @@ def _plot_accuracy_panel_with_ffonly(
             for column in requested_accuracy
             if any(entry[0] == column for entry in plotted_accuracy_full)
             or column in ff_accuracy_markers
+            or any(entry[0] == column for entry in plotted_accuracy_feedforward)
         ]
         confidence_columns_in_plot = [
             column
@@ -465,9 +549,26 @@ def _plot_accuracy_panel_with_ffonly(
                         color="black",
                         linewidth=0,
                         linestyle="none",
-                        marker="*",
+                        marker="^",
                         markersize=12,
-                        label=_append_suffix_to_label(label, "FF-only max"),
+                        label=_append_suffix_to_label(label, "Silenced"),
+                        alpha=fmt["alpha_line"],
+                    )
+                )
+
+            # Add legend entry for feedforward-trained models
+            if has_feedforward and any(
+                entry[0] == column for entry in plotted_accuracy_feedforward
+            ):
+                legend_elements.append(
+                    Line2D(
+                        [0],
+                        [0],
+                        color="grey",
+                        linewidth=fmt["linewidth_main"],
+                        linestyle="--",
+                        marker="",
+                        label=_append_suffix_to_label(label, "FF-trained"),
                         alpha=fmt["alpha_line"],
                     )
                 )
@@ -527,8 +628,19 @@ def _plot_peak_height_panel(
     confidence_cols: Optional[List[str]] = None,
     primary_accuracy: Optional[str] = None,
     primary_confidence: Optional[str] = None,
+    ylabel: str = "Max Performance",
+    show_seed_errorbars: bool = True,
 ) -> None:
-    """Plot max accuracy and confidence vs subplot value for each hue category."""
+    """Plot max accuracy and confidence vs subplot value for each hue category.
+
+    Parameters
+    ----------
+    ylabel : str, default="Max Performance"
+        Y-axis label
+    show_seed_errorbars : bool, default=True
+        If True and multiple seeds present (seed_id or source_file column),
+        show error bars indicating std across seeds
+    """
 
     requested_accuracy = list(accuracy_cols or [])
     requested_confidence = list(confidence_cols or [])
@@ -587,6 +699,9 @@ def _plot_peak_height_panel(
     has_ffonly = (
         "model_type" in row_data.columns and "ffonly" in row_data["model_type"].values
     )
+    has_feedforward = (
+        "model_type" in row_data.columns and "feedforward" in row_data["model_type"].values
+    )
 
     if not has_accuracy and not has_confidence:
         ax.text(
@@ -622,10 +737,24 @@ def _plot_peak_height_panel(
         if has_ffonly
         else pd.DataFrame()
     )
+    feedforward_data = (
+        row_data[row_data.get("model_type", "full") == "feedforward"]
+        if has_feedforward
+        else pd.DataFrame()
+    )
 
     accuracy_plot_data: List[Dict[str, Union[float, str]]] = []
     confidence_plot_data: List[Dict[str, Union[float, str]]] = []
     ff_accuracy_plot_data: List[Dict[str, Union[float, str]]] = []
+    feedforward_accuracy_plot_data: List[Dict[str, Union[float, str]]] = []
+
+    # Determine if we have multiple seeds
+    seed_col = None
+    if "seed_id" in row_data.columns:
+        seed_col = "seed_id"
+    elif "source_file" in row_data.columns:
+        seed_col = "source_file"
+    has_seeds = seed_col is not None and show_seed_errorbars
 
     def _compute_peak_value(subset: pd.DataFrame, column: str) -> Optional[float]:
         if column not in subset.columns:
@@ -643,6 +772,19 @@ def _plot_peak_height_panel(
         if peak_val is None or not np.isfinite(peak_val):
             return None
         return float(peak_val)
+
+    def _compute_peak_per_seed(subset: pd.DataFrame, column: str) -> pd.DataFrame:
+        """Compute peak value for each seed separately."""
+        if column not in subset.columns or seed_col not in subset.columns:
+            return pd.DataFrame()
+
+        results = []
+        for seed_val, seed_data in subset.groupby(seed_col):
+            peak_val = _compute_peak_value(seed_data, column)
+            if peak_val is not None:
+                results.append({seed_col: seed_val, "peak": peak_val})
+
+        return pd.DataFrame(results)
 
     accuracy_label = (
         _format_measure_label(primary_accuracy, "Accuracy")
@@ -668,6 +810,11 @@ def _plot_peak_height_panel(
             if hue_key in ffonly_data.columns and not ffonly_data.empty
             else ffonly_data
         )
+        hue_data_feedforward = (
+            feedforward_data[feedforward_data[hue_key] == hue_val_std]
+            if hue_key in feedforward_data.columns and not feedforward_data.empty
+            else feedforward_data
+        )
 
         for subplot_val in subplot_values:
             subplot_val_std = _standardize_category_value(str(subplot_val))
@@ -681,6 +828,11 @@ def _plot_peak_height_panel(
                 if subplot_key in hue_data_ff.columns and not hue_data_ff.empty
                 else hue_data_ff
             )
+            subset_feedforward = (
+                hue_data_feedforward[hue_data_feedforward[subplot_key] == subplot_val_std]
+                if subplot_key in hue_data_feedforward.columns and not hue_data_feedforward.empty
+                else hue_data_feedforward
+            )
 
             try:
                 x_val = float(subplot_val)
@@ -689,20 +841,39 @@ def _plot_peak_height_panel(
 
             if len(subset_full) > 0:
                 if has_accuracy and accuracy_column:
-                    peak_val = _compute_peak_value(subset_full, accuracy_column)
-                    if peak_val is not None:
-                        accuracy_plot_data.append(
-                            {
-                                "x": x_val,
-                                "y": peak_val,
-                                "hue": hue_val,
-                                "subplot_val": subplot_val,
-                                "metric": accuracy_label,
-                                "model_type": "full",
-                            }
+                    if has_seeds:
+                        # Compute peak per seed and add one row per seed
+                        seed_peaks = _compute_peak_per_seed(
+                            subset_full, accuracy_column
                         )
+                        for _, seed_row in seed_peaks.iterrows():
+                            accuracy_plot_data.append(
+                                {
+                                    "x": x_val,
+                                    "y": seed_row["peak"],
+                                    "hue": hue_val,
+                                    "subplot_val": subplot_val,
+                                    "metric": accuracy_label,
+                                    "model_type": "full",
+                                }
+                            )
+                    else:
+                        # Compute single aggregated peak
+                        peak_val = _compute_peak_value(subset_full, accuracy_column)
+                        if peak_val is not None:
+                            accuracy_plot_data.append(
+                                {
+                                    "x": x_val,
+                                    "y": peak_val,
+                                    "hue": hue_val,
+                                    "subplot_val": subplot_val,
+                                    "metric": accuracy_label,
+                                    "model_type": "full",
+                                }
+                            )
 
                 if has_confidence and confidence_column:
+                    # Always compute single aggregated peak for confidence (no seed-level error bars)
                     peak_val = _compute_peak_value(subset_full, confidence_column)
                     if peak_val is not None:
                         confidence_plot_data.append(
@@ -717,23 +888,71 @@ def _plot_peak_height_panel(
                         )
 
             if has_ffonly and len(subset_ff) > 0 and has_accuracy and accuracy_column:
-                peak_val = _compute_peak_value(subset_ff, accuracy_column)
-                if peak_val is not None:
-                    ff_accuracy_plot_data.append(
-                        {
-                            "x": x_val,
-                            "y": peak_val,
-                            "hue": hue_val,
-                            "subplot_val": subplot_val,
-                            "metric": accuracy_label,
-                            "model_type": "ffonly",
-                        }
-                    )
+                if has_seeds:
+                    # Compute peak per seed and add one row per seed
+                    seed_peaks = _compute_peak_per_seed(subset_ff, accuracy_column)
+                    for _, seed_row in seed_peaks.iterrows():
+                        ff_accuracy_plot_data.append(
+                            {
+                                "x": x_val,
+                                "y": seed_row["peak"],
+                                "hue": hue_val,
+                                "subplot_val": subplot_val,
+                                "metric": accuracy_label,
+                                "model_type": "ffonly",
+                            }
+                        )
+                else:
+                    # Compute single aggregated peak
+                    peak_val = _compute_peak_value(subset_ff, accuracy_column)
+                    if peak_val is not None:
+                        ff_accuracy_plot_data.append(
+                            {
+                                "x": x_val,
+                                "y": peak_val,
+                                "hue": hue_val,
+                                "subplot_val": subplot_val,
+                                "metric": accuracy_label,
+                                "model_type": "ffonly",
+                            }
+                        )
+
+            # Feedforward-trained model data collection
+            if has_feedforward and len(subset_feedforward) > 0 and has_accuracy and accuracy_column:
+                if has_seeds:
+                    # Compute peak per seed and add one row per seed
+                    seed_peaks = _compute_peak_per_seed(subset_feedforward, accuracy_column)
+                    for _, seed_row in seed_peaks.iterrows():
+                        feedforward_accuracy_plot_data.append(
+                            {
+                                "x": x_val,
+                                "y": seed_row["peak"],
+                                "hue": hue_val,
+                                "subplot_val": subplot_val,
+                                "metric": accuracy_label,
+                                "model_type": "feedforward",
+                            }
+                        )
+                else:
+                    # Compute single aggregated peak
+                    peak_val = _compute_peak_value(subset_feedforward, accuracy_column)
+                    if peak_val is not None:
+                        feedforward_accuracy_plot_data.append(
+                            {
+                                "x": x_val,
+                                "y": peak_val,
+                                "hue": hue_val,
+                                "subplot_val": subplot_val,
+                                "metric": accuracy_label,
+                                "model_type": "feedforward",
+                            }
+                        )
 
     if (
         not accuracy_plot_data
         and not confidence_plot_data
         and not ff_accuracy_plot_data
+        and not feedforward_accuracy_plot_data
     ):
         ax.text(
             0.5, 0.5, "No Valid Data", ha="center", va="center", transform=ax.transAxes
@@ -743,6 +962,12 @@ def _plot_peak_height_panel(
     if accuracy_plot_data:
         accuracy_df = pd.DataFrame(accuracy_plot_data).dropna(subset=["x", "y"])
         if not accuracy_df.empty:
+            # Use std error bars when showing seed-level data, otherwise use SEM
+            errorbar_config = (
+                {"errorbar": ("sd", 1), "err_style": "bars"}
+                if has_seeds
+                else ERRORBAR_CONFIG
+            )
             sns.lineplot(
                 data=accuracy_df,
                 x="x",
@@ -757,12 +982,18 @@ def _plot_peak_height_panel(
                 markersize=6,
                 alpha=FORMATTING["alpha_line"],
                 linestyle="-",
-                **ERRORBAR_CONFIG,
+                **errorbar_config,
             )
 
     if has_ffonly and ff_accuracy_plot_data:
         ff_df = pd.DataFrame(ff_accuracy_plot_data).dropna(subset=["x", "y"])
         if not ff_df.empty:
+            # Use std error bars when showing seed-level data, otherwise use SEM
+            errorbar_config = (
+                {"errorbar": ("sd", 1), "err_style": "bars"}
+                if has_seeds
+                else ERRORBAR_CONFIG
+            )
             sns.lineplot(
                 data=ff_df,
                 x="x",
@@ -773,11 +1004,38 @@ def _plot_peak_height_panel(
                 ax=ax,
                 legend=False,
                 linewidth=FORMATTING["linewidth_main"],
-                marker="^",
+                marker="o",
                 markersize=6,
                 alpha=FORMATTING["alpha_line"],
                 linestyle="--",
-                **ERRORBAR_CONFIG,
+                **errorbar_config,
+            )
+
+    # Plot feedforward-trained models as grey dashed lines with star markers
+    if has_feedforward and feedforward_accuracy_plot_data:
+        feedforward_df = pd.DataFrame(feedforward_accuracy_plot_data).dropna(subset=["x", "y"])
+        if not feedforward_df.empty:
+            # Use std error bars when showing seed-level data, otherwise use SEM
+            errorbar_config = (
+                {"errorbar": ("sd", 1), "err_style": "bars"}
+                if has_seeds
+                else ERRORBAR_CONFIG
+            )
+            sns.lineplot(
+                data=feedforward_df,
+                x="x",
+                y="y",
+                hue="hue",
+                hue_order=hue_values,
+                palette={val: "grey" for val in hue_values},  # Grey for all hue values
+                ax=ax,
+                legend=False,
+                linewidth=FORMATTING["linewidth_main"],
+                marker="^",
+                markersize=10,
+                alpha=FORMATTING["alpha_line"],
+                linestyle="--",
+                **errorbar_config,
             )
 
     if confidence_plot_data:
@@ -797,13 +1055,11 @@ def _plot_peak_height_panel(
                 markersize=4,
                 alpha=FORMATTING["alpha_line"],
                 linestyle=":",
-                **ERRORBAR_CONFIG,
+                errorbar=None,  # No error bars for confidence
             )
 
     if show_ylabel:
-        ax.set_ylabel(
-            "Performance", fontsize=FORMATTING["fontsize_axis"], fontweight="bold"
-        )
+        ax.set_ylabel(ylabel, fontsize=FORMATTING["fontsize_axis"], fontweight="bold")
     else:
         ax.set_ylabel("")
 
@@ -854,12 +1110,18 @@ def _plot_peak_height_panel(
                     marker="^",
                     markersize=6,
                     linestyle="--",
-                    label=_append_suffix_to_label(legend_text, "FF-only"),
+                    label=_append_suffix_to_label(legend_text, "Feedforward"),
                     alpha=FORMATTING["alpha_line"],
                 )
             )
 
     if show_legend and confidence_plot_data:
+        # Only add specifics to label if there are multiple confidence measures
+        if len(requested_confidence) > 1:
+            conf_legend_label = f"Max {confidence_label}"
+        else:
+            conf_legend_label = "Max Confidence"
+
         legend_elements.append(
             plt.Line2D(
                 [0],
@@ -869,7 +1131,7 @@ def _plot_peak_height_panel(
                 marker="s",
                 markersize=4,
                 linestyle=":",
-                label=f"Max {confidence_label}",
+                label=conf_legend_label,
                 alpha=FORMATTING["alpha_line"],
             )
         )
@@ -1234,13 +1496,21 @@ def _add_hue_legend(
     colors: Dict[str, str],
     config: Dict,
     dt: float,
+    show_without_recurrence: bool = False,
 ) -> None:
-    """Add horizontal hue legend at the top of performance plots."""
+    """Add hue legend to the right of accuracy/confidence legend.
+
+    Parameters
+    ----------
+    show_without_recurrence : bool, default=False
+        If True, add a "without recurrence" entry showing star marker + dashed line
+        in black to indicate ffonly and feedforward-trained models.
+    """
     if not hue_values or len(hue_values) <= 1 or not perf_axes or not perf_axes[0]:
         return
 
-    # Use second performance subplot if available, otherwise first
-    legend_ax = perf_axes[0][1] if len(perf_axes[0]) > 3 else perf_axes[0][-1]
+    # Place on second subplot of first row
+    legend_ax = perf_axes[0][1]
 
     # Create legend elements
     legend_elements = []
@@ -1258,17 +1528,39 @@ def _add_hue_legend(
             )
         )
 
-    # Add legend above the subplot
-    legend_ax.legend(
+    # Add "without recurrence" entry if requested
+    if show_without_recurrence:
+        # Create a combined legend entry showing star marker + dashed line
+        legend_elements.append(
+            plt.Line2D(
+                [0],
+                [0],
+                color="0.1",
+                linewidth=FORMATTING["linewidth_main"],
+                linestyle="--",
+                marker="^",
+                markersize=10,
+                label="Without Recurrence",
+                alpha=FORMATTING["alpha_line"],
+            )
+        )
+
+    # Create hue legend
+    hue_legend = legend_ax.legend(
         handles=legend_elements,
         loc="upper left",
         frameon=False,
         fontsize=FORMATTING["fontsize_legend"],
-        ncol=len(hue_values),  # Horizontal layout
+        ncol=1,  # Vertical layout
         title=get_display_name(hue_key, config),
         title_fontsize=FORMATTING["fontsize_legend"],
-        # alignment="left",
     )
+
+    # Make the legend title bold
+    hue_legend.get_title().set_fontweight('bold')
+
+    # Add the hue legend as an artist (preserves the existing accuracy/confidence legend)
+    legend_ax.add_artist(hue_legend)
 
 
 def plot_performance_grid(
@@ -1286,9 +1578,17 @@ def plot_performance_grid(
     dt: float = 2.0,
     config: Optional[Dict] = None,
     subplot_filter: Optional[List[str]] = None,
+    plot_individual_seeds: bool = False,
     **kwargs,
 ) -> None:
-    """Plot performance traces in a grid layout with flexible dimension mapping."""
+    """Plot performance traces in a grid layout with flexible dimension mapping.
+
+    Parameters
+    ----------
+    plot_individual_seeds : bool, default=False
+        If True and multiple seed files are provided, plot each seed as a separate
+        trace with the same color and linestyle instead of averaging over seeds.
+    """
     logger.info("=" * 60)
     logger.info("Starting performance grid plotting")
     logger.info("=" * 60)
@@ -1389,6 +1689,11 @@ def plot_performance_grid(
         df["experiment"] = experiment_name
         df["model_type"] = "full"  # Mark as full model
         df["source_file"] = data_path.stem
+
+        # Add seed identifier if plotting individual seeds
+        if plot_individual_seeds:
+            df["seed_id"] = i
+
         combined_data.append(df)
         logger.info(
             f"Loaded {len(df)} rows for full model experiment '{experiment_name}'"
@@ -1436,6 +1741,11 @@ def plot_performance_grid(
                 df["experiment"] = experiment_name
                 df["model_type"] = "ffonly"  # Mark as feedforward-only model
                 df["source_file"] = data_path.stem
+
+                # Add seed identifier if plotting individual seeds
+                if plot_individual_seeds:
+                    df["seed_id"] = i
+
                 combined_data.append(df)
                 logger.info(
                     "Loaded %d rows for feedforward-only experiment '%s'",
@@ -1949,6 +2259,11 @@ def main():
         nargs="*",
         help="Filter subplot values to display in performance panels",
     )
+    parser.add_argument(
+        "--plot-individual-seeds",
+        action="store_true",
+        help="Plot each seed as a separate trace instead of averaging over seeds",
+    )
 
     args = parser.parse_args()
 
@@ -1975,6 +2290,7 @@ def main():
         dt=args.dt,
         config=config,
         subplot_filter=args.subplot_filter,
+        plot_individual_seeds=args.plot_individual_seeds,
     )
 
 
