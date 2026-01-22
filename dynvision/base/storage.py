@@ -339,7 +339,9 @@ class DataBuffer:
 
         return strategies[strategy]()
 
-    def _preprocess_tensor(self, tensor: torch.Tensor, defer_cache_clear: bool = False) -> torch.Tensor:
+    def _preprocess_tensor(
+        self, tensor: torch.Tensor, defer_cache_clear: bool = False
+    ) -> torch.Tensor:
         """Enhanced preprocessing with immediate GPU memory release."""
         # Detach from computation graph
         if self.detach_tensors and tensor.requires_grad:
@@ -370,13 +372,23 @@ class DataBuffer:
             return self._preprocess_tensor(data, defer_cache_clear=defer_cache_clear)
         elif isinstance(data, dict):
             # Defer cache clearing for dict processing to batch GPU cleanup
-            result = {k: self._preprocess_data(v, defer_cache_clear=True) for k, v in data.items()}
+            result = {
+                k: self._preprocess_data(v, defer_cache_clear=True)
+                for k, v in data.items()
+            }
             # Clear GPU cache once after processing all dict items
-            if self.cpu_offload and not defer_cache_clear and torch.cuda.is_available():
+            if (
+                self.cpu_offload
+                and not defer_cache_clear
+                and torch.cuda.is_available()
+            ):
                 torch.cuda.empty_cache()
             return result
         elif isinstance(data, (list, tuple)):
-            return type(data)(self._preprocess_data(item, defer_cache_clear=defer_cache_clear) for item in data)
+            return type(data)(
+                self._preprocess_data(item, defer_cache_clear=defer_cache_clear)
+                for item in data
+            )
         else:
             return data
 
@@ -1028,12 +1040,22 @@ class StorageBuffer:
             return False
 
         if image_index is None:
+            last_record = self.records.get_recent_items(1)
+            if last_record:
+                last_image_index = last_record[0].image_index.max()
+            else:
+                last_image_index = 0
+
             batch_size, n_timesteps = label_index.shape
             image_index = (
                 torch.arange(batch_size, device=label_index.device)
                 .unsqueeze(1)
                 .expand(-1, n_timesteps)
             )
+            # Should we increment from last_image_index so each image has a unique index?
+            #     + last_image_index
+            #     + 1
+            # )
 
         # Create record with core fields and extras
         record = Record(
@@ -1250,8 +1272,8 @@ class StorageBufferMixin(LightningModule):
     }
 
     testing_storage_config: Dict[str, Any] = {
-        "max_responses": 8,  # Enabled by default for analysis
-        "max_records": 50,  # Much larger for detailed analysis
+        "max_responses": 6,  # Enabled by default for analysis
+        "max_records": 40,  # Much larger for detailed analysis
         "response_strategy": "fixed",  # Keep recent responses
         "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,

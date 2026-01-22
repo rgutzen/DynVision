@@ -755,7 +755,7 @@ class TemporalBase(nn.Module):
                     label_indices = label_indices.clone()
 
                     # Apply masks in single pass
-                    inputs[:, zero_mask] = 0
+                    inputs[:, zero_mask] = self.non_input_value
                     label_indices[:, combined_mask] = self.non_label_index
 
         return (inputs, label_indices, *extra)
@@ -842,29 +842,6 @@ class TemporalBase(nn.Module):
         mask[valid_indices] = True
 
         return mask
-
-    def _apply_reaction_window(
-        self,
-        mask: torch.Tensor,
-        chunk_start: int,
-        chunk_length: int,
-        reaction_steps: int,
-    ) -> None:
-        chunk_end = chunk_start + chunk_length
-        window_end = min(chunk_end, chunk_start + reaction_steps)
-        mask[chunk_start:window_end] = True
-
-        if reaction_steps > chunk_length:
-            self._warn_reaction_window_exceeds_chunk(chunk_length)
-
-    def _warn_reaction_window_exceeds_chunk(self, chunk_length: int) -> None:
-        chunk_duration = chunk_length * self.dt
-        logger.warning(
-            "loss_reaction_time (%sms) exceeds presentation chunk duration (%sms)."
-            " Entire chunk will be ignored for loss computations.",
-            self.loss_reaction_time,
-            chunk_duration,
-        )
 
     def _get_presentation_pattern(self) -> torch.Tensor:
         """Return the presentation pattern, shuffling when requested."""
