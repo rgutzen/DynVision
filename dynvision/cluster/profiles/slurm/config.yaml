@@ -18,8 +18,8 @@ rerun-incomplete: "True"
 nolock: "True"
 
 # CHANGE AS NEEDED
-slurm-logdir: "/home/rg5022/rhythmic_visual_attention/logs/slurm"
-slurm-keep-successful-logs: true
+slurm-logdir: "/home/rg5022/Modeling_Dynamical_Vision/logs/slurm"
+slurm-keep-successful-logs: false
 slurm-delete-logfiles-older-than: 2 # specify the number of days
 
 default-resources:
@@ -46,7 +46,7 @@ set-resources:
   test_model:
     mem: 80G * attempt # use 80GB of memory
     # disk: 200G  # 100 GB
-    runtime: 60 * attempt 
+    runtime: 120 * attempt 
     gpu: 1 # use one GPU
     cpus_per_task: 16 # use 16 cores
     # constraint: "a100|h100"
@@ -96,12 +96,12 @@ set-resources:
     
   process_single_test:
     mem: 120G # use 64GB of memory
-    runtime: 45 # run for 1 hour
+    runtime: 30 # run for 1 hour
     cpus_per_task: 16
 
   aggregate_test_results:
     mem: 64G # use 16GB of memory
-    runtime: 60 # run for 30 minutes
+    runtime: 15 # run for 30 minutes
     cpus_per_task: 4
 
   best_checkpoint_to_statedict:
