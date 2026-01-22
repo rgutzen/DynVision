@@ -164,9 +164,17 @@ rule plot_performance:
             / 'test_data.csv',
             seed=lambda w: w.seeds.split('.'),
         ),
+        data_ffonly = expand(
+            project_paths.reports
+            / '{{experiment}}ffonly'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seed=lambda w: w.seeds.split('.'),
+        ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
-        dataffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
+        data_ffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
         row = None,
         subplot = 'parameter',
         hue = 'category',
@@ -178,7 +186,7 @@ rule plot_performance:
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
-        subplot_filter = [], #[0.1, 0.5, 1.0], #lambda w: config.experiment_config[w.experiment].get('subplot_filter', []),
+        subplot_filter = [0.2, 0.6, 1.0], #[0.1, 0.5, 1.0], #lambda w: config.experiment_config[w.experiment].get('subplot_filter', []),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -189,7 +197,7 @@ rule plot_performance:
         """
         {params.execution_cmd} \
             --data {input.data:q} \
-            --data-ffonly {params.dataffonly:q} \
+            --data-ffonly {input.data_ffonly:q} \
             --output {output:q} \
             --row {params.row} \
             --subplot {params.subplot} \
@@ -204,61 +212,8 @@ rule plot_performance:
             --ordering {params.ordering:q} \
             --subplot-filter {params.subplot_filter}
         """
+            # --plot-individual-seeds
 
-# rule plot_training_old:
-#     """Plot training metrics (hierarchical structure, old version)."""
-#     input:
-#         test_data = expand(
-#             project_paths.reports
-#             / '{{experiment}}'
-#             / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
-#             / '{{data_name}}:{{data_group}}_{{status}}'
-#             / 'test_data.csv',
-#             seeds=lambda w: w.seeds.split('.'),
-#         ),
-#         script = SCRIPTS / 'visualization' / 'plot_training_old.py'
-#     params:
-#         accuracy_csv = lambda w: project_paths.reports \
-#             / 'wandb' \
-#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_accuracy.csv',
-#         memory_csv = lambda w: project_paths.reports \
-#             / 'wandb' \
-#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_gpu_mem_alloc.csv',
-#         epoch_csv = lambda w: project_paths.reports \
-#             / 'wandb' \
-#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_epoch.csv',
-#         energy_csv= lambda w: project_paths.reports \
-#             / 'wandb' \
-#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_energyloss.csv',
-#         cross_entropy_csv= lambda w: project_paths.reports \
-#             / 'wandb' \
-#             / f'{w.model_name}:{w.args1}{w.category}=*{w.args2}_{w.seeds}_{w.data_name}_{w.status}_crossentropyloss.csv',
-#         execution_cmd = lambda w, input: build_execution_command(
-#             script_path=input.script,
-#             use_distributed=False,
-#         ),
-#         palette = lambda w: json.dumps(config.palette),
-#         naming = lambda w: json.dumps(config.naming),
-#         ordering = lambda w: json.dumps(config.ordering),
-#         dt = getattr(config, 'dt', 2),
-#     output:
-#         project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training_old.png',
-#     shell:
-#         """
-#         {params.execution_cmd} \
-#             --test_data {input.test_data:q} \
-#             --accuracy_csv {params.accuracy_csv:q} \
-#             --memory_csv {params.memory_csv:q} \
-#             --epoch_csv {params.epoch_csv:q} \
-#             --energy_csv {params.energy_csv:q} \
-#             --cross_entropy_csv {params.cross_entropy_csv:q} \
-#             --palette {params.palette:q} \
-#             --naming {params.naming:q} \
-#             --ordering {params.ordering:q} \
-#             --category {wildcards.category} \
-#             --dt {params.dt} \
-#             --output {output:q} 
-#         """
 
 rule plot_training:
     """Plot training metrics (hierarchical structure)."""
@@ -275,14 +230,15 @@ rule plot_training:
     params:
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{w.seeds}_accuracy.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_accuracy.csv',
         loss_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{w.seeds}_loss.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_loss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
+        validation_frequency = 10,
         column = getattr(config, 'column', 'parameter'),
         subplot = getattr(config, 'subplot', 'layers'),
         hue = getattr(config, 'hue', 'category'),
@@ -313,7 +269,8 @@ rule plot_training:
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q} \
-            --output {output:q} 
+            --output {output:q} \
+            --validation-frequency {params.validation_frequency}
         """
 
 
@@ -331,7 +288,6 @@ rule plot_dynamics:
         script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        # focus_layer = 'IT',
         dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
@@ -469,9 +425,9 @@ rule plot_responses_tripytch:
         ),
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
-        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_{w.seeds}_accuracy.csv",
-        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_{w.seeds}_accuracy.csv",
-        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_{w.seeds}_accuracy.csv",
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_{'.'.join(config.seed)}_accuracy.csv",
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_{'.'.join(config.seed)}_accuracy.csv",
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_{'.'.join(config.seed)}_accuracy.csv",
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -482,8 +438,10 @@ rule plot_responses_tripytch:
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}:{a1}{cat1}=*{a2}{cat2}=*{a3}{cat3}=*{a4}_{seeds}' / '{data_name}:{data_group}_{status}' / 'response_tripytch.png',
+        project_paths.figures / '{experiment}' / '{model_name}:{a1}{cat1}=*{a2}{cat2}=*{a3}{cat3}=*{a4}_{seeds}' / '{data_name}:{data_group}_{status}' / 'responses_tripytch.png',
     wildcard_constraints:
         a1 = r'([a-z,;\+\-=\d\.]*?)',
         a2 = r'([a-z,;\+\-=\d\.]*?)',
@@ -507,6 +465,8 @@ rule plot_responses_tripytch:
             --experiment {wildcards.experiment} \
             --category {params.category:q} \
             --dt {params.dt} \
+            --confidence-measure {params.confidence_measure} \
+            --accuracy-measure {params.accuracy_measure} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q}

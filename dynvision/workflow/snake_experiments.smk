@@ -123,9 +123,61 @@ rule plot_model_variation_weights:  # call with --config category=<variable_name
         ) for category in (config.category if isinstance(config.category, list) else [config.category])]
 
 
-rule recreate_noise_results:  # run with --allowed-rules test_model process_test_data
+rule process_all_wandb_data:
     input:
-        project_paths.reports / "uniformnoise" / "DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040" / "imagenette:all_trained" / "test_data.csv",
+        [expand(project_paths.reports / "wandb" / "{model_name}{model_args}_{seed}_{metric}_summary.csv",
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: "*"}),
+            seed='.'.join(config.seed),
+            metric='gpu_mem_alloc', #['epoch', 'gpu_mem_alloc']
+        ) for category in (config.category if isinstance(config.category, list) else [config.category])]
+    params:
+        summary_file = project_paths.reports / "wandb" / f"{config.model_name}{args_product(DEFAULT_MODEL_ARGS)}_{'.'.join(config.seed)}_all_gpu_summary.csv"
+    run:
+        import pandas as pd
+        from pathlib import Path
+        
+        # Read all input CSV files and concatenate
+        if not input:
+            raise ValueError("No input files provided")
+        
+        dfs = [pd.read_csv(f) for f in input]
+        aggregated_df = pd.concat(dfs, ignore_index=True)
+        
+        # Save to output file
+        output_path = Path(params.summary_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        aggregated_df.to_csv(output_path, index=False)
+        print(f"Aggregated {len(input)} files into {output_path}")
+        print(f"Total rows: {len(aggregated_df)}")
+
+
+rule alt_best_model:
+    input:
+        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+                experiment=['duration', 'interval', 'contrast'],
+                model_name=config.model_name,
+                model_args=args_product(DEFAULT_MODEL_ARGS | {'pattern':'1011', 'energyloss': "1.0", 'rctarget':'*'}),
+                seed='6000',
+                data_name=config.data_name,
+                data_group=config.data_group,
+                status=config.status,
+                plot=[f'dynamics_groen_{focus_layer}' for focus_layer in ['V1','V2']]
+            ),
+        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+                experiment=['gaussiannoise'],
+                model_name=config.model_name,
+                model_args=args_product(DEFAULT_MODEL_ARGS | {'pattern':'1011', 'energyloss': "1.0", 'rctarget':'*'}),
+                seed='6000',
+                data_name=config.data_name,
+                data_group=config.data_group,
+                status=config.status,
+                plot='performance_manuscript'
+            )
+
+# rule recreate_noise_results:  # run with --allowed-rules test_model process_test_data
+#     input:
+#         project_paths.reports / "uniformnoise" / "DyRCNNx8:tsteps=20+rctype=full+rctarget=*+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4_0040" / "imagenette:all_trained" / "test_data.csv",
 
 
 # LOADER_VARIATIONS = [
@@ -158,83 +210,127 @@ rule recreate_noise_results:  # run with --allowed-rules test_model process_test
 #         done
 #         """
 
-rule manuscript_figures: # manuscript figures
-# sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"
+rule plot_training_figures:
     input:
-        # TRAINING
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="stability",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"}),    
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
             plot="training",
-        ),
+        )
+
+rule manuscript_figures: # manuscript figures
+# sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"
+    input:
+        # TRAINING  # run with --config test_batch_size=16
+        # expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+        #     experiment="stability",
+        #     model_name=config.model_name,
+        #     model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
+        #              + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"}),    
+        #     seed=config.seed + [".".join(config.seed)],
+        #     data_name=config.data_name,
+        #     data_group=config.data_group,
+        #     status=config.status,
+        #     plot="training",
+        # ),
         # TIMEPARAMS TRIPYTCH
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="response",
             model_name=config.model_name,
             model_args=args_product(DEFAULT_MODEL_ARGS | {"tau": "*", "trc": "*", "tsk": "*"}),
-            seed=config.seed + [".".join(config.seed)],
+            seed=[".".join(config.seed)] + config.seed,
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
-            plot="response_tripytch",
+            plot="responses_tripytch",
         ),
         # CONNECTION TRIPYTCH
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="response",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*", "skip": "*", "feedback": "*"}),
-            seed=config.seed + [".".join(config.seed)],
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"pattern": "*", "skip": "*", "feedback": "*"}),
+            seed=[".".join(config.seed)] + config.seed,
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
-            plot="response_tripytch",
+            plot="responses_tripytch",
         ),
         # TIMESTEP TRIPYTCH
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="response",
             model_name=config.model_name,
             model_args=args_product(DEFAULT_MODEL_ARGS | {"tsteps": "*", "lossrt": "*", "idle": "*"}),
-            seed=config.seed + [".".join(config.seed)],
+            seed=[".".join(config.seed)] + config.seed,
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
-            plot="response_tripytch",
+            plot="responses_tripytch",
         ),
-        # NEURAL DYNAMICS
+        # RECURRENCE TRIPYTCH
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="response",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "rctarget": "*", "dt": "*"}),  # "seed": "*"
+            seed=[".".join(config.seed)], # + config.seeds
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            plot="responses_tripytch",
+        ),
+        # NEURAL DYNAMICS
+        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+            experiment=["duration", "contrast", "interval"],
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "energyloss": "1.0", "pattern": "1011"})
+                    #  + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011"}),
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
-            plot=[f"dynamics_{focus_layer}" for focus_layer in ['V1', 'V2', 'V4', 'IT']],
+            plot=[f"dynamics_groen_{focus_layer}" for focus_layer in ['V1', 'V2']],
         ),
         # NOISE PERFORMANCE
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
-            experiment=["uniformnoise", "poissonnoise", "gaussiannoise", "gaussiancorrnoise"],
+            experiment=["gaussiannoise"], # "gaussiancorrnoise"], #"phasescramblednoise", 
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"}) 
+                    #  + args_product(DEFAULT_MODEL_ARGS | {"rctype": "*"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "rctarget": "middle", "pattern": "1"}),
+                    #  + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011"}),
+                    #  + args_product(DEFAULT_MODEL_ARGS | {"feedback": "*"}),
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
-            plot="performance",
+            plot="performance_manuscript",
         ),
-        # REFERENCE MODELS
-        expand(project_paths.figures / "{experiment}" / "{model}:{model_args}_{seeds}" / "imagenet:imagenette_init" / "{plot}.png",
-            experiment=['response', 'idleresponse', 'hundred'],
-            model=['CorNetRT', 'CordsNet'],
-            model_args='pretrained=*',
-            seeds=SEED[0],
-            plot='responses',
-        ),
+        # # DEVELOPMENT DURING TRAINING
+        # expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+        #     experiment="responseintermediate",
+        #     model_name=config.model_name,
+        #     model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1"})
+        #              + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011"}),
+        #     seed=config.seed + [".".join(config.seed)],
+        #     data_name=config.data_name,
+        #     data_group=config.data_group,
+        #     status=config.status,
+        #     plot='responses', # set hue=epoch
+        # ),
+        # # REFERENCE MODELS
+        # expand(project_paths.figures / "{experiment}" / "{model}:{model_args}_{seeds}" / "imagenet:imagenette_init" / "{plot}.png",
+        #     experiment=['response', 'idleresponse', 'hundred'],
+        #     model=['CorNetRT', 'CordsNet'],
+        #     model_args='pretrained=*',
+        #     seeds=SEED[0],
+        #     plot='responses',
+        # ),
     params:
         figure_folder = project_paths.figures / "manuscript_figures"
     shell:
@@ -248,6 +344,185 @@ rule manuscript_figures: # manuscript figures
             done
         fi
         """
+
+rule plot_performance_manuscript:
+    """Plot performance metrics with Jang et al. (2021) benchmarks.
+
+    This rule generates publication-ready performance figures including:
+    - Panel A: Performance traces over time (multiple subplots)
+    - Panel B: Max accuracy vs parameter for models
+    - Panel C: Jang et al. (2021) human and DNN benchmarks
+
+    Input/Output follow pattern:
+    - Input: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
+    - Output: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/performance_manuscript.png
+    """
+    input:
+        data = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seed=lambda w: w.seeds.split('.'),
+        ),
+        data_ffonly = expand(
+            project_paths.reports
+            / '{{experiment}}ffonly'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seed=lambda w: w.seeds.split('.'),
+        ),
+        data_feedforward = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}{model_args}_{seed}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "none", "dt": "*"}),
+            seed=lambda w: w.seeds.split('.'),
+        ),
+        script = SCRIPTS / 'visualization' / 'plot_performance_manuscript.py'
+    params:
+        # data_ffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
+        data_category2 = expand(
+            project_paths.reports
+            / '{experiment}'
+            / '{model_name}{model_args}_{seed}'
+            / '{data_name}:{data_group}_{status}'
+            / 'test_data.csv',
+            experiment=lambda w: w.experiment,
+            model_name=lambda w: w.model_name,
+            data_name=lambda w: w.data_name,
+            data_group=lambda w: w.data_group,
+            status=lambda w: w.status,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011", "rctarget": "middle"}),
+            seed=lambda w: w.seeds.split('.'),
+        ),
+        row = None,
+        subplot = 'parameter',
+        hue = 'category',
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category,
+        category2 = 'energyloss',
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "none"),
+        jang_noise_type = getattr(config, 'jang_noise_type', 'gaussian'),
+        dt = getattr(config, 'dt', 2),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        subplot_filter = [0.1, 0.4, 0.7, 1.0],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance_manuscript.png',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --data-ffonly {input.data_ffonly:q} \
+            --data-feedforward {input.data_feedforward:q} \
+            --data-category2 {params.data_category2:q} \
+            --output {output:q} \
+            --row {params.row} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --parameter-key {params.parameter} \
+            --category-key {params.category} \
+            --category2-key {params.category2} \
+            --experiment-names {wildcards.experiment} \
+            --accuracy-measure {params.accuracy_measure} \
+            --confidence-measure {params.confidence_measure} \
+            --jang-noise-type {params.jang_noise_type} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --subplot-filter {params.subplot_filter} \
+        """
+            # --plot-individual-seeds
+
+
+rule plot_dynamics_manuscript:
+    """Plot dynamics with Groen et al. 2022 empirical data (hierarchical structure).
+
+    This rule generates 4-panel dynamics figures that include:
+    - Panel A: Ridge plots of different layers at reference parameter value
+    - Panel B: Ridge plots of focus layer across parameter values
+    - Panel C: Groen et al. (2022) empirical V1 data (duration/contrast/interval)
+    - Panel D: Summary metrics plot
+
+    The Groen data shown in panel C depends on the experiment type:
+    - Duration experiment → Figure 2B (Temporal Summation)
+    - Interval experiment → Figure 3B (Recovery from Adaptation)
+    - Contrast experiment → Figure 4B (Time-to-Peak)
+    """
+    input:
+        data = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        script = SCRIPTS / 'visualization' / 'plot_dynamics_with_groen.py',
+        groen_data = lambda w: [
+            project_paths.data.external / "groen2022_csv" / f"groen2022_{w.experiment}_data.csv"
+        ] if w.experiment in ['duration', 'contrast', 'interval'] else []
+    params:
+        data_category2 = expand(
+            project_paths.reports
+            / '{experiment}'
+            / '{model_name}{model_args}_{seed}'
+            / '{data_name}:{data_group}_{status}'
+            / 'test_data.csv',
+            experiment=lambda w: w.experiment,
+            model_name=lambda w: w.model_name,
+            data_name=lambda w: w.data_name,
+            data_group=lambda w: w.data_group,
+            status=lambda w: w.status,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011", "rctarget": "output"}),
+            seed=lambda w: w.seeds.split('.'),
+        ),
+        category2 = "energyloss",
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        dt = getattr(config, 'dt', 2),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        # subplot_filter = [1, 3, 5, 10, 15, 20]
+        groen_data_dir = project_paths.data.external / "groen2022_csv",
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    output:
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'dynamics_groen_{focus_layer}.png',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --data-category2 {params.data_category2:q} \
+            --category2 {params.category2} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --experiment {wildcards.experiment} \
+            --category {wildcards.category} \
+            --focus-layer {wildcards.focus_layer} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --groen-data {params.groen_data_dir}
+        """
+
 
 rule unrolling:
     input:

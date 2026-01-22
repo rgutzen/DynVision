@@ -193,7 +193,7 @@ rule test_model:
                 config.data_statistics[w.data_name]['std']
             ))
         ),
-        batch_size = config.test_batch_size,
+        batch_size = get_param("test_batch_size", 32),
         enable_progress_bar = True,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
@@ -271,7 +271,6 @@ checkpoint intermediate_checkpoint_to_statedict:
         ),
     output:
         project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained-epoch={epoch}.pt'
-        # /scratch/rg5022/rhythmic_visual_attention/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+lossrt=4+pattern=1+energyloss=0.2_5000/imagenette/trained-epoch=149.pt
     shell:
         """
         {params.execution_cmd} \
@@ -423,7 +422,7 @@ rule process_single_test:
             script_path=input.script,
             use_distributed=False,
         ),
-    priority: 4,  # Higher than aggregation
+    priority: 40,  # Higher than aggregation
     output:
         test_data = project_paths.reports \
             / '{experiment}' \
@@ -440,7 +439,6 @@ rule process_single_test:
             --memory_limit_gb {params.memory_limit_gb} \
             --remove_input_responses {params.remove_input_responses}
         """
-
 
 rule aggregate_experiment_data:
     """Aggregate individual test data into experiment-level dataset (Stage 2 of experiment processing).
@@ -459,6 +457,7 @@ rule aggregate_experiment_data:
     Processing:
         - Load all test_data.csv files
         - Extract metadata from .config.yaml files (parameter, category, additional_parameters)
+        - If 'status' in additional_parameters: extract status from file paths (with auto-epoch extraction)
         - Add metadata columns to each dataframe
         - Concatenate into single dataframe
         - Optionally apply class-level aggregation
@@ -467,7 +466,7 @@ rule aggregate_experiment_data:
     Parameters:
         parameter: Parameter key to extract (e.g., 'dsteps', 'stim')
         category: Category key to extract (e.g., 'rctype', 'tsteps')
-        additional_parameters: Extra parameters to extract
+        additional_parameters: Extra parameters to extract (if 'status' included, extracts from path; if 'epoch' included, auto-extracts from status string)
         sample_resolution: 'sample' or 'class'
         fail_on_missing_inputs: Error handling mode
     """
@@ -493,7 +492,7 @@ rule aggregate_experiment_data:
         script = SCRIPTS / 'visualization' / 'aggregate_experiment_data.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        additional_parameters = ['epoch', 'seed', 'experiment'],
+        additional_parameters = ['seed', 'status', 'epoch', 'energyloss'],  # config keys ('status' and 'epoch' are extracted from file path)
         sample_resolution = 'sample',  # 'sample' or 'class'
         fail_on_missing_inputs = False,
         execution_cmd = lambda w, input: build_execution_command(
@@ -515,6 +514,74 @@ rule aggregate_experiment_data:
             --output {output.experiment_data:q} \
             --parameter {params.parameter} \
             --category {wildcards.category} \
+            --additional_parameters {params.additional_parameters} \
+            --sample_resolution {params.sample_resolution} \
+            --fail_on_missing_inputs {params.fail_on_missing_inputs}
+        """
+
+
+rule aggregate_experiment_data_single:
+    """Aggregate test data for a single model configuration (no category sweep).
+
+    Aggregates across test_identifiers (experiment variations) for one model config.
+    Used when model_args contains no wildcard (*).
+
+    Input:
+        test_data_files: All test_data.csv files from Stage 1 (across test_identifiers)
+        test_configs: Corresponding .config.yaml files for metadata extraction
+        script: Aggregation script
+
+    Output:
+        experiment_data: Aggregated CSV with metadata columns added
+
+    Processing:
+        Same as aggregate_experiment_data but without category extraction.
+        Category parameter is passed as empty string.
+    """
+    input:
+        test_data = expand(project_paths.reports \
+            / '{{experiment}}' \
+            / '{{model_name}}{{model_args}}_{{seed}}' \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{test_identifier}' / 'test_data.csv',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+        ),
+        test_configs = expand(project_paths.reports \
+            / '{{experiment}}' \
+            / '{{model_name}}{{model_args}}_{{seed}}' \
+            / '{{data_name}}:{{data_group}}_{status}' \
+            / '{test_identifier}' / 'test_outputs.csv.config.yaml',
+            status = lambda w: config.experiment_config[w.experiment].get('status', w.status),
+            test_identifier = lambda w: get_test_specs_for_experiment(w.experiment),
+        ),
+        script = SCRIPTS / 'visualization' / 'aggregate_experiment_data.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        additional_parameters = ['seed', 'status', 'epoch', 'energyloss'],
+        sample_resolution = 'sample',
+        fail_on_missing_inputs = False,
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    priority: 3,
+    wildcard_constraints:
+        model_args = r'(:[a-z,;:\+=\d\.]+)?',  # No * allowed (excludes \*)
+    output:
+        experiment_data = project_paths.reports \
+            / '{experiment}' \
+            / '{model_name}{model_args}_{seed}' \
+            / '{data_name}:{data_group}_{status}' \
+            / 'test_data.csv',
+    shell:
+        """
+        {params.execution_cmd} \
+            --test_data {input.test_data:q} \
+            --test_configs {input.test_configs:q} \
+            --output {output.experiment_data:q} \
+            --parameter {params.parameter} \
+            --category "" \
             --additional_parameters {params.additional_parameters} \
             --sample_resolution {params.sample_resolution} \
             --fail_on_missing_inputs {params.fail_on_missing_inputs}

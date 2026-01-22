@@ -184,11 +184,15 @@ wildcard_constraints:
     args2 = r'([a-z,;:\+\-=\d\.]+|\s?)',
     experiment = r'[a-z]+',
     layer_name = r'(layer1|layer2|V1|V2|V4|IT)',
+    focus_layer = r'(layer1|layer2|V1|V2|V4|IT)',
     model_identifier = r'(:[a-z0-9,;=_\-\+\*\.]+|\s?)',  # Allow periods for float values
     test_identifier = r'([a-zA-Z0-9,;:=\-\+\.]+)',  # Polymorphic: hash or full spec, allows periods for floats
 
 localrules: all, symlink_data_subsets, symlink_data_groups
-ruleorder: symlink_data_subsets > symlink_data_groups > train_model_distributed > train_model #> process_test_data > test_model
+ruleorder: aggregate_experiment_data > aggregate_experiment_data_single 
+ruleorder: process_single_test > test_model 
+ruleorder: symlink_data_subsets > symlink_data_groups 
+ruleorder: train_model_distributed > train_model
 
 def _write_base_config_file(config_payload: Dict[str, Any]) -> Path:
     """Persist the fully merged Snakemake config for reuse by runtime scripts.
