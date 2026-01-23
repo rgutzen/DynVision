@@ -17,6 +17,10 @@ class EnergyLoss(BaseLoss):
     The hooks fire once per monitored layer per timestep during the model's
     forward pass. Energy is accumulated across all hook calls and then normalized
     by the number of timesteps when compute_loss() is called.
+
+    Note: Idle timesteps (when model._in_idle_period is True) are skipped from
+    energy accumulation, as they are used only to bring the network into a stable
+    state and should not contribute to the energy loss.
     """
 
     def __init__(self, reduction: str = "mean", p: int = 1) -> None:
@@ -30,10 +34,14 @@ class EnergyLoss(BaseLoss):
         self._last_device: Optional[torch.device] = None
         self._last_dtype: Optional[torch.dtype] = None
         self._hook_call_count = {}  # Track hook calls per module to infer n_timesteps
+        self._model_ref = None  # Weak reference to model for checking idle period
 
     def register_hooks(self, model: nn.Module) -> None:
         """Register forward hooks on model modules to capture energy statistics."""
         self.remove_hooks()  # Clean up any existing hooks
+
+        # Store reference to model for checking _in_idle_period flag
+        self._model_ref = model
 
         for name, module in model.named_modules():
             if self._should_monitor_module(module):
@@ -54,8 +62,16 @@ class EnergyLoss(BaseLoss):
 
         This method is called via hooks once per layer per timestep. Energy is
         accumulated across all timesteps to compute the total computational cost.
+
+        Note: Skips accumulation during idle period (when model._in_idle_period is True).
         """
         if activation is None:
+            return
+
+        # Skip accumulation during idle period
+        if self._model_ref is not None and getattr(
+            self._model_ref, "_in_idle_period", False
+        ):
             return
 
         # Calculate energy for this timestep

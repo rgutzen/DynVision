@@ -224,6 +224,14 @@ class TemporalBase(nn.Module):
     ) -> Dict[str, List[Optional[torch.Tensor]]]:
         """Compute initial hidden states through idle timesteps.
 
+        .. deprecated::
+            This method is deprecated and no longer used by forward().
+            The forward() method now handles idle timesteps inline, running them
+            in a separate loop before the real timesteps. Hidden states flow
+            naturally through the layers' buffers without caching/restoring.
+            This approach maintains proper buffer state and allows gradients to
+            flow correctly (with detachment at the transition to limit memory).
+
         Runs the model for idle_timesteps with null input to allow spontaneous
         activity to converge. Returns the converged hidden state values that
         can be used to initialize the model for training timesteps.
@@ -240,22 +248,15 @@ class TemporalBase(nn.Module):
         Returns:
             Dictionary mapping layer names to lists of hidden state tensors.
             These can be used with layer.initialize_hidden_states(values)
-
-        Example:
-            # Compute initial states
-            initial_states = model.compute_idle_initial_states(
-                batch_size=256, device='cuda', dtype=torch.float32
-            )
-
-            # Reset model and initialize with converged states
-            model.reset(input_shape)
-            for name, layer in model.named_modules():
-                if name in initial_states:
-                    layer.initialize_hidden_states(initial_states[name])
-
-            # Now forward pass starts with converged hidden states
-            output = model(real_input)
         """
+        import warnings
+
+        warnings.warn(
+            "compute_idle_initial_states is deprecated. The forward() method now "
+            "handles idle timesteps inline without cache/restore.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if not hasattr(self, "idle_timesteps") or self.idle_timesteps <= 0:
             return {}
 
@@ -432,21 +433,11 @@ class TemporalBase(nn.Module):
         Returns:
             torch.Tensor: Model outputs.
         """
-        # Log initial memory at DEBUG level
-        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-            mem_start = torch.cuda.memory_allocated(0) / (1024**3)
-            logger.debug(f"Forward start: {mem_start:.2f} GB allocated")
-
         x_0 = _adjust_data_dimensions(x_0)
         batch_size, n_timesteps, dim_channels, dim_y, dim_x = x_0.shape
 
         if hasattr(self, "reset"):
             self.reset(x_0.shape)
-            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-                mem_after_reset = torch.cuda.memory_allocated(0) / (1024**3)
-                logger.debug(
-                    f"After reset: {mem_after_reset:.2f} GB allocated (+{mem_after_reset - mem_start:.2f} GB)"
-                )
 
         store_responses = (
             hasattr(self, "storage") and self.storage.responses.should_store()
@@ -463,75 +454,75 @@ class TemporalBase(nn.Module):
         # Collect outputs in a list to preserve gradients
         output_list = []
 
-        # Initialize hidden states from idle timesteps if configured
-        # This computes converged initial states through spontaneous activity
-        if hasattr(self, "idle_timesteps") and self.idle_timesteps > 0:
-            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-                mem_before_idle = torch.cuda.memory_allocated(0) / (1024**3)
-                logger.debug(
-                    f"Computing initial states from {self.idle_timesteps} idle timesteps: {mem_before_idle:.2f} GB"
-                )
+        # Get idle timesteps count
+        idle_steps = getattr(self, "idle_timesteps", 0)
 
-            # Compute initial hidden states through idle period (no_grad, memory efficient)
-            initial_states = self.compute_idle_initial_states(
-                batch_size=batch_size,
+        # =====================================================================
+        # IDLE TIMESTEPS LOOP
+        # Run model with null input to bring network into stable state.
+        # Hidden states evolve naturally through the layers' buffers.
+        # Outputs, responses, and energy loss are NOT recorded during this phase.
+        # =====================================================================
+        if idle_steps > 0:
+            # Create null input for idle timesteps
+            null_input = torch.full(
+                (batch_size, self.n_channels, self.dim_y, self.dim_x),
+                self.non_input_value,
                 device=x_0.device,
                 dtype=x_0.dtype,
             )
 
-            # Reset model state (clears buffers, creates fresh ones)
-            if hasattr(self, "reset"):
-                self.reset(x_0.shape)
+            # Flag for energy loss hooks to skip accumulation
+            self._in_idle_period = True
 
-            # Initialize hidden states with converged values from idle period
-            # These become the initial conditions for real timesteps
-            for name, layer in self.named_modules():
-                if name in initial_states and hasattr(
-                    layer, "initialize_hidden_states"
-                ):
-                    layer.initialize_hidden_states(initial_states[name])
-
-            # Clear cache to free memory
-            del initial_states
-
-            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-                mem_after_idle = torch.cuda.memory_allocated(0) / (1024**3)
-                logger.debug(
-                    f"After idle initialization: {mem_after_idle:.2f} GB allocated"
+            for t_idle in range(idle_steps):
+                # Forward pass with null input - populates hidden states
+                x, _ = self._forward(
+                    null_input,
+                    t=t_idle,
+                    feedforward_only=self.feedforward_only,
+                    store_responses=False,  # Don't store responses during idle
                 )
+                del x  # Discard output - not used for loss
 
-        # Forward the model over all timesteps
-        for t in torch.arange(n_timesteps, device=x_0.device):
+            # End of idle period - detach hidden states to truncate BPTT
+            # This prevents gradient flow through idle timesteps (memory efficient)
+            # while preserving the hidden state VALUES as initial conditions
+            for layer in self.modules():
+                if hasattr(layer, "detach_hidden_states"):
+                    layer.detach_hidden_states()
+
+            # Clear idle period flag
+            self._in_idle_period = False
+
+            # Clean up
+            del null_input
+
+        # =====================================================================
+        # REAL TIMESTEPS LOOP
+        # Forward pass with actual input data.
+        # Outputs and responses are recorded, gradients flow normally.
+        # =====================================================================
+        for t in range(n_timesteps):
             x = x_0[:, t, ...]
 
             x, responses_t = self._forward(
                 x,
-                t,
+                t=idle_steps + t,  # Continue timestep counter from idle period
                 feedforward_only=self.feedforward_only,
                 store_responses=store_responses,
             )
 
-            # Log memory for each real timestep to track accumulation (DEBUG level)
-            if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-                mem_timestep = torch.cuda.memory_allocated(0) / (1024**3)
-                logger.debug(
-                    f"After real timestep {t.item()+1}/{n_timesteps}: {mem_timestep:.2f} GB allocated"
-                )
-
             # Truncated BPTT: Detach hidden states periodically to limit memory accumulation
-            # NOTE: Current implementation creates discrete gradient segments (e.g., [0-9], [10-19], [20-29])
-            # TODO: Implement true sliding window TBPTT where gradients always flow back exactly N steps
-            # (requires gradient checkpointing or manual recomputation for proper sliding window)
             if (
                 hasattr(self, "truncated_bptt_timesteps")
                 and self.truncated_bptt_timesteps > 0
             ):
-                # Check if we should detach at this timestep
-                # We detach after every N timesteps (where N = truncated_bptt_timesteps)
-                timestep_num = t.item() + 1  # Convert to 1-based indexing
+                timestep_num = t + 1  # 1-based indexing for real timesteps
                 if timestep_num % self.truncated_bptt_timesteps == 0:
                     logger.info(
-                        f"[TBPTT] Detaching hidden states at timestep {timestep_num} (every {self.truncated_bptt_timesteps} timesteps)"
+                        f"[TBPTT] Detaching hidden states at real timestep {timestep_num} "
+                        f"(every {self.truncated_bptt_timesteps} timesteps)"
                     )
                     for layer in self.modules():
                         if hasattr(layer, "detach_hidden_states"):
@@ -548,9 +539,7 @@ class TemporalBase(nn.Module):
                 output_list.append(zero_output)
             elif x.size(0) == 1 and x.size(0) != batch_size:
                 # Handle case where only model self-generated activity (with batch size 1) reaches the classifier
-                x = x.repeat(batch_size, 1).unsqueeze(
-                    1
-                )  # Repeat the single output to match batch size
+                x = x.repeat(batch_size, 1).unsqueeze(1)
             else:
                 x = x.unsqueeze(1)
 
@@ -558,7 +547,6 @@ class TemporalBase(nn.Module):
 
             if store_responses and len(responses_t):
                 # Move responses to CPU immediately to prevent GPU memory accumulation
-                # Critical for long sequences (60+ timesteps) with multiple layers
                 t_responses = {
                     k: v.unsqueeze(1).cpu().detach() if v is not None else None
                     for k, v in responses_t.items()
@@ -566,17 +554,7 @@ class TemporalBase(nn.Module):
                 responses.append(t_responses)
 
         # Concatenate all outputs along time dimension - preserves gradients
-        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-            mem_before_concat = torch.cuda.memory_allocated(0) / (1024**3)
-            logger.debug(
-                f"Before concatenating {len(output_list)} outputs: {mem_before_concat:.2f} GB allocated"
-            )
-
         outputs = torch.cat(output_list, dim=1)
-
-        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-            mem_after_concat = torch.cuda.memory_allocated(0) / (1024**3)
-            logger.debug(f"After concatenation: {mem_after_concat:.2f} GB allocated")
 
         if store_responses:
             response_dict = responses.to_dict(dim=1)  # Concatenate time dimension
@@ -584,10 +562,6 @@ class TemporalBase(nn.Module):
             del responses, response_dict
 
         del output_list
-
-        if torch.cuda.is_available() and logger.isEnabledFor(logging.DEBUG):
-            mem_end = torch.cuda.memory_allocated(0) / (1024**3)
-            logger.debug(f"Forward end: {mem_end:.2f} GB allocated")
 
         return outputs
 

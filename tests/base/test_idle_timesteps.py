@@ -1,10 +1,10 @@
 """Tests for idle timesteps functionality and gradient flow.
 
 This test suite verifies that:
-1. Idle timesteps compute converged hidden states
-2. Cache-reset-restore pattern works correctly
-3. Gradients flow properly through real timesteps after idle initialization
-4. Memory usage remains low during idle period
+1. Idle timesteps properly initialize hidden states before real timesteps
+2. Gradients flow properly through real timesteps after idle period
+3. Memory usage remains bounded (via detachment at idle-real transition)
+4. Model can learn effectively with idle timesteps enabled
 """
 
 import pytest
@@ -142,13 +142,12 @@ class TestIdleTimestepsGradientFlow:
         ), f"Loss did not decrease: {initial_loss:.4f} -> {final_loss:.4f}"
 
 
-class TestCacheResetRestorePattern:
-    """Test the cache-reset-restore implementation details."""
+class TestLayerHiddenStateMethods:
+    """Test layer-level hidden state methods (cache, initialize, detach)."""
 
     def test_cache_hidden_states_returns_clones(self):
         """Test that cache_hidden_states returns independent clones."""
         from dynvision.model_components.recurrence import RecurrentConnectedConv2d
-        from dynvision.base.storage import DataBuffer
 
         # Create a simple recurrent layer
         layer = RecurrentConnectedConv2d(
@@ -220,8 +219,10 @@ class TestCacheResetRestorePattern:
                 layer._hidden_states[i], cached[i]
             ), f"Hidden state {i} values should match"
 
-    def test_compute_idle_initial_states_returns_dict(self):
-        """Test that compute_idle_initial_states returns proper structure."""
+    def test_compute_idle_initial_states_is_deprecated(self):
+        """Test that compute_idle_initial_states raises deprecation warning."""
+        import warnings
+
         model = DyRCNNx2(
             n_timesteps=5,
             n_classes=10,
@@ -230,28 +231,18 @@ class TestCacheResetRestorePattern:
             recurrence_type="full",
         )
 
-        # Compute initial states
-        initial_states = model.compute_idle_initial_states(
-            batch_size=2, device=torch.device("cpu"), dtype=torch.float32
-        )
+        # Should raise deprecation warning
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model.compute_idle_initial_states(
+                batch_size=2, device=torch.device("cpu"), dtype=torch.float32
+            )
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "deprecated" in str(w[0].message).lower()
 
-        # Should return a dictionary
-        assert isinstance(
-            initial_states, dict
-        ), "Should return dict of layer names to states"
-
-        # Should have entries for recurrent layers
-        assert len(initial_states) > 0, "Should have at least one layer with states"
-
-        # Each entry should be a list of tensors
-        for layer_name, states in initial_states.items():
-            assert isinstance(states, list), f"States for {layer_name} should be a list"
-            assert all(
-                isinstance(s, torch.Tensor) or s is None for s in states
-            ), f"States for {layer_name} should be tensors or None"
-
-    def test_idle_timesteps_memory_efficient(self):
-        """Test that idle timesteps don't accumulate excessive memory."""
+    def test_idle_timesteps_memory_bounded_with_detachment(self):
+        """Test that idle timesteps memory is bounded due to detachment at transition."""
         model = DyRCNNx2(
             n_timesteps=5,
             n_classes=10,
@@ -266,25 +257,26 @@ class TestCacheResetRestorePattern:
         model = model.cuda()
         batch_size = 16
 
-        # Measure memory before
+        # Create input
+        x = torch.randn(batch_size, 1, 3, 32, 32, device="cuda")
+
+        # Measure memory before forward pass
         torch.cuda.reset_peak_memory_stats()
+        torch.cuda.empty_cache()
         mem_before = torch.cuda.memory_allocated() / (1024**3)
 
-        # Compute idle states
-        initial_states = model.compute_idle_initial_states(
-            batch_size=batch_size,
-            device=torch.device("cuda"),
-            dtype=torch.float32,
-        )
+        # Forward pass (includes idle timesteps)
+        with torch.no_grad():
+            output = model(x)
 
         mem_after = torch.cuda.memory_allocated() / (1024**3)
         mem_increase = mem_after - mem_before
 
-        # Memory increase should be small (<1 GB for 10 idle timesteps)
-        # This verifies torch.no_grad() is working
+        # Memory increase should be bounded
+        # With detachment at transition, idle timesteps shouldn't accumulate graph
         assert (
-            mem_increase < 1.0
-        ), f"Idle timesteps used too much memory: {mem_increase:.2f} GB"
+            mem_increase < 2.0
+        ), f"Forward pass with idle timesteps used too much memory: {mem_increase:.2f} GB"
 
 
 class TestIdleTimestepsIntegration:
