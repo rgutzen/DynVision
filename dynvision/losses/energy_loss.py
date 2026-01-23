@@ -146,16 +146,16 @@ class EnergyLoss(BaseLoss):
             # Get the accumulated energy and normalize by spatial dimensions
             norm_factor = self.norm_factors[module_name]
 
-            # Ensure gradients flow through
-            if batch_energy.requires_grad:
-                # Normalize by spatial dimensions
-                normalized_energy = batch_energy / norm_factor
+            # Normalize by spatial dimensions
+            # Note: Gradients flow naturally when requires_grad=True (training),
+            # and computation still works when requires_grad=False (validation)
+            normalized_energy = batch_energy / norm_factor
 
-                if total_energy is None:
-                    total_energy = normalized_energy
-                else:
-                    total_energy = total_energy + normalized_energy
-                module_count += 1
+            if total_energy is None:
+                total_energy = normalized_energy
+            else:
+                total_energy = total_energy + normalized_energy
+            module_count += 1
 
         # Normalize by number of timesteps and number of modules
         if module_count > 0 and total_energy is not None:
