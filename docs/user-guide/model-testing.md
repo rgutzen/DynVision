@@ -120,7 +120,7 @@ Downstream visualization rules (e.g., `plot_performance`, `plot_responses`) cons
 - **Additional parameters**: any names supplied via `--additional_parameters` are extracted from response directories and inserted verbatim, allowing downstream filters like `epoch == 99` or `tau == "5"`.
 
 ### Available Measure Columns
-`process_test_data.py` organizes measures into four categories:
+`process_test_data.py` and `process_single_test.py` organize measures into four categories:
 - **Layer metrics** (`response_avg`, `response_std`, `spatial_variance`, `feature_variance`): computed per layer and timestep from response tensors. When `--sample_resolution sample` is used, they emit columns such as `{layer_name}_response_avg`. Under `class` resolution the same metrics aggregate over presentations (`first_label_index`).
 - **Confidence metrics** (`guess_confidence`, `label_confidence`, `first_label_confidence`): derived from classifier logits. Values reflect softmax probabilities and remain at the same resolution as the CSV input.
 - **Top-k accuracy metrics** (`accuracy_top3`, `accuracy_top5`, etc.): Boolean indicators per timestep showing whether the ground-truth label appears in the model’s top-k predictions. With class resolution, they are averaged and accompanied by standard deviation columns.

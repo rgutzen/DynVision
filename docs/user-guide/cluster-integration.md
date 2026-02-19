@@ -6,187 +6,248 @@ This guide explains how to run DynVision workflows on high-performance computing
 
 DynVision provides two methods for running workflows on HPC clusters:
 
-1. **Basic Execution**: Submit a single job script that handles environment setup and runs the entire workflow sequentially.
-2. **Advanced Execution**: Use Snakemake's built-in cluster capabilities to submit and manage individual jobs in parallel.
+1. **Basic Execution**: Submit a single job script that handles environment setup and runs the entire workflow sequentially within one SLURM allocation.
+2. **Advanced Execution**: Use Snakemake's SLURM executor plugin to submit and manage individual jobs in parallel.
+
+### Architecture
+
+The two execution methods use different scripts:
+
+```
+dynvision/cluster/
+├── snakejob.sh               # Basic: single-job submission script
+├── snakecharm.sh              # Advanced: wrapper (runs _snakecharm.sh in background)
+├── _snakecharm.sh             # Advanced: core orchestration script
+├── executor_wrapper.sh        # Advanced: per-job container/environment setup
+├── clean_env_vars.sh          # Utility: cleans PyTorch rank variables
+└── profiles/
+   └── slurm/
+      └── config.yaml          # Advanced: SLURM resource profile
+```
+
+**Basic execution** runs snakemake inside a single SLURM job (optionally inside a Singularity container). All workflow rules execute sequentially within that allocation.
+
+**Advanced execution** runs snakemake as an orchestrator on the cluster's native filesystem. Snakemake then submits each rule as a separate SLURM job, where `executor_wrapper.sh` handles container/environment activation per job. This enables parallel execution of independent rules.
 
 ## Prerequisites
 
 Before running workflows on a cluster, ensure:
 
-1. **Cluster Access**
-   You have access to a compute cluster and a directory with read and write access.
+1. **Cluster Access**: You have access to a compute cluster with read/write access to a home and scratch directory.
 
-2. **Getting DynVision**
-   Download or sync the DynVision folder into you cluster directory
+2. **Getting DynVision**: Download or sync the DynVision folder into your cluster directory.
 
-3. **Data Access**
-   If you are working with non-standard datasets that can be automatically downloaded within the workflow execution, make sure they are available.
+3. **Data Access**: If you are working with non-standard datasets that cannot be automatically downloaded within the workflow execution, make sure they are available on the cluster.
 
-4. **Path Mangement**
-   Review your `dynvision.project_paths.py` file and set the alternative cluster paths according to your needs.
+4. **Path Management**: Review `dynvision/project_paths.py` and set the alternative cluster paths according to your needs (scratch partitions, log directories, etc.).
 
-5. **Environment Setup**
-   Follow you HPC documentation to setup and environment that has dynvision and all its dependencies installed. Depending on you system, this may for example also involve setting up a docker or singularity image.
-   See the [Installation Guide](installation.md).
+5. **Main Environment**: Set up an environment with DynVision and all its dependencies installed. Depending on your system, this may involve setting up a Singularity/Apptainer image, a Docker container, or a native conda environment. See the [Installation Guide](installation.md).
 
 ## Basic Execution (Single Job)
 
-The basic method uses a single job script to run the entire workflow:
+The basic method uses a single SLURM job script to run the entire workflow. This is simpler to set up but less efficient for large workflows since all rules run sequentially within one allocation.
 
 1. **Create Job Script**
-   Use the provided template in `dynvision/cluster/snakejob_example.sh`:
+
+   Use the provided template `dynvision/cluster/snakejob.sh` and adapt it to your cluster. The key sections to configure:
 
    ```slurm
    #!/usr/bin/env bash
    #SBATCH -o /path/to/logs/slurm/%j.out
    #SBATCH -e /path/to/logs/slurm/%j.err
-   #SBATCH --time=24:00:00
-   #SBATCH --mem=80G
+   #SBATCH --time=2:00:00
+   #SBATCH --mem=32G
    #SBATCH --nodes=1
    #SBATCH --ntasks-per-node=1
    #SBATCH --cpus-per-task=16
-   #SBATCH --gres=gpu:1"
-   
+   #SBATCH --gres=gpu:1
+   #SBATCH --account=your_account
+
    module purge
-   
-   # If using Singularity
+
+   # Option A: Using Singularity container
    singularity exec --nv \
        --overlay /path/to/overlay.ext3:ro \
        /path/to/container.sif \
        bash -c "
+   source /ext3/env.sh
    conda activate myenv
-   
+
    cd ../workflow/
-   snakemake \
+   snakemake \$@ \
        --cores 16 \
-       --resources gpu=1 \
-       --config \
-           model_name=DyRCNNx4 \
-           data_name=cifar100
+       --resources gpu=1 cpu=16
    "
+
+   # Option B: Using native conda environment (no container)
+   # conda activate myenv
+   # cd ../workflow/
+   # snakemake $@ --cores 16 --resources gpu=1 cpu=16
    ```
+
+   The script passes any CLI arguments (`$@`) to snakemake, so you can specify targets, config overrides, etc.
 
 2. **Submit Job**
    ```bash
-   sbatch snakejob_example.sh
+   # Run default workflow
+   sbatch snakejob.sh
+
+   # Run specific target with config
+   sbatch snakejob.sh --config model_name=DyRCNNx4 data_name=cifar100
    ```
 
 3. **Monitor Job**
-
    ```bash
-   squeue -u <user-name>
+   squeue -u $USER
    ```
 
-   It is also recommended to make use of the Weights & Biases integration to monitor progress online.
-
-This method is simpler but less efficient for large workflows as it runs tasks sequentially.
+   It is also recommended to make use of the Weights & Biases integration to monitor training progress online.
 
 ## Advanced Execution (Parallel Jobs)
 
-The advanced method uses Snakemake's cluster capabilities to run tasks in parallel:
+The advanced method uses Snakemake's [SLURM executor plugin](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html) to submit each workflow rule as a separate SLURM job. This enables parallel execution and better resource utilization.
 
+### 1. Executor Environment (snake-env)
 
-1. Profile Configuration
+The advanced execution requires a **separate lightweight environment** on the cluster's native filesystem (outside any container). This environment only needs snakemake and the SLURM executor plugin --- it does NOT need DynVision or its dependencies.
 
-   DynVision uses Snakemake's cluster profiles for job management:
+Why? Snakemake must be able to call SLURM commands (`sbatch`, `srun`, `sacct`) directly, which are typically not available inside Singularity containers.
 
-   ```
-   dynvision/cluster/
-   ├── snakecharm.sh         # Wrapper script
-   ├── _snakecharm.sh        # Core execution script
-   └── profiles/
-      └── slurm/            # SLURM cluster profile
-         └── config.yaml   # Cluster settings
-   ```
+Create the environment using conda:
 
-   The SLURM profile (`profiles/slurm/config.yaml`) defines default resources and rule-specific settings:
+```bash
+conda create -n snake-env -c conda-forge -c bioconda python=3.12 snakemake snakemake-executor-plugin-slurm -y
+```
 
-   ```yaml
-   # General settings
-   executor: slurm
-   jobs: 150
-   default-resources:
-   runtime: 60
-   mem_mb: 16000
-   cpus_per_task: 16
+> **Important**: Use Python 3.12 (not 3.13+). Newer Python versions may have compatibility issues with snakemake dependencies.
 
-   # Rule-specific resources
-   set-resources:
-   train_model:
-      mem: 46000
-      runtime: 1440
-      gpu: 1
-      constraint: "a100|h100"
-      slurm_extra: "'--gres=gpu:1'"
-   ```
+Verify the installation:
+```bash
+conda activate snake-env
+snakemake --version          # should show 9.x
+snakemake --help | grep slurm   # should list slurm as an executor option
+```
 
-   For more details see the [Snakemake Executor Documentation](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html).
+> **Note**: If your cluster provides snakemake via a module (e.g., `module load bioinformatics/...`), make sure the conda environment's snakemake takes precedence. The module version may not include the SLURM executor plugin. When in doubt, run `which snakemake` after activation to confirm it points to the conda environment.
 
-2. **Automatic Environment Detection**
+### 2. Configure `_snakecharm.sh`
 
-   DynVision automatically detects cluster execution via scheduler environment variables:
-   - **SLURM**: `SLURM_JOB_ID`
-   - **PBS/Torque**: `PBS_JOBID`
-   - **LSF**: `LSB_JOBID`
-   - **SGE/UGE**: `SGE_TASK_ID`
+Edit `dynvision/cluster/_snakecharm.sh` to activate your snake-env. The key section to adapt:
 
-   When running on a cluster, Python commands are automatically wrapped with:
-   ```bash
-   executor_wrapper.sh python script.py --arg1 value
-   ```
+```bash
+source ~/.bashrc
+module purge
+module load anaconda3/2025.06      # or however conda is made available on your system
+conda activate /path/to/snake-env  # the environment created in step 1
+```
 
-   The `executor_wrapper.sh` script handles:
-   - Singularity container activation
-   - Conda environment setup
-   - GPU device configuration
-   - Overlay mounting
+Important details:
+- Use `conda activate`, not `source activate` (which is deprecated and may fail)
+- `module purge` first to avoid conflicts with system-provided snakemake versions
+- Only load the minimal modules needed to make conda available
 
-   **No configuration needed** - detection is automatic!
+### 3. Configure `executor_wrapper.sh`
 
-3. **Executor Environment**
-   This advanced execution may require the creation of an additional environment if the commands of the scheduler (e.g. SLURM) are not available in the main environment (e.g. because of using singularity).
-   Therefore, create a new environment (let's call it 'snake-env') in the cluster's native filesystem (so that commands like `sbatch` and `srun` are available) and install snakemake (`pip install snakemake`).
+Edit `dynvision/cluster/executor_wrapper.sh` to match your cluster's container and environment setup. The key configuration variables at the top of the file:
 
-4. **Adapt Executor Scripts**
+```bash
+readonly CONTAINER_IMAGE="/path/to/your/container.sif"
+readonly CONDA_ENV="your_env_name"
 
-   Adapt the executor script `dynvision/cluster/_snakecharm.sh` as needed to activate the environment created in **3.**
-   ```bash
-   module load anaconda3/2020.07  # conda needs to be available
-   source activate snake-env  # environment that contains snakemake
-   ```
+readonly OVERLAYS=(
+    "/path/to/your/overlay.ext3:ro"
+    # Add additional overlay mounts as needed (e.g., dataset squashfs)
+)
+```
 
-   Also configure the main executor wrapper (`dynvision/cluster/executor_wrapper.sh`) with your:
-   - Singularity container path
-   - Conda environment name
-   - Required overlay images
+If your cluster does not use Singularity, you can modify `executor_wrapper.sh` to activate a native conda environment instead of launching a container.
 
-5. **Use Snakecharm Wrapper**
-   DynVision provides `snakecharm.sh` to manage cluster execution:
+### 4. Configure SLURM Profile
 
-   ```bash
-   # Navigate to DynVision directory
-   cd dynvision
-   
-   # Run all experiments
-   ./cluster/snakecharm.sh
-   
-   # Run specific experiment
-   ./cluster/snakecharm.sh "--config experiment=duration model_name=DyRCNNx4 data_name=cifar100"
-   ```
+The SLURM profile (`dynvision/cluster/profiles/slurm/config.yaml`) defines resource allocations for each workflow rule. Key settings to adapt:
 
-   The wrapper script:
-   - Sets up the environment
-   - Configures cluster parameters
-   - Submits and monitors jobs
-   - Manages log files
+```yaml
+# Account / billing
+slurm_account: "your_account_name"
 
-   You may pass any commandline arguments to the snakecharm.sh script as you would do with a regular snakemake command
+# Log directory
+slurm-logdir: "/path/to/logs/slurm"
 
-6. **Monitor Execution**
-   - Check logs in the configured `slurm-logdir`
-   - Monitor job status with `squeue`
-   - View detailed logs for each rule
+# Default resources (applied to all rules unless overridden)
+default-resources:
+  runtime: 1800       # in seconds (see note below)
+  mem_mb: 32000       # in MB
+  cpus_per_task: 16
 
+# Rule-specific resources
+set-resources:
+  train_model:
+    mem: 80G
+    runtime: 48000     # 800 minutes
+    gpu: 1
+    tasks_per_gpu: 0   # see note below
+    cpus_per_task: 16
+```
+
+**Critical notes for the SLURM profile:**
+
+- **Runtime is in seconds**: The SLURM executor plugin divides the `runtime` value by 60 before passing it to SLURM's `--time` flag (which expects minutes). So `runtime: 1800` results in `--time=30` (30 minutes). Always specify runtime in seconds.
+
+- **GPU resources**: The plugin's `gpu` key maps to SLURM's `--gpus` flag. However, not all clusters support `--gpus` (job-level GPU allocation). If you get `Requested node configuration is not available` errors with `gpu: 1`, test your cluster directly:
+  ```bash
+  # Test which GPU flag format your cluster supports:
+  sbatch --gpus=1 --mem=1G -t 1 --wrap="nvidia-smi"           # job-level (plugin default)
+  sbatch --gres=gpu:1 --mem=1G -t 1 --wrap="nvidia-smi"       # per-node (traditional)
+  sbatch --gpus-per-node=1 --mem=1G -t 1 --wrap="nvidia-smi"  # per-node (alternative)
+  ```
+  If `--gpus` fails, use `slurm_extra: "'--gpus-per-node=1'"` instead of `gpu: 1`. The plugin blocks `--gres` in `slurm_extra` but allows `--gpus-per-node`.
+
+- **Disable `--ntasks-per-gpu`**: When using the `gpu` resource key, the plugin may automatically add `--ntasks-per-gpu=1`, which can cause job rejection on some clusters. Set `tasks_per_gpu: 0` to suppress this. (Not needed if using `slurm_extra` for GPU allocation instead.)
+
+- **GPU model selection**: If you need a specific GPU type, use `gpu_model` (not `constraint`). Check your cluster's available GPU names with `sinfo` or cluster documentation.
+
+- **Partitions**: Many clusters auto-assign partitions based on requested resources. Check your cluster documentation before adding `slurm_partition` --- on some systems, specifying a partition manually can cause errors.
+
+- **`slurm_account`**: Must be set in `default-resources` and/or in each rule under `set-resources`. Check your available accounts with `sacctmgr show associations user=$USER`.
+
+### 5. Use Snakecharm Wrapper
+
+Navigate to the `dynvision/` directory and run:
+
+```bash
+# Run all default targets
+./cluster/snakecharm.sh
+
+# Run a specific target with config
+./cluster/snakecharm.sh manuscript_figures --config test_batch=32
+
+# Dry run
+./cluster/snakecharm.sh -n
+```
+
+Pass arguments as you would to a regular `snakemake` command. Each argument should be passed separately (do not wrap multiple arguments in quotes).
+
+The wrapper runs the workflow in the background via `nohup`. Check the log file printed to stdout for progress:
+
+```bash
+tail -f /path/to/logs/slurm/snakecharm_<id>.log
+```
+
+### 6. Monitor Execution
+
+```bash
+# Check your running/pending SLURM jobs
+squeue -u $USER
+
+# Check a specific job's resource usage
+sacct -j <job_id> --format=JobID,Elapsed,Timelimit,State,MaxRSS
+
+# View snakemake orchestrator log
+tail -f /path/to/logs/slurm/snakecharm_<id>.log
+
+# View a specific rule's SLURM log
+ls /path/to/logs/slurm/
+```
 
 ## Environment Adaptation
 
@@ -234,10 +295,26 @@ DynVision automatically adapts to cluster environments:
    debug_enable_progress_bar: True
    ```
 
+## Troubleshooting
+
+### Common Issues
+
+- **`invalid choice: 'slurm'` for executor**: The snakemake binary being used doesn't have the SLURM plugin installed. Check `which snakemake` to confirm it points to your snake-env. System module versions of snakemake may shadow the conda version.
+
+- **Jobs timing out immediately**: Check that `runtime` values in the SLURM profile are in **seconds** (the plugin divides by 60). Use `sacct -j <jobid> --format=Timelimit` to verify the actual time limit SLURM received.
+
+- **`Requested node configuration not available`**: Often caused by `--ntasks-per-gpu` being set automatically. Add `tasks_per_gpu: 0` to the rule's resources. Can also be caused by invalid `constraint` or `slurm_partition` values.
+
+- **`--gres not allowed in slurm_extra`**: Use the `gpu` resource key instead. The SLURM executor plugin manages GRES allocation automatically.
+
+- **`assert self.workflow.is_main_process`**: Known bug in snakemake 9.14.0--9.14.4. Upgrade to snakemake >= 9.14.5.
+
+- **`command not found` errors in `_snakecharm.sh`**: Use `conda activate` (not `source activate`). Ensure `module purge` doesn't remove conda itself --- load the anaconda module after purging.
 
 ## Related Resources
 
-- [Snakemake Cluster Documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html)
+- [Snakemake SLURM Executor Plugin](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html)
+- [Snakemake CLI Reference](https://snakemake.readthedocs.io/en/stable/executing/cli.html)
 - [SLURM Documentation](https://slurm.schedmd.com/documentation.html)
 - [DynVision Configuration Reference](../reference/configuration.md)
 - [Workflow Organization](workflows.md)

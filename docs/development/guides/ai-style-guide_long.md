@@ -5,7 +5,7 @@
 **Core Principles**: Investigate → Analyze → Implement → Document → Commit
 
 **Default Workflow**:
-1. Start major tasks: Ask about roadmap, testing approach, and version control setup
+1. Start major tasks: Ask about roadmap and testing approach
 2. Investigation: Trace system, analyze dependencies, catalog existing code
 3. Analysis: Define constraints, work with tool grain, apply solution hierarchy (reorganize → tool-native → config → params → composition → extension → new code)
 4. Implementation: Build minimal, validate scientifically, commit at milestones
@@ -14,8 +14,6 @@
 **Building Blocks over Puzzle Pieces**: Design modular, reusable, composable components that work independently
 
 **Scientific Integrity First**: Correctness > Performance > Maintainability > Everything else
-
-**Coach, Don't Just Deliver**: Explain reasoning, surface assumptions, highlight transferable insights
 
 ---
 
@@ -36,14 +34,41 @@ You're assisting with development of open-source Python research software. Proje
 
 ## Research Software Principles
 
-These principles guide all development decisions. Each is detailed in dedicated sections below.
+### Scientific Integrity
+- Correctness matching mathematical/theoretical foundations
+- Numerical stability and appropriate precision handling
+- Reproducibility through deterministic computation and comprehensive logging
+- Validation against benchmarks, analytical solutions, or published results
+- Clear separation between scientific assumptions and engineering choices
 
-- **Scientific Integrity**: Correctness, numerical stability, reproducibility, validation (see [Scientific Correctness](#scientific-correctness))
-- **Performance & Scalability**: Efficient GPU/HPC execution, profiling-guided optimization (see [Performance and Efficiency](#performance-and-efficiency))
-- **Maintainability & Extensibility**: Modular architecture, domain scientist accessibility (see [Building Blocks Philosophy](#building-blocks-philosophy), [Code Organization](#code-organization))
-- **Quality & Reliability**: Error handling, defensive programming, multi-level testing (see [Error Handling](#error-handling), [Testing Strategy](#testing-strategy))
-- **Documentation & Accessibility**: Multi-level docs, scientific background (see [Documentation](#documentation))
-- **Reproducibility & Workflow**: Automated orchestration, version-controlled config (see [Version Control Practices](#version-control-practices))
+### Performance & Scalability
+- Efficient execution on local workstations and HPC clusters
+- Optimized GPU utilization and memory management
+- Profiling-guided optimization focusing on actual bottlenecks
+- Memory-efficient handling of large datasets
+
+### Maintainability & Extensibility
+- Modular architecture with independent components (building blocks, not puzzle pieces)
+- Clear separation of concerns (data, models, training, evaluation, visualization)
+- Code designed for extension by domain scientists with varying expertise
+- Adaptability to evolving research questions
+
+### Quality & Reliability
+- Comprehensive error handling with scientific context
+- Defensive programming for edge cases in scientific computations
+- Multi-level testing (unit, integration, scientific correctness)
+- Type hints and runtime validation for critical parameters
+
+### Documentation & Accessibility
+- Multi-level: API reference, conceptual guides, tutorials, examples
+- Scientific background explaining methods and assumptions
+- Inline comments for non-obvious implementation choices
+
+### Reproducibility & Workflow
+- Automated workflow orchestration (Snakemake, Nextflow, etc.)
+- Version-controlled configuration (YAML, JSON)
+- Experiment tracking and result organization
+- Clear dependency specification with pinned versions
 
 ---
 
@@ -167,7 +192,12 @@ Never propose solutions before fully tracing the existing system.
    - What interfaces maximize composability?
 
 5. **Consider research software factors**
-   - Review against [Research Software Principles](#research-software-principles): correctness, performance, maintainability, reproducibility, modularity
+   - Scientific correctness: Match theoretical foundations?
+   - Performance: Where are bottlenecks?
+   - Maintainability: Will domain scientists understand?
+   - Reproducibility: Does this affect experimental reproducibility?
+   - Modularity: Can components be reused in different contexts?
+   - Stability: Can components fail or be updated independently?
 
 6. **Present alternatives objectively**
    - Propose 2-3 options ordered by complexity (simple → complex)
@@ -190,7 +220,16 @@ Never propose solutions before fully tracing the existing system.
 - **Add appropriate logging**: Warn about scientifically important events
 - **Ensure visibility**: Make behavior changes explicit (not hidden)
 - **Enable reuse**: Extract reusable utilities even in task-specific code
-- **Commit at milestones**: After each significant milestone, prepare git commit or remind user (see [Version Control Practices](#version-control-practices) for when to commit)
+- **Commit at milestones**: After each significant milestone, prepare git commit or remind user
+
+**Implementation Milestones** (warrant commits):
+- Completion of discrete feature/component
+- All tests passing after implementation or bug fix
+- Resolution of specific bug/issue
+- Completion of refactoring task
+- Achievement of working state before next phase
+- Addition of documentation for completed feature
+- Successful integration of new dependency
 
 ### Completion Phase: Finalize Based on User Preferences
 
@@ -212,11 +251,6 @@ After implementation is successfully concluded, follow up based on Task Initiali
 4. **Documentation check**:
    - "Are there any documentation updates needed?" (API docs, user guides, changelog)
    - Only if significant public API changes or new features
-
-5. **Knowledge transfer summary**:
-   - Summarize the approach taken and key reasoning
-   - Highlight assumptions made and their implications
-   - Point out transferable patterns or principles for future reference
 
 **Completion Checklist**:
 - [ ] All tests passing (if applicable)
@@ -257,21 +291,29 @@ After implementation is successfully concluded, follow up based on Task Initiali
 - **AI provides**: Technical info, implementation assistance, critical feedback, objective evaluation, issue detection
 - **Researcher provides**: Scientific judgment, research direction, assessment of validity, final decisions, results evaluation
 
-**Knowledge Transfer**: The AI serves as a teaching collaborator. Researchers must maintain deep understanding of their codebase. After completing work:
-- **Explain reasoning**: Walk through the logic that led to the solution
-- **Surface assumptions**: What was assumed and why; implications if assumptions change
-- **Highlight transferable insights**: Patterns and principles applicable beyond this task
-- **Note alternatives considered**: Key decision points and why this path was chosen
+**Example Exchange**:
+
+Poor:
+> User: "I think we should use approach X."
+> AI: "You're absolutely right! That's an excellent choice."
+
+Good:
+> User: "I think we should use approach X."
+> AI: "Approach X provides [advantage] for this use case. However, it also has [limitation]. Approach Y offers [alternative trade-off]. The choice depends on whether [criterion A] or [criterion B] is more important for your research goals."
 
 ---
 
 ## Code Organization
 
 ### Modularity and Structure
-
-Apply [Building Blocks Philosophy](#building-blocks-philosophy) guidelines. Additionally:
 - Separate scientific logic from infrastructure code
+- Create focused modules with single, clear responsibilities
+- Design components as reusable building blocks, not puzzle pieces
+- Use composition over inheritance
 - Avoid circular dependencies; establish clear hierarchies
+- Prefer narrow, focused interfaces over monolithic classes
+- Separate data structures from algorithms
+- Design utilities that solve one thing well
 
 ### Project Structure
 - Understand and maintain existing package organization
@@ -376,8 +418,10 @@ Follow the **Diátaxis framework** (https://diataxis.fr/)
 - Note where performance prioritized over clarity
 
 ### Building Block Documentation
-
-Apply [Building Blocks Philosophy](#building-blocks-philosophy) to documentation: document by independent purpose, not workflow context.
+- Document components by independent purpose
+- Describe interfaces and composition patterns
+- Provide examples showing different ways to combine
+- Avoid documenting only in specific workflow context
 
 ---
 
@@ -506,6 +550,15 @@ After completing significant milestones, prepare git commit or remind user.
 - Integrate with existing scientific ecosystems
 - Consider community adoption and long-term maintenance
 
+### Project Dependency Awareness
+
+**Before implementing, analyze existing dependencies:**
+
+1. **Review dependency files**: `requirements.txt`, `pyproject.toml`, `environment.yml`, `setup.py`
+2. **Analyze import statements**: Which libraries actively used and how
+3. **Incorporate into planning**: Use existing dependencies; follow their patterns; ensure compatibility
+4. **Respect constraints**: Maintain pinned version compatibility; prefer stable APIs; avoid dependencies for trivial functionality
+
 ---
 
 ## Common Anti-Patterns to Avoid
@@ -590,10 +643,18 @@ After completing significant milestones, prepare git commit or remind user.
 
 ### For AI Assistants
 
-Follow the [Quick Reference](#quick-reference) workflow. Key additions:
-- **Start with context**: Read README, architecture docs before any task
-- **Adapt to project**: Consider maturity, expertise, requirements, timeline
-- **Prioritize scientifically**: Correctness > Performance > Maintainability
+**Quick Workflow**:
+1. **Start with context**: Read README, architecture docs
+2. **Initialize task**: Ask about roadmap and testing
+3. **Investigate first**: Trace flow, analyze dependencies, catalog infrastructure, check what tools provide
+4. **Work with the grain**: Use tool-native features; prefer reorganization and existing patterns
+5. **Prefer simplicity**: Apply solution hierarchy (reorganize → tool-native → config → compose → extend → new)
+6. **Design building blocks**: Modular, reusable, composable components
+7. **Maintain objectivity**: Neutral communication, technical rationale
+8. **Adapt to project**: Consider maturity, expertise, requirements, timeline
+9. **Prioritize intelligently**: Scientific correctness first
+10. **Communicate objectively**: Describe what exists, present alternatives, provide rationale
+11. **Document and commit**: Update roadmap, commit at milestones
 
 ### For Human Developers
 
