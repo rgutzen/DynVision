@@ -164,14 +164,14 @@ rule plot_performance:
             / 'test_data.csv',
             seed=lambda w: w.seeds.split('.'),
         ),
-        data_ffonly = expand(
-            project_paths.reports
-            / '{{experiment}}ffonly'
-            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            seed=lambda w: w.seeds.split('.'),
-        ),
+        # data_ffonly = expand(
+        #     project_paths.reports
+        #     / '{{experiment}}ffonly'
+        #     / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
+        #     / '{{data_name}}:{{data_group}}_{{status}}'
+        #     / 'test_data.csv',
+        #     seed=lambda w: w.seeds.split('.'),
+        # ),
         script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
         data_ffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
@@ -186,7 +186,7 @@ rule plot_performance:
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
-        subplot_filter = [0.2, 0.6, 1.0], #[0.1, 0.5, 1.0], #lambda w: config.experiment_config[w.experiment].get('subplot_filter', []),
+        subplot_filter = [], #[0.2, 0.6, 1.0], #[0.1, 0.5, 1.0], #lambda w: config.experiment_config[w.experiment].get('subplot_filter', []),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -197,7 +197,7 @@ rule plot_performance:
         """
         {params.execution_cmd} \
             --data {input.data:q} \
-            --data-ffonly {input.data_ffonly:q} \
+            --data-ffonly {params.data_ffonly:q} \
             --output {output:q} \
             --row {params.row} \
             --subplot {params.subplot} \
@@ -228,12 +228,13 @@ rule plot_training:
         ),
         script = SCRIPTS / 'visualization' / 'plot_training.py'
     params:
+            # / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_accuracy.csv',
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_accuracy.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_6000.6001.6002_accuracy.csv',
         loss_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_loss.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_6000.6001.6002_loss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -365,7 +366,14 @@ rule plot_responses:
         """
 
 def _get_triptych_value(category: str) -> str:
-    """Resolve the fixed value for one triptych axis."""
+    """Resolve the fixed value for one triptych axis.
+
+    For "seed", returns "-" placeholder since all seeds are used (no default value).
+    This placeholder won't match any actual seed, so no asterisk marking is added.
+    """
+    if category == "seed":
+        return "-"
+
     model_args = getattr(config, "model_args", {})
 
     if isinstance(model_args, dict) and category in model_args:
@@ -382,58 +390,75 @@ def _get_triptych_value(category: str) -> str:
 
 
 def _build_triptych_identifier(wildcards, star_slot: int) -> str:
+    """Build the model identifier with wildcards for glob matching.
+
+    Categories set to "seed" are skipped since seed is in the path suffix,
+    not the model identifier. However, the prefix before seed (which may
+    contain other parameters) is preserved.
+    """
+    cats = [wildcards.cat1, wildcards.cat2, wildcards.cat3]
+    prefixes = [wildcards.a1, wildcards.a2, wildcards.a3]
     values = [
-        '*' if star_slot == 1 else _get_triptych_value(wildcards.cat1),
-        '*' if star_slot == 2 else _get_triptych_value(wildcards.cat2),
-        '*' if star_slot == 3 else _get_triptych_value(wildcards.cat3),
+        '*' if star_slot == i + 1 else _get_triptych_value(cat)
+        for i, cat in enumerate(cats)
     ]
-    return (
-        f"{wildcards.a1}{wildcards.cat1}={values[0]}"
-        f"{wildcards.a2}{wildcards.cat2}={values[1]}"
-        f"{wildcards.a3}{wildcards.cat3}={values[2]}"
-        f"{wildcards.a4}"
+
+    parts = []
+    for prefix, cat, value in zip(prefixes, cats, values):
+        if cat == "seed":
+            # When skipping seed, keep the prefix content (e.g., "+skip=true+feedback=false+")
+            # but strip the trailing '+' that would have connected to seed=value
+            trimmed_prefix = prefix.rstrip('+')
+            if trimmed_prefix:
+                parts.append(trimmed_prefix)
+            continue
+        parts.append(f"{prefix}{cat}={value}")
+
+    return "".join(parts) + wildcards.a4
+
+
+def _get_triptych_data_inputs(wildcards, star_slot: int) -> list:
+    """Get input data files for a triptych column.
+
+    Returns empty list when the category is "seed" since seed variation
+    is already present in the other data files (they expand over seeds).
+    """
+    cats = [wildcards.cat1, wildcards.cat2, wildcards.cat3]
+    if cats[star_slot - 1] == "seed":
+        return []
+
+    return expand(
+        project_paths.reports
+        / wildcards.experiment
+        / f'{wildcards.model_name}:{{model_identifier}}_{{seed}}'
+        / f'{wildcards.data_name}:{wildcards.data_group}_{wildcards.status}'
+        / 'test_data.csv',
+        model_identifier=_build_triptych_identifier(wildcards, star_slot),
+        seed=wildcards.seeds.split('.'),
     )
+
 
 rule plot_responses_tripytch:
     input:
-        data1 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}:{model_identifier}_{seed}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            model_identifier=lambda w: _build_triptych_identifier(w, star_slot=1),
-            seed=lambda w: w.seeds.split('.'),
-        ),
-        data2 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}:{model_identifier}_{seed}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            model_identifier=lambda w: _build_triptych_identifier(w, star_slot=2),
-            seed=lambda w: w.seeds.split('.'),
-        ),
-        data3 = expand(
-            project_paths.reports
-            / '{{experiment}}'
-            / '{{model_name}}:{model_identifier}_{seed}'
-            / '{{data_name}}:{{data_group}}_{{status}}'
-            / 'test_data.csv',
-            model_identifier=lambda w: _build_triptych_identifier(w, star_slot=3),
-            seed=lambda w: w.seeds.split('.'),
-        ),
+        data1 = lambda w: _get_triptych_data_inputs(w, star_slot=1),
+        data2 = lambda w: _get_triptych_data_inputs(w, star_slot=2),
+        data3 = lambda w: _get_triptych_data_inputs(w, star_slot=3),
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
-        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_{'.'.join(config.seed)}_accuracy.csv",
-        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_{'.'.join(config.seed)}_accuracy.csv",
-        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_{'.'.join(config.seed)}_accuracy.csv",
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_6000.6001.6002.6003.6004.6005_accuracy.csv",
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_6000.6001.6002.6003.6004.6005_accuracy.csv",
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_6000.6001.6002.6003.6004.6005_accuracy.csv",
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
         ),
+        # Build data arguments conditionally - skip empty inputs (seed categories)
+        data1_arg = lambda w, input: f"--data {' '.join(shlex.quote(str(f)) for f in input.data1)}" if input.data1 else "",
+        data2_arg = lambda w, input: f"--data2 {' '.join(shlex.quote(str(f)) for f in input.data2)}" if input.data2 else "",
+        data3_arg = lambda w, input: f"--data3 {' '.join(shlex.quote(str(f)) for f in input.data3)}" if input.data3 else "",
         category = lambda w: ' '.join([w.cat1, w.cat2, w.cat3]),
+        default_category_values = lambda w: ' '.join([_get_triptych_value(cat) for cat in [w.cat1, w.cat2, w.cat3]]),
         dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
@@ -454,9 +479,9 @@ rule plot_responses_tripytch:
     shell:
         """
         {params.execution_cmd} \
-            --data {input.data1:q} \
-            --data2 {input.data2:q} \
-            --data3 {input.data3:q} \
+            {params.data1_arg} \
+            {params.data2_arg} \
+            {params.data3_arg} \
             --accuracy1 {params.accuracy1:q} \
             --accuracy2 {params.accuracy2:q} \
             --accuracy3 {params.accuracy3:q} \
@@ -464,6 +489,7 @@ rule plot_responses_tripytch:
             --parameter {params.parameter} \
             --experiment {wildcards.experiment} \
             --category {params.category:q} \
+            --default-category-values {params.default_category_values:q} \
             --dt {params.dt} \
             --confidence-measure {params.confidence_measure} \
             --accuracy-measure {params.accuracy_measure} \
@@ -683,30 +709,4 @@ rule plot_experiment:
             --data {input.data:q} \
             --output {output:q} \
             --parameter {params.parameter}
-        """
-
-rule plot_unrolling:
-    input:
-        engineering_time_data = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}:{args1}tff=0+trc=6+tsk=0+tfb=34{args2}+unrolled=false_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
-        biological_time_data = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}:{args1}tff=10+trc=6+tsk=20+tfb=14{args2}+unrolled=true_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
-        script = SCRIPTS / 'visualization' / 'plot_unrolling.py'
-    params:
-        t_feedforward = 10 // 2,  # tff / dt
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-        ),
-    output:
-        project_paths.figures / 'unrolling' / 'unrolling_{model_name}:{args1}tff=*{args2}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.png',
-    shell:
-        """
-        {params.execution_cmd} \
-            --engineering_time_data {input.engineering_time_data:q} \
-            --biological_time_data {input.biological_time_data:q} \
-            --t_feedforward {params.t_feedforward} \
-            --output {output:q} 
         """

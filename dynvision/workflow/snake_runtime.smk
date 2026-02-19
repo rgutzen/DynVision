@@ -27,9 +27,9 @@ rule init_model:
     """
     input:
         script = SCRIPTS / 'runtime' / 'init_model.py',
-        dataset_ready = project_paths.data.interim \
+        dataset_ready = ancient(project_paths.data.interim \
             / '{data_name}' \
-            / 'train_all.ready'
+            / 'train_all.ready')
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
         model_arguments = lambda w: parse_arguments(w.model_args),
@@ -77,17 +77,17 @@ rule train_model:
             / '{model_name}{model_args}_{seed}' \
             / '{data_name}' \
             / 'init.pt',
-        dataset_ready = project_paths.data.interim \
+        dataset_ready = ancient(project_paths.data.interim \
             / '{data_name}' \
-            / 'train_all.ready',
-        dataset_train = lambda w: project_paths.data.processed \
-            / '{data_name}' \
-            / 'train_all' \
-            / 'train.beton' if config.use_ffcv else [],
-        dataset_val = lambda w: project_paths.data.processed \
+            / 'train_all.ready'),
+        dataset_train = ancient(lambda w: project_paths.data.processed \
             / '{data_name}' \
             / 'train_all' \
-            / 'val.beton' if config.use_ffcv else [],
+            / 'train.beton' if config.use_ffcv else []),
+        dataset_val = ancient(lambda w: project_paths.data.processed \
+            / '{data_name}' \
+            / 'train_all' \
+            / 'val.beton' if config.use_ffcv else []),
         script = SCRIPTS / 'runtime' / 'train_model.py'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
@@ -173,9 +173,9 @@ rule test_model:
             / '{model_name}{model_identifier}' \
             / '{data_name}' \
             / '{status}.pt',
-        dataset_ready = project_paths.data.interim \
+        dataset_ready = ancient(project_paths.data.interim \
             / '{data_name}' \
-            / 'test_{data_group}.ready',
+            / 'test_{data_group}.ready'),
         script = SCRIPTS / 'runtime' / 'test_model.py'
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
@@ -259,7 +259,7 @@ rule best_checkpoint_to_statedict:
 checkpoint intermediate_checkpoint_to_statedict:
     """Convert Lightning checkpoints to state dictionaries."""
     input:
-        # model = project_paths.models / '{model_name}' / '{model_name}{model_identifier}' / '{data_name}' / 'trained.pt',   # comment out to retrieve checkpoints from unfinished trainings
+        model = project_paths.models / '{model_name}' / '{model_name}{model_args}_{seed}' / '{data_name}' / 'trained.pt',   # comment out to retrieve checkpoints from unfinished trainings
         script = project_paths.scripts.utils / 'checkpoint_to_statedict.py'
     params:
         checkpoint_dir = lambda w: project_paths.models / w.model_name / f'{w.model_name}{w.model_args}_{w.seed}' / w.data_name,
