@@ -143,15 +143,44 @@ def load_test_data_with_metadata(
         logger.warning(msg)
         return None
 
-    # Add metadata columns
+    # Detect collision between parameter and category (e.g., both are "idle")
+    param_category_collision = category and data_arg_key == category
+
+    # Determine category column name (prefix with train_ if collision)
+    category_col_name = f"train_{category}" if param_category_collision else category
+
+    # Track columns already used to avoid overwrites
+    used_columns = {data_arg_key}
+
+    # Add parameter column (test/data value)
     df[data_arg_key] = metadata.parameter_value
-    if category:  # Only add category column if category is provided
-        df[category] = metadata.category_value
+
+    # Add category column
+    if category:
+        df[category_col_name] = metadata.category_value
+        used_columns.add(category_col_name)
+
+    # Add status if present
     if metadata.status_value is not None:
         df["status"] = metadata.status_value
+        used_columns.add("status")
+
+    # Add extra parameters with collision avoidance
     for param_name, param_value in metadata.extra_values.items():
-        if param_value is not None:
-            df[param_name] = param_value
+        if param_value is None:
+            continue
+
+        # Skip if column already used (avoids overwriting parameter/category)
+        if param_name in used_columns:
+            continue
+
+        # Handle case where extra_param matches original category name but collision occurred
+        # The train value is already in train_{category}, data value same as parameter_value
+        if param_category_collision and param_name == category:
+            continue
+
+        df[param_name] = param_value
+        used_columns.add(param_name)
 
     return df
 
@@ -194,6 +223,14 @@ def aggregate_test_data(
     if extra_parameters:
         logger.info(f"Additional parameters: {extra_parameters}")
     logger.info(f"Extract status: {extract_status}")
+
+    # Detect and log parameter-category collision
+    param_category_collision = category and data_arg_key == category
+    if param_category_collision:
+        logger.info(
+            f"Collision detected: parameter '{data_arg_key}' == category '{category}'. "
+            f"Using 'train_{category}' for model category, '{data_arg_key}' for test parameter."
+        )
 
     dfs = []
     successful_files = []
@@ -249,8 +286,12 @@ def aggregate_test_data(
         sort_cols.append("status")
 
     # Add category (if provided) and parameter
+    # Use renamed column when parameter-category collision occurred
+    param_category_collision = category and data_arg_key == category
+    category_col_name = f"train_{category}" if param_category_collision else category
+
     if category:
-        sort_cols.extend([category, data_arg_key])
+        sort_cols.extend([category_col_name, data_arg_key])
     else:
         sort_cols.append(data_arg_key)
 
@@ -449,9 +490,13 @@ if __name__ == "__main__":
     logger.info(f"Shape: {aggregated_df.shape}")
     logger.info(f"Columns: {len(aggregated_df.columns)}")
 
-    if args.category in aggregated_df.columns:
+    # Handle collision case where category column is renamed to train_{category}
+    param_category_collision = args.category and args.parameter == args.category
+    category_col_name = f"train_{args.category}" if param_category_collision else args.category
+
+    if category_col_name and category_col_name in aggregated_df.columns:
         logger.info(
-            f"Unique {args.category} values: {aggregated_df[args.category].unique()}"
+            f"Unique {category_col_name} values: {aggregated_df[category_col_name].unique()}"
         )
     if args.parameter in aggregated_df.columns:
         logger.info(

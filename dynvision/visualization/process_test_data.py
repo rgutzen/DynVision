@@ -68,6 +68,10 @@ def extract_status_from_path(file_path: Path) -> Optional[str]:
     The status is expected to be in the format: {data_name}:{data_group}_{status}
     where the status appears after the last underscore in a path component.
 
+    This function distinguishes between:
+    - Model identifier parts: {model_name}:{args}_{seed} where args contains '=' BEFORE underscore
+    - Data identifier parts: {data_name}:{data_group}_{status} where '=' only in status (epoch=N)
+
     Args:
         file_path: Path to extract status from (typically config file or data file)
 
@@ -80,17 +84,31 @@ def extract_status_from_path(file_path: Path) -> Optional[str]:
 
         Path: .../imagenet1k:01_trained-epoch=150/test_data.csv
         Returns: "trained-epoch=150"
+
+        Path: .../DyRCNNx8:rctype=full_6000/imagenette:all_trained-best/test_data.csv
+        Returns: "trained-best" (correctly skips model identifier part)
     """
     # Look through path components for pattern matching {data}:{group}_{status}
     for part in file_path.parts:
-        # Check if this part contains a colon (indicating data_name:data_group format)
+        # Check if this part contains a colon (indicating potential data_name:data_group format)
         if ":" in part:
             # Extract the part after the colon
             after_colon = part.split(":", 1)[1]
-            # Split on last underscore to get status
-            if "_" in after_colon:
-                status = after_colon.rsplit("_", 1)[1]
-                return status
+
+            # Must have underscore to extract status
+            if "_" not in after_colon:
+                continue
+
+            # Split on last underscore: before_underscore contains group, after contains status/seed
+            before_underscore, after_underscore = after_colon.rsplit("_", 1)
+
+            # Skip model identifier parts - they have '=' in the part BEFORE the underscore
+            # (e.g., "rctype=full_6000" has "rctype=full" before underscore)
+            # Data parts don't have '=' before underscore (e.g., "all_trained-best" has "all")
+            if "=" in before_underscore:
+                continue
+
+            return after_underscore
 
     logger.debug(f"No status found in path: {file_path}")
     return None

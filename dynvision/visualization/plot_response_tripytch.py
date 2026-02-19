@@ -87,42 +87,47 @@ def _calculate_column_positions(layout: Dict) -> List[float]:
 def _get_title_and_symbol(
     category: str, config: Optional[Dict] = None
 ) -> Tuple[str, str]:
-    """Get display title and mathematical symbol for a category."""
-    # Try to get from config first
+    """Get display title and mathematical symbol for a category.
+
+    Uses the naming dict from config for symbol translation, with fallback
+    to hardcoded mappings for full descriptive names.
+    """
+    # Get symbol from config naming dict
     symbol = get_display_name(category, config) if config else None
 
-    # Enhanced mappings with full names
-    if symbol is None:
-        mappings = {
-            "tau": ("Time Constant", r"$\tau$"),
-            "trc": ("Recurrence Delay", r"$\Delta_{RC}$"),
-            "tsk": ("Skip Delay", r"$\Delta_{SK}$"),
-            "rctarget": ("Recurrence Target", "Target"),
-            "lossrt": ("Loss Reaction Time", r"$t_{loss}$"),
-            "tsteps": ("Training Timesteps", r"$T$"),
-            "idle": ("Initial Idle Time", r"$t_{idle}$"),
-            "feedback": ("Feedback Connections", "Feedback"),
-            "skip": ("Skip Connections", "Skip"),
-        }
-        category_name, symbol = mappings.get(
-            category, (category.capitalize(), category)
-        )
-    else:
-        # If we have a symbol from config, use the enhanced name mappings
-        name_mappings = {
-            "tau": "Time Constant",
-            "trc": "Recurrence Delay",
-            "tsk": "Skip Delay",
-            "rctarget": "Recurrence Target",
-            "lossrt": "Loss Reaction Time",
-            "tsteps": "Training Timesteps",
-            "idle": "Initial Idle Time",
-            "feedback": "Feedback Connections",
-            "skip": "Skip Connections",
-        }
-        category_name = name_mappings.get(category, category.capitalize())
+    # Fallback mappings for full descriptive names
+    name_mappings = {
+        "tau": "Time Constant",
+        "trc": "Recurrence Delay",
+        "tsk": "Skip Delay",
+        "rctarget": "Recurrence Target",
+        "rctype": "Recurrence Type",
+        "lossrt": "Loss Reaction Time",
+        "tsteps": "Training Timesteps",
+        "idle": "Initial Idle Time",
+        "feedback": "Feedback Connections",
+        "skip": "Skip Connections",
+        "seed": "Random Seed",
+    }
 
-    # Only add full name if symbol contains '$' (is a mathematical symbol)
+    # Fallback symbol mappings (used when config doesn't have the symbol)
+    symbol_mappings = {
+        "tau": r"$\tau$",
+        "trc": r"$\Delta_{RC}$",
+        "tsk": r"$\Delta_{SK}$",
+        "lossrt": r"$t_{loss}$",
+        "tsteps": r"$T$",
+        "idle": r"$t_{idle}$",
+    }
+
+    # Get descriptive name
+    category_name = name_mappings.get(category, category.capitalize())
+
+    # If no symbol from config, use fallback
+    if symbol is None or symbol == category:
+        symbol = symbol_mappings.get(category, category_name)
+
+    # Build title: only add symbol in parentheses if it's a mathematical symbol
     if symbol and "$" in symbol:
         title = f"Varying {category_name} ({symbol})"
     else:
@@ -210,7 +215,44 @@ def _extract_numerical_sort_key(value: str) -> Tuple[bool, float, str]:
         pass
 
     # Not numeric, return as string for string sorting
-    return (False, float('inf'), value_str)
+    return (False, float("inf"), value_str)
+
+
+def _get_ordering_sort_key(category_key: str, config: Optional[Dict]) -> callable:
+    """Get a sort key function based on the ordering dict from config.
+
+    If the category_key exists in config['ordering'], returns a function
+    that sorts by the order defined there. Otherwise returns a function
+    that sorts by numerical value (or string if not numeric).
+    """
+    ordering_list = None
+    if config and "ordering" in config:
+        # Try exact match first, then lowercase
+        ordering_list = config["ordering"].get(
+            category_key, config["ordering"].get(category_key.lower())
+        )
+
+    if ordering_list:
+        # Create a lookup dict for ordering
+        order_lookup = {str(v).lower(): i for i, v in enumerate(ordering_list)}
+
+        def sort_by_ordering(item):
+            val, label = item
+            # Try to match the value (lowercase) in the ordering list
+            val_lower = str(val).lower()
+            if val_lower in order_lookup:
+                return (0, order_lookup[val_lower], label)
+            # Not in ordering list, sort after ordered items by label
+            return (1,) + _extract_numerical_sort_key(label)
+
+        return sort_by_ordering
+    else:
+        # Fall back to numerical sorting by label
+        return lambda item: _extract_numerical_sort_key(item[1])
+
+
+def _format_seed_value(value) -> str:
+    return str(value).strip().split(".")[0]
 
 
 def _filter_first_parameter_value(
@@ -247,8 +289,6 @@ def _filter_first_parameter_value(
         return filtered_df
 
     return df
-
-
 
 
 def _plot_training_accuracy_panel(
@@ -292,7 +332,9 @@ def _plot_training_accuracy_panel(
             original_len = len(accuracy_df)
             accuracy_df = accuracy_df[accuracy_df["epoch"] <= max_epoch].copy()
             if len(accuracy_df) < original_len:
-                logger.info(f"Filtered accuracy data to epochs <= {max_epoch}: {len(accuracy_df)} rows (was {original_len})")
+                logger.info(
+                    f"Filtered accuracy data to epochs <= {max_epoch}: {len(accuracy_df)} rows (was {original_len})"
+                )
 
         logger.info(f"Plotting training accuracy data with {len(accuracy_df)} rows")
 
@@ -310,7 +352,9 @@ def _plot_training_accuracy_panel(
                         ax.plot(
                             train_data["epoch"],
                             train_data["train_accuracy"],
-                            color=colors.get(cat_val_orig, TRIPTYCH_FORMATTING["greyscale_color"]),
+                            color=colors.get(
+                                cat_val_orig, TRIPTYCH_FORMATTING["greyscale_color"]
+                            ),
                             linewidth=TRIPTYCH_FORMATTING["linewidth_main"],
                             linestyle="-",
                             alpha=TRIPTYCH_FORMATTING["alpha_line"],
@@ -325,7 +369,9 @@ def _plot_training_accuracy_panel(
                         ax.plot(
                             val_data["epoch"],
                             val_data["val_accuracy"],
-                            color=colors.get(cat_val_orig, TRIPTYCH_FORMATTING["greyscale_color"]),
+                            color=colors.get(
+                                cat_val_orig, TRIPTYCH_FORMATTING["greyscale_color"]
+                            ),
                             linewidth=TRIPTYCH_FORMATTING["linewidth_main"],
                             linestyle=":",
                             alpha=TRIPTYCH_FORMATTING["alpha_line"],
@@ -402,6 +448,7 @@ def create_triptych_plot(
     accuracy_measure: str = "accuracy",
     confidence_measure: str = "first_label_confidence",
     max_epoch: Optional[float] = None,
+    default_category_values: Optional[List[str]] = None,
 ) -> plt.Figure:
     """Create a triptych plot using plot_responses.py functionality.
 
@@ -416,6 +463,8 @@ def create_triptych_plot(
         accuracy_measure: Column name for accuracy metric
         confidence_measure: Column name for confidence metric
         max_epoch: Maximum epoch to display in accuracy panels (None for no limit)
+        default_category_values: Default values for each category (matching category_list order).
+            Legend entries matching these values will be marked with an asterisk (*).
     """
 
     logger.info("=" * 60)
@@ -474,10 +523,16 @@ def create_triptych_plot(
                     df = _filter_first_parameter_value(df, parameter_key)
 
                     # Standardize category values in the dataframe to match dimension extraction
+                    # Use special standardization for seed to avoid float conversion
                     if category_key in df.columns:
-                        df[category_key] = df[category_key].apply(
-                            _standardize_category_value
-                        )
+                        if category_key == "seed":
+                            df[category_key] = df[category_key].apply(
+                                _format_seed_value
+                            )
+                        else:
+                            df[category_key] = df[category_key].apply(
+                                _standardize_category_value
+                            )
 
             except Exception as e:
                 logger.error(f"Error loading data: {e}")
@@ -505,9 +560,45 @@ def create_triptych_plot(
         # Store data for later y-scaling
         column_data_list.append((df, accuracy_df, category_key))
 
+        # Handle missing data: for "seed" category, reuse data from other columns
+        # Filter to default values only to show seed variation for the default model
         if df is None or df.empty:
-            logger.warning(f"No valid data for column {col_idx + 1}")
-            continue
+            if category_key == "seed":
+                filtered_dfs = []
+                for prev_idx, (prev_df, _, prev_cat) in enumerate(
+                    column_data_list[:-1]
+                ):
+                    if (
+                        prev_df is not None
+                        and not prev_df.empty
+                        and prev_cat in prev_df.columns
+                    ):
+                        # Get default value for this category (standardized)
+                        if default_category_values and prev_idx < len(
+                            default_category_values
+                        ):
+                            default_val = _standardize_category_value(
+                                default_category_values[prev_idx]
+                            )
+                            # Filter to rows matching the default value
+                            filtered = prev_df[prev_df[prev_cat] == default_val].copy()
+                            if not filtered.empty:
+                                logger.info(
+                                    f"Column {col_idx + 1}: Using {len(filtered)} rows "
+                                    f"from column {prev_idx + 1} where {prev_cat}={default_val}"
+                                )
+                                filtered_dfs.append(filtered)
+                if filtered_dfs:
+                    df = pd.concat(filtered_dfs, ignore_index=True)
+                    # Standardize seed column values as integers (not floats)
+                    if "seed" in df.columns:
+                        df["seed"] = df["seed"].apply(_format_seed_value)
+                    logger.info(
+                        f"Column {col_idx + 1}: Combined {len(df)} rows for seed variation"
+                    )
+            if df is None or df.empty:
+                logger.warning(f"No valid data for column {col_idx + 1}")
+                continue
 
         # Extract dimension values and colors
         try:
@@ -612,15 +703,36 @@ def create_triptych_plot(
 
         # Create legend elements and labels
         # Build tuples of (value, formatted_label) first, then sort
+        # Get default value for this column (if provided)
+        # Standardize using the same function used for hue_values for consistent comparison
+        default_val = None
+        if default_category_values and col_idx < len(default_category_values):
+            if category_key == "seed":
+                default_val = _format_seed_value(default_category_values[col_idx])
+            else:
+                default_val = _standardize_category_value(
+                    default_category_values[col_idx]
+                )
+
         legend_items = []
         for val in hue_values:
             if val in colors:
-                formatted_label = _format_legend_label(category_key, val, config or {}, dt)
+                # Format seed values specially to avoid decimals
+                if category_key == "seed":
+                    formatted_label = _format_seed_value(val)
+                else:
+                    formatted_label = _format_legend_label(
+                        category_key, val, config or {}, dt
+                    )
+                # Add asterisk if this value matches the default
+                # Both val and default_val are standardized, so compare directly
+                if default_val is not None and val == default_val:
+                    formatted_label = f"{formatted_label} *"
                 legend_items.append((val, formatted_label))
 
-        # Sort by numerical value if possible (labels may have units)
-        # The sort key extracts numeric part from formatted label
-        legend_items_sorted = sorted(legend_items, key=lambda x: _extract_numerical_sort_key(x[1]))
+        # Sort using ordering dict if available, otherwise by numerical value
+        sort_key = _get_ordering_sort_key(category_key, config)
+        legend_items_sorted = sorted(legend_items, key=sort_key)
 
         # Build final legend elements and labels in sorted order
         legend_elements = []
@@ -640,7 +752,9 @@ def create_triptych_plot(
             legend_labels.append(formatted_label)
 
         if legend_elements:
-            n_cols = min(len(legend_elements), 5)
+            n_cols = min(len(legend_elements), 4)
+            # Get legend title from naming dict (symbol already comes from _get_title_and_symbol)
+            legend_title = get_display_name(category_key, config) or symbol
             legend = legend_ax.legend(
                 legend_elements,
                 legend_labels,
@@ -651,9 +765,11 @@ def create_triptych_plot(
                 handlelength=2,
                 handletextpad=0.5,
                 columnspacing=1.0,
-                title=symbol,
+                title=legend_title,
                 title_fontsize=fmt["fontsize_legend"],
             )
+            # Make legend title bold
+            legend.get_title().set_fontweight("bold")
 
         # Plot ridge plots using plot_responses functionality
         try:
@@ -817,6 +933,13 @@ def main():
         help="Maximum epoch to display in training accuracy panels (default: 300)",
     )
     parser.add_argument(
+        "--default-category-values",
+        type=str,
+        default=None,
+        help="Default values for each category (space-separated, matching --category order). "
+        "Legend entries matching these values will be marked with an asterisk (*).",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -897,6 +1020,11 @@ def main():
             accuracy_measure=args.accuracy_measure,
             confidence_measure=args.confidence_measure,
             max_epoch=args.max_epoch,
+            default_category_values=(
+                args.default_category_values.split()
+                if args.default_category_values
+                else None
+            ),
         )
 
         # Save the plot
