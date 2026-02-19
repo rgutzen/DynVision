@@ -51,6 +51,7 @@ class project_paths_class:
             self.large_logs = (
                 Path("/scratch") / self.user_name / self.project_name / "logs"
             )
+            self.references = Path().home() / self.toolbox_name / "references"
 
         os.environ["WANDB_DIR"] = str(self.large_logs.resolve())
         return None
@@ -90,7 +91,6 @@ class project_paths_class:
         self.scripts.models = self.scripts_path / "models"
         self.scripts.losses = self.scripts_path / "losses"
         self.scripts.configs = self.scripts_path / "configs"
-        self.scripts.features = self.scripts_path / "features"
         self.scripts.workflow = self.scripts_path / "workflow"
         self.scripts.visualization = self.scripts_path / "visualization"
         return None

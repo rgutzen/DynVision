@@ -508,7 +508,7 @@ class TemporalBase(nn.Module):
 
             x, responses_t = self._forward(
                 x,
-                t=idle_steps + t,  # Continue timestep counter from idle period
+                t=t,
                 feedforward_only=self.feedforward_only,
                 store_responses=store_responses,
             )

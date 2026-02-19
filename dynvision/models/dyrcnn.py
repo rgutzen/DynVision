@@ -233,7 +233,6 @@ class DyRCNNx4(DyRCNN):
             "record",  # record activations in responses dict
             "delay",  # set and get delayed activations for next layer
             "pool",  # apply pooling
-            "norm",  # apply normalization
         ]
 
         # Activation functions
