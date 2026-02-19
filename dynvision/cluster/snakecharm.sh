@@ -21,11 +21,10 @@ else
 fi
 
 # Use nohup to run the script in the background and redirect both stdout and stderr to the log file
-nohup bash -c "
-sh ./_snakecharm.sh $@
-" "$@" > "$slurm_logdir/snakecharm_$id.log" 2>&1 &
+echo "snakecharm DEBUG: $# args"; printf 'sc arg: [%s]\n' "$@"
 
-# nohup bash ./_snakecharm.sh "$@" > "$slurm_logdir/snakecharm_$id.log" 2>&1 &
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+nohup bash "$SCRIPT_DIR/_snakecharm.sh" "$@" > "$slurm_logdir/snakecharm_$id.log" 2>&1 &
 
 pid=$!  # Process ID of the last background command (stop with `kill $pid`)
 echo "PID: $pid" >> "$slurm_logdir/snakecharm_$id.log"

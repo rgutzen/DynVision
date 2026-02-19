@@ -1,4 +1,5 @@
-sbatch --time=06:00:00 --mem=2GB --wrap "sleep infinity"
+sbatch --time=06:00:00 --mem=2GB --account=torch_pr_628_general --wrap "sleep infinity"
+# srun --account=torch_pr_628_general --cpus-per-task=4 --mem=32G --time=02:00:00  --pty bash -l
 
 # How to Connect VS Code to a Greene Compute Node
 # https://sites.google.com/nyu.edu/nyu-hpc/training-support/general-hpc-topics/vs-code
