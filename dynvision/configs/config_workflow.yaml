@@ -11,7 +11,8 @@ model_name:
   # - ResNet1202
   # - ResNet44
 
-seed: ["6000", "6001", "6002"] #, "6003", "6004", "6005"]
+# seed: ["6000", "6001", "6002"] #, "6003", "6004", "6005"]
+seed: ["7000", "7001", "7002"]
 init_with_pretrained: False
 
 status: [trained-best] #, trained-epoch=299]

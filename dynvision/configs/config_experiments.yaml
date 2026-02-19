@@ -20,7 +20,7 @@ experiment_config:
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
     # energyloss: ['0', '0.0002', '0.002', '0.02', '0.2', '1.0']  # '0.00002',
-    energyloss: ['0', '0.0002', '0.2', '0.5', '1.0'] # '0.002',
+    energyloss: ['0', '0.0002', '0.02', '0.2', '1.0'] # '0.002',
     pretrained: ['true']
     
   response:
@@ -42,7 +42,7 @@ experiment_config:
       ffonly: ['true', 'false']
 
   responseintermediate:
-    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=299, trained-epoch=399, trained-epoch=499]
+    status: [trained-epoch=49, trained-epoch=99, trained-epoch=149, trained-epoch=199, trained-epoch=249, trained-epoch=299] #, trained-epoch=399, trained-epoch=499]
     parameter: stim
     data_loader: StimulusDuration
     data_args:
@@ -66,8 +66,8 @@ experiment_config:
     data_loader: StimulusDuration
     data_args:
       dsteps: 125
-      # stim: [25, 100]
-      stim: 100
+      stim: [25, 100]
+      # stim: 100
       intro: 0
       idle: 20
 
@@ -83,11 +83,10 @@ experiment_config:
     parameter: idle
     data_loader: StimulusDuration
     data_args:
-      dsteps: 50
-      intro: 0
-      stim: 25
-      # idle: [0, 1, 5, 10, 15, 100]
-      idle: 100
+      dsteps: 30
+      intro: 5
+      stim: 15
+      idle: [0, 1, 5, 10, 20, 40]
 
   duration:
     parameter: stim

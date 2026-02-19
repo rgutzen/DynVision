@@ -47,6 +47,8 @@ naming:
   mul: "Multiplicative"
   nan: "None"
   none: "None"
+  pattern: "Presentation Pattern"
+  seed: "Seed"
   ffonly: "Feedforward Only"
   feedforward: "Feedforward"
   recurrence: "Recurrent"
