@@ -127,11 +127,10 @@ execute_container() {
             echo "================================================"
             
             # Setup conda environment
-            if ! source /ext3/env.sh; then
-                echo "Failed to source /ext3/env.sh" >&2
-                exit 1
-            fi
-            
+            # Source only conda.sh (env.sh has broken PATH/PYTHONPATH exports)
+            source /ext3/miniforge3/etc/profile.d/conda.sh
+            unset PYTHONPATH
+
             if ! conda activate '"$CONDA_ENV"'; then
                 echo "Failed to activate conda environment: '"$CONDA_ENV"'" >&2
                 exit 1
