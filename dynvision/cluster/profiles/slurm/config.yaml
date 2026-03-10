@@ -31,7 +31,7 @@ default-resources:
   disk_mb: 1000  # 1 GB
   cpus_per_task: 16
   cpu: 16
-  slurm_account: "torch_pr_628_general"
+  slurm_account: "torch_pr_628_cds"
 
 #############################
 # dynamic resources keywords:
@@ -46,7 +46,7 @@ set-resources:
     runtime: 9600  # 160 minutes
     cpus_per_task: 16
     cpu: 16
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
 
   test_model:
@@ -54,14 +54,14 @@ set-resources:
     runtime: 120 * attempt  # 120 minutes per attempt (dynamic expressions are in minutes, not seconds)
     cpus_per_task: 16
     disk_mb: 30000  # ~30 GB per test_responses.pt; throttle with --resources disk_mb=<total_budget>
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
     slurm_extra: "'--gpus-per-node=1'"
 
   train_model:
     mem: 80G
     runtime: 48000  # 800 minutes (~13 hours)
     cpus_per_task: 16
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
     slurm_extra: "'--gpus-per-node=h200:1'"
 
   train_model_distributed:
@@ -70,60 +70,60 @@ set-resources:
     runtime: 360000  # 6000 minutes (100 hours)
     cpus_per_task: 16
     nodes: 1
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
     slurm_extra: "'--gpus-per-node=h200:4 --ntasks-per-node=4'"
 
   symlink_data_subsets:
     mem: 32G
     runtime: 600  # 10 minutes
     cpus_per_task: 4
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   symlink_data_groups:
     mem: 32G
     runtime: 600  # 10 minutes
     cpus_per_task: 4
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   build_ffcv_datasets:
     mem: 120G
     runtime: 7200  # 120 minutes
     cpu: 32
     cpus_per_task: 32
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   process_test_data:
     mem: 120G
     runtime: 21600  # 360 minutes (6 hours)
     cpus_per_task: 16
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   process_single_test:
     mem: 120G
     runtime: 1800  # 30 minutes
     cpus_per_task: 16
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   aggregate_test_results:
     mem: 64G
     runtime: 900  # 15 minutes
     cpus_per_task: 4
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   best_checkpoint_to_statedict:
     mem: 16G
     runtime: 900  # 15 minutes
     cpus_per_task: 4
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
 
   intermediate_checkpoint_to_statedict:
     mem: 16G
     runtime: 900  # 15 minutes
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"
     cpus_per_task: 4
 
   plot_unrolling:
     mem: 120G
     runtime: 3600  # 60 minutes
     cpus_per_task: 16
-    slurm_account: "torch_pr_628_general"
+    slurm_account: "torch_pr_628_cds"

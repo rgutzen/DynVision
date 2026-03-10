@@ -12,9 +12,9 @@ readonly CONDA_ENV="rva"
 # Overlay mounts - organized for clarity
 readonly OVERLAYS=(
     "/scratch/rg5022/images/rva.ext3:ro"
-    # "/vast/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro"
-    # "/vast/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro"
-    # "/vast/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro"
+    "/projects/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro"
+    "/projects/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro"
+    "/projects/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro"
 )
 
 # Logging functions

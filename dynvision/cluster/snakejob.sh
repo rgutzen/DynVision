@@ -15,10 +15,14 @@ module purge
 
 singularity exec --nv \
     --overlay /scratch/rg5022/images/rva.ext3:ro \
+    --overlay /projects/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro \
+    --overlay /projects/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro \
+    --overlay /projects/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro \
     /share/apps/images/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif \
     bash -c \
 "
-source /ext3/env.sh
+# source /ext3/env.sh
+source /ext3/miniforge3/etc/profile.d/conda.sh
 conda activate rva
 
 cd ../workflow
