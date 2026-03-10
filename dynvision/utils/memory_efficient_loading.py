@@ -703,6 +703,27 @@ def process_layer_responses_incremental(
                 is_5d = len(layer_tensor.shape) == 5
                 logger.info(f"  Computing metrics for {layer_name} (5D: {is_5d})")
 
+                # Defensive guard: handle pre-averaged 2D tensors (from layer-wise storage)
+                if layer_tensor.dim() == 2:
+                    logger.info(
+                        f"  Layer {layer_name} is 2D ({layer_tensor.shape}) — "
+                        f"treating as pre-averaged data"
+                    )
+                    full_metric_name = f"{layer_name}_response_avg"
+                    extracted_values[full_metric_name] = (
+                        extract_metric_values_for_dataframe(
+                            layer_tensor,
+                            sample_to_presentation,
+                            presented_classes,
+                            unique_times,
+                            resolution=resolution,
+                            n_samples_expected=n_samples_expected,
+                        )
+                    )
+                    del layer_tensor
+                    memory_monitor.cleanup()
+                    continue
+
                 # STEP 3C: Process each metric with aggressive cleanup
                 metrics_to_process = []
                 if "response_avg" in measures:

@@ -333,6 +333,15 @@ class TestingOrchestrator:
                         f"  Layer {layer}: {responses[layer].shape}, {responses[layer].dtype} -> {size_mb:.2f} MB"
                     )
 
+                # Inject metadata about storage format
+                response_resolution = getattr(
+                    getattr(model, "storage", None), "response_resolution", "unit"
+                )
+                responses["_metadata"] = {
+                    "response_resolution": response_resolution,
+                    "version": 1,
+                }
+
                 # Save responses
                 logger.info("Writing response tensors to disk...")
                 torch.save(responses, self.config.output_responses)

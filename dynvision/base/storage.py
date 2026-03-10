@@ -14,7 +14,10 @@ from pytorch_lightning import LightningModule
 import torch
 import pandas as pd
 import numpy as np
-import time
+from dynvision.utils.visualization_utils import (
+    layer_response_avg,
+    layer_response_std,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -947,6 +950,8 @@ class StorageBuffer:
         record_strategy: str = "fixed",
         cpu_offload: bool = True,
         thread_safe: bool = True,
+        response_resolution: str = "unit",
+        classifier_name: str = "classifier",
     ):
         # Response buffer for layer activations
         self.responses = DataBuffer(
@@ -966,9 +971,12 @@ class StorageBuffer:
             name="RecordBuffer",
         )
 
+        self.response_resolution = response_resolution
+        self.classifier_name = classifier_name
+
         logger.debug(
             f"Storage buffers created: responses={max_responses}({response_strategy}), "
-            f"records={max_records}({record_strategy})"
+            f"records={max_records}({record_strategy}), resolution={response_resolution}"
         )
 
     def store_responses(
@@ -998,12 +1006,42 @@ class StorageBuffer:
             else:
                 processed_dict[key] = tensor
 
+        # Apply layer-wise reduction if configured
+        if self.response_resolution == "layer":
+            processed_dict = self._reduce_to_layer_stats(processed_dict)
+
         # Clear original response_dict references to allow GPU memory release
         # before CPU offload in append() - critical for preventing OOM
         result = self.responses.append(processed_dict)
         del processed_dict
 
         return result
+
+    def _reduce_to_layer_stats(
+        self, response_dict: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Reduce full layer tensors to spatially averaged statistics.
+
+        Replaces each non-classifier layer tensor (dim > 2) with two (B, T) tensors:
+        {layer}_response_avg and {layer}_response_std. The classifier layer and
+        already-2D tensors pass through unchanged.
+
+        Args:
+            response_dict: Dictionary of layer name to response tensor
+
+        Returns:
+            Dictionary with reduced tensors
+        """
+
+        reduced = {}
+        for key, tensor in response_dict.items():
+            if key == self.classifier_name or tensor.dim() <= 2:
+                reduced[key] = tensor
+            else:
+                with torch.no_grad():
+                    reduced[f"{key}_response_avg"] = layer_response_avg(tensor)
+                    reduced[f"{key}_response_std"] = layer_response_std(tensor)
+        return reduced
 
     def store_records(
         self,
@@ -1289,9 +1327,12 @@ class StorageBufferMixin(LightningModule):
         store_val_records: Optional[int] = None,
         store_test_records: Optional[int] = None,
         early_test_stop: bool = True,
+        response_resolution: str = "unit",
         **kwargs,
     ):
         """Initialize with flexible storage configuration."""
+        self._response_resolution = response_resolution
+
         # Update response configs only if provided
         if store_train_responses is not None:
             self.training_storage_config["max_responses"] = store_train_responses
@@ -1463,8 +1504,14 @@ class StorageBufferMixin(LightningModule):
 
         # Create storage with testing configuration
         self.storage.clear_all()
-        self.storage = StorageBuffer(**self.testing_storage_config)
-        logger.debug(f"Testing storage: {self.testing_storage_config}")
+        self.storage = StorageBuffer(
+            **self.testing_storage_config,
+            response_resolution=self._response_resolution,
+            classifier_name=getattr(self, "classifier_name", "classifier"),
+        )
+        logger.debug(
+            f"Testing storage: {self.testing_storage_config}, resolution={self._response_resolution}"
+        )
 
     def on_test_end(self) -> None:
         """Clear storage buffer at end of testing."""
