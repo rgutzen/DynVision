@@ -216,7 +216,7 @@ snakemake train_model --config \
   epochs=100 \
   batch_size=256 \
   learning_rate=0.0005 \
-  loss="[CrossEntropyLoss,EnergyLoss]"
+  loss="[CrossEntropyLoss,ActivityLoss]"
 ```
 
 This example:

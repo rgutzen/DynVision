@@ -53,7 +53,7 @@ Documentation of DynVision's code structure:
 
 Reference for available loss functions:
 - CrossEntropyLoss with temporal masking
-- EnergyLoss for regularization
+- ActivityLoss for regularization
 - Temporal normalization behavior
 - Loss combination and weighting
 - Presentation pattern integration

@@ -44,18 +44,18 @@ Reviewed and fixed the complete loss calculation pipeline to ensure correct hand
 
 **Key Findings:**
 - ✅ **CrossEntropyLoss:** Normalizes by valid (non-masked) timesteps only
-- ⚠️ **EnergyLoss:** Was overwriting instead of accumulating energy across timesteps
+- ⚠️ **ActivityLoss:** Was overwriting instead of accumulating energy across timesteps
 - ✅ **Loss Combination:** Correctly weights and sums individual losses
 
 ### Fixes Applied
 
-1. **EnergyLoss Accumulation** - Modified `_accumulate_energy()` to accumulate energy across timesteps rather than overwrite
-2. **EnergyLoss Timestep Normalization** - Infer `n_timesteps` from hook call counts and normalize by total timesteps
+1. **ActivityLoss Accumulation** - Modified `_accumulate_energy()` to accumulate energy across timesteps rather than overwrite
+2. **ActivityLoss Timestep Normalization** - Infer `n_timesteps` from hook call counts and normalize by total timesteps
 3. **Device Handling** - Added automatic device alignment for GPU/CPU transfers
 4. **GPU-CPU Sync Elimination** - Rewrote `_compute_reaction_mask()` using fully vectorized operations
 5. **Unit Tests** - Created `tests/losses/test_loss_normalization.py` with 6 comprehensive tests
 
-**Result:** EnergyLoss now correctly measures average absolute activity per unit, per timestep, per module, per sample.
+**Result:** ActivityLoss now correctly measures average absolute activity per unit, per timestep, per module, per sample.
 
 **Detailed documentation:** See [Loss Functions Reference](../reference/losses.md)
 

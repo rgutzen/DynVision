@@ -62,7 +62,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ## Recent Updates (2025-11-22)
 
 ### Completed Documentation Tasks
-1. ✅ **Created losses.md** - Comprehensive reference for CrossEntropyLoss and EnergyLoss
+1. ✅ **Created losses.md** - Comprehensive reference for CrossEntropyLoss and ActivityLoss
 2. ✅ **Created temporal-data-presentation.md** - Complete user guide for temporal features
 3. ✅ **Updated model-base.md** - Added temporal presentation and loss configuration sections
 4. ✅ **Updated configuration.md** - Added temporal parameters documentation

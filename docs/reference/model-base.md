@@ -113,7 +113,7 @@ TemporalBase now handles sophisticated temporal presentation patterns and reacti
 TemporalBase owns loss criterion initialization through `_init_loss()`:
 
 - Supports multiple loss functions with configurable weights
-- Automatically registers hooks for EnergyLoss
+- Automatically registers hooks for ActivityLoss
 - Handles `ignore_index` configuration for temporal masking
 - See [Loss Functions Reference](losses.md) for available losses
 

@@ -51,11 +51,11 @@ loss = criterion(outputs, targets)
 
 ---
 
-### EnergyLoss
+### ActivityLoss
 
 Regularization loss that penalizes total neural activity across all timesteps.
 
-**Location:** `dynvision.losses.EnergyLoss`
+**Location:** `dynvision.losses.ActivityLoss`
 
 **Purpose:** Compute total computational energy (neural activity) to encourage efficient, sparse representations.
 
@@ -77,16 +77,16 @@ Regularization loss that penalizes total neural activity across all timesteps.
 
 **Example:**
 ```python
-from dynvision.losses import EnergyLoss
+from dynvision.losses import ActivityLoss
 
 # Create energy loss
-energy_loss = EnergyLoss(reduction="mean", p=1)  # L1 norm
+energy_loss = ActivityLoss(reduction="mean", p=1)  # L1 norm
 
 # Register hooks on model layers
 energy_loss.register_hooks(model)
 
 # During training, energy accumulates automatically via hooks
-# Compute loss (outputs and targets are ignored for EnergyLoss)
+# Compute loss (outputs and targets are ignored for ActivityLoss)
 loss = energy_loss(outputs=None, targets=None)
 # Returns average absolute activity per unit per timestep per module
 ```
@@ -179,7 +179,7 @@ criterion:
 ```python
 # Manually combining losses
 ce_loss = criterion_ce(outputs, targets)  # CrossEntropyLoss
-energy = criterion_energy(None, None)      # EnergyLoss
+energy = criterion_energy(None, None)      # ActivityLoss
 
 # Weighted combination
 total_loss = 1.0 * ce_loss + 0.05 * energy
@@ -230,11 +230,11 @@ pattern = "1000111000"  # Two stimulus chunks
 | Loss Type | Normalization Base | Reaction Masking | Null Input Handling |
 |-----------|-------------------|------------------|---------------------|
 | CrossEntropyLoss | Valid timesteps only | Respects (via ignore_index) | Respects (via ignore_index) |
-| EnergyLoss | All timesteps | Ignores (counts all) | Ignores (counts all) |
+| ActivityLoss | All timesteps | Ignores (counts all) | Ignores (counts all) |
 
 **Rationale:**
 - **CrossEntropyLoss**: Evaluates prediction accuracy only when supervision is meaningful
-- **EnergyLoss**: Measures total computational cost regardless of supervision availability
+- **ActivityLoss**: Measures total computational cost regardless of supervision availability
 
 ---
 
@@ -261,7 +261,7 @@ def apply_reduction(self, loss: torch.Tensor, num_valid_timesteps: Optional[int]
 - Passes count to `apply_reduction()` for correct normalization
 - Handles edge case of zero valid timesteps (returns zero loss)
 
-### Hook Management (EnergyLoss)
+### Hook Management (ActivityLoss)
 
 **Hook Registration:**
 ```python
@@ -303,13 +303,13 @@ def _accumulate_energy(self, module_name: str, activation: torch.Tensor) -> None
 ### Basic Training Setup
 
 ```python
-from dynvision.losses import CrossEntropyLoss, EnergyLoss
+from dynvision.losses import CrossEntropyLoss, ActivityLoss
 
 # Classification loss
 ce_loss = CrossEntropyLoss(reduction="mean", ignore_index=-1)
 
 # Energy regularization
-energy_loss = EnergyLoss(reduction="mean", p=1)
+energy_loss = ActivityLoss(reduction="mean", p=1)
 energy_loss.register_hooks(model)
 
 # In training loop
@@ -334,7 +334,7 @@ def training_step(batch):
 ```python
 # Log individual components for tracking
 self.log("loss/CrossEntropyLoss", ce_loss.item())
-self.log("loss/EnergyLoss", energy_loss.item())
+self.log("loss/ActivityLoss", energy_loss.item())
 self.log("train_loss", total_loss.item())
 ```
 
@@ -398,7 +398,7 @@ total_loss = ce_loss + 0.1 * energy_loss  # Try larger weight
 
 ### Memory Efficiency
 
-**EnergyLoss:**
+**ActivityLoss:**
 - Uses hooks to avoid storing full activation tensors
 - Only accumulates scalar energy values per module
 - Minimal memory overhead compared to standard forward pass
