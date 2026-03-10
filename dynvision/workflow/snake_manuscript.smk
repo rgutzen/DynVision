@@ -3,33 +3,44 @@
 # SEED = ["3000", "3001", "3002"] # energy loss weight not applied? & use_ffcv=True
 # SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
 # SEED = ["5000"] #, "5001", "5002"] # ~not! uses shuffled patterns~ 
-
+# SEED = 7000+ uses ffcv=False, energyloss on all timesteps
+# SEED = 8000+ uses ffcv=False, energyloss on relu output
+# SEED = 9000 uses ffcv=False, signed activity loss on pre-relu activity
+# SEED = 9010 absolute activity loss on pre-relu activity
+# SEED = 9020 absolute activity loss on recurrence output
+# SEED = 9100+ uses ffcv=False, signed activity loss on recurrent output
 
 # Figures naming convention:
 # {plot_type}_{category}=*{+model_args}_{focus_layer}_{seed}.png
-rule remaining_training:
+
+rule figures_with_updated_energyloss: # seed=8000+
     input:
-        m1 = "/scratch/rg5022/Modeling_Dynamical_Vision/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.0002+pattern=1+rctype=full+rctarget=middle+skip=true+feedback=mul_7002/imagenette/trained.pt",
-        m2 = "/scratch/rg5022/Modeling_Dynamical_Vision/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.0002+pattern=1+rctype=full+rctarget=middle+skip=true+feedback=add_7001/imagenette/trained.pt",
-        m3 = "/scratch/rg5022/Modeling_Dynamical_Vision/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.0002+pattern=1+rctype=full+rctarget=middle+skip=true+feedback=add_7002/imagenette/trained.pt",
-        m4 = "/scratch/rg5022/Modeling_Dynamical_Vision/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.0002+pattern=1+rctype=full+rctarget=middle+skip=true+feedback=mul_7001/imagenette/trained.pt",
-        m5 = "/scratch/rg5022/Modeling_Dynamical_Vision/models/DyRCNNx8/DyRCNNx8:tsteps=20+dt=2+tau=5+tff=0+trc=6+tsk=0+lossrt=4+energyloss=0.0002+pattern=1+rctype=full+rctarget=middle+skip=true+feedback=mul_7002/imagenette/trained.pt"
-
-
-rule run_one_unrolling:
-    input:
-        expand(project_paths.figures / "unrolling" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "responses_tff={b_tff}+tsk={b_tsk}+tfb={b_tfb}.png",
-        model_name=config.model_name,
-        model_args=args_product(DEFAULT_MODEL_ARGS | {"feedback": "add"}),
-        seed=config.seed[0],
-        data_name=config.data_name,
-        data_group='one',
-        status=config.status,
-        b_tff=[10], # 0 in engineering time 
-        b_tsk=[20], # 0 in engineering time (e_tsk + b_tff * n_skip_layers)
-        b_tfb=[10], # 30 in engineering time (e_tfb - b_tff * n_skip_layers)
-    ),
-
+        # NOISE PERFORMANCE
+        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+            experiment=["gaussiannoise"], # "gaussiancorrnoise"], #"phasescramblednoise", 
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "middle", "energyloss": "*", "pattern": "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "output", "energyloss": "*", "pattern": "1011"}),
+            seed=config.seed + [".".join(config.seed)],
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            plot="performance_manuscript",
+        ),
+        # NEURAL DYNAMICS
+        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+            # experiment=["duration", "contrast", "interval"],
+            experiment=["dynamics"],
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "output", "energyloss": "*", "pattern": "1011"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "middle", "energyloss": "*", "pattern": "1"}),
+            seed=config.seed + [".".join(config.seed)],
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            # plot=[f"dynamics_groen_{focus_layer}" for focus_layer in ['V1', 'V2']],
+            plot=[f"dynamics_{focus_layer}_v_groen+energyloss" for focus_layer in ['V2+V2+V1', 'V1+V1+V2']]
+        ),
 
 rule manuscript_figures: # manuscript figures
 # sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"
@@ -109,7 +120,8 @@ rule manuscript_figures: # manuscript figures
             experiment=["gaussiannoise"], # "gaussiancorrnoise"], #"phasescramblednoise", 
             model_name=config.model_name,
             model_args=args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*", "pattern": "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"feedback": "*", "rctarget": "middle"}),
+                     + args_product(DEFAULT_MODEL_ARGS | {"feedback": "*", "rctarget": "middle"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "rctarget": "middle"}),
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
@@ -153,18 +165,18 @@ rule manuscript_figures: # manuscript figures
             tfb=[10], # 30 in engineering time
         ),
         # STABILITY
-        # expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
-        #     experiment="stability",
-        #     model_name=config.model_name,
-        #     model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
-        #              + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"})
-        #              + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"}),   
-        #     seed=config.seed + [".".join(config.seed)],
-        #     data_name=config.data_name,
-        #     data_group=config.data_group,
-        #     status=config.status,
-        #     plot="responses",
-        # ),
+        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+            experiment="stability",
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"}),
+            seed=config.seed + [".".join(config.seed)],
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            plot="responses",
+        ),
         # # REFERENCE MODELS
         # expand(project_paths.figures / "{experiment}" / "{model}:{model_args}_{seeds}" / "imagenet:imagenette_init" / "{plot}.png",
         #     experiment=['response', 'idleresponse', 'hundred'],
@@ -173,19 +185,7 @@ rule manuscript_figures: # manuscript figures
         #     seeds=SEED[0],
         #     plot='responses',
         # ),
-    params:
-        figure_folder = project_paths.figures / "manuscript_figures"
-    shell:
-        """
-        mkdir -p {params.figure_folder}
-        if [ -n "{input}" ]; then
-            for file in {input}; do
-            folder_name=$(basename "$(dirname "$file")")
-            file_name=$(basename "$file")
-            cp "$file" "{params.figure_folder}/${{folder_name}}_${{file_name}}"
-            done
-        fi
-        """
+
 
 rule process_all_wandb_data:
     input:

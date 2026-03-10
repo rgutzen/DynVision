@@ -231,10 +231,10 @@ rule plot_training:
             # / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_accuracy.csv',
         accuracy_csv = lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_6000.6001.6002_accuracy.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_7000.7001.7002_accuracy.csv',
         loss_csv= lambda w: project_paths.reports \
             / 'wandb' \
-            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_6000.6001.6002_loss.csv',
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_7000.7001.7002_loss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
@@ -445,9 +445,9 @@ rule plot_responses_tripytch:
         data3 = lambda w: _get_triptych_data_inputs(w, star_slot=3),
         script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
     params:
-        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_6000.6001.6002.6003.6004.6005_accuracy.csv",
-        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_6000.6001.6002.6003.6004.6005_accuracy.csv",
-        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_6000.6001.6002.6003.6004.6005_accuracy.csv",
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_7000.7001.7002_accuracy.csv",
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_7000.7001.7002_accuracy.csv",
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_7000.7001.7002_accuracy.csv",
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,

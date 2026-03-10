@@ -90,10 +90,9 @@ def _safe_symlink(link_path: Path, target_path: Path) -> None:
 
 def _raw_subset_path(data_name: str, data_subset: str) -> Path:
     mounted = getattr(config, 'mounted_datasets', []) or []
-    subset_key = 'val' if data_name == 'imagenet' and data_subset == 'test' else data_subset
     if data_name in mounted and project_paths.iam_on_cluster():
-        return Path(f'/{data_name}') / subset_key
-    return project_paths.data.raw / data_name / subset_key
+        return Path(f'/{data_name}') / data_subset
+    return project_paths.data.raw / data_name / data_subset
 
 
 rule get_data:

@@ -176,7 +176,7 @@ rule test_model:
         dataset_ready = ancient(project_paths.data.interim \
             / '{data_name}' \
             / 'test_{data_group}.ready'),
-        script = SCRIPTS / 'runtime' / 'test_model.py'
+        script = ancient(SCRIPTS / 'runtime' / 'test_model.py')
     params:
         base_config_path = WORKFLOW_CONFIG_PATH,
         model_arguments = lambda w: parse_arguments(w.model_identifier),
