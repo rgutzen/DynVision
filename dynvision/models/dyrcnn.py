@@ -499,6 +499,9 @@ class DyRCNNx8(DyRCNNx4):
             requires_grad=self.train_tau,
         )
         self.tstep_V1 = EulerStep(dt=self.dt, tau=self.tau_V1)
+        # self.tstep_V1._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         self.pool_V1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -524,6 +527,9 @@ class DyRCNNx8(DyRCNNx4):
             requires_grad=self.train_tau,
         )
         self.tstep_V2 = EulerStep(dt=self.dt, tau=self.tau_V2)
+        # self.tstep_V2._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         self.pool_V2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -563,6 +569,9 @@ class DyRCNNx8(DyRCNNx4):
             requires_grad=self.train_tau,
         )
         self.tstep_V4 = EulerStep(dt=self.dt, tau=self.tau_V4)
+        # self.tstep_V4._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         # IT
         self.IT = RecurrentConnectedConv2d(
@@ -593,6 +602,9 @@ class DyRCNNx8(DyRCNNx4):
             requires_grad=self.train_tau,
         )
         self.tstep_IT = EulerStep(dt=self.dt, tau=self.tau_IT)
+        # self.tstep_IT._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         # Classifier
         self.classifier = nn.Sequential(

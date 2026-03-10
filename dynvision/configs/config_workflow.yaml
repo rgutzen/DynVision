@@ -12,7 +12,8 @@ model_name:
   # - ResNet44
 
 # seed: ["6000", "6001", "6002"] #, "6003", "6004", "6005"]
-seed: ["7000", "7001", "7002"]
+# seed: ["7000", "7001", "7002"]
+seed: ["9020"] #, "8001", "8002"] # calculating energyloss on non-linearities
 init_with_pretrained: False
 
 status: [trained-best] #, trained-epoch=299]
@@ -75,5 +76,5 @@ experiment:
 # Training parameters
 loss: 
   - CrossEntropyLoss
-  - EnergyLoss
+  - ActivityLoss
 

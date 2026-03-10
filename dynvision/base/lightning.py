@@ -60,7 +60,9 @@ class LightningBase(pl.LightningModule):
         self.energy_loss_weight = (
             float(energy_loss_weight) if energy_loss_weight is not None else None
         )
-        self.update_criterion_params("EnergyLoss", {"weight": self.energy_loss_weight})
+        self.update_criterion_params(
+            "ActivityLoss", {"weight": self.energy_loss_weight}
+        )
 
         # Optimizer attributes
         self.optimizer = optimizer

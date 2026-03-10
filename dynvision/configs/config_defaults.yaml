@@ -106,9 +106,10 @@ test:
 store_responses: 0  # DEPRECATED: use store_test_responses
 store_train_responses: 0  # n_batches
 store_val_responses: 0  # n_batches
-store_test_responses: 8  # n_batches
+store_test_responses: 12  # n_batches
 store_responses_on_cpu: True  # Store on CPU to save GPU memory
 early_test_stop: True  # Stop testing early when buffer filled
+response_resolution: layer  # "unit" = full tensors, "layer" = spatially averaged (~100x smaller)
 
 # ===== LOSS CONFIGURATION =====
 loss: CrossEntropyLoss  # Loss function name
@@ -170,7 +171,7 @@ every_n_epochs: 50
 
 # DataLoader
 batch_size: 192
-test_batch_size: 64
+test_batch_size: 32
 order: "QUASI_RANDOM"
 os_cache: True
 # chunksize: 5000
@@ -193,9 +194,9 @@ loss_configs:
   CrossEntropyLoss:
     weight: 1
     ignore_index: -1
-  EnergyLoss:
+  ActivityLoss:
     weight: 0.0002
-    p: 1
+    ord: 1
 non_input_value: 0
 
 # ===== OPTIMIZER CONFIGURATION =====

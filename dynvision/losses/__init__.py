@@ -7,18 +7,18 @@ training objectives.
 Available Losses:
     - BaseLoss: Base class for implementing custom losses
     - CrossEntropyLoss: Standard cross entropy loss with response handling
-    - EnergyLoss: Loss based on network activation energies
+    - ActivityLoss: Loss based on network activation energies
     - MeanSquaredActivationLoss: MSE loss for activation targeting
 
 Example:
     ```python
-    from dynvision.losses import CrossEntropyLoss, EnergyLoss
+    from dynvision.losses import CrossEntropyLoss, ActivityLoss
 
     # Standard classification loss
     ce_loss = CrossEntropyLoss()
     
     # Energy-based regularization
-    energy_loss = EnergyLoss()
+    energy_loss = ActivityLoss()
     
     # Combined loss
     def compute_loss(outputs, targets):
@@ -32,13 +32,13 @@ from torch.nn.modules.loss import _Loss
 import torch
 from .base_loss import BaseLoss
 from .cross_entropy_loss import CrossEntropyLoss
-from .energy_loss import EnergyLoss
+from .energy_loss import ActivityLoss
 from .lr_scheduler import *
 
 __all__ = [
     "BaseLoss",
     "CrossEntropyLoss",
-    "EnergyLoss",
+    "ActivityLoss",
 ]
 
 

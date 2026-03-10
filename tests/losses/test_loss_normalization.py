@@ -2,14 +2,14 @@
 
 This module verifies that:
 1. CrossEntropyLoss normalizes only by valid (non-masked) timesteps
-2. EnergyLoss accumulates and normalizes across all timesteps
+2. ActivityLoss accumulates and normalizes across all timesteps
 3. Loss combination correctly weights and sums individual losses
 """
 
 import pytest
 import torch
 import torch.nn as nn
-from dynvision.losses import CrossEntropyLoss, EnergyLoss
+from dynvision.losses import CrossEntropyLoss, ActivityLoss
 
 
 class TestCrossEntropyLossNormalization:
@@ -55,9 +55,12 @@ class TestCrossEntropyLossNormalization:
         valid_outputs = outputs[valid_mask]
         valid_targets = targets[valid_mask]
 
-        expected_loss = torch.nn.functional.cross_entropy(
-            valid_outputs, valid_targets, reduction="sum"
-        ) / valid_mask.sum().item()
+        expected_loss = (
+            torch.nn.functional.cross_entropy(
+                valid_outputs, valid_targets, reduction="sum"
+            )
+            / valid_mask.sum().item()
+        )
 
         assert torch.allclose(loss, expected_loss, atol=1e-5)
         assert valid_mask.sum().item() == 4  # Verify 4 valid timesteps
@@ -72,7 +75,9 @@ class TestCrossEntropyLossNormalization:
         loss_fn = CrossEntropyLoss(reduction="mean", ignore_index=ignore_index)
 
         outputs = torch.randn(batch_size * n_timesteps, n_classes, requires_grad=True)
-        targets = torch.full((batch_size * n_timesteps,), ignore_index, dtype=torch.long)
+        targets = torch.full(
+            (batch_size * n_timesteps,), ignore_index, dtype=torch.long
+        )
 
         loss = loss_fn(outputs, targets)
 
@@ -80,11 +85,11 @@ class TestCrossEntropyLossNormalization:
         assert torch.allclose(loss, torch.tensor(0.0), atol=1e-5)
 
 
-class TestEnergyLossAccumulation:
-    """Test EnergyLoss accumulation and normalization across timesteps."""
+class TestActivityLossAccumulation:
+    """Test ActivityLoss accumulation and normalization across timesteps."""
 
     def test_accumulation_across_timesteps(self):
-        """Verify EnergyLoss accumulates energy across multiple timesteps."""
+        """Verify ActivityLoss accumulates energy across multiple timesteps."""
 
         # Create a simple model with one Conv2d layer
         class SimpleModel(nn.Module):
@@ -96,7 +101,7 @@ class TestEnergyLossAccumulation:
                 return self.conv(x)
 
         model = SimpleModel()
-        loss_fn = EnergyLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", p=1)
         loss_fn.register_hooks(model)
 
         batch_size = 2
@@ -123,7 +128,9 @@ class TestEnergyLossAccumulation:
         loss = loss_fn(outputs=None, targets=None)
 
         # Manual calculation
-        total_energy = torch.stack(per_timestep_energies).sum(dim=0)  # Sum over timesteps
+        total_energy = torch.stack(per_timestep_energies).sum(
+            dim=0
+        )  # Sum over timesteps
         n_units = 8 * 8 * 8  # channels * height * width
         normalized_energy = total_energy / n_units  # Normalize by spatial dimensions
         expected_loss = (
@@ -147,7 +154,7 @@ class TestEnergyLossAccumulation:
                 return x
 
         model = SimpleModel()
-        loss_fn = EnergyLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", p=1)
         loss_fn.register_hooks(model)
 
         batch_size = 2
@@ -161,7 +168,9 @@ class TestEnergyLossAccumulation:
         # Check hook call counts before compute_loss
         assert len(loss_fn._hook_call_count) == 2  # Two monitored layers
         for module_name, count in loss_fn._hook_call_count.items():
-            assert count == n_timesteps, f"{module_name} called {count} times, expected {n_timesteps}"
+            assert (
+                count == n_timesteps
+            ), f"{module_name} called {count} times, expected {n_timesteps}"
 
         # Compute loss (which resets counters)
         _ = loss_fn(outputs=None, targets=None)
@@ -184,7 +193,7 @@ class TestEnergyLossAccumulation:
                 return x
 
         model = SimpleModel()
-        loss_fn = EnergyLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", p=1)
         loss_fn.register_hooks(model)
 
         batch_size = 1
@@ -214,7 +223,7 @@ class TestEnergyLossAccumulation:
 
         device = torch.device("cuda:0")
         model = SimpleModel().to(device)
-        loss_fn = EnergyLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", p=1)
         loss_fn.register_hooks(model)
 
         batch_size = 2

@@ -164,6 +164,10 @@ class ModelParams(BaseParams):
         default=None,
         description="Stop testing early when buffer is filled (only for fixed strategy)",
     )
+    response_resolution: Optional[Literal["unit", "layer"]] = Field(
+        default=None,
+        description="Resolution for stored responses: 'unit' (full tensors) or 'layer' (spatially averaged)",
+    )
 
     # ===== LOSS CONFIGURATION =====
     loss: Optional[Union[str, List[str]]] = Field(
@@ -276,6 +280,7 @@ class ModelParams(BaseParams):
             SummaryItem("store_test_responses"),
             SummaryItem("store_responses_on_cpu"),
             SummaryItem("early_test_stop"),
+            SummaryItem("response_resolution"),
         ),
     }
 
@@ -313,6 +318,7 @@ class ModelParams(BaseParams):
                 "store_val_rec": "store_val_records",
                 "store_test_rec": "store_test_records",
                 "early_stop": "early_test_stop",
+                "resp_res": "response_resolution",
             }
         )
         return aliases
@@ -456,7 +462,7 @@ class ModelParams(BaseParams):
                 "loss_configs",
                 {
                     "CrossEntropyLoss": {"weight": 1.0, "ignore_index": -1},
-                    "EnergyLoss": {"weight": 100},
+                    "ActivityLoss": {"weight": 100},
                 },
                 mutation_tag="derived",
             )
@@ -761,6 +767,7 @@ class ModelParams(BaseParams):
             "store_val_records": self.store_val_records,
             "store_test_records": self.store_test_records,
             "early_test_stop": self.early_test_stop,
+            "response_resolution": self.response_resolution,
             # Loss and training configuration
             "loss_reaction_time": self.loss_reaction_time,
             "criterion_params": self.criterion_params,
@@ -1066,7 +1073,7 @@ if __name__ == "__main__":
         "loss": "CrossEntropyLoss",
         "criterion_params": [
             ["CrossEntropyLoss", {"weight": 1.0, "ignore_index": -1}],
-            ["EnergyLoss", {"weight": 0.1}],
+            ["ActivityLoss", {"weight": 0.1}],
         ],
     }
 

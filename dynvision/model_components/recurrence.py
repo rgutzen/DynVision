@@ -926,6 +926,9 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
                     self.recurrence.weight = apply_parametrization(
                         self.recurrence.weight, self.parametrization
                     )
+        # self.recurrence._activity_monitor = (
+        #     "absolute"  # ToDo: remove again after evalutation
+        # )
 
         # Configure recurrence influence
         self.integrate_signal = setup_integration_strategy(self.integration_strategy)
