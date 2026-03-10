@@ -20,6 +20,9 @@ palette:
   V4: "#da70d6ff"
   IT: "#ba55d3ff"
   classifier: "#808080ff"
+  input: "#6BAA75"
+  middle: "#E9C46A"
+  output: "#C0533A"
 
 # Combined naming dictionary for display labels and symbols
 naming:

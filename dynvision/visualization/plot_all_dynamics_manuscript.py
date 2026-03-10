@@ -44,7 +44,7 @@ from dynvision.visualization.plot_dynamics import (
     determine_experiment_info,
     calculate_metrics,
     create_panel_b,
-    DYNAMICS_LAYOUT,
+    # DYNAMICS_LAYOUT,
     DYNAMICS_STYLE,
     _extract_dimension_values,
     _get_colors_for_dimension,
@@ -76,7 +76,25 @@ if not logger.handlers:
 # =============================================================================
 # Layout Configuration for All-Experiments Manuscript Figure
 # =============================================================================
-
+DYNAMICS_LAYOUT = {
+    "figure_width": 15,
+    "figure_height": 10,
+    "plots_start": 0.05,
+    "left_plots_width": 0.6,
+    "right_plots_width": 0.3,
+    "gap_width": 0.1,
+    # Vertical positions
+    "upper_top": 0.98,
+    "upper_bottom": 0.65,
+    "lower_top": 0.48,
+    "lower_bottom": 0.01,
+    "legend_height": 0.1,
+    "legend_margin": 0.02,
+    # Positioning helpers
+    "y_label_x_position": 0.01,
+    "panel_label_x_offset": -0.04,
+    "panel_label_y_offset": 0.02,
+}
 # Number of experiment columns (interval, duration, contrast)
 _N_COLUMNS = 3
 
@@ -127,6 +145,7 @@ ALL_DYNAMICS_LAYOUT = {
 EXPERIMENT_ORDER = ["interval", "duration", "contrast"]
 EXPERIMENT_COLUMN_LABELS = ["i", "ii", "iii"]
 
+FORMATTING = {**RESPONSES_FORMATTING, **DYNAMICS_STYLE}
 # =============================================================================
 # Panel Label Functions
 # =============================================================================
@@ -156,7 +175,7 @@ def add_panel_labels_all_experiments(fig):
         x=left_x,
         y=layout["upper_top"] + panel_y_offset,
         s="A)",
-        fontsize=DYNAMICS_STYLE["fontsize_panel_labels"],
+        fontsize=FORMATTING["fontsize_panel_labels"],
         fontweight="bold",
         ha="left",
         va="top",
@@ -165,7 +184,7 @@ def add_panel_labels_all_experiments(fig):
         x=left_x,
         y=layout["lower_top"] + panel_y_offset,
         s="B)",
-        fontsize=DYNAMICS_STYLE["fontsize_panel_labels"],
+        fontsize=FORMATTING["fontsize_panel_labels"],
         fontweight="bold",
         ha="left",
         va="top",
@@ -189,7 +208,7 @@ def add_panel_labels_all_experiments(fig):
             x=col_x,
             y=layout["right_upper_top"] + panel_y_offset,
             s=label_c,
-            fontsize=DYNAMICS_STYLE["fontsize_panel_labels"],
+            fontsize=FORMATTING["fontsize_panel_labels"],
             fontweight="bold",
             ha="left",
             va="top",
@@ -204,7 +223,7 @@ def add_panel_labels_all_experiments(fig):
             x=col_x,
             y=layout["right_middle_top"] + panel_y_offset,
             s=label_d,
-            fontsize=DYNAMICS_STYLE["fontsize_panel_labels"],
+            fontsize=FORMATTING["fontsize_panel_labels"],
             fontweight="bold",
             ha="left",
             va="top",
@@ -219,7 +238,7 @@ def add_panel_labels_all_experiments(fig):
             x=col_x,
             y=layout["right_lower_top"] + panel_y_offset,
             s=label_e,
-            fontsize=DYNAMICS_STYLE["fontsize_panel_labels"],
+            fontsize=FORMATTING["fontsize_panel_labels"],
             fontweight="bold",
             ha="left",
             va="top",
@@ -344,11 +363,11 @@ def create_panel_a_performance(
             palette=colors,
             ax=ax,
             legend=False,
-            linewidth=RESPONSES_FORMATTING["linewidth_main"],
+            linewidth=FORMATTING["linewidth_main"],
             linestyle="-",
             marker="o",
             markersize=3,
-            alpha=RESPONSES_FORMATTING["alpha_line"],
+            alpha=FORMATTING["alpha_line"],
             errorbar=("se", 1),
             err_style="band",
         )
@@ -364,22 +383,22 @@ def create_panel_a_performance(
             palette=colors,
             ax=ax,
             legend=False,
-            linewidth=RESPONSES_FORMATTING["linewidth_main"],
+            linewidth=FORMATTING["linewidth_main"],
             linestyle=":",
             marker="s",
             markersize=2,
-            alpha=RESPONSES_FORMATTING["alpha_line"],
+            alpha=FORMATTING["alpha_line"],
             errorbar=None,
         )
 
     # Styling
-    ax.set_xlabel("Time (ms)", fontsize=RESPONSES_FORMATTING["fontsize_label"])
+    ax.set_xlabel("Time (ms)", fontsize=FORMATTING["fontsize_label"])
     ax.set_ylabel(
         "Performance",
-        fontsize=RESPONSES_FORMATTING["fontsize_label"],
+        fontsize=FORMATTING["fontsize_label"],
         fontweight="bold",
     )
-    ax.tick_params(axis="both", labelsize=RESPONSES_FORMATTING["fontsize_tick"])
+    ax.tick_params(axis="both", labelsize=FORMATTING["fontsize_tick"])
     ax.grid(True, alpha=0.3, linestyle=":", zorder=1)
     sns.despine(ax=ax, left=True, bottom=True)
 
@@ -391,12 +410,12 @@ def create_panel_a_performance(
                 [0],
                 [0],
                 color="black",
-                linewidth=RESPONSES_FORMATTING["linewidth_main"],
+                linewidth=FORMATTING["linewidth_main"],
                 linestyle="-",
                 marker="o",
                 markersize=4,
                 label="Accuracy",
-                alpha=RESPONSES_FORMATTING["alpha_line"],
+                alpha=FORMATTING["alpha_line"],
             )
         )
     if confidence_col is not None:
@@ -405,12 +424,12 @@ def create_panel_a_performance(
                 [0],
                 [0],
                 color="black",
-                linewidth=RESPONSES_FORMATTING["linewidth_main"],
+                linewidth=FORMATTING["linewidth_main"],
                 linestyle=":",
                 marker="s",
                 markersize=3,
                 label="Confidence",
-                alpha=RESPONSES_FORMATTING["alpha_line"],
+                alpha=FORMATTING["alpha_line"],
             )
         )
 
@@ -419,7 +438,7 @@ def create_panel_a_performance(
             handles=legend_elements,
             loc="upper right",
             frameon=False,
-            fontsize=RESPONSES_FORMATTING["fontsize_legend"],
+            fontsize=FORMATTING["fontsize_legend"],
             ncol=1,
         )
 
@@ -440,7 +459,7 @@ def create_panel_a_performance(
         horizontalalignment="right",
         verticalalignment="center",
         transform=ax.transAxes,
-        fontsize=RESPONSES_FORMATTING["fontsize_label"],
+        fontsize=FORMATTING["fontsize_label"],
         bbox=dict(
             boxstyle="round,pad=0.3",
             facecolor="white",
@@ -535,7 +554,7 @@ def create_panel_c_groen_column(
             f"Groen data not provided\nfor {experiment_type}",
             ha="center",
             va="center",
-            fontsize=RESPONSES_FORMATTING["fontsize_label"],
+            fontsize=FORMATTING["fontsize_label"],
             alpha=0.7,
             transform=ax.transAxes,
         )
@@ -568,7 +587,7 @@ def create_panel_c_groen_column(
                 handles=[linear_pred_line],
                 loc="lower right",
                 frameon=False,
-                fontsize=RESPONSES_FORMATTING["fontsize_legend"],
+                fontsize=FORMATTING["fontsize_legend"],
             )
         elif exp_type == "interval":
             # Keep full Groen legend for interval (column i)
@@ -577,9 +596,7 @@ def create_panel_c_groen_column(
             plot_groen_contrast_time_to_peak(ax, df_groen)
             ax.legend().remove()
             # Fix x-axis label for contrast to be consistent
-            ax.set_xlabel(
-                "Stimulus Contrast", fontsize=RESPONSES_FORMATTING["fontsize_label"]
-            )
+            ax.set_xlabel("Stimulus Contrast", fontsize=FORMATTING["fontsize_label"])
         else:
             ax.text(
                 0.5,
@@ -587,7 +604,7 @@ def create_panel_c_groen_column(
                 f"Unknown experiment type:\n{experiment_type}",
                 ha="center",
                 va="center",
-                fontsize=RESPONSES_FORMATTING["fontsize_label"],
+                fontsize=FORMATTING["fontsize_label"],
                 alpha=0.7,
                 transform=ax.transAxes,
             )
@@ -602,7 +619,7 @@ def create_panel_c_groen_column(
             f"Groen data not found\n{experiment_type}",
             ha="center",
             va="center",
-            fontsize=RESPONSES_FORMATTING["fontsize_label"],
+            fontsize=FORMATTING["fontsize_label"],
             alpha=0.7,
             transform=ax.transAxes,
         )
@@ -619,7 +636,7 @@ def create_panel_c_groen_column(
             f"Error loading Groen data:\n{str(e)[:30]}...",
             ha="center",
             va="center",
-            fontsize=RESPONSES_FORMATTING["fontsize_label"],
+            fontsize=FORMATTING["fontsize_label"],
             alpha=0.7,
             transform=ax.transAxes,
         )
@@ -768,12 +785,12 @@ def create_panel_d_metrics_column(
     ax.set_xlabel("")
     ax.set_ylabel(
         metric_display,
-        fontsize=RESPONSES_FORMATTING["fontsize_label"],
+        fontsize=FORMATTING["fontsize_label"],
         fontweight="bold",
     )
 
     # Hide x tick labels (shared axis with Panel E)
-    ax.tick_params(axis="y", labelsize=RESPONSES_FORMATTING["fontsize_tick"])
+    ax.tick_params(axis="y", labelsize=FORMATTING["fontsize_tick"])
     ax.tick_params(axis="x", labelbottom=False)
     ax.grid(True, alpha=0.3, linestyle=":", zorder=1)
     sns.despine(ax=ax, left=True, bottom=True)
@@ -838,7 +855,7 @@ def create_panel_e_category2_column(
             "Category-2 data\nnot provided",
             ha="center",
             va="center",
-            fontsize=RESPONSES_FORMATTING["fontsize_label"],
+            fontsize=FORMATTING["fontsize_label"],
             alpha=0.7,
             transform=ax.transAxes,
         )
@@ -947,26 +964,26 @@ def create_panel_e_category2_column(
     else:
         x_label = param_display
 
-    ax.set_xlabel(x_label, fontsize=RESPONSES_FORMATTING["fontsize_label"])
+    ax.set_xlabel(x_label, fontsize=FORMATTING["fontsize_label"])
     ax.set_ylabel(
         metric_display,
-        fontsize=RESPONSES_FORMATTING["fontsize_label"],
+        fontsize=FORMATTING["fontsize_label"],
         fontweight="bold",
     )
-    ax.tick_params(axis="both", labelsize=RESPONSES_FORMATTING["fontsize_tick"])
+    ax.tick_params(axis="both", labelsize=FORMATTING["fontsize_tick"])
     ax.grid(True, alpha=0.3, linestyle=":", zorder=1)
     sns.despine(ax=ax, left=True, bottom=True)
 
     # Add legend with plasma-colored lines (only on specified panel)
     if show_legend:
         legend = ax.legend(
-            fontsize=RESPONSES_FORMATTING["fontsize_legend"],
+            fontsize=FORMATTING["fontsize_legend"],
             frameon=True,
             fancybox=True,
             framealpha=0.7,
             loc="best",
             title=get_display_name(category2, config),
-            title_fontsize=RESPONSES_FORMATTING["fontsize_legend"],
+            title_fontsize=FORMATTING["fontsize_legend"],
         )
         legend.get_frame().set_facecolor("white")
         legend.get_frame().set_edgecolor("none")
@@ -1251,7 +1268,7 @@ def plot_all_dynamics_manuscript(
                 linewidth=2,
                 alpha=0.8,
             ),
-            fontsize=RESPONSES_FORMATTING["fontsize_label"],
+            fontsize=FORMATTING["fontsize_label"],
             fontweight="bold",
         )
 
@@ -1273,7 +1290,7 @@ def plot_all_dynamics_manuscript(
         dt=dt or 1.0,
         legend_bot=legend_bottom,
         **(
-            RESPONSES_FORMATTING
+            FORMATTING
             | {
                 "legend_height": legend_height,
                 "left_margin": legend_left,

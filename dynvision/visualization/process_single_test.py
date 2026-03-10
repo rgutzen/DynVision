@@ -46,23 +46,39 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
-def load_responses(pt_file: Path) -> tuple[Optional[Dict[str, torch.Tensor]], bool]:
+def load_responses(
+    pt_file: Path,
+) -> tuple[Optional[Dict[str, torch.Tensor]], bool, str]:
     """Load response tensors from disk.
 
     Returns:
-        (responses_dict, has_responses) tuple
+        (responses_dict, has_responses, response_resolution) tuple.
+        response_resolution is "unit" or "layer".
     """
     try:
         responses = torch.load(pt_file, map_location="cpu", weights_only=True)
     except Exception as exc:
         logger.warning(f"Failed to load responses from {pt_file}: {exc}")
-        return None, False
+        return None, False, "unit"
 
     if not responses or len(responses) == 0:
         logger.warning(f"Empty response file: {pt_file}")
-        return None, False
+        return None, False, "unit"
 
-    return responses, True
+    # Extract metadata if present
+    metadata = responses.pop("_metadata", None)
+    if metadata is not None:
+        response_resolution = metadata.get("response_resolution", "unit")
+        logger.info(f"Response metadata: resolution={response_resolution}, version={metadata.get('version')}")
+    else:
+        # Auto-detect: if non-classifier keys end with _response_avg/_response_std, it's layer-wise
+        non_classifier_keys = [k for k in responses if k != "classifier"]
+        has_avg_keys = any(k.endswith("_response_avg") for k in non_classifier_keys)
+        response_resolution = "layer" if has_avg_keys else "unit"
+        if response_resolution == "layer":
+            logger.info("Auto-detected layer-wise response format (no metadata)")
+
+    return responses, True, response_resolution
 
 
 def append_classifier_metrics(
@@ -243,6 +259,7 @@ def append_layer_metrics(
     layer_measures: List[str],
     memory_monitor: MemoryMonitor,
     test_df_with_first_label: pd.DataFrame,
+    response_resolution: str = "unit",
 ) -> pd.DataFrame:
     """Attach layer-level metrics to result dataframe.
 
@@ -255,12 +272,22 @@ def append_layer_metrics(
         layer_measures: List of layer measure names to compute
         memory_monitor: Memory monitoring instance
         test_df_with_first_label: Original test dataframe with first_label_index
+        response_resolution: "unit" or "layer" — when "layer", uses fast path
+            for pre-averaged data
 
     Returns:
         DataFrame with layer metrics added
     """
     if not (has_responses and layer_measures):
         return result_df
+
+    # Fast path for pre-averaged (layer-wise) data
+    if response_resolution == "layer":
+        return _append_preaveraged_layer_metrics(
+            result_df=result_df,
+            pt_file=pt_file,
+            layer_measures=layer_measures,
+        )
 
     logger.info("  Calculating layer metrics at sample-level resolution...")
 
@@ -315,6 +342,91 @@ def append_layer_metrics(
     return merged_df
 
 
+def _append_preaveraged_layer_metrics(
+    result_df: pd.DataFrame,
+    pt_file: Path,
+    layer_measures: List[str],
+) -> pd.DataFrame:
+    """Fast path for layer-wise (pre-averaged) response data.
+
+    When responses were stored with response_resolution="layer", the .pt file
+    already contains {layer}_response_avg and {layer}_response_std tensors of
+    shape (n_samples, n_timesteps). This maps them directly to DataFrame columns,
+    bypassing the memory-heavy incremental loading pipeline.
+
+    Args:
+        result_df: DataFrame to augment with layer metrics
+        pt_file: Path to test_responses.pt file
+        layer_measures: List of layer measure names to compute
+
+    Returns:
+        DataFrame with layer metrics added
+    """
+    logger.info("  Using fast path for pre-averaged layer responses...")
+
+    responses = torch.load(pt_file, map_location="cpu", weights_only=True)
+    responses.pop("_metadata", None)
+
+    # Check for measures that require full 5D tensors
+    spatial_measures = {"spatial_variance", "feature_variance"}
+    unavailable = spatial_measures & set(layer_measures)
+    if unavailable:
+        logger.warning(
+            f"  Skipping measures {unavailable} — requires full unit-wise tensors "
+            f"(not available in layer-wise mode)"
+        )
+
+    n_samples = result_df["sample_index"].nunique()
+    unique_times = sorted(result_df["times_index"].unique())
+    n_times = len(unique_times)
+
+    layer_data = {
+        "sample_index": np.repeat(np.arange(n_samples), n_times),
+        "times_index": np.tile(unique_times, n_samples),
+    }
+
+    metrics_added = 0
+    for key, tensor in responses.items():
+        # Skip classifier — handled separately
+        if key == "classifier":
+            continue
+
+        # Match keys like layer0_response_avg, layer0_response_std
+        for suffix in ("response_avg", "response_std"):
+            if key.endswith(f"_{suffix}"):
+                metric_short = suffix.split("_", 1)[1] if "_" in suffix else suffix
+                # Only include if the metric is in the requested measures
+                if suffix not in layer_measures:
+                    continue
+                # Flatten (n_samples, n_timesteps) -> (n_samples * n_timesteps,)
+                values = tensor.float().numpy()
+                n_samples_pt = values.shape[0]
+                if n_samples_pt < n_samples:
+                    logger.warning(
+                        f"    {key}: PT has {n_samples_pt} samples, CSV has {n_samples}. "
+                        f"Padding with NaN."
+                    )
+                    padded = np.full((n_samples, n_times), np.nan)
+                    padded[:n_samples_pt, :n_times] = values[:, :n_times]
+                    values = padded
+                else:
+                    values = values[:n_samples, :n_times]
+                layer_data[key] = values.flatten()
+                metrics_added += 1
+                break
+
+    layer_df = pd.DataFrame(layer_data)
+
+    merged_df = result_df.merge(
+        layer_df,
+        on=["sample_index", "times_index"],
+        how="left",
+    )
+
+    logger.info(f"    Added {metrics_added} pre-averaged layer metrics")
+    return merged_df
+
+
 def process_single_test(
     response_file: Path,
     test_output_file: Path,
@@ -339,7 +451,7 @@ def process_single_test(
     test_df_with_first_label = process_test_performance(test_df)
 
     # Load response tensors
-    responses, has_responses = load_responses(response_file)
+    responses, has_responses, response_resolution = load_responses(response_file)
 
     # Start with CSV data at sample level
     sample_level_df = test_df_with_first_label.copy()
@@ -361,6 +473,7 @@ def process_single_test(
         layer_measures=measure_config.layer_measures,
         memory_monitor=memory_monitor,
         test_df_with_first_label=test_df_with_first_label,
+        response_resolution=response_resolution,
     )
 
     logger.info(

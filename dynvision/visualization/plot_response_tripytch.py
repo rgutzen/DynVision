@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 # Triptych-specific layout configuration with relative positioning
 TRIPTYCH_LAYOUT = {
     # Figure dimensions in inches
-    "figure_width": 21,
-    "figure_height": 16,
+    "figure_width": 19,
+    "figure_height": 14,
     # Column layout (relative coordinates 0-1)
     "n_columns": 3,
     "column_spacing": 0.04,  # Space between columns
@@ -54,18 +54,18 @@ TRIPTYCH_LAYOUT = {
     "training_accuracy_pad": 0.07,
     "performance_height": 0.13,
     "performance_pad": 0.05,
-    "legend_height": 0.08,
-    "legend_pad": 0.01,
+    "legend_height": 0.10,
+    "legend_pad": 0.02,
     "ridge_height": 0.5,  # Remaining space for ridge plots
     # Panel letters
-    "panel_letter_offset_x": -0.04,
-    "panel_letter_offset_y": 0.02,
+    "panel_letter_offset_x": -0.02,
+    "panel_letter_offset_y": 0.025,
 }
 
 # Formatting configuration
 TRIPTYCH_FORMATTING = {
     **RESPONSES_FORMATTING,
-    "fontsize_panel_label": 18,
+    "fontsize_panel_label": 20,
 }
 
 
@@ -108,6 +108,7 @@ def _get_title_and_symbol(
         "feedback": "Feedback Connections",
         "skip": "Skip Connections",
         "seed": "Random Seed",
+        "pattern": "Presentation Pattern",
     }
 
     # Fallback symbol mappings (used when config doesn't have the symbol)
@@ -255,6 +256,10 @@ def _format_seed_value(value) -> str:
     return str(value).strip().split(".")[0]
 
 
+def _format_pattern_value(value) -> str:
+    return str(value).strip().split(".")[0]
+
+
 def _filter_first_parameter_value(
     df: pd.DataFrame, parameter_key: str
 ) -> pd.DataFrame:
@@ -392,7 +397,7 @@ def _plot_training_accuracy_panel(
     # Formatting
     if show_ylabel:
         ax.set_ylabel(
-            "Train Accuracy",
+            "Accuracy",
             fontsize=TRIPTYCH_FORMATTING["fontsize_axis"],
             fontweight="bold",
         )
@@ -401,6 +406,7 @@ def _plot_training_accuracy_panel(
         ax.set_yticklabels([])
 
     ax.set_xlabel("Epoch", fontsize=TRIPTYCH_FORMATTING["fontsize_axis"])
+    ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
     ax.tick_params(labelsize=TRIPTYCH_FORMATTING["fontsize_tick"])
 
     # Add legend for line styles on first panel
@@ -529,11 +535,24 @@ def create_triptych_plot(
                             df[category_key] = df[category_key].apply(
                                 _format_seed_value
                             )
+                        elif category_key == "pattern":
+                            df[category_key] = df[category_key].apply(
+                                _format_pattern_value
+                            )
                         else:
                             df[category_key] = df[category_key].apply(
                                 _standardize_category_value
                             )
-
+                    
+                    if category_key == "rctype":
+                        # Remove rows with rctype=None, NaN, null values, or empty strings
+                        initial_len = len(df)
+                        df = df[(df["rctype"].notna()) & (df["rctype"].astype(str).str.strip() != "")].copy()
+                        if len(df) < initial_len:
+                            logger.info(
+                                f"Filtered out {initial_len - len(df)} rows with null/NaN/empty rctype values"
+                            )
+                    
             except Exception as e:
                 logger.error(f"Error loading data: {e}")
 
@@ -752,7 +771,7 @@ def create_triptych_plot(
             legend_labels.append(formatted_label)
 
         if legend_elements:
-            n_cols = min(len(legend_elements), 4)
+            n_cols = min(len(legend_elements), 4 if category_key == "rctype" else 3)
             # Get legend title from naming dict (symbol already comes from _get_title_and_symbol)
             legend_title = get_display_name(category_key, config) or symbol
             legend = legend_ax.legend(
@@ -762,7 +781,7 @@ def create_triptych_plot(
                 ncol=n_cols,
                 frameon=False,
                 fontsize=fmt["fontsize_legend"],
-                handlelength=2,
+                handlelength=1.5,
                 handletextpad=0.5,
                 columnspacing=1.0,
                 title=legend_title,

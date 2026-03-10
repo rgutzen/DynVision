@@ -32,6 +32,7 @@ from dynvision.visualization.plot_responses import (
     _validate_dimensions,
     _format_legend_label,
     FORMATTING as RESPONSES_FORMATTING,
+    ERRORBAR_CONFIG,
 )
 
 # Configure logging
@@ -41,20 +42,20 @@ logger.setLevel("INFO")
 # Training plot layout configuration
 TRAINING_LAYOUT = {
     # Figure dimensions
-    "figure_width": 14,
-    "figure_height": 14,
+    "figure_height": 12,
+    "figure_width": 8,
     # Column layout (relative coordinates 0-1)
-    "left_column_width": 0.45,  # Configurable
-    "right_column_width": 0.50,
-    "column_spacing": 0.12,
+    "left_column_width": 0.35,  # Configurable
+    "right_column_width": 0.60,
+    "column_spacing": 0.16,
     "left_margin": 0.06,
     "right_margin": 0.02,
     # Left column vertical layout (A:legend:B:C ~ 0.3:0.1:0.3:0.3)
     "top_margin": 0.05,
     "accuracy_height": 0.27,
     "accuracy_bottom_margin": 0.015,
-    "legend_height": 0.09,
-    "legend_top_margin": 0.015,  # Space above legend
+    "legend_height": 0.15,
+    "legend_top_margin": 0.020,  # Space above legend
     "legend_bottom_margin": 0.015,  # Space below legend
     "energy_loss_height": 0.27,
     "energy_loss_bottom_margin": 0.015,
@@ -65,16 +66,16 @@ TRAINING_LAYOUT = {
     "performance_pad": 0.05,
     "ridge_legend_height": 0.08,
     "ridge_legend_pad": 0.01,
-    "ridge_overlap": 0.0,  # No overlap between ridge plots
+    "ridge_overlap": 0.0,
     # Panel letters
-    "panel_letter_offset_x": -0.05,
+    "panel_letter_offset_x": -0.09,
     "panel_letter_offset_y": 0.015,
 }
 
 # Formatting configuration (inherit from plot_responses)
 TRAINING_FORMATTING = {
     **RESPONSES_FORMATTING,
-    "fontsize_panel_label": 18,
+    "fontsize_panel_label": 20,
     "max_global_ymax": 5.5,  # Increased from 1.5 to accommodate higher response values
 }
 
@@ -292,15 +293,15 @@ def _parse_loss_data(
     energy_loss_cols = [
         col
         for col in df.columns
-        if "EnergyLoss" in col and "__MIN" not in col and "__MAX" not in col
+        if "ActivityLoss" in col and "__MIN" not in col and "__MAX" not in col
     ]
 
     if not ce_loss_cols and not energy_loss_cols:
-        logger.warning("No CrossEntropyLoss or EnergyLoss columns found")
+        logger.warning("No CrossEntropyLoss or ActivityLoss columns found")
         return pd.DataFrame(), actual_category_key
 
     logger.info(
-        f"Found {len(ce_loss_cols)} CrossEntropyLoss columns, {len(energy_loss_cols)} EnergyLoss columns"
+        f"Found {len(ce_loss_cols)} CrossEntropyLoss columns, {len(energy_loss_cols)} ActivityLoss columns"
     )
 
     # Extract data for each category value
@@ -379,7 +380,7 @@ def _plot_training_accuracy_panel(
     show_legend: bool = True,
     xlim: Optional[Tuple[float, float]] = None,
     **kwargs,
-) -> None:
+) -> plt.Axes:
     """Plot training and validation accuracy panel.
 
     Args:
@@ -411,41 +412,52 @@ def _plot_training_accuracy_panel(
             fontsize=14,
             alpha=0.6,
         )
-        return
+        return ax
 
     # Note: accuracy_df["category_value"] is already standardized to numeric/string
     # Standardize hue_values for comparison
     hue_values_std = [_standardize_category_value(v) for v in hue_values]
 
+    palette = {
+        v_std: colors.get(v_orig, fmt["greyscale_color"])
+        for v_orig, v_std in zip(hue_values, hue_values_std)
+    }
+
     # Plot training accuracy (solid lines)
-    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = accuracy_df[accuracy_df["category_value"] == cat_val_std]
-        if not cat_data.empty:
-            train_data = cat_data.dropna(subset=["train_accuracy"])
-            if not train_data.empty:
-                ax.plot(
-                    train_data["epoch"],
-                    train_data["train_accuracy"],
-                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                    linewidth=fmt["linewidth_main"],
-                    linestyle="-",
-                    alpha=fmt["alpha_line"],
-                )
+    train_acc_df = accuracy_df.dropna(subset=["train_accuracy"])
+    if not train_acc_df.empty:
+        sns.lineplot(
+            data=train_acc_df,
+            x="epoch",
+            y="train_accuracy",
+            hue="category_value",
+            hue_order=hue_values_std,
+            palette=palette,
+            ax=ax,
+            legend=False,
+            linewidth=fmt["linewidth_main"],
+            linestyle="-",
+            alpha=fmt["alpha_line"],
+            **ERRORBAR_CONFIG,
+        )
 
     # Plot validation accuracy (dotted lines)
-    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = accuracy_df[accuracy_df["category_value"] == cat_val_std]
-        if not cat_data.empty:
-            val_data = cat_data.dropna(subset=["val_accuracy"])
-            if not val_data.empty:
-                ax.plot(
-                    val_data["epoch"],
-                    val_data["val_accuracy"],
-                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                    linewidth=fmt["linewidth_main"],
-                    linestyle=":",
-                    alpha=fmt["alpha_line"],
-                )
+    val_acc_df = accuracy_df.dropna(subset=["val_accuracy"])
+    if not val_acc_df.empty:
+        sns.lineplot(
+            data=val_acc_df,
+            x="epoch",
+            y="val_accuracy",
+            hue="category_value",
+            hue_order=hue_values_std,
+            palette=palette,
+            ax=ax,
+            legend=False,
+            linewidth=fmt["linewidth_main"],
+            linestyle=":",
+            alpha=fmt["alpha_line"],
+            **ERRORBAR_CONFIG,
+        )
 
     # Styling
     ax.set_ylim(-0.01, 1.01)
@@ -465,9 +477,7 @@ def _plot_training_accuracy_panel(
     )
 
     if show_ylabel:
-        ax.set_ylabel(
-            "Train Accuracy", fontsize=fmt["fontsize_axis"], fontweight="bold"
-        )
+        ax.set_ylabel("Accuracy", fontsize=fmt["fontsize_axis"], fontweight="bold")
     else:
         ax.set_ylabel("")
         ax.set_yticklabels([])
@@ -508,6 +518,7 @@ def _plot_training_accuracy_panel(
 
     ax.grid(True, alpha=0.3)
     sns.despine(ax=ax, left=True, bottom=True)
+    return ax
 
 
 def _plot_energy_loss_panel(
@@ -566,20 +577,28 @@ def _plot_energy_loss_panel(
     # Filter to training data only (validation energy loss is always 0)
     train_df = loss_df[~loss_df["is_validation"]]
 
+    palette = {
+        v_std: colors.get(v_orig, fmt["greyscale_color"])
+        for v_orig, v_std in zip(hue_values, hue_values_std)
+    }
+
     # Plot energy loss (training only, solid lines)
-    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = train_df[train_df["category_value"] == cat_val_std]
-        if not cat_data.empty:
-            energy_data = cat_data.dropna(subset=["energy_loss"])
-            if not energy_data.empty:
-                ax.plot(
-                    energy_data["epoch"],
-                    energy_data["energy_loss"],
-                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                    linewidth=fmt["linewidth_main"],
-                    linestyle="-",
-                    alpha=fmt["alpha_line"],
-                )
+    energy_df = train_df.dropna(subset=["energy_loss"])
+    if not energy_df.empty:
+        sns.lineplot(
+            data=energy_df,
+            x="epoch",
+            y="energy_loss",
+            hue="category_value",
+            hue_order=hue_values_std,
+            palette=palette,
+            ax=ax,
+            legend=False,
+            linewidth=fmt["linewidth_main"],
+            linestyle="-",
+            alpha=fmt["alpha_line"],
+            **ERRORBAR_CONFIG,
+        )
 
     # Set x-axis limits
     if xlim is not None:
@@ -608,6 +627,7 @@ def _plot_energy_loss_panel(
 
     ax.grid(True, alpha=0.3)
     sns.despine(ax=ax, left=True, bottom=True)
+    return ax
 
 
 def _plot_ce_loss_panel(
@@ -666,35 +686,46 @@ def _plot_ce_loss_panel(
     train_df = loss_df[~loss_df["is_validation"]]
     val_df = loss_df[loss_df["is_validation"]]
 
+    palette = {
+        v_std: colors.get(v_orig, fmt["greyscale_color"])
+        for v_orig, v_std in zip(hue_values, hue_values_std)
+    }
+
     # Plot training cross-entropy loss (solid lines)
-    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = train_df[train_df["category_value"] == cat_val_std]
-        if not cat_data.empty:
-            ce_data = cat_data.dropna(subset=["cross_entropy_loss"])
-            if not ce_data.empty:
-                ax.plot(
-                    ce_data["epoch"],
-                    ce_data["cross_entropy_loss"],
-                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                    linewidth=fmt["linewidth_main"],
-                    linestyle="-",
-                    alpha=fmt["alpha_line"],
-                )
+    train_ce_df = train_df.dropna(subset=["cross_entropy_loss"])
+    if not train_ce_df.empty:
+        sns.lineplot(
+            data=train_ce_df,
+            x="epoch",
+            y="cross_entropy_loss",
+            hue="category_value",
+            hue_order=hue_values_std,
+            palette=palette,
+            ax=ax,
+            legend=False,
+            linewidth=fmt["linewidth_main"],
+            linestyle="-",
+            alpha=fmt["alpha_line"],
+            **ERRORBAR_CONFIG,
+        )
 
     # Plot validation cross-entropy loss (dotted lines)
-    for cat_val_orig, cat_val_std in zip(hue_values, hue_values_std):
-        cat_data = val_df[val_df["category_value"] == cat_val_std]
-        if not cat_data.empty:
-            ce_data = cat_data.dropna(subset=["cross_entropy_loss"])
-            if not ce_data.empty:
-                ax.plot(
-                    ce_data["epoch"],
-                    ce_data["cross_entropy_loss"],
-                    color=colors.get(cat_val_orig, fmt["greyscale_color"]),
-                    linewidth=fmt["linewidth_main"],
-                    linestyle=":",
-                    alpha=fmt["alpha_line"],
-                )
+    val_ce_df = val_df.dropna(subset=["cross_entropy_loss"])
+    if not val_ce_df.empty:
+        sns.lineplot(
+            data=val_ce_df,
+            x="epoch",
+            y="cross_entropy_loss",
+            hue="category_value",
+            hue_order=hue_values_std,
+            palette=palette,
+            ax=ax,
+            legend=False,
+            linewidth=fmt["linewidth_main"],
+            linestyle=":",
+            alpha=fmt["alpha_line"],
+            **ERRORBAR_CONFIG,
+        )
 
     # Set x-axis limits
     if xlim is not None:
@@ -752,6 +783,7 @@ def _plot_ce_loss_panel(
 
     ax.grid(True, alpha=0.3)
     sns.despine(ax=ax, left=True, bottom=True)
+    return ax
 
 
 def _add_panel_letters(
@@ -857,7 +889,7 @@ def _plot_category_legend(
         # Get symbol for title
         symbol = get_display_name(category_key, config)
 
-        n_cols = min(len(legend_elements), 7)
+        n_cols = min(len(legend_elements), 3)
         logger.debug(
             f"Adding category legend with {len(legend_elements)} elements in {n_cols} columns"
         )
@@ -869,7 +901,7 @@ def _plot_category_legend(
             ncol=n_cols,
             frameon=False,
             fontsize=fmt["fontsize_legend"],
-            handlelength=2,
+            handlelength=1.5,
             handletextpad=0.5,
             columnspacing=1.0,
             title=symbol,
@@ -877,6 +909,48 @@ def _plot_category_legend(
         )
         # Make legend title bold
         legend.get_title().set_fontweight("bold")
+
+
+def _align_ylabels_tight(axes: List[plt.Axes], renderer, gap_px: int = 4) -> None:
+    """Align ylabels across a group of add_axes() panels.
+
+    Finds the leftmost tick-label edge across all axes (i.e. the panel with
+    the widest tick text), then places every ylabel so its right edge sits
+    ``gap_px`` pixels to the left of that edge.  This keeps labels as close
+    to the spines as possible while staying aligned.
+
+    Args:
+        axes: Axes whose ylabels should be aligned.
+        renderer: Active renderer (from ``fig.canvas.get_renderer()``).
+        gap_px: Gap in display pixels between ylabel right edge and tick labels.
+    """
+    if not axes:
+        return
+
+    labeled_axes = [ax for ax in axes if ax.yaxis.label.get_text()]
+    if not labeled_axes:
+        return
+
+    # Leftmost tick-label x0 across all axes (widest tick text sets the reference).
+    tick_x0_values = []
+    for ax in labeled_axes:
+        for tick in ax.yaxis.get_ticklabels():
+            if tick.get_visible() and tick.get_text():
+                tick_x0_values.append(tick.get_window_extent(renderer).x0)
+
+    if not tick_x0_values:
+        return
+
+    min_tick_x0 = min(tick_x0_values)
+
+    for ax in labeled_axes:
+        lbl_ext = ax.yaxis.label.get_window_extent(renderer)
+        # For a 90°-rotated label the horizontal span equals the font cap-height.
+        lbl_half_w = (lbl_ext.x1 - lbl_ext.x0) / 2
+        # Place label center so its right edge is gap_px left of the ticks.
+        center_x = min_tick_x0 - gap_px - lbl_half_w
+        x_ax = ax.transAxes.inverted().transform([center_x, 0])[0]
+        ax.yaxis.set_label_coords(x_ax, 0.5)
 
 
 def plot_training_overview(
@@ -1099,7 +1173,7 @@ def plot_training_overview(
     # Training accuracy panel
     accuracy_bottom = current_top - layout["accuracy_height"]
     logger.info("Creating training accuracy panel...")
-    _plot_training_accuracy_panel(
+    ax_accuracy = _plot_training_accuracy_panel(
         fig=fig,
         column_left=left_col_left,
         column_width=left_col_width,
@@ -1141,7 +1215,7 @@ def plot_training_overview(
     current_top = legend_bottom - layout["legend_bottom_margin"]
     energy_loss_bottom = current_top - layout["energy_loss_height"]
     logger.info("Creating energy loss panel...")
-    _plot_energy_loss_panel(
+    ax_e_loss = _plot_energy_loss_panel(
         fig=fig,
         column_left=left_col_left,
         column_width=left_col_width,
@@ -1160,7 +1234,7 @@ def plot_training_overview(
     current_top = energy_loss_bottom - layout["energy_loss_bottom_margin"]
     ce_loss_bottom = current_top - layout["ce_loss_height"]
     logger.info("Creating cross-entropy loss panel...")
-    _plot_ce_loss_panel(
+    ax_ce_loss = _plot_ce_loss_panel(
         fig=fig,
         column_left=left_col_left,
         column_width=left_col_width,
@@ -1303,10 +1377,6 @@ def plot_training_overview(
             f"Ridge plot actual bottom: {bottom_pos.y0:.4f}, target: {ce_loss_bottom:.4f}, diff: {(bottom_pos.y0 - ce_loss_bottom):.4f}"
         )
 
-    # Align y-labels
-    all_axes = ridge_axes
-    fig.align_ylabels(all_axes)
-
     # Add panel letters
     logger.info("Adding panel letters...")
     _add_panel_letters(
@@ -1321,6 +1391,18 @@ def plot_training_overview(
         layout=layout,
         fmt=fmt,
     )
+    # Align ylabels for both columns in a single pass over the fully-built figure.
+    # One canvas.draw() here is enough; a prior draw would be reset by this one.
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    left_col_axes = [
+        ax for ax in [ax_accuracy, ax_e_loss, ax_ce_loss] if ax is not None
+    ]
+    _align_ylabels_tight(left_col_axes, renderer, gap_px=-22)
+    right_col_axes_with_labels = [
+        ax for ax in ([perf_ax] + ridge_axes) if ax.yaxis.label.get_text()
+    ]
+    _align_ylabels_tight(right_col_axes_with_labels, renderer, gap_px=-6)
 
     logger.info(f"Saving figure to: {output}")
     save_plot(output)
@@ -1353,7 +1435,7 @@ def main():
         "--loss_csv",
         type=Path,
         required=True,
-        help="Path to loss CSV with CrossEntropyLoss and EnergyLoss",
+        help="Path to loss CSV with CrossEntropyLoss and ActivityLoss",
     )
     parser.add_argument(
         "--output",

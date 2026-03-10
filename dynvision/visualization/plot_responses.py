@@ -33,6 +33,7 @@ from dynvision.utils.visualization_utils import (
     load_config_from_args,
     order_layers,
     save_plot,
+    format_parameter_value,
 )
 
 # Configure logging - simplified to prevent duplicate output
@@ -63,12 +64,12 @@ LAYOUT = {
 
 # Global formatting configuration
 FORMATTING = {
-    "fontsize_title": 18,
-    "fontsize_axis": 16,
-    "fontsize_tick": 14,
-    "fontsize_legend": 16,
-    "fontsize_label": 14,
-    "linewidth_main": 2.5,
+    "fontsize_title": 20,
+    "fontsize_axis": 19,
+    "fontsize_tick": 16,
+    "fontsize_legend": 19,
+    "fontsize_label": 18,
+    "linewidth_main": 3,
     "linewidth_indicator": 3,
     "alpha_line": 0.8,
     "alpha_indicator": 0.6,
@@ -85,7 +86,7 @@ FORMATTING = {
 
 # Errorbar configuration for lineplot
 ERRORBAR_CONFIG = {
-    "errorbar": "ci",
+    "errorbar": ("ci", 95),
     "err_style": "band",
     "err_kws": {"alpha": 0.2, "edgecolor": "none"},
 }
@@ -753,7 +754,7 @@ def _plot_accuracy_panel(
                 labels=legend_labels,
                 loc="best",
                 frameon=False,
-                fontsize=fmt["fontsize_legend"] - 2,
+                fontsize=fmt["fontsize_legend"] - 1,
             )
 
     # Add label indicator
@@ -1070,7 +1071,6 @@ def _plot_response_ridges(
                 )
 
             # Add parameter label with unit formatting
-            from dynvision.utils.visualization_utils import format_parameter_value
             display_name = get_display_name(subplot_key, config)
             formatted_value = format_parameter_value(subplot_value, subplot_key, dt)
             label_text = f"{display_name}={formatted_value}"
@@ -1127,7 +1127,7 @@ def _plot_response_ridges(
         # Y-label on leftmost panel, middle subplot
         if show_ylabel and i == len(subplot_values) // 2:
             ax.set_ylabel(
-                "Avg Layer Response",
+                "Average Response",
                 fontsize=fmt["fontsize_axis"],
                 fontweight="bold",
                 labelpad=6,

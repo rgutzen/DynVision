@@ -304,7 +304,6 @@ def calculate_metrics(df, focus_layer, parameter, category, metric, dt=None):
                             f"peak_ratio=0 for {parameter}={param_val}, {category}={cat_val}, {entity_col}={entity_val}. "
                             f"Possible causes: (1) <2 positive peaks, or (2) peaks <5 timesteps apart"
                         )
-                        # breakpoint()
                 elif metric == "peak_time":
                     metric_value = peak_time(response_tensor)[0].item()
                     if dt is not None:
