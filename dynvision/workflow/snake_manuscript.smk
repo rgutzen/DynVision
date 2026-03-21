@@ -1,10 +1,10 @@
-# SEED = ["1000", "1001", "1002"] #, "1003", "1004","1005"]  # energy loss weight 0.05 & use_ffcv=False
-# SEED = ["2000", "2001", "2002"] # energy loss weight 0.2 & use_ffcv=True
-# SEED = ["3000", "3001", "3002"] # energy loss weight not applied? & use_ffcv=True
-# SEED = ["4000", "4001", "4002"] # energy loss weight 0.5 & use_ffcv=True
+# SEED = ["1000", "1001", "1002"] #, "1003", "1004","1005"]  # activity loss weight 0.05 & use_ffcv=False
+# SEED = ["2000", "2001", "2002"] # activity loss weight 0.2 & use_ffcv=True
+# SEED = ["3000", "3001", "3002"] # activity loss weight not applied? & use_ffcv=True
+# SEED = ["4000", "4001", "4002"] # activity loss weight 0.5 & use_ffcv=True
 # SEED = ["5000"] #, "5001", "5002"] # ~not! uses shuffled patterns~ 
-# SEED = 7000+ uses ffcv=False, energyloss on all timesteps
-# SEED = 8000+ uses ffcv=False, energyloss on relu output
+# SEED = 7000+ uses ffcv=False, activityloss on all timesteps
+# SEED = 8000+ uses ffcv=False, activityloss on relu output
 # SEED = 9000 uses ffcv=False, signed activity loss on pre-relu activity
 # SEED = 9010 absolute activity loss on pre-relu activity
 # SEED = 9020 absolute activity loss on recurrence output
@@ -13,33 +13,46 @@
 # Figures naming convention:
 # {plot_type}_{category}=*{+model_args}_{focus_layer}_{seed}.png
 
-rule figures_with_updated_energyloss: # seed=8000+
+rule figures_with_updated_local:
     input:
-        # NOISE PERFORMANCE
-        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
-            experiment=["gaussiannoise"], # "gaussiancorrnoise"], #"phasescramblednoise", 
-            model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "middle", "energyloss": "*", "pattern": "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "output", "energyloss": "*", "pattern": "1011"}),
-            seed=config.seed + [".".join(config.seed)],
-            data_name=config.data_name,
-            data_group=config.data_group,
-            status=config.status,
-            plot="performance_manuscript",
-        ),
         # NEURAL DYNAMICS
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             # experiment=["duration", "contrast", "interval"],
             experiment=["dynamics"],
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "output", "energyloss": "*", "pattern": "1011"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "rctarget": "middle", "energyloss": "*", "pattern": "1"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}),
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
             # plot=[f"dynamics_groen_{focus_layer}" for focus_layer in ['V1', 'V2']],
-            plot=[f"dynamics_{focus_layer}_v_groen+energyloss" for focus_layer in ['V2+V2+V1', 'V1+V1+V2']]
+            plot=[f"dynamics_{focus_layer}_v_groen+activityloss" for focus_layer in ['V2+V2+V1', 'V1+V1+V2']]
+        ),
+
+rule figure_unrolling:
+    input:
+        # UNROLLING
+        expand(project_paths.figures / "unrolling" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "responses_tff={tff}+tsk={tsk}+tfb={tfb}.png",
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"feedback": "add"}),
+            seed=7001,
+            data_name=config.data_name,
+            data_group='one',
+            status=config.status,
+            tff=[10], # 0 in engineering time
+            tsk=[20], # 0 in engineering time
+            tfb=[10], # 30 in engineering time
+        ),
+
+rule reference_models:
+    input:
+        # REFERENCE MODELS
+        expand(project_paths.figures / "{experiment}" / "{model}:{model_args}_{seeds}" / "imagenet:all_init" / "{plot}.png",
+            experiment=['response', 'idleresponse', 'hundred'],
+            model=['CorNetRT', 'CordsNet'],
+            model_args='pretrained=*',
+            seeds="9000",
+            plot='responses',
         ),
 
 rule manuscript_figures: # manuscript figures
@@ -49,8 +62,8 @@ rule manuscript_figures: # manuscript figures
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="response",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"}),    
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1011"}),    
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
@@ -106,14 +119,14 @@ rule manuscript_figures: # manuscript figures
             # experiment=["duration", "contrast", "interval"],
             experiment=["dynamics"],
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "energyloss": "1.0", "pattern": "1011"}) 
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*", "energyloss": "1.0", "pattern": "1011"}),   
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}) 
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*", "activityloss": "1.0", "pattern": "1011"}),   
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
             # plot=[f"dynamics_groen_{focus_layer}" for focus_layer in ['V1', 'V2']],
-            plot=[f"dynamics_{focus_layer}_v_groen+energyloss" for focus_layer in ['V2+V2+V1', 'V1+V1+V2']]
+            plot=[f"dynamics_{focus_layer}_v_groen+activityloss" for focus_layer in ['V2+V2+V1', 'V1+V1+V2']]
         ),
         # NOISE PERFORMANCE
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
@@ -132,8 +145,8 @@ rule manuscript_figures: # manuscript figures
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="responseintermediate",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", "pattern": "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", "pattern": "1011"}),
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
@@ -144,9 +157,9 @@ rule manuscript_figures: # manuscript figures
          expand(project_paths.figures / "weights" / "{model_name}{model_args}_{seed}" / "{data_name}_{status}" / "weights.png",
             model_name=config.model_name,
             model_args=args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "middle", "energyloss": "*"}) 
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "energyloss": "1.0", "pattern": "1011"}) 
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "energyloss": "*", "pattern": "1011"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "middle", "activityloss": "*"}) 
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}) 
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "activityloss": "*", "pattern": "1011"})
                      + args_product(DEFAULT_MODEL_ARGS | {"feedback": "*"}),
             seed=config.seed,
             data_name=config.data_name,
@@ -156,7 +169,7 @@ rule manuscript_figures: # manuscript figures
         expand(project_paths.figures / "unrolling" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "responses_tff={tff}+tsk={tsk}+tfb={tfb}.png",
             model_name=config.model_name,
             model_args=args_product(DEFAULT_MODEL_ARGS | {"feedback": "add"}),
-            seed=config.seed[0],
+            seed=config.seed[-1],
             data_name=config.data_name,
             data_group='one',
             status=config.status,
@@ -168,8 +181,8 @@ rule manuscript_figures: # manuscript figures
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="stability",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"})
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1011"})
                      + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"}),
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
@@ -252,8 +265,8 @@ rule plot_stability: # run with --config test_batch_size=16
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment="stability",
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"})
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1011"})
                      + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"}), 
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
@@ -267,8 +280,8 @@ rule plot_middle_model:
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             experiment=["contrast", "duration", "interval"],
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", 'pattern': "1011"}),    
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1"})
+                     + args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1011"}),    
             seed=[".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
@@ -320,7 +333,7 @@ rule plot_performance_manuscript:
             / '{{model_name}}{model_args}_{seed}'
             / '{{data_name}}:{{data_group}}_{{status}}'
             / 'test_data.csv',
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "rctarget": "middle"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", "rctarget": "middle"}),
             seed=lambda w: w.seeds.split('.'),
         ),
         script = SCRIPTS / 'visualization' / 'plot_performance_manuscript.py'
@@ -331,7 +344,7 @@ rule plot_performance_manuscript:
         hue = 'category',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         category = lambda w: w.category,
-        category2 = 'energyloss',
+        category2 = 'activityloss',
         accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
         confidence_measure = getattr(config, 'plot_confidence_measure', "none"),
         jang_noise_type = getattr(config, 'jang_noise_type', 'gaussian'),
@@ -413,10 +426,10 @@ rule plot_dynamics_manuscript:
             data_name=lambda w: w.data_name,
             data_group=lambda w: w.data_group,
             status=lambda w: w.status,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"energyloss": "*", "pattern": "1011", "rctarget": "output"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", "pattern": "1011", "rctarget": "output"}),
             seed=lambda w: w.seeds.split('.'),
         ),
-        category2 = "energyloss",
+        category2 = "activityloss",
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         dt = getattr(config, 'dt', 2),
         palette = lambda w: json.dumps(config.palette),
@@ -449,7 +462,7 @@ rule plot_dynamics_manuscript:
             --groen-data {params.groen_data_dir}
         """
 
-def data_category2(w, experiment, model_args={"energyloss": "*", "pattern": "1011"}):
+def data_category2(w, experiment, model_args={"activityloss": "*", "pattern": "1011"}):
     return expand(
             project_paths.reports
             / '{experiment}'
@@ -607,6 +620,9 @@ rule plot_unrolling:
             script_path=input.script,
             use_distributed=False,
         ),
+        # Convert feedforward delay from ms to timesteps (tff / dt)
+        t_feedforward = lambda w: int(int(w.b_tff) // getattr(config, 'dt', 2)),
+        dt = getattr(config, 'dt', 2),
     output:
         project_paths.figures / 'unrolling' / '{model_name}{args1}tff={e_tff}+trc={trc}+tsk={e_tsk}{args2}_{seed}' / '{data_name}:{data_group}_{status}' / 'responses_tff={b_tff}+tsk={b_tsk}+tfb={b_tfb}.png',
     shell:
@@ -614,7 +630,8 @@ rule plot_unrolling:
         {params.execution_cmd} \
             --engineering_time_data {input.engineering_time_data:q} \
             --biological_time_data {input.biological_time_data:q} \
-            --t_feedforward {wildcards.b_tff} \
+            --t_feedforward {params.t_feedforward} \
+            --dt {params.dt} \
             --output {output:q}
         """
 
