@@ -43,7 +43,13 @@ parser.add_argument(
     "--t_feedforward",
     type=int,
     required=True,
-    help="Time shift value for each successive layer",
+    help="Feedforward delay per layer in timesteps (already converted from ms)",
+)
+parser.add_argument(
+    "--dt",
+    type=float,
+    default=1.0,
+    help="Temporal resolution in ms per timestep (for axis labels)",
 )
 parser.add_argument(
     "--output", type=Path, required=True, help="Path to output plot file"
@@ -56,6 +62,8 @@ parser.add_argument("--ordering", type=str, help="JSON formatted ordering dictio
 def load_and_process_responses(response_file):
     """Load response tensor file and calculate average responses for each layer.
 
+    Handles both old (unit-wise) and new (layer-wise pre-averaged) response formats.
+
     Args:
         response_file: Path to .pt file containing layer responses
 
@@ -65,13 +73,44 @@ def load_and_process_responses(response_file):
     print(f"Loading responses from: {response_file}")
     responses = torch.load(response_file, map_location=torch.device("cpu"))
 
+    # Extract metadata if present (new format indicator)
+    metadata = responses.pop("_metadata", None)
+    if metadata is not None:
+        response_resolution = metadata.get("response_resolution", "unit")
+        print(f"Response format: {response_resolution} (metadata: {metadata})")
+    else:
+        # Auto-detect: if non-classifier keys end with _response_avg/_response_std, it's layer-wise
+        non_classifier_keys = [k for k in responses if k != "classifier"]
+        has_avg_keys = any(k.endswith("_response_avg") for k in non_classifier_keys)
+        response_resolution = "layer" if has_avg_keys else "unit"
+        if response_resolution == "layer":
+            print("Auto-detected layer-wise response format (no metadata)")
+
     # Process each layer to get average responses
     processed_responses = {}
 
-    for layer_name, tensor in responses.items():
-        # Calculate layer response average across spatial/feature dimensions
-        avg_response = layer_response_avg(tensor)  # Shape: (samples, time)
-        processed_responses[layer_name] = tensor_to_numpy(avg_response)
+    if response_resolution == "layer":
+        # New format: tensors are pre-averaged (already 2D or 3D, not spatial)
+        for key, tensor in responses.items():
+            if key.endswith("_response_avg"):
+                # Extract layer name from key (e.g., "layer0_response_avg" -> "layer0")
+                layer_name = key.replace("_response_avg", "")
+                # Already averaged, just convert to numpy
+                processed_responses[layer_name] = tensor_to_numpy(tensor)
+            elif key == "classifier":
+                # Handle classifier directly (no _response_avg suffix for classifier)
+                processed_responses["classifier"] = tensor_to_numpy(tensor)
+            # Skip std tensors and metadata keys
+        print(f"Loaded {len(processed_responses)} layers from layer-wise format")
+        print(f"Layer names: {list(processed_responses.keys())}")
+    else:
+        # Old format: tensors have spatial dimensions, need averaging
+        for layer_name, tensor in responses.items():
+            if isinstance(tensor, torch.Tensor):
+                # Calculate layer response average across spatial/feature dimensions
+                avg_response = layer_response_avg(tensor)  # Shape: (samples, time)
+                processed_responses[layer_name] = tensor_to_numpy(avg_response)
+        print(f"Loaded {len(processed_responses)} layers from unit-wise format")
 
     return processed_responses
 
@@ -159,6 +198,7 @@ def plot_unrolling(
     engineering_responses,
     biological_responses,
     t_feedforward,
+    dt=1.0,
     config=None,
     output_path=None,
 ):
@@ -167,7 +207,8 @@ def plot_unrolling(
     Args:
         engineering_responses: Dict of layer_name -> response arrays from engineering time
         biological_responses: Dict of layer_name -> response arrays from biological time
-        t_feedforward: Time shift amount for successive layers
+        t_feedforward: Time shift amount per layer in timesteps
+        dt: Temporal resolution in ms per timestep (for axis labels)
         config: Configuration dictionary for styling
         output_path: Path to save the plot
 
@@ -185,6 +226,16 @@ def plot_unrolling(
     ordered_layers = order_layers(layer_names, config)
 
     print(f"Plotting layers in order: {ordered_layers}")
+
+    # Debug: check shapes and values
+    print(f"\nResponse shapes:")
+    for layer in ordered_layers[:3]:  # Print first 3 layers
+        if layer in engineering_responses and layer in biological_responses:
+            eng_shape = engineering_responses[layer].shape
+            bio_shape = biological_responses[layer].shape
+            eng_mean = engineering_responses[layer].mean()
+            bio_mean = biological_responses[layer].mean()
+            print(f"  {layer}: eng={eng_shape} (mean={eng_mean:.4f}), bio={bio_shape} (mean={bio_mean:.4f})")
 
     n_layers = len(ordered_layers)
 
@@ -235,8 +286,8 @@ def plot_unrolling(
         bio_mean = np.mean(bio_data, axis=0)
         shifted_eng_mean = np.mean(shifted_eng_data, axis=0)
 
-        # Create time axis
-        time_steps = np.arange(len(eng_mean))
+        # Create time axis in ms
+        time_steps = np.arange(len(eng_mean)) * dt
 
         # Plot the three traces with different markers
         ax.plot(
@@ -277,7 +328,7 @@ def plot_unrolling(
         ax.set_ylabel(f"{layer_display_name}\nResponse", fontsize=FONTSIZE_AXIS_LABELS)
 
         if i == n_layers - 1:
-            ax.set_xlabel("Time Step", fontsize=FONTSIZE_AXIS_LABELS)
+            ax.set_xlabel("Time (ms)", fontsize=FONTSIZE_AXIS_LABELS)
 
         ax.grid(True, alpha=0.3)
         ax.set_xlim(min(time_steps), max(time_steps))
@@ -343,6 +394,7 @@ if __name__ == "__main__":
             engineering_responses,
             biological_responses,
             args.t_feedforward,
+            dt=args.dt,
             config=config,
             output_path=args.output,
         )
