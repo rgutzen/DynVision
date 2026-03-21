@@ -364,6 +364,17 @@ class TestingParams(CompositeParams):
                 "classes": "model.n_classes",
                 "tsteps": "model.n_timesteps",
                 "rctype": "model.recurrence_type",
+                "rctarget": "model.recurrence_target",
+                # Model timing aliases (needed for biological time overrides in test identifiers)
+                "tff": "model.t_feedforward",
+                "tfb": "model.t_feedback",
+                "tsk": "model.t_skip",
+                "trc": "model.t_recurrence",
+                "dt": "model.dt",
+                "tau": "model.tau",
+                "lossrt": "model.loss_reaction_time",
+                "pattern": "model.data_presentation_pattern",
+                "solver": "model.dynamics_solver",
                 # Trainer aliases (routed to trainer component)
                 "precision": "trainer.precision",
                 "benchmark": "trainer.benchmark",

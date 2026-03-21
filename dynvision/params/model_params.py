@@ -432,6 +432,39 @@ class ModelParams(BaseParams):
             )
         return v
 
+    @field_validator("data_presentation_pattern", mode="before")
+    @classmethod
+    def validate_data_presentation_pattern(cls, v):
+        """Convert string pattern specifications to list of ints.
+
+        Handles:
+        - String numbers: '1' → [1]
+        - Comma/space separated: '1,0,1' or '1 0 1' → [1, 0, 1]
+        - Already a list: [1, 0, 1] → [1, 0, 1]
+        - None: None → None
+        """
+        if v is None:
+            return None
+
+        if isinstance(v, str):
+            # Parse string pattern
+            import re
+            # Split by comma, space, or both
+            parts = re.split(r'[,\s]+', v.strip())
+            parts = [p for p in parts if p]  # Remove empty strings
+            try:
+                v = [int(p) for p in parts]
+            except ValueError as e:
+                raise ValueError(f"data_presentation_pattern contains non-integer values: {v}") from e
+
+        if isinstance(v, list):
+            # Validate list contents
+            if not all(isinstance(x, int) for x in v):
+                raise ValueError(f"data_presentation_pattern must contain only integers, got {v}")
+            return v
+
+        raise ValueError(f"data_presentation_pattern must be a string or list, got {type(v).__name__}")
+
     @field_validator("input_dims")
     def validate_input_dims(cls, v):
         """Validate input dimensions."""
