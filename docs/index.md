@@ -47,9 +47,9 @@ DynVision is an open-source project, and we welcome contributions! See our [Cont
 
 If you have questions or run into issues:
 
-1. Search the [GitHub Issues](https://github.com/yourusername/dynvision/issues) to see if someone has encountered the same problem. Open a new issue if you can't find a solution.
+1. Search the [GitHub Issues](https://github.com/Lindsay-Lab/dynvision/issues) to see if someone has encountered the same problem. Open a new issue if you can't find a solution.
 2. Reach out via [Email](mailto:robin.gutzen@nyu.edu).
 
 ## License
 
-DynVision is released under the MIT License. See the [LICENSE](https://github.com/yourusername/dynvision/blob/main/LICENSE) file for more details.
+DynVision is released under the MIT License. See the [LICENSE](https://github.com/Lindsay-Lab/dynvision/blob/main/LICENSE) file for more details.

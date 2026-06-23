@@ -4,6 +4,15 @@ This document describes the different types of recurrent connections available i
 
 ## Introduction to Recurrence
 
+<!--
+  TODO: Several recurrence-type images are missing:
+  - ../assets/self_recurrence.png
+  - ../assets/full_recurrence.png
+  - ../assets/depthwise_recurrence.png
+  - ../assets/local_recurrence.png
+  The overview image recurrence_types.png exists.
+-->
+
 Recurrent connections are abundant in the primate visual system. In the ventral visual stream, lateral recurrent connections exist amongst neurons within a visual cortical region, and feedback connections go from higher areas (like V4) back to lower ones (such as V1).
 
 DynVision implements several types of recurrent connections, each with different computational properties and biological interpretations.
@@ -250,16 +259,13 @@ class CustomRecurrence(RecurrenceBase):
 
 ```python 
 class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
-    $$$
     def _setup_recurrence(self) -> None:
-    $$$
-
         # Map recurrence types to their implementations
         recurrence_types = {
             "self": lambda: SelfConnection(fixed_weight=self.fixed_self_weight),
-            "custom" lambda: CustomRecurrence(in_channels=self.out_channels, **recurrence_params
-            )
+            "custom": lambda: CustomRecurrence(in_channels=self.out_channels, **recurrence_params),
             # ... other recurrence types
+        }
 ```
 
 ## Performance Considerations

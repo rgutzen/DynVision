@@ -125,9 +125,9 @@ DynVision allows setting these time constants for each layer, enabling layer-spe
 
 To test temporal dynamics, DynVision provides specialized data loaders:
 
-- **StimulusDurationDataLoader**: Presents stimuli for varying durations
-- **StimulusIntervalDataLoader**: Presents repeated stimuli with varying intervals
-- **StimulusContrastDataLoader**: Presents stimuli at different contrast levels
+- **StimulusDuration**: Presents stimuli for varying durations
+- **StimulusInterval**: Presents repeated stimuli with varying intervals
+- **StimulusContrast**: Presents stimuli at different contrast levels
 
 These loaders create temporal stimulus patterns that probe specific aspects of temporal processing.
 
