@@ -33,24 +33,37 @@
 
 | File | Lines | Reason |
 |------|-------|--------|
-| `dynvision/workflow/snake_manuscript.smk` | 831 | Manuscript-only Snakemake workflow |
-| `dynvision/visualization/plot_all_dynamics_manuscript.py` | 1626 | Composite 3-experiment dynamics figure |
+| `dynvision/workflow/snake_manuscript.smk` | 831 | Manuscript-only Snakemake workflow (13 rules: manuscript_figures, plot_stability, plot_performance_manuscript, plot_dynamics_manuscript, plot_all_dynamics_manuscript, plot_unrolling, plot_reference_models, dataloader, imagenet, benchmark_training, benchmark_dagger_reruns, process_all_wandb_data, current_figure) |
+| `dynvision/visualization/plot_all_dynamics_manuscript.py` | 1626 | Composite 3-experiment dynamics figure with Groen comparison |
 | `dynvision/visualization/plot_performance_manuscript.py` | 1424 | 4-panel performance + Jang benchmarks figure |
-| `dynvision/visualization/plot_dynamics_with_groen.py` | 1484 | Dynamics with Groen et al. 2022 human data |
-| `dynvision/visualization/plot_reference_models.py` | 1039 | Reference model comparison figure |
-| `dynvision/visualization/fetch_benchmarks.py` | 745 | W&B benchmarking data fetch |
+| `dynvision/visualization/plot_dynamics_with_groen.py` | 1484 | Dynamics with Groen et al. 2022 human V1 data overlay |
+| `dynvision/visualization/plot_reference_models.py` | 1039 | Reference model comparison (CorNetRT, CordsNet, DyRCNNx8) |
+| `dynvision/visualization/fetch_benchmarks.py` | 745 | W&B benchmarking data fetch for resource table |
 | `dynvision/visualization/count_params.py` | 154 | Parameter counting for benchmark table |
 | `dynvision/visualization/weight_caption_metrics.py` | 471 | Weight distribution metrics for figure captions |
 
-**Procedure**:
-1. Create a new branch `manuscript-split` in the DynVision repo
-2. On that branch, remove the 8 files listed above
-3. Create a corresponding branch in the manuscript repo
-4. Add these files to the manuscript repo under an appropriate directory (e.g., `scripts/` or `code/`)
-5. Update any remaining references in DynVision to note that manuscript scripts have moved
-6. Merge `manuscript-split` into `dev`
+**Dependencies within manuscript files**:
+- `plot_all_dynamics_manuscript.py` imports from `plot_dynamics_with_groen.py`
+- `plot_performance_manuscript.py` imports from `plot_performance.py` (general) — will need path adjustment
+- `plot_dynamics_with_groen.py` imports from `plot_dynamics.py` (general) — will need path adjustment
+- `fetch_benchmarks.py` imports and calls `count_params.py`
+- `snake_manuscript.smk` orchestrates all manuscript rules; references `snake_visualizations.smk` for `plot_responses_tripytch`
 
-**Verification**: Run `git status` on the manuscript branch; confirm no internal DynVision imports break on the remaining files. The general visualization scripts (`plot_responses.py`, `plot_dynamics.py`, `plot_performance.py`, `plot_training.py`, `plot_unrolling.py`) must remain fully functional.
+**Borderline files — KEEP in DynVision**:
+- `plot_response_tripytch.py` — used by general `snake_visualizations.smk`, not just manuscript
+- `plot_performance.py`, `plot_dynamics.py`, `plot_responses.py`, `plot_training.py` — general-purpose visualization modules
+- `snake_visualizations.smk` — general workflow rules
+
+**Split procedure**:
+1. Create branch `manuscript-split` in DynVision repo
+2. Move the 8 files to a `scripts/` directory in the manuscript repo
+3. Adjust import paths in moved files (they currently import from `dynvision.visualization.*`)
+   - Option A: Add `sys.path` manipulation at top of each script
+   - Option B: Install DynVision as editable dependency, change imports to use package paths
+   - Option C: Copy necessary utility functions into manuscript scripts (avoids DynVision dependency)
+4. Remove manuscript-only Snakemake rules from DynVision
+5. Update the manuscript repo's workflow to reference DynVision as a dependency
+6. Merge `manuscript-split` into `dev`
 
 ---
 

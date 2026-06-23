@@ -5,6 +5,8 @@ from pathlib import Path
 from torchvision import datasets
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
+
 parser = argparse.ArgumentParser(description="Download dataset")
 parser.add_argument("--output", type=Path)
 parser.add_argument("--data_name", type=str)
@@ -33,13 +35,13 @@ def download_data(output_folder, data_name, train):
 
 def store_images(image_folder, dataset, ext="png"):
     if Path(image_folder).exists() and any(Path(image_folder).iterdir()):
-        logging.warning(f"Folder {image_folder} already exists and is not empty.")
+        logger.warning(f"Folder {image_folder} already exists and is not empty.")
         return None
 
     # Create a new folder to store the images
     image_folder.mkdir(parents=True, exist_ok=True)
 
-    logging.info(f"Saving images to: {image_folder}")
+    logger.info(f"Saving images to: {image_folder}")
     # Iterate through the MNIST dataset and save the images to the new folder
     for i, (image, label) in tqdm(enumerate(dataset), total=len(dataset)):
         label_folder = image_folder / str(label)
@@ -53,7 +55,6 @@ def store_images(image_folder, dataset, ext="png"):
 
 if __name__ == "__main__":
 
-    logger = logging.getLogger(__name__)
     args = parser.parse_args()
 
     if args.subset in ["train", "test"]:

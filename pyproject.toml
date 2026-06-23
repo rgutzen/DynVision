@@ -4,19 +4,20 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "dynvision"
-version = "0.0.1"
+version = "0.1.0"
 description = "Dynamical Vision Modeling"
 authors = [{ name = "Robin Gutzen" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 # some packages may be better installed via conda on some systems
