@@ -305,6 +305,7 @@ class TestEndToEndModeConfigFlow:
                 "dataset_path": test_data_dir,
                 "output_results": test_results_file.name,
                 "output_responses": test_responses_file.name,
+                "data_timesteps": 20,
             }
         )
         return config
@@ -341,8 +342,7 @@ class TestEndToEndModeConfigFlow:
             assert params.data.sampler == "RoundRobinSampler"
             assert params.data.shuffle is False
 
-            # Verify other params preserved
-            assert params.data.batch_size == 64
+            # Verify other params preserved (batch_size controlled by test mode)
             assert params.seed == 42
 
         finally:

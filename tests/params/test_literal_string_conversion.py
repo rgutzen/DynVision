@@ -126,7 +126,9 @@ class TestLiteralStringConversion:
         config_path = create_minimal_config({"recurrence_type": "none"})
 
         try:
-            params = ModelParams.from_cli_and_config(config_path=str(config_path))
+            params = ModelParams.from_cli_and_config(
+                config_path=str(config_path), args=[]
+            )
 
             assert params.recurrence_type == "none"
         finally:

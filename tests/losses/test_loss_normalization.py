@@ -96,6 +96,7 @@ class TestActivityLossAccumulation:
             def __init__(self):
                 super().__init__()
                 self.conv = nn.Conv2d(3, 8, kernel_size=3, padding=1)
+                self.conv._activity_monitor = "absolute"  # Mark for monitoring
 
             def forward(self, x):
                 return self.conv(x)
@@ -148,7 +149,9 @@ class TestActivityLossAccumulation:
             def __init__(self):
                 super().__init__()
                 self.conv1 = nn.Conv2d(3, 4, kernel_size=3)
+                self.conv1._activity_monitor = "absolute"
                 self.conv2 = nn.Conv2d(4, 8, kernel_size=3)
+                self.conv2._activity_monitor = "absolute"
 
             def forward(self, x):
                 x = self.conv1(x)
@@ -187,7 +190,9 @@ class TestActivityLossAccumulation:
             def __init__(self):
                 super().__init__()
                 self.conv1 = nn.Conv2d(3, 4, kernel_size=1)
+                self.conv1._activity_monitor = "absolute"
                 self.conv2 = nn.Conv2d(4, 4, kernel_size=1)
+                self.conv2._activity_monitor = "absolute"
 
             def forward(self, x):
                 x = self.conv1(x)
