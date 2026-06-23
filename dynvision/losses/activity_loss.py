@@ -239,6 +239,8 @@ class ActivityLoss(BaseLoss):
 
     def remove_hooks(self) -> None:
         """Clean up registered hooks."""
+        if not hasattr(self, "hooks"):
+            return
         for hook in self.hooks:
             hook.remove()
         self.hooks = []

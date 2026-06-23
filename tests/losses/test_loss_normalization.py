@@ -101,7 +101,7 @@ class TestActivityLossAccumulation:
                 return self.conv(x)
 
         model = SimpleModel()
-        loss_fn = ActivityLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", ord=1)
         loss_fn.register_hooks(model)
 
         batch_size = 2
@@ -156,7 +156,7 @@ class TestActivityLossAccumulation:
                 return x
 
         model = SimpleModel()
-        loss_fn = ActivityLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", ord=1)
         loss_fn.register_hooks(model)
 
         batch_size = 2
@@ -195,7 +195,7 @@ class TestActivityLossAccumulation:
                 return x
 
         model = SimpleModel()
-        loss_fn = ActivityLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", ord=1)
         loss_fn.register_hooks(model)
 
         batch_size = 1
@@ -225,7 +225,7 @@ class TestActivityLossAccumulation:
 
         device = torch.device("cuda:0")
         model = SimpleModel().to(device)
-        loss_fn = ActivityLoss(reduction="mean", p=1)
+        loss_fn = ActivityLoss(reduction="mean", ord=1)
         loss_fn.register_hooks(model)
 
         batch_size = 2
