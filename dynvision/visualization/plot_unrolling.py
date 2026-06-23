@@ -9,21 +9,32 @@ import torch
 from dynvision.utils.visualization_utils import (
     save_plot,
     load_config_from_args,
+    get_color,
     get_display_name,
     order_layers,
     tensor_to_numpy,
     layer_response_avg,
 )
 
-# Global styling parameters
-FONTSIZE_PANEL_LABELS = 18
-FONTSIZE_AXIS_LABELS = 18
-FONTSIZE_TICK_LABELS = 16
-FONTSIZE_LEGEND = 18
-FONTSIZE_TITLE = 20
-LINEWIDTH_MAIN = 3
-ALPHA_LINES = 0.8
-FIGURE_HEIGHT_PER_SUBPLOT = 3
+# Global styling parameters (matching plot_responses.py)
+FORMATTING = {
+    "fontsize_title": 20,
+    "fontsize_axis": 19,
+    "fontsize_tick": 16,
+    "fontsize_legend": 19,
+    "fontsize_label": 18,
+    "linewidth_main": 3,
+    "linewidth_indicator": 3,
+    "alpha_line": 0.8,
+    "alpha_indicator": 0.6,
+    "layer_circle_colors": {
+        "V1": "#ff69b4ff",
+        "V2": "#dda0ddff",
+        "V4": "#da70d6ff",
+        "IT": "#ba55d3ff",
+    },
+}
+FIGURE_HEIGHT_PER_SUBPLOT = 2.5
 SUBPLOT_SPACING = 0.2
 
 parser = argparse.ArgumentParser()
@@ -50,6 +61,12 @@ parser.add_argument(
     type=float,
     default=1.0,
     help="Temporal resolution in ms per timestep (for axis labels)",
+)
+parser.add_argument(
+    "--idle-timesteps",
+    type=int,
+    default=0,
+    help="Number of idle timesteps before recorded data (shifts time axis)",
 )
 parser.add_argument(
     "--output", type=Path, required=True, help="Path to output plot file"
@@ -194,11 +211,45 @@ def create_time_shifted_trace(response_data, shift_amount):
     return shifted_data
 
 
+def _add_layer_circle(x, y, layer_name, ax=None, config=None):
+    """Add a circular layer indicator label to the axes.
+
+    Replicates the style from plot_responses.py for visual consistency.
+    """
+    if ax is None:
+        ax = plt.gca()
+
+    pad = 0.5 if layer_name == "IT" else 0.4
+
+    color = get_color(layer_name, config) if config else None
+    if color is None:
+        color = FORMATTING["layer_circle_colors"].get(layer_name, "#808080ff")
+
+    ax.text(
+        x,
+        y,
+        layer_name,
+        horizontalalignment="center",
+        verticalalignment="center",
+        transform=ax.transAxes,
+        bbox=dict(
+            boxstyle=f"circle,pad={pad}",
+            facecolor=color,
+            edgecolor="#353535ff",
+            linewidth=2,
+            alpha=0.8,
+        ),
+        fontsize=FORMATTING["fontsize_label"],
+        fontweight="bold",
+    )
+
+
 def plot_unrolling(
     engineering_responses,
     biological_responses,
     t_feedforward,
     dt=1.0,
+    time_offset=0.0,
     config=None,
     output_path=None,
 ):
@@ -209,6 +260,7 @@ def plot_unrolling(
         biological_responses: Dict of layer_name -> response arrays from biological time
         t_feedforward: Time shift amount per layer in timesteps
         dt: Temporal resolution in ms per timestep (for axis labels)
+        time_offset: Time offset in ms to shift the time axis (e.g., from idle timesteps)
         config: Configuration dictionary for styling
         output_path: Path to save the plot
 
@@ -227,17 +279,8 @@ def plot_unrolling(
 
     print(f"Plotting layers in order: {ordered_layers}")
 
-    # Debug: check shapes and values
-    print(f"\nResponse shapes:")
-    for layer in ordered_layers[:3]:  # Print first 3 layers
-        if layer in engineering_responses and layer in biological_responses:
-            eng_shape = engineering_responses[layer].shape
-            bio_shape = biological_responses[layer].shape
-            eng_mean = engineering_responses[layer].mean()
-            bio_mean = biological_responses[layer].mean()
-            print(f"  {layer}: eng={eng_shape} (mean={eng_mean:.4f}), bio={bio_shape} (mean={bio_mean:.4f})")
-
     n_layers = len(ordered_layers)
+    fmt = FORMATTING
 
     # Set seaborn style
     sns.set_style("whitegrid")
@@ -245,7 +288,7 @@ def plot_unrolling(
 
     # Create figure with subplots for each layer
     fig, axes = plt.subplots(
-        n_layers, 1, figsize=(12, FIGURE_HEIGHT_PER_SUBPLOT * n_layers), sharex=True
+        n_layers, 1, figsize=(10, FIGURE_HEIGHT_PER_SUBPLOT * n_layers), sharex=True
     )
 
     # Ensure axes is always a list
@@ -287,15 +330,15 @@ def plot_unrolling(
         shifted_eng_mean = np.mean(shifted_eng_data, axis=0)
 
         # Create time axis in ms
-        time_steps = np.arange(len(eng_mean)) * dt
+        time_steps = np.arange(len(eng_mean)) * dt + time_offset
 
         # Plot the three traces with different markers
         ax.plot(
             time_steps,
             bio_mean,
             color=bio_color,
-            linewidth=LINEWIDTH_MAIN,
-            alpha=ALPHA_LINES,
+            linewidth=fmt["linewidth_main"],
+            alpha=fmt["alpha_line"],
             label="Biological time",
             linestyle="-",
         )
@@ -304,8 +347,8 @@ def plot_unrolling(
             time_steps,
             eng_mean,
             color=eng_color,
-            linewidth=LINEWIDTH_MAIN,
-            alpha=ALPHA_LINES,
+            linewidth=fmt["linewidth_main"],
+            alpha=fmt["alpha_line"],
             label="Engineering time",
             linestyle="-",
         )
@@ -314,63 +357,87 @@ def plot_unrolling(
             time_steps,
             shifted_eng_mean,
             color=shift_color,
-            linewidth=LINEWIDTH_MAIN + 1,  # Slightly wider than default
-            alpha=ALPHA_LINES,
+            linewidth=fmt["linewidth_main"] + 1,
+            alpha=fmt["alpha_line"],
             label="Engineering time shifted",
             linestyle="none",
             marker="o",
             markersize=8,
-            markevery=4,  # Show marker only every 4 steps
+            markevery=3,
         )
 
-        # Customize subplot
-        layer_display_name = get_display_name(layer, config)
-        ax.set_ylabel(f"{layer_display_name}\nResponse", fontsize=FONTSIZE_AXIS_LABELS)
+        # Remove y-axis text label (replaced by layer circle)
+        ax.set_ylabel("")
 
         if i == n_layers - 1:
-            ax.set_xlabel("Time (ms)", fontsize=FONTSIZE_AXIS_LABELS)
+            ax.set_xlabel("Time (ms)", fontsize=fmt["fontsize_axis"])
+            ax.tick_params(labelsize=fmt["fontsize_tick"])
+        else:
+            ax.tick_params(axis="x", labelbottom=False)
+            ax.set_xlabel("")
 
+        ax.tick_params(axis="y", labelsize=fmt["fontsize_tick"])
         ax.grid(True, alpha=0.3)
         ax.set_xlim(min(time_steps), max(time_steps))
 
         # Remove top and right spines
         sns.despine(ax=ax, left=True, bottom=True)
 
-        # Add label indicator to the bottom subplot
-        if i == n_layers - 1:
-            # Create a mock label indicator (assuming stimulus presentation at early time points)
-            # You may need to adapt this based on your actual data structure
-            y_min, y_max = ax.get_ylim()
-
-            # Simple label indicator: assume stimulus is present for first 35 time steps
-            stimulus_duration = 35
-            label_indicator = np.full(len(time_steps), y_min)
-            label_indicator[:stimulus_duration] = y_min + 0.1 * (y_max - y_min)
-
-            ax.plot(
-                time_steps,
-                label_indicator,
-                color="gray",
-                linewidth=LINEWIDTH_MAIN,
-                drawstyle="steps-mid",
-                alpha=0.6,
-            )
-
-    # Add legend to the second subplot from the bottom (or top if only one layer)
-    legend_ax_idx = max(0, n_layers - 2) if n_layers >= 2 else 0
-    axes[legend_ax_idx].legend(
-        loc="upper right", fontsize=FONTSIZE_LEGEND, frameon=False
+    # Add label indicator to the bottom subplot
+    ax_bottom = axes[-1]
+    y_min, y_max = ax_bottom.get_ylim()
+    stimulus_duration = 20  # labels present for first 20 timesteps
+    label_indicator = np.full(len(time_steps), y_min)
+    label_indicator[:stimulus_duration] = y_min + 0.1 * (y_max - y_min)
+    ax_bottom.plot(
+        time_steps,
+        label_indicator,
+        color="dimgray",
+        linewidth=fmt["linewidth_indicator"],
+        drawstyle="steps-mid",
+        alpha=fmt["alpha_indicator"],
     )
+
+    # Add legend to the bottom subplot with white background, no border
+    axes[-1].legend(
+        loc="center left",
+        fontsize=fmt["fontsize_legend"],
+        frameon=False,
+        facecolor="white",
+        edgecolor="none",
+        framealpha=1.0,
+    )
+
+    # Add layer circles after y-limits are finalized (drawn after legend so they appear on top)
+    for i, layer in enumerate(ordered_layers):
+        display_name = get_display_name(layer, config)
+        _add_layer_circle(
+            x=0.95,
+            y=0.5,
+            layer_name=display_name,
+            ax=axes[i],
+            config=config,
+        )
 
     # Adjust layout
     plt.tight_layout()
     plt.subplots_adjust(hspace=SUBPLOT_SPACING)
+
+    # Add shared y-label centered vertically
+    fig.text(
+        0.01, 0.5, "Average Response",
+        va="center", ha="center", rotation="vertical",
+        fontsize=fmt["fontsize_axis"],
+    )
 
     return fig
 
 
 if __name__ == "__main__":
     args = parser.parse_args()
+
+    # Compute time offset from idle timesteps
+    time_offset = args.idle_timesteps * args.dt
 
     # Load configuration from command line arguments
     config = load_config_from_args(
@@ -395,6 +462,7 @@ if __name__ == "__main__":
             biological_responses,
             args.t_feedforward,
             dt=args.dt,
+            time_offset=time_offset,
             config=config,
             output_path=args.output,
         )

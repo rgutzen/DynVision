@@ -59,14 +59,14 @@ logger.setLevel("INFO")
 # Layout configuration - modified from plot_performance
 MANUSCRIPT_LAYOUT = {
     # Figure dimensions
-    "subplot_width": 3,  # Width of each performance subplot
-    "subplot_height": 7.0,  # Height of each subplot
-    "subplot_spacing_x": 0.3,  # Horizontal spacing between subplots
+    "subplot_width": 2.6,  # Width of each performance subplot
+    "subplot_height": 6.0,  # Height of each subplot
+    "subplot_spacing_x": 0.2,  # Horizontal spacing between subplots
     "subplot_spacing_y": 0.7,  # Vertical spacing between rows
     "ssnr_panel_width": 4.0,  # Width of SSNR panel (Panel B)
-    "ssnr_panel_spacing": 1,  # Spacing before SSNR panel
+    "ssnr_panel_spacing": 0.5,  # Spacing before SSNR panel
     "category2_panel_width": 4.0,  # Width of category-2 panel (Panel C)
-    "category2_panel_spacing": 1.0,  # Spacing before category-2 panel
+    "category2_panel_spacing": 0.5,  # Spacing before category-2 panel
     "jang_panel_width": 4.0,  # Width of Jang panel (Panel D)
     "jang_panel_spacing": 1,  # Spacing before Jang panel
     # Margins
@@ -77,8 +77,18 @@ MANUSCRIPT_LAYOUT = {
     # Title spacing
     "title_spacing": 0.08,
     # Panel letters
-    "panel_letter_offset_x": -0.01,
+    "panel_letter_offset_x": -0.08,
     "panel_letter_offset_y": 0.03,
+}
+FORMATTING = {
+    **FORMATTING,
+    "title_fontsize": 18,
+    "fontsize_panel_label": 20,
+    "fontsize_title": 20,
+    "fontsize_axis": 20,
+    "fontsize_tick": 17,
+    "fontsize_legend": 19,
+    "fontsize_label": 19,
 }
 
 
@@ -145,9 +155,7 @@ def _plot_category2_panel(
         data_filtered = data
 
     if len(data_filtered) == 0:
-        ax.text(
-            0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes
-        )
+        ax.text(0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes)
         return
 
     # Determine accuracy measure
@@ -191,9 +199,8 @@ def _plot_category2_panel(
             subplot_val_std = _standardize_category_value(subplot_val)
 
             # Filter data for this combination
-            mask = (
-                (data_filtered[category2_key] == cat2_val_std)
-                & (data_filtered[subplot_key] == subplot_val_std)
+            mask = (data_filtered[category2_key] == cat2_val_std) & (
+                data_filtered[subplot_key] == subplot_val_std
             )
             subset = data_filtered[mask]
 
@@ -304,8 +311,9 @@ def _plot_category2_panel(
             handlelength=2.5,  # Length of legend lines
             numpoints=1,
         )
-        # Make legend title bold
+        # Make legend title bold and left-align entries
         legend.get_title().set_fontweight("bold")
+        legend._legend_box.align = "left"
         # Remove markers from legend handles (only for Line2D objects)
         for handle in legend.legendHandles:
             if isinstance(handle, Line2D):
@@ -388,6 +396,7 @@ def _plot_jang_panel(
 
         legend = ax.legend(
             loc="upper left",
+            bbox_to_anchor=(0, 1.08),
             frameon=False,
             fontsize=FORMATTING["fontsize_legend"],
             title="Jang et al. 2021",
@@ -395,8 +404,9 @@ def _plot_jang_panel(
             handlelength=2.5,
             numpoints=1,
         )
-        # Make legend title bold and remove markers from legend handles
+        # Make legend title bold, left-align entries, and remove markers
         legend.get_title().set_fontweight("bold")
+        legend._legend_box.align = "left"
         for handle in legend.legendHandles:
             if isinstance(handle, Line2D):
                 handle.set_marker("")
@@ -510,6 +520,9 @@ def plot_performance_manuscript(
     subplot_filter: Optional[List[str]] = None,
     jang_noise_type: str = "gaussian",
     plot_individual_seeds: bool = False,
+    time_offset: float = 0.0,
+    show_category2: bool = True,
+    show_jang: bool = True,
     **kwargs,
 ) -> plt.Figure:
     """Plot performance grid with category-2 and Jang et al. (2021) benchmarks.
@@ -518,7 +531,7 @@ def plot_performance_manuscript(
     - Panel A: Performance traces over time (multiple subplots)
     - Panel B: Max accuracy vs parameter for main models
     - Panel C: Max accuracy vs parameter for category-2 models (optional)
-    - Panel D: Jang et al. (2021) human and DNN benchmarks
+    - Panel D: Jang et al. (2021) human and DNN benchmarks (optional)
 
     Parameters
     ----------
@@ -561,6 +574,12 @@ def plot_performance_manuscript(
     plot_individual_seeds : bool, default=False
         If True and multiple seed files are provided, plot each seed as a separate
         trace with the same color and linestyle instead of averaging over seeds.
+    time_offset : float, default=0.0
+        Time offset in ms to shift the time axis (e.g., for idle timesteps).
+    show_category2 : bool, default=True
+        Whether to include Panel C (category-2 max performance).
+    show_jang : bool, default=True
+        Whether to include Panel D (Jang et al. benchmarks).
     **kwargs
         Additional formatting arguments
 
@@ -695,7 +714,9 @@ def plot_performance_manuscript(
                     df["seed_id"] = idx
 
                 combined_data.append(df)
-                logger.info(f"Loaded {len(df)} feedforward-trained rows from {path.name}")
+                logger.info(
+                    f"Loaded {len(df)} feedforward-trained rows from {path.name}"
+                )
 
     df = pd.concat(combined_data, ignore_index=True)
     logger.info(f"Combined: {len(df)} rows, {len(df.columns)} columns")
@@ -709,7 +730,9 @@ def plot_performance_manuscript(
     category2_values = []
     category2_colors = {}
     if data_category2_paths and category2_key:
-        logger.info(f"Loading category-2 data from {len(data_category2_paths)} files...")
+        logger.info(
+            f"Loading category-2 data from {len(data_category2_paths)} files..."
+        )
         combined_category2_data = []
         for i, data_path in enumerate(data_category2_paths):
             if data_path and Path(data_path).exists():
@@ -718,7 +741,9 @@ def plot_performance_manuscript(
                     experiment_name = (
                         experiment_names[i]
                         if experiment_names and i < len(experiment_names)
-                        else (experiment_names[0] if experiment_names else data_path.stem)
+                        else (
+                            experiment_names[0] if experiment_names else data_path.stem
+                        )
                     )
                 else:
                     experiment_name = combined_label
@@ -729,7 +754,9 @@ def plot_performance_manuscript(
                 if plot_individual_seeds:
                     df_cat2["seed_id"] = i
                 combined_category2_data.append(df_cat2)
-                logger.info(f"Loaded {len(df_cat2)} category-2 rows from {data_path.name}")
+                logger.info(
+                    f"Loaded {len(df_cat2)} category-2 rows from {data_path.name}"
+                )
 
         if combined_category2_data:
             df_category2 = pd.concat(combined_category2_data, ignore_index=True)
@@ -752,12 +779,15 @@ def plot_performance_manuscript(
             if n_category2 > 0:
                 plasma_cmap = plt.cm.plasma
                 plasma_colors = [
-                    plasma_cmap(i / max(n_category2 - 1, 1)) for i in range(n_category2)
+                    plasma_cmap(i / max(n_category2 - 1, 1))
+                    for i in range(n_category2)
                 ]
                 category2_colors = {
                     val: plasma_colors[i] for i, val in enumerate(category2_values)
                 }
-                logger.info(f"Generated plasma palette for {n_category2} category-2 values")
+                logger.info(
+                    f"Generated plasma palette for {n_category2} category-2 values"
+                )
     else:
         logger.info("No category-2 data provided, Panel C will be blank")
 
@@ -838,12 +868,12 @@ def plot_performance_manuscript(
         + performance_section_width
         + layout["ssnr_panel_spacing"]
         + layout["ssnr_panel_width"]
-        + layout["category2_panel_spacing"]
-        + layout["category2_panel_width"]
-        + layout["jang_panel_spacing"]
-        + layout["jang_panel_width"]
-        + layout["right_margin"]
     )
+    if show_category2:
+        fig_width += layout["category2_panel_spacing"] + layout["category2_panel_width"]
+    if show_jang:
+        fig_width += layout["jang_panel_spacing"] + layout["jang_panel_width"]
+    fig_width += layout["right_margin"]
 
     fig_height = (
         layout["top_margin"]
@@ -900,40 +930,38 @@ def plot_performance_manuscript(
             )
 
         # Category-2 panels (Panel C)
-        category2_left = (
-            ssnr_left + layout["ssnr_panel_width"] + layout["category2_panel_spacing"]
-        )
-        for row_idx in range(n_rows):
-            row_bottom = layout["bottom_margin"] + (n_rows - 1 - row_idx) * (
-                layout["subplot_height"] + layout["subplot_spacing_y"]
-            )
-            positions["category2"].append(
-                [
-                    category2_left / fig_width,
-                    row_bottom / fig_height,
-                    layout["category2_panel_width"] / fig_width,
-                    layout["subplot_height"] / fig_height,
-                ]
-            )
+        next_left = ssnr_left + layout["ssnr_panel_width"]
+        if show_category2:
+            category2_left = next_left + layout["category2_panel_spacing"]
+            for row_idx in range(n_rows):
+                row_bottom = layout["bottom_margin"] + (n_rows - 1 - row_idx) * (
+                    layout["subplot_height"] + layout["subplot_spacing_y"]
+                )
+                positions["category2"].append(
+                    [
+                        category2_left / fig_width,
+                        row_bottom / fig_height,
+                        layout["category2_panel_width"] / fig_width,
+                        layout["subplot_height"] / fig_height,
+                    ]
+                )
+            next_left = category2_left + layout["category2_panel_width"]
 
         # Jang panels (Panel D)
-        jang_left = (
-            category2_left
-            + layout["category2_panel_width"]
-            + layout["jang_panel_spacing"]
-        )
-        for row_idx in range(n_rows):
-            row_bottom = layout["bottom_margin"] + (n_rows - 1 - row_idx) * (
-                layout["subplot_height"] + layout["subplot_spacing_y"]
-            )
-            positions["jang"].append(
-                [
-                    jang_left / fig_width,
-                    row_bottom / fig_height,
-                    layout["jang_panel_width"] / fig_width,
-                    layout["subplot_height"] / fig_height,
-                ]
-            )
+        if show_jang:
+            jang_left = next_left + layout["jang_panel_spacing"]
+            for row_idx in range(n_rows):
+                row_bottom = layout["bottom_margin"] + (n_rows - 1 - row_idx) * (
+                    layout["subplot_height"] + layout["subplot_spacing_y"]
+                )
+                positions["jang"].append(
+                    [
+                        jang_left / fig_width,
+                        row_bottom / fig_height,
+                        layout["jang_panel_width"] / fig_width,
+                        layout["subplot_height"] / fig_height,
+                    ]
+                )
 
         return positions
 
@@ -958,12 +986,14 @@ def plot_performance_manuscript(
         ssnr_axes.append(ssnr_ax)
 
         # Category-2 axis (Panel C)
-        category2_ax = fig.add_axes(panel_positions["category2"][row_idx])
-        category2_axes.append(category2_ax)
+        if show_category2:
+            category2_ax = fig.add_axes(panel_positions["category2"][row_idx])
+            category2_axes.append(category2_ax)
 
         # Jang axis (Panel D)
-        jang_ax = fig.add_axes(panel_positions["jang"][row_idx])
-        jang_axes.append(jang_ax)
+        if show_jang:
+            jang_ax = fig.add_axes(panel_positions["jang"][row_idx])
+            jang_axes.append(jang_ax)
 
     # Plot performance panels
     logger.info("=" * 60)
@@ -1022,6 +1052,7 @@ def plot_performance_manuscript(
                 show_legend=False,  # Legend moved to category hue legend
                 accuracy_cols=accuracy_measures,
                 confidence_cols=confidence_measures,
+                time_offset=time_offset,
                 **plot_kwargs,
             )
 
@@ -1103,76 +1134,90 @@ def plot_performance_manuscript(
             primary_accuracy=primary_accuracy_measure,
             primary_confidence=primary_confidence_measure,
         )
+        if row_idx == 0:
+            ssnr_axes[row_idx].set_title(
+                "ActivityLoss W. = 0.0002",
+                fontsize=FORMATTING["fontsize_axis"],
+                pad=10,
+            )
 
     # Plot category-2 panels (Panel C)
-    logger.info("=" * 60)
-    logger.info("PANEL C - Category-2 Max Performance vs Parameter")
-    if df_category2 is not None and len(category2_values) > 0:
-        logger.info(
-            "Data points: Max performance = max over time of (mean over trials/samples at each timepoint)"
-        )
-        if len(data_category2_paths) > 1:
-            logger.info(
-                "             When multiple seeds: mean of max performance across seeds"
-            )
-            logger.info(
-                "Error bars: STD (Standard Deviation) of max performance across seeds"
-            )
-        else:
-            logger.info("             Single seed - no error bars")
-    else:
-        logger.info("No category-2 data provided - panel will be blank")
-    logger.info("=" * 60)
-
-    for row_idx, row_value in enumerate(row_values):
+    if show_category2:
+        logger.info("=" * 60)
+        logger.info("PANEL C - Category-2 Max Performance vs Parameter")
         if df_category2 is not None and len(category2_values) > 0:
-            _plot_category2_panel(
-                ax=category2_axes[row_idx],
-                data=df_category2,
-                row_key=row_key,
-                row_value=row_value,
-                subplot_key=subplot_key,
-                subplot_values=subplot_values_all,  # Use all values for plotting
-                category2_key=category2_key,
-                category2_values=category2_values,
-                colors=category2_colors,
-                config=config,
-                dt=dt,
-                show_ylabel=False,  # No y-label for Panel C
-                show_legend=(row_idx == 0),  # Show legend in first row only
-                accuracy_cols=accuracy_measures,
-                primary_accuracy=primary_accuracy_measure,
+            logger.info(
+                "Data points: Max performance = max over time of (mean over trials/samples at each timepoint)"
             )
+            if len(data_category2_paths) > 1:
+                logger.info(
+                    "             When multiple seeds: mean of max performance across seeds"
+                )
+                logger.info(
+                    "Error bars: STD (Standard Deviation) of max performance across seeds"
+                )
+            else:
+                logger.info("             Single seed - no error bars")
         else:
-            # Show blank panel with message
-            category2_axes[row_idx].text(
-                0.5,
-                0.5,
-                "No Data",
-                ha="center",
-                va="center",
-                transform=category2_axes[row_idx].transAxes,
-            )
-            category2_axes[row_idx].set_xticks([])
-            category2_axes[row_idx].set_yticks([])
+            logger.info("No category-2 data provided - panel will be blank")
+        logger.info("=" * 60)
+
+        for row_idx, row_value in enumerate(row_values):
+            if df_category2 is not None and len(category2_values) > 0:
+                _plot_category2_panel(
+                    ax=category2_axes[row_idx],
+                    data=df_category2,
+                    row_key=row_key,
+                    row_value=row_value,
+                    subplot_key=subplot_key,
+                    subplot_values=subplot_values_all,  # Use all values for plotting
+                    category2_key=category2_key,
+                    category2_values=category2_values,
+                    colors=category2_colors,
+                    config=config,
+                    dt=dt,
+                    show_ylabel=False,  # No y-label for Panel C
+                    show_legend=(row_idx == 0),  # Show legend in first row only
+                    accuracy_cols=accuracy_measures,
+                    primary_accuracy=primary_accuracy_measure,
+                )
+                if row_idx == 0:
+                    category2_axes[row_idx].set_title(
+                        "Recurrence Target = Middle",
+                        fontsize=FORMATTING["fontsize_axis"],
+                        pad=10,
+                    )
+            else:
+                # Show blank panel with message
+                category2_axes[row_idx].text(
+                    0.5,
+                    0.5,
+                    "No Data",
+                    ha="center",
+                    va="center",
+                    transform=category2_axes[row_idx].transAxes,
+                )
+                category2_axes[row_idx].set_xticks([])
+                category2_axes[row_idx].set_yticks([])
 
     # Plot Jang et al. panels (Panel D - Jang data only)
-    logger.info("=" * 60)
-    logger.info("PANEL D - Jang et al. (2021) Benchmark Data")
-    logger.info("Human data points: Mean accuracy over human observers")
-    logger.info(
-        "               Error bars: STD (Standard Deviation) over human observers"
-    )
-    logger.info("DNN data points: Mean accuracy over DNN models")
-    logger.info("             Error bars: STD (Standard Deviation) over DNN models")
-    logger.info("=" * 60)
-
-    for row_idx in range(n_rows):
-        _plot_jang_panel(
-            ax=jang_axes[row_idx],
-            jang_noise_type=jang_noise_type,
-            show_ylabel=(row_idx == 0),
+    if show_jang:
+        logger.info("=" * 60)
+        logger.info("PANEL D - Jang et al. (2021) Benchmark Data")
+        logger.info("Human data points: Mean accuracy over human observers")
+        logger.info(
+            "               Error bars: STD (Standard Deviation) over human observers"
         )
+        logger.info("DNN data points: Mean accuracy over DNN models")
+        logger.info("             Error bars: STD (Standard Deviation) over DNN models")
+        logger.info("=" * 60)
+
+        for row_idx in range(n_rows):
+            _plot_jang_panel(
+                ax=jang_axes[row_idx],
+                jang_noise_type=jang_noise_type,
+                show_ylabel=(row_idx == 0),
+            )
 
     # Synchronize y-limits between Panel A, B, and C (Panel D has independent scale)
     all_perf_axes = [ax for row in perf_axes for ax in row]
@@ -1197,6 +1242,12 @@ def plot_performance_manuscript(
             if col_idx > 0:
                 perf_axes[row_idx][col_idx].set_yticklabels([])
 
+    # Share y-axis between Panel B and C: hide y-spine and tick labels on Panel C
+    if show_category2:
+        for row_idx in range(n_rows):
+            category2_axes[row_idx].set_yticklabels([])
+            sns.despine(ax=category2_axes[row_idx], left=True)
+
     # Add label indicators to performance panels (Panel A)
     for row_idx in range(n_rows):
         for col_idx in range(n_subplots_display):
@@ -1206,9 +1257,8 @@ def plot_performance_manuscript(
                 logger.debug(f"Could not add label indicator to Panel A: {e}")
 
     # Add hue legend with "without recurrence" entry for ffonly/feedforward models
-    has_ffonly_or_feedforward = (
-        (data_ffonly_paths and len(data_ffonly_paths) > 0)
-        or (data_feedforward_paths and len(data_feedforward_paths) > 0)
+    has_ffonly_or_feedforward = (data_ffonly_paths and len(data_ffonly_paths) > 0) or (
+        data_feedforward_paths and len(data_feedforward_paths) > 0
     )
     _add_hue_legend(
         fig=fig,
@@ -1301,6 +1351,12 @@ def main():
         help="Confidence measure (default: None, no confidence trace shown)",
     )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
+    parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
+    )
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
@@ -1317,8 +1373,20 @@ def main():
         action="store_true",
         help="Plot each seed as a separate trace instead of averaging over seeds",
     )
+    parser.add_argument(
+        "--no-category2",
+        action="store_true",
+        help="Hide Panel C (category-2 comparison)",
+    )
+    parser.add_argument(
+        "--no-jang",
+        action="store_true",
+        help="Hide Panel D (Jang et al. benchmarks)",
+    )
 
     args = parser.parse_args()
+
+    time_offset = args.idle_timesteps * args.dt
 
     config = load_config_from_args(
         palette_str=args.palette,
@@ -1346,6 +1414,9 @@ def main():
         subplot_filter=args.subplot_filter,
         jang_noise_type=args.jang_noise_type,
         plot_individual_seeds=args.plot_individual_seeds,
+        time_offset=time_offset,
+        show_category2=not args.no_category2,
+        show_jang=not args.no_jang,
     )
 
 

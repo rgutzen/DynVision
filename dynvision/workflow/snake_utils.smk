@@ -178,6 +178,7 @@ wildcard_constraints:
     seed = r'\d+',
     seeds = r'[\d\.]+',
     category_str = r'([a-z0-9]+=\*|\s?)',
+    category = r'([a-z]+|\s?)',
     model_args = r'(:[a-z,;:\+=\d\.\*]+|\s?)',
     data_args = r'(:[a-zTF,;:\+=\d\.]+|\s?)',
     args = r'([a-z,;:\+\-=\d\.]+|\s?)',

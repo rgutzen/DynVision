@@ -29,11 +29,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dynvision.models.cornet_original import CORnet_RT as OriginalCorNetRT
 from dynvision.models.cornet_rt import CorNetRT as ReimplementedCorNetRT
+from dynvision.project_paths import project_paths
+from PIL import Image
 
 
 @dataclass
 class ComparisonMetrics:
     """Metrics for comparing two tensors."""
+
     mean_abs_diff: float
     max_abs_diff: float
     mean_rel_diff: float
@@ -103,8 +106,10 @@ class ModelLoader:
 
         param_count = sum(p.numel() for p in model.parameters())
         print(f"✓ Model loaded: {param_count:,} parameters")
-        print(f"  Config: n_timesteps={model.n_timesteps}, dt={model.dt}, "
-              f"t_feedforward={model.t_feedforward}, t_recurrence={model.t_recurrence}")
+        print(
+            f"  Config: n_timesteps={model.n_timesteps}, dt={model.dt}, "
+            f"t_feedforward={model.t_feedforward}, t_recurrence={model.t_recurrence}"
+        )
 
         return model
 
@@ -112,7 +117,9 @@ class ModelLoader:
 class ModelComparator:
     """Compares original and reimplemented CorNet-RT models."""
 
-    def __init__(self, original: nn.Module, reimplemented: nn.Module, device: str = "cpu"):
+    def __init__(
+        self, original: nn.Module, reimplemented: nn.Module, device: str = "cpu"
+    ):
         self.original = original
         self.reimplemented = reimplemented
         self.device = device
@@ -159,7 +166,9 @@ class ModelComparator:
 
         return len(mismatches) == 0
 
-    def create_inputs(self, batch_size: int = 2, seed: int = 42) -> Dict[str, torch.Tensor]:
+    def create_inputs(
+        self, batch_size: int = 2, seed: int = 42
+    ) -> Dict[str, torch.Tensor]:
         """Create test inputs with ImageNet normalization."""
         print("\n" + "=" * 80)
         print("Creating Test Inputs")
@@ -168,13 +177,34 @@ class ModelComparator:
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        # Create random image and normalize
-        img = torch.randint(0, 256, (batch_size, 3, 224, 224), dtype=torch.float32)
-        img = img / 255.0
+        image_path = (
+            project_paths.data.interim
+            / "imagenette"
+            / "train"
+            / "n01440764"
+            / "n01440764_334.JPEG"
+        )
+
+        if image_path.exists():
+            pil_img = Image.open(image_path).convert("RGB")
+            img = transforms.ToTensor()(pil_img)
+            # Resize and center crop to 224x224
+            img = transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                ]
+            )(pil_img)
+            img = transforms.ToTensor()(img)
+            # Add batch dimension
+            img = img.unsqueeze(0).repeat(batch_size, 1, 1, 1)
+        else:
+            # Fallback to random image if path doesn't exist
+            img = torch.randint(0, 256, (batch_size, 3, 224, 224), dtype=torch.float32)
+            img = img / 255.0
 
         normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
         img_normalized = normalize(img)
 
@@ -190,7 +220,9 @@ class ModelComparator:
         print(f"✓ Created inputs (batch_size={batch_size})")
         print(f"  Original shape: {inputs['original'].shape}")
         print(f"  Reimplemented shape: {inputs['reimplemented'].shape}")
-        print(f"  Stats: mean={img_normalized.mean():.3f}, std={img_normalized.std():.3f}")
+        print(
+            f"  Stats: mean={img_normalized.mean():.3f}, std={img_normalized.std():.3f}"
+        )
 
         return inputs
 
@@ -250,7 +282,9 @@ class ModelComparator:
 
         return metrics
 
-    def compare_layer_activations(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, ComparisonMetrics]:
+    def compare_layer_activations(
+        self, inputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, ComparisonMetrics]:
         """Compare activations at each layer using hooks."""
         print("\n" + "=" * 80)
         print("LAYER-BY-LAYER COMPARISON")
@@ -263,6 +297,7 @@ class ModelComparator:
         orig_hooks = []
 
         for name in self.layer_names:
+
             def make_hook(layer_name):
                 def hook(module, input, output):
                     # This hook fires after each timestep, but we only want the final one
@@ -271,6 +306,7 @@ class ModelComparator:
                         orig_activations[layer_name] = output[0].detach().cpu()
                     else:
                         orig_activations[layer_name] = output.detach().cpu()
+
                 return hook
 
             layer = getattr(self.original, name)
@@ -310,17 +346,24 @@ class ModelComparator:
                 if t <= 2:
                     v2_h = self.reimplemented.V2.get_hidden_state(delay=1)
                     v2_buffer_len = len(self.reimplemented.V2._hidden_states)
-                    print(f"\nt={t} BEFORE forward: V2 buffer len={v2_buffer_len}, hidden_state(delay=1)={'None' if v2_h is None else f'tensor(shape={v2_h.shape}, mean={v2_h.mean().item():.6f})'}")
+                    print(
+                        f"\nt={t} BEFORE forward: V2 buffer len={v2_buffer_len}, hidden_state(delay=1)={'None' if v2_h is None else f'tensor(shape={v2_h.shape}, mean={v2_h.mean().item():.6f})'}"
+                    )
 
                 _, responses_t = self.reimplemented._forward(
-                    x, t=t, feedforward_only=self.reimplemented.feedforward_only, store_responses=True
+                    x,
+                    t=t,
+                    feedforward_only=self.reimplemented.feedforward_only,
+                    store_responses=True,
                 )
 
                 # Debug: Check V2 hidden state after forward
                 if t <= 2:
                     v2_h = self.reimplemented.V2.get_hidden_state(delay=1)
                     v2_buffer_len = len(self.reimplemented.V2._hidden_states)
-                    print(f"t={t} AFTER forward: V2 buffer len={v2_buffer_len}, hidden_state(delay=1)={'None' if v2_h is None else f'tensor(shape={v2_h.shape}, mean={v2_h.mean().item():.6f})'}")
+                    print(
+                        f"t={t} AFTER forward: V2 buffer len={v2_buffer_len}, hidden_state(delay=1)={'None' if v2_h is None else f'tensor(shape={v2_h.shape}, mean={v2_h.mean().item():.6f})'}"
+                    )
 
                 # Store all timestep responses for analysis
                 for layer_name, activation in responses_t.items():
@@ -353,7 +396,9 @@ class ModelComparator:
             reimpl_act = reimpl_activations[name]
 
             if orig_act.shape != reimpl_act.shape:
-                print(f"{name}: ✗ Shape mismatch: {orig_act.shape} vs {reimpl_act.shape}")
+                print(
+                    f"{name}: ✗ Shape mismatch: {orig_act.shape} vs {reimpl_act.shape}"
+                )
                 continue
 
             metrics = self.compute_metrics(orig_act, reimpl_act)
@@ -404,8 +449,10 @@ def main():
     print("=" * 80)
     print(f"Weights: {'✓ Match' if weights_match else '✗ Mismatch'}")
     if output_metrics:
-        print(f"Final output: {'✓ Match' if output_metrics.is_match() else '✗ Diverge'} "
-              f"(mean diff={output_metrics.mean_abs_diff:.6f})")
+        print(
+            f"Final output: {'✓ Match' if output_metrics.is_match() else '✗ Diverge'} "
+            f"(mean diff={output_metrics.mean_abs_diff:.6f})"
+        )
 
     if layer_metrics:
         print("\nLayer-by-layer:")

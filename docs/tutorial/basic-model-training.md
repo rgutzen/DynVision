@@ -226,7 +226,7 @@ This example:
 - Trains for more epochs (100)
 - Uses a larger batch size (256)
 - Uses a lower learning rate (0.0005)
-- Adds an energy loss term to promote stable activity
+- Adds an activity loss term to promote stable activity
 
 You can also control temporal data presentation patterns:
 

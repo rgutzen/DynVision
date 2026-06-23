@@ -33,19 +33,12 @@ cd "$workflow_dir"
 
 echo -n 'running workflow with snakemake version: '
 snakemake --version
-    
-
-# Process command line arguments (args saved at top of script)
-# Check if --config exists, if not add it
-if [[ ! " ${args[*]} " =~ " --config " ]]; then
-    args+=("--config")
-fi
 
 # Cluster execution auto-detected via environment variables (SLURM_JOB_ID, etc.)
 # No config override needed - see docs/development/planning/cluster-execution.md
 
 echo "Final command will be:"
-echo "snakemake ${args[@]} --profile $current_dir/profiles/slurm"
+echo "snakemake ${args[@]} --profile $current_dir/profiles/slurm --latency-wait 90 --resources disk_mb=300000"
 echo ""
 
 snakemake --unlock --cores=1

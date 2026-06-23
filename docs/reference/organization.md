@@ -118,7 +118,7 @@ The `losses` module implements training objectives:
 1. **Loss Functions**:
    - `base_loss.py`: Abstract base classes
    - `cross_entropy_loss.py`: Classification losses
-   - `energy_loss.py`: Biological energy constraint losses
+   - `activity_loss.py`: Biological activity constraint losses
 
 2. **Organization**:
    - Modular implementation with consistent interfaces

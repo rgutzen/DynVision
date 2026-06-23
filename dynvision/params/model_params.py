@@ -449,9 +449,13 @@ class ModelParams(BaseParams):
         if isinstance(v, str):
             # Parse string pattern
             import re
-            # Split by comma, space, or both
-            parts = re.split(r'[,\s]+', v.strip())
-            parts = [p for p in parts if p]  # Remove empty strings
+            v_stripped = v.strip()
+            # If no separators, treat each character as a digit
+            if re.search(r'[,\s]', v_stripped):
+                parts = re.split(r'[,\s]+', v_stripped)
+                parts = [p for p in parts if p]  # Remove empty strings
+            else:
+                parts = list(v_stripped)
             try:
                 v = [int(p) for p in parts]
             except ValueError as e:

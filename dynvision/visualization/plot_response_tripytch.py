@@ -59,7 +59,7 @@ TRIPTYCH_LAYOUT = {
     "ridge_height": 0.5,  # Remaining space for ridge plots
     # Panel letters
     "panel_letter_offset_x": -0.02,
-    "panel_letter_offset_y": 0.025,
+    "panel_letter_offset_y": 0.03,
 }
 
 # Formatting configuration
@@ -148,7 +148,7 @@ def _add_panel_letters(
     for i, left in enumerate(column_positions):
         fig.text(
             left + layout["panel_letter_offset_x"],
-            1 - layout["panel_letter_offset_y"],
+            1,
             column_letters[i],
             fontsize=fmt["fontsize_panel_label"],
             fontweight="bold",
@@ -455,6 +455,7 @@ def create_triptych_plot(
     confidence_measure: str = "first_label_confidence",
     max_epoch: Optional[float] = None,
     default_category_values: Optional[List[str]] = None,
+    time_offset: float = 0.0,
 ) -> plt.Figure:
     """Create a triptych plot using plot_responses.py functionality.
 
@@ -471,6 +472,7 @@ def create_triptych_plot(
         max_epoch: Maximum epoch to display in accuracy panels (None for no limit)
         default_category_values: Default values for each category (matching category_list order).
             Legend entries matching these values will be marked with an asterisk (*).
+        time_offset: Time offset in ms to shift the time axis (default: 0.0).
     """
 
     logger.info("=" * 60)
@@ -543,16 +545,19 @@ def create_triptych_plot(
                             df[category_key] = df[category_key].apply(
                                 _standardize_category_value
                             )
-                    
+
                     if category_key == "rctype":
                         # Remove rows with rctype=None, NaN, null values, or empty strings
                         initial_len = len(df)
-                        df = df[(df["rctype"].notna()) & (df["rctype"].astype(str).str.strip() != "")].copy()
+                        df = df[
+                            (df["rctype"].notna())
+                            & (df["rctype"].astype(str).str.strip() != "")
+                        ].copy()
                         if len(df) < initial_len:
                             logger.info(
                                 f"Filtered out {initial_len - len(df)} rows with null/NaN/empty rctype values"
                             )
-                    
+                    #
             except Exception as e:
                 logger.error(f"Error loading data: {e}")
 
@@ -601,6 +606,7 @@ def create_triptych_plot(
                             )
                             # Filter to rows matching the default value
                             filtered = prev_df[prev_df[prev_cat] == default_val].copy()
+
                             if not filtered.empty:
                                 logger.info(
                                     f"Column {col_idx + 1}: Using {len(filtered)} rows "
@@ -708,6 +714,7 @@ def create_triptych_plot(
             show_legend=(col_idx == 0),
             accuracy_cols=[accuracy_measure],
             confidence_cols=[confidence_measure],
+            time_offset=time_offset,
         )
         performance_ax.set_ylim(-0.005, 1)
 
@@ -745,7 +752,11 @@ def create_triptych_plot(
                     )
                 # Add asterisk if this value matches the default
                 # Both val and default_val are standardized, so compare directly
-                if default_val is not None and val == default_val:
+                try:
+                    is_default = float(val) == float(default_val)
+                except (ValueError, TypeError):
+                    is_default = str(val) == str(default_val)
+                if is_default:
                     formatted_label = f"{formatted_label} *"
                 legend_items.append((val, formatted_label))
 
@@ -829,6 +840,7 @@ def create_triptych_plot(
                     accuracy_pad=0,
                     legend_height=0,  # No legend in ridge section
                     legend_pad=0,
+                    time_offset=time_offset,
                 )
 
                 all_ridge_axes.extend(ridge_axes)
@@ -924,6 +936,12 @@ def main():
         type=float,
         required=True,
         help="Temporal resolution in ms per timestep",
+    )
+    parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
     )
     parser.add_argument("--experiment", type=str, help="Experiment name for title")
     parser.add_argument(
@@ -1021,10 +1039,17 @@ def main():
     if not valid_data_paths:
         raise ValueError("No valid data files found")
 
+    # Compute time offset from idle timesteps
+    time_offset = args.idle_timesteps * args.dt
+
     logger.info(f"Processing {len(valid_data_paths)} data file groups")
     logger.info(f"Categories: {category_list}")
     logger.info(f"Parameter: {args.parameter}")
     logger.info(f"Temporal resolution: {args.dt} ms")
+    if time_offset != 0.0:
+        logger.info(
+            f"Time offset: {time_offset} ms ({args.idle_timesteps} idle timesteps)"
+        )
 
     try:
         # Create the triptych plot
@@ -1044,6 +1069,7 @@ def main():
                 if args.default_category_values
                 else None
             ),
+            time_offset=time_offset,
         )
 
         # Save the plot

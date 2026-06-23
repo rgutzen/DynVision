@@ -600,7 +600,7 @@ def get_display_name(key: str, config: Dict) -> str:
         Display name or symbol, fallback to key if not found
     """
     naming = config.get("naming", {})
-    return naming.get(key.lower(), key)
+    return naming.get(key, naming.get(key.lower(), key))
 
 
 def get_color(key: str, config: Dict) -> Optional[str]:

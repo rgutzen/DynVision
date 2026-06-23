@@ -186,11 +186,18 @@ class DyRCNN(BaseModel):
         was_training = self.training
         self.eval()
 
+        # Temporarily disable feedforward delay so all layers receive valid
+        # tensors (otherwise the empty delay buffer returns None and
+        # skip/feedback modules can't inspect .shape to set up transforms).
+        saved_delay = self.delay_feedforward
+        self.delay_feedforward = 0
+
         with torch.no_grad():
             x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
             _ = self.forward(x, store_responses=False)
 
-        # Restore training mode
+        # Restore feedforward delay and training mode
+        self.delay_feedforward = saved_delay
         if was_training:
             self.train()
 
@@ -261,6 +268,7 @@ class DyRCNNx4(DyRCNN):
             tau=self.tau,
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
             recurrence_target=self.recurrence_target,
@@ -272,8 +280,12 @@ class DyRCNNx4(DyRCNN):
                 fixed_weight=self.input_adaption_weight
             )
 
+        # +1 because the source layer's delay already stored the current timestep
+        # before addskip runs (source is an earlier layer, fully processed this step)
         self.delay_index_skip = (
-            int(round(float(self.t_skip) / float(self.dt))) if self.t_skip else 0
+            int(round(float(self.t_skip) / float(self.dt))) + 1
+            if self.t_skip
+            else 1
         )
         self.delay_index_feedback = (
             int(round(float(self.t_feedback) / float(self.dt)))
@@ -454,8 +466,12 @@ class DyRCNNx8(DyRCNNx4):
                 bias=self.bias,
             )
 
+        # +1 because the source layer's delay already stored the current timestep
+        # before addskip runs (source is an earlier layer, fully processed this step)
         self.delay_index_skip = (
-            int(round(float(self.t_skip) / float(self.dt))) if self.t_skip else 0
+            int(round(float(self.t_skip) / float(self.dt))) + 1
+            if self.t_skip
+            else 1
         )
         self.delay_index_feedback = (
             int(round(float(self.t_feedback) / float(self.dt)))
@@ -471,6 +487,7 @@ class DyRCNNx8(DyRCNNx4):
             tau=self.tau,
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
             recurrence_target=self.recurrence_target,
@@ -660,13 +677,18 @@ class DyRCNNx2(DyRCNN):
             tau=self.tau,
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             recurrence_target=self.recurrence_target,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
         )
 
+        # +1 because the source layer's delay already stored the current timestep
+        # before addskip runs (source is an earlier layer, fully processed this step)
         self.delay_index_skip = (
-            int(round(float(self.t_skip) / float(self.dt))) if self.t_skip else 0
+            int(round(float(self.t_skip) / float(self.dt))) + 1
+            if self.t_skip
+            else 1
         )
         self.delay_index_feedback = (
             int(round(float(self.t_feedback) / float(self.dt)))

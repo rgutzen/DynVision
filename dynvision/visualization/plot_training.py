@@ -1,7 +1,7 @@
 """Plot training overview with training/validation accuracy, losses, and test performance.
 
 This module creates a comprehensive training visualization with:
-- Left column: Training/validation accuracy (top), energy/cross-entropy loss (bottom)
+- Left column: Training/validation accuracy (top), activity/cross-entropy loss (bottom)
 - Right column: Test performance panel (top), layer response ridge plots (bottom)
 - Horizontal category legend between left panels
 """
@@ -55,15 +55,15 @@ TRAINING_LAYOUT = {
     "accuracy_height": 0.27,
     "accuracy_bottom_margin": 0.015,
     "legend_height": 0.15,
-    "legend_top_margin": 0.020,  # Space above legend
+    "legend_top_margin": 0.023,  # Space above legend
     "legend_bottom_margin": 0.015,  # Space below legend
-    "energy_loss_height": 0.27,
-    "energy_loss_bottom_margin": 0.015,
+    "activity_loss_height": 0.27,
+    "activity_loss_bottom_margin": 0.015,
     "ce_loss_height": 0.27,
-    "ce_loss_bottom_margin": 0.02,
+    "ce_loss_bottom_margin": 0.05,
     # Right column - panel D aligned to panel A with same height
     "performance_height": 0.27,
-    "performance_pad": 0.05,
+    "performance_pad": 0.08,
     "ridge_legend_height": 0.08,
     "ridge_legend_pad": 0.01,
     "ridge_overlap": 0.0,
@@ -113,8 +113,8 @@ def _extract_category_value_from_column(
     """Extract category value from grouped W&B column name.
 
     Args:
-        column_name: Column name like "energy_loss_weight: 0.05 - train_accuracy"
-        category_key: Category key like "energy_loss_weight"
+        column_name: Column name like "activity_loss_weight: 0.05 - train_accuracy"
+        category_key: Category key like "activity_loss_weight"
 
     Returns:
         Category value like "0.05" or None if not found
@@ -267,7 +267,7 @@ def _parse_loss_data(
 
     Returns:
         Tuple of (processed DataFrame, actual category_key used)
-        DataFrame has columns: epoch, category_value, cross_entropy_loss, energy_loss, is_validation
+        DataFrame has columns: epoch, category_value, cross_entropy_loss, activity_loss, is_validation
     """
     df = pd.read_csv(loss_csv)
 
@@ -290,18 +290,18 @@ def _parse_loss_data(
         for col in df.columns
         if "CrossEntropyLoss" in col and "__MIN" not in col and "__MAX" not in col
     ]
-    energy_loss_cols = [
+    activity_loss_cols = [
         col
         for col in df.columns
         if "ActivityLoss" in col and "__MIN" not in col and "__MAX" not in col
     ]
 
-    if not ce_loss_cols and not energy_loss_cols:
+    if not ce_loss_cols and not activity_loss_cols:
         logger.warning("No CrossEntropyLoss or ActivityLoss columns found")
         return pd.DataFrame(), actual_category_key
 
     logger.info(
-        f"Found {len(ce_loss_cols)} CrossEntropyLoss columns, {len(energy_loss_cols)} ActivityLoss columns"
+        f"Found {len(ce_loss_cols)} CrossEntropyLoss columns, {len(activity_loss_cols)} ActivityLoss columns"
     )
 
     # Extract data for each category value
@@ -309,7 +309,7 @@ def _parse_loss_data(
 
     # Get all category values from column names
     category_values = set()
-    for col in ce_loss_cols + energy_loss_cols:
+    for col in ce_loss_cols + activity_loss_cols:
         cat_val = _extract_category_value_from_column(col, actual_category_key)
         if cat_val:
             category_values.add(cat_val)
@@ -325,10 +325,10 @@ def _parse_loss_data(
             ),
             None,
         )
-        energy_col = next(
+        activity_col = next(
             (
                 col
-                for col in energy_loss_cols
+                for col in activity_loss_cols
                 if _extract_category_value_from_column(col, actual_category_key)
                 == cat_val
             ),
@@ -337,13 +337,13 @@ def _parse_loss_data(
 
         for idx, row in df.iterrows():
             ce_loss = row[ce_col] if ce_col and not pd.isna(row[ce_col]) else None
-            energy_loss = (
-                row[energy_col]
-                if energy_col and not pd.isna(row[energy_col])
+            activity_loss = (
+                row[activity_col]
+                if activity_col and not pd.isna(row[activity_col])
                 else None
             )
 
-            if ce_loss is not None or energy_loss is not None:
+            if ce_loss is not None or activity_loss is not None:
                 epoch = row["epoch"]
                 # Validation epochs: (epoch + 1) % validation_frequency == 0
                 # i.e., epochs 9, 19, 29, ... for frequency 10
@@ -353,7 +353,7 @@ def _parse_loss_data(
                         "epoch": epoch,
                         "category_value": _standardize_category_value(cat_val),
                         "cross_entropy_loss": ce_loss,
-                        "energy_loss": energy_loss,
+                        "activity_loss": activity_loss,
                         "is_validation": is_validation,
                     }
                 )
@@ -521,7 +521,7 @@ def _plot_training_accuracy_panel(
     return ax
 
 
-def _plot_energy_loss_panel(
+def _plot_activity_loss_panel(
     fig: plt.Figure,
     column_left: float,
     column_width: float,
@@ -535,9 +535,9 @@ def _plot_energy_loss_panel(
     xlim: Optional[Tuple[float, float]] = None,
     **kwargs,
 ) -> None:
-    """Plot energy loss panel (training only).
+    """Plot activity loss panel (training only).
 
-    Energy loss validation values are not properly computed (always 0),
+    activity loss validation values are not properly computed (always 0),
     so only training loss is shown.
 
     Args:
@@ -563,7 +563,7 @@ def _plot_energy_loss_panel(
         ax.text(
             0.5,
             0.5,
-            "No energy loss data",
+            "No activity loss data",
             ha="center",
             va="center",
             fontsize=14,
@@ -574,7 +574,7 @@ def _plot_energy_loss_panel(
     # Standardize hue_values for comparison
     hue_values_std = [_standardize_category_value(v) for v in hue_values]
 
-    # Filter to training data only (validation energy loss is always 0)
+    # Filter to training data only (validation activity loss is always 0)
     train_df = loss_df[~loss_df["is_validation"]]
 
     palette = {
@@ -582,13 +582,13 @@ def _plot_energy_loss_panel(
         for v_orig, v_std in zip(hue_values, hue_values_std)
     }
 
-    # Plot energy loss (training only, solid lines)
-    energy_df = train_df.dropna(subset=["energy_loss"])
-    if not energy_df.empty:
+    # Plot activity loss (training only, solid lines)
+    activity_df = train_df.dropna(subset=["activity_loss"])
+    if not activity_df.empty:
         sns.lineplot(
-            data=energy_df,
+            data=activity_df,
             x="epoch",
-            y="energy_loss",
+            y="activity_loss",
             hue="category_value",
             hue_order=hue_values_std,
             palette=palette,
@@ -609,11 +609,15 @@ def _plot_energy_loss_panel(
     # Log axis limits
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
-    logger.info(f"Energy loss panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]")
+    logger.info(
+        f"activity loss panel: x-axis [{xmin}, {xmax}], y-axis [{ymin}, {ymax}]"
+    )
 
     # Styling
     if show_ylabel:
-        ax.set_ylabel("Energy Loss", fontsize=fmt["fontsize_axis"], fontweight="bold")
+        ax.set_ylabel(
+            "Activity Loss", fontsize=fmt["fontsize_axis"], fontweight="bold"
+        )
     else:
         ax.set_ylabel("")
         ax.set_yticklabels([])
@@ -791,7 +795,7 @@ def _add_panel_letters(
     left_col_left: float,
     right_col_left: float,
     accuracy_top: float,
-    energy_loss_top: float,
+    activity_loss_top: float,
     ce_loss_top: float,
     performance_top: float,
     ridge_top: float,
@@ -805,7 +809,7 @@ def _add_panel_letters(
         left_col_left: Left position of left column
         right_col_left: Left position of right column
         accuracy_top: Top position of accuracy panel
-        energy_loss_top: Top position of energy loss panel
+        activity_loss_top: Top position of activity loss panel
         ce_loss_top: Top position of cross-entropy loss panel
         performance_top: Top position of performance panel
         ridge_top: Top position of ridge plots
@@ -814,7 +818,7 @@ def _add_panel_letters(
     """
     panel_letters = [
         ("A)", left_col_left, accuracy_top),  # Training/validation accuracy
-        ("B)", left_col_left, energy_loss_top),  # Energy loss panel
+        ("B)", left_col_left, activity_loss_top),  # activity loss panel
         ("C)", left_col_left, ce_loss_top),  # Cross-entropy loss panel
         ("D)", right_col_left, performance_top),  # Performance panel
         ("E)", right_col_left, ridge_top),  # Ridge plots
@@ -966,6 +970,7 @@ def plot_training_overview(
     confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
     accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
+    time_offset: float = 0.0,
     validation_frequency: int = 10,
     config: Optional[Dict] = None,
     **kwargs,
@@ -985,6 +990,7 @@ def plot_training_overview(
         confidence_measure: Column name(s) for confidence metrics
         accuracy_measure: Column name(s) for accuracy metrics
         dt: Temporal resolution in ms per timestep
+        time_offset: Time offset in ms from idle timesteps (shifts time axis)
         validation_frequency: Frequency of validation epochs (default: 10).
             Validation epochs are (epoch + 1) % validation_frequency == 0.
         config: Configuration dict with palette, naming, ordering
@@ -1044,8 +1050,8 @@ def plot_training_overview(
         loss_csv, detected_category_key, validation_frequency
     )
 
-    # Use original category_key for test data lookups (may be alias like "energyloss")
-    # Use detected_category_key for W&B CSV parsing (full name like "energy_loss_weight")
+    # Use original category_key for test data lookups (may be alias like "activityloss")
+    # Use detected_category_key for W&B CSV parsing (full name like "activity_loss_weight")
     test_data_category_key = category_key
     wandb_category_key = detected_category_key
 
@@ -1211,16 +1217,16 @@ def plot_training_overview(
         **fmt,
     )
 
-    # Energy loss panel (Panel B)
+    # activity loss panel (Panel B)
     current_top = legend_bottom - layout["legend_bottom_margin"]
-    energy_loss_bottom = current_top - layout["energy_loss_height"]
-    logger.info("Creating energy loss panel...")
-    ax_e_loss = _plot_energy_loss_panel(
+    activity_loss_bottom = current_top - layout["activity_loss_height"]
+    logger.info("Creating activity loss panel...")
+    ax_e_loss = _plot_activity_loss_panel(
         fig=fig,
         column_left=left_col_left,
         column_width=left_col_width,
-        bottom=energy_loss_bottom,
-        height=layout["energy_loss_height"],
+        bottom=activity_loss_bottom,
+        height=layout["activity_loss_height"],
         loss_df=loss_df,
         category_key="category_value",
         hue_values=hue_values,
@@ -1231,7 +1237,7 @@ def plot_training_overview(
     )
 
     # Cross-entropy loss panel (Panel C)
-    current_top = energy_loss_bottom - layout["energy_loss_bottom_margin"]
+    current_top = activity_loss_bottom - layout["activity_loss_bottom_margin"]
     ce_loss_bottom = current_top - layout["ce_loss_height"]
     logger.info("Creating cross-entropy loss panel...")
     ax_ce_loss = _plot_ce_loss_panel(
@@ -1254,15 +1260,15 @@ def plot_training_overview(
     # Calculate right column x-axis limits (time in ms)
     # Start at 0, round max up to next multiple of 10
     if "times_index" in test_df.columns:
-        time_max = test_df["times_index"].max() * dt
+        time_max = test_df["times_index"].max() * dt + time_offset
         # Round up to next multiple of 10
         right_xmax = math.ceil(time_max / 10) * 10
-        right_xmin = 0
+        right_xmin = time_offset
         logger.info(
-            f"Right column x-axis limits: [0, {right_xmax}] (data max: {time_max} ms)"
+            f"Right column x-axis limits: [{right_xmin}, {right_xmax}] (data max: {time_max} ms)"
         )
     else:
-        right_xmin, right_xmax = 0, 120
+        right_xmin, right_xmax = time_offset, 120
 
     # Calculate positions
     right_top = 1 - layout["top_margin"]
@@ -1286,6 +1292,7 @@ def plot_training_overview(
         hue_values=hue_values,
         colors=colors,
         dt=dt,
+        time_offset=time_offset,
         show_ylabel=True,
         show_legend=True,
         accuracy_cols=(
@@ -1345,6 +1352,7 @@ def plot_training_overview(
         hue_values=hue_values,
         colors=colors,
         dt=dt,
+        time_offset=time_offset,
         show_ylabel=True,
         config=config,
         ridge_top=ridge_top,
@@ -1384,8 +1392,8 @@ def plot_training_overview(
         left_col_left=left_col_left,
         right_col_left=right_col_left,
         accuracy_top=1 - layout["top_margin"],
-        energy_loss_top=legend_bottom - layout["legend_bottom_margin"],
-        ce_loss_top=energy_loss_bottom - layout["energy_loss_bottom_margin"],
+        activity_loss_top=legend_bottom - layout["legend_bottom_margin"],
+        ce_loss_top=activity_loss_bottom - layout["activity_loss_bottom_margin"],
         performance_top=1 - layout["top_margin"],
         ridge_top=ridge_top,
         layout=layout,
@@ -1479,6 +1487,12 @@ def main():
         help="Temporal resolution in ms per timestep",
     )
     parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
+    )
+    parser.add_argument(
         "--validation-frequency",
         type=int,
         default=10,
@@ -1540,6 +1554,9 @@ def main():
     # Handle single vs multiple test data files
     test_data_input = args.test_data if len(args.test_data) > 1 else args.test_data[0]
 
+    # Compute time offset from idle timesteps
+    time_offset = args.idle_timesteps * args.dt
+
     # Plot
     plot_training_overview(
         test_data=test_data_input,
@@ -1554,6 +1571,7 @@ def main():
         confidence_measure=args.confidence_measure,
         accuracy_measure=args.accuracy_measure,
         dt=args.dt,
+        time_offset=time_offset,
         validation_frequency=args.validation_frequency,
         config=config,
     )

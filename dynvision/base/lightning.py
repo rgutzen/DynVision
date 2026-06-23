@@ -25,7 +25,7 @@ class LightningBase(pl.LightningModule):
     @alias_kwargs(
         lr="learning_rate",
         solver="dynamics_solver",
-        energyloss="energy_loss_weight",
+        activityloss="activity_loss_weight",
     )
     def __init__(
         self,
@@ -35,7 +35,7 @@ class LightningBase(pl.LightningModule):
         criterion_params: List[Tuple[str, Dict[str, Any]]] = [
             ("CrossEntropyLoss", {"weight": 1.0})
         ],
-        energy_loss_weight: Optional[float] = None,
+        activity_loss_weight: Optional[float] = None,
         non_label_index: int = -1,
         # Optimizer configuration
         optimizer: str = "Adam",
@@ -57,11 +57,11 @@ class LightningBase(pl.LightningModule):
         self.retain_graph = retain_graph
         self.criterion_params = criterion_params
         self.non_label_index = non_label_index
-        self.energy_loss_weight = (
-            float(energy_loss_weight) if energy_loss_weight is not None else None
+        self.activity_loss_weight = (
+            float(activity_loss_weight) if activity_loss_weight is not None else None
         )
         self.update_criterion_params(
-            "ActivityLoss", {"weight": self.energy_loss_weight}
+            "ActivityLoss", {"weight": self.activity_loss_weight}
         )
 
         # Optimizer attributes

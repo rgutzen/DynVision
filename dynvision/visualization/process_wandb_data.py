@@ -16,7 +16,7 @@ def extract_param_value(column_name: str, param_key: str) -> Optional[str]:
 
     Supports formats:
     - 'rctype=full' -> 'full'
-    - 'energy_loss_weight: 0.05' -> '0.05'
+    - 'activity_loss_weight: 0.05' -> '0.05'
     """
     # Try colon-space format first (W&B default): "param_key: value"
     match = re.search(rf"{param_key}:\s*([^-]+?)(?:\s+-|$)", column_name)

@@ -390,3 +390,13 @@ class DtypeDeviceCoordinatorMixin(DtypeDeviceCoordinator, LightningModule):
 
         if self.is_root_node:
             self.propagate_dtype_sync()
+
+    def on_test_start(self) -> None:
+        """Lightning hook: ensure sync at test start."""
+        try:
+            super().on_test_start()
+        except AttributeError:
+            pass
+
+        if self.is_root_node:
+            self.propagate_dtype_sync()

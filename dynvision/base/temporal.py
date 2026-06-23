@@ -24,7 +24,7 @@ class TemporalBase(nn.Module):
     # These can be overridden per instance or subclass
     DEFAULT_NON_FEEDFORWARD_OPERATIONS = [
         "addfeedback",
-        "tstep",
+        "addskip",
     ]
     DEFAULT_OPERATIONS_SKIPPED_ON_NULL_INPUT = [
         "nonlin",
@@ -97,7 +97,9 @@ class TemporalBase(nn.Module):
             self.t_feedforward,
             self.t_recurrence,
             self.t_feedback if self.feedback else 0,
-            self.skip if self.skip else 0,
+            # +dt because skip source's delay stores current timestep before
+            # addskip runs, requiring one extra buffer slot (see delay_index_skip +1)
+            self.t_skip + self.dt if self.skip else 0,
         )
         self.classifier_name = classifier_name
         self.dynamics_solver = str(dynamics_solver)
@@ -370,7 +372,7 @@ class TemporalBase(nn.Module):
                     if hasattr(self, f"delay_{layer_name}"):
                         delay_func = getattr(self, f"delay_{layer_name}")
                         x = delay_func(x)
-                    # Then try layer's delay method
+                    # Then try layer's delay method (uses per-layer t_feedforward)
                     elif hasattr(layer, "delay"):
                         x = layer.delay(x)
                     # Fall back to original implementation
@@ -385,6 +387,8 @@ class TemporalBase(nn.Module):
                 elif operation == "tstep" and hasattr(self, module_name):
                     module = getattr(self, module_name)
                     h = layer.get_newest_hidden_state()
+                    if h is not None and h.device != x.device:
+                        h = h.to(x.device)
                     x = module(x, h)
 
                 # Apply any other operations (if defined)
@@ -461,7 +465,7 @@ class TemporalBase(nn.Module):
         # IDLE TIMESTEPS LOOP
         # Run model with null input to bring network into stable state.
         # Hidden states evolve naturally through the layers' buffers.
-        # Outputs, responses, and energy loss are NOT recorded during this phase.
+        # Outputs, responses, and activity loss are NOT recorded during this phase.
         # =====================================================================
         if idle_steps > 0:
             # Create null input for idle timesteps
@@ -472,7 +476,7 @@ class TemporalBase(nn.Module):
                 dtype=x_0.dtype,
             )
 
-            # Flag for energy loss hooks to skip accumulation
+            # Flag for activity loss hooks to skip accumulation
             self._in_idle_period = True
 
             for t_idle in range(idle_steps):
@@ -912,7 +916,7 @@ class TemporalBase(nn.Module):
                 device=label_indices.device,
                 dtype=label_indices.dtype,
             )
-            new_label_indices[:, :n_timesteps] = label_indices
+            new_label_indices[:, self.n_residual_timesteps :] = label_indices
 
             batch = (new_inputs, new_label_indices, *extra)
 

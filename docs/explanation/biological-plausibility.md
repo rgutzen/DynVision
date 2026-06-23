@@ -9,7 +9,7 @@ Biological plausibility refers to the degree to which an artificial neural netwo
 1. **Recurrent connectivity**: Abundant feedback and lateral connections
 2. **Temporal dynamics**: Time-dependent processing with continuous evolution
 3. **Noise and stochasticity**: Variability and robustness to perturbations
-4. **Metabolic constraints**: Energy efficiency considerations
+4. **Metabolic constraints**: Activity efficiency considerations
 5. **Topographic organization**: Spatial arrangement of neurons with similar properties
 6. **Neural adaptation**: Changes in response properties over time
 

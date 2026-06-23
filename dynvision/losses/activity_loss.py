@@ -11,7 +11,7 @@ The value controls how activity is measured:
 
 - ``"absolute"``: L-p norm of activations, normalized by number of units.
   Penalizes total firing rate regardless of sign. Equivalent to the original
-  energy loss behavior. Typically applied to post-nonlinearity activations.
+  activity loss behavior. Typically applied to post-nonlinearity activations.
 
 - ``"signed"``: Magnitude of the mean activation (allows sign cancellation).
   Near-zero when excitatory and inhibitory drives are balanced (EI balance),
@@ -64,7 +64,7 @@ class ActivityLoss(BaseLoss):
         super().__init__(reduction=reduction)
         self.requires_responses = False
         self.allow_broadcasting = True
-        self.batch_energy = {}
+        self.batch_activity = {}
         self.hooks = []
         self._norm_factors = (
             {}
@@ -85,16 +85,25 @@ class ActivityLoss(BaseLoss):
             if mode is not None:
                 hook = module.register_forward_hook(
                     lambda module, input, output, name=name, mode=mode: (
-                        self._accumulate_energy(name, output, mode)
+                        self._accumulate_activity(name, output, mode)
                     )
                 )
                 self.hooks.append(hook)
 
     def _should_monitor_module(self, module: nn.Module) -> bool:
         """Return True if the module is marked for activity monitoring."""
-        return getattr(
-            module, ACTIVITY_MONITOR_ATTR, None
-        ) is not None or self._is_nonlinearity(module)
+        # return getattr(
+        #     module, ACTIVITY_MONITOR_ATTR, None
+        # ) is not None or self._is_nonlinearity(module)
+        return isinstance(
+            module,
+            (
+                nn.Conv1d,
+                nn.Conv2d,
+                nn.Conv3d,
+                nn.Linear,
+            ),
+        )
 
     def _is_nonlinearity(self, module: nn.Module) -> bool:
         """Return True if the module is a nonlinearity (activation function)."""
@@ -119,7 +128,7 @@ class ActivityLoss(BaseLoss):
             ),
         )
 
-    def _accumulate_energy(
+    def _accumulate_activity(
         self, module_name: str, activation: torch.Tensor, mode: str
     ) -> None:
         """Accumulate activity for a module across timesteps during forward pass.
@@ -146,30 +155,30 @@ class ActivityLoss(BaseLoss):
         if mode == "signed":
             # Net activity: mean over all units, allowing excitatory/inhibitory cancellation.
             # Near-zero for balanced EI, large for imbalanced activity.
-            batch_energy = activation.mean(dim=spatial_dims).abs()
+            batch_activity = activation.mean(dim=spatial_dims).abs()
         else:  # "absolute"
             # Total absolute activity: L-p norm, normalized by unit count.
-            batch_energy = torch.linalg.vector_norm(
+            batch_activity = torch.linalg.vector_norm(
                 activation, ord=self.ord, dim=spatial_dims
             )
             if module_name not in self._norm_factors:
                 n_units = activation.shape[1:].numel()
                 self._norm_factors[module_name] = n_units ** (1 / self.ord)
-            batch_energy = batch_energy / self._norm_factors[module_name]
+            batch_activity = batch_activity / self._norm_factors[module_name]
 
-        # Accumulate energy across timesteps
-        if module_name not in self.batch_energy:
-            self.batch_energy[module_name] = batch_energy
+        # Accumulate activity across timesteps
+        if module_name not in self.batch_activity:
+            self.batch_activity[module_name] = batch_activity
             self._hook_call_count[module_name] = 1
         else:
-            existing_energy = self.batch_energy[module_name]
-            if existing_energy.device != batch_energy.device:
-                existing_energy = existing_energy.to(batch_energy.device)
-            self.batch_energy[module_name] = existing_energy + batch_energy
+            existing_activity = self.batch_activity[module_name]
+            if existing_activity.device != batch_activity.device:
+                existing_activity = existing_activity.to(batch_activity.device)
+            self.batch_activity[module_name] = existing_activity + batch_activity
             self._hook_call_count[module_name] += 1
 
-        self._last_device = batch_energy.device
-        self._last_dtype = batch_energy.dtype
+        self._last_device = batch_activity.device
+        self._last_dtype = batch_activity.dtype
 
     def forward(
         self,
@@ -194,7 +203,7 @@ class ActivityLoss(BaseLoss):
         The accumulated (pre-normalized) activity is averaged over modules and
         timesteps, then returned per batch element for apply_reduction.
         """
-        if not self.batch_energy:
+        if not self.batch_activity:
             device = self._last_device if self._last_device is not None else None
             dtype = self._last_dtype if self._last_dtype is not None else torch.float32
             return torch.zeros(1, device=device, dtype=dtype)
@@ -203,25 +212,27 @@ class ActivityLoss(BaseLoss):
         call_counts = list(self._hook_call_count.values())
         n_timesteps = max(call_counts) if call_counts else 1
 
-        total_energy: Optional[torch.Tensor] = None
+        total_activity: Optional[torch.Tensor] = None
         module_count = 0
 
-        for batch_energy in self.batch_energy.values():
-            # Energy values are already normalized per-module in _accumulate_energy
-            total_energy = (
-                batch_energy if total_energy is None else total_energy + batch_energy
+        for batch_activity in self.batch_activity.values():
+            # Activity values are already normalized per-module in _accumulate_activity
+            total_activity = (
+                batch_activity
+                if total_activity is None
+                else total_activity + batch_activity
             )
             module_count += 1
 
-        if module_count > 0 and total_energy is not None:
-            loss = total_energy / (module_count * n_timesteps)
+        if module_count > 0 and total_activity is not None:
+            loss = total_activity / (module_count * n_timesteps)
         else:
             device = self._last_device if self._last_device is not None else None
             dtype = self._last_dtype if self._last_dtype is not None else torch.float32
             loss = torch.zeros(1, device=device, dtype=dtype)
 
         # Clear accumulators for next batch
-        self.batch_energy = {}
+        self.batch_activity = {}
         self._hook_call_count = {}
 
         return loss

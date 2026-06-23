@@ -1104,6 +1104,7 @@ def plot_unified_dynamics_with_groen(
     groen_data_path=None,
     df_category2=None,
     category2=None,
+    time_offset=0.0,
 ):
     """Create unified dynamics visualization with Groen data and optional category-2.
 
@@ -1193,10 +1194,10 @@ def plot_unified_dynamics_with_groen(
     # Convert time if needed
     if dt is not None:
         df = df.copy()
-        df["time_ms"] = df["times_index"] * dt
+        df["time_ms"] = df["times_index"] * dt + time_offset
         if df_category2 is not None:
             df_category2 = df_category2.copy()
-            df_category2["time_ms"] = df_category2["times_index"] * dt
+            df_category2["time_ms"] = df_category2["times_index"] * dt + time_offset
 
     # Create figure
     fig = plt.figure(
@@ -1399,6 +1400,7 @@ def main():
         "--focus-layer", type=str, default="V1", help="Layer to focus on"
     )
     parser.add_argument("--dt", type=float, help="Time step in milliseconds")
+    parser.add_argument("--idle-timesteps", type=int, default=0, help="Number of idle timesteps before recorded data (shifts time axis)")
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
@@ -1458,6 +1460,9 @@ def main():
         ordering_str=args.ordering,
     )
 
+    # Compute time offset from idle timesteps
+    time_offset = args.idle_timesteps * (args.dt if args.dt is not None else 1.0)
+
     # Create plot
     plot_unified_dynamics_with_groen(
         df=df,
@@ -1471,6 +1476,7 @@ def main():
         groen_data_path=args.groen_data,
         df_category2=df_category2,
         category2=args.category2,
+        time_offset=time_offset,
     )
 
 

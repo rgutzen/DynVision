@@ -37,6 +37,7 @@ from dynvision.utils.visualization_utils import (
     load_config_from_args,
     get_display_name,
     DT_CONVERT_PARAMS,
+    calculate_label_indicator,
 )
 
 # Import functions from plot_dynamics
@@ -78,22 +79,22 @@ if not logger.handlers:
 # =============================================================================
 DYNAMICS_LAYOUT = {
     "figure_width": 15,
-    "figure_height": 10,
+    "figure_height": 13,
     "plots_start": 0.05,
     "left_plots_width": 0.6,
     "right_plots_width": 0.3,
     "gap_width": 0.1,
     # Vertical positions
     "upper_top": 0.98,
-    "upper_bottom": 0.65,
-    "lower_top": 0.48,
+    "upper_bottom": 0.75,
+    "lower_top": 0.72,
     "lower_bottom": 0.01,
-    "legend_height": 0.1,
-    "legend_margin": 0.02,
+    "legend_height": 0.08,
+    "legend_margin": 0.045,
     # Positioning helpers
-    "y_label_x_position": 0.01,
+    "y_label_x_position": 0.00,
     "panel_label_x_offset": -0.04,
-    "panel_label_y_offset": 0.02,
+    "panel_label_y_offset": 0.04,
 }
 # Number of experiment columns (interval, duration, contrast)
 _N_COLUMNS = 3
@@ -108,7 +109,7 @@ _available_column_width = (
 ) / _N_COLUMNS
 
 # Vertical layout from extended dynamics (3 rows: C, D, E)
-_panel_gap = 0.06
+_panel_gap = 0.10
 _n_typical_params = 7
 _ridge_overlap = 0.2
 _ridge_height = DYNAMICS_LAYOUT["lower_top"] - DYNAMICS_LAYOUT["lower_bottom"]
@@ -145,7 +146,11 @@ ALL_DYNAMICS_LAYOUT = {
 EXPERIMENT_ORDER = ["interval", "duration", "contrast"]
 EXPERIMENT_COLUMN_LABELS = ["i", "ii", "iii"]
 
-FORMATTING = {**RESPONSES_FORMATTING, **DYNAMICS_STYLE}
+FORMATTING = {
+    **RESPONSES_FORMATTING,
+    **DYNAMICS_STYLE,
+    "fontsize_panel_labels": 20,  # Match plot_training.py panel label size
+}
 # =============================================================================
 # Panel Label Functions
 # =============================================================================
@@ -182,7 +187,7 @@ def add_panel_labels_all_experiments(fig):
     )
     fig.text(
         x=left_x,
-        y=layout["lower_top"] + panel_y_offset,
+        y=layout["lower_top"] - 3 * panel_y_offset,
         s="B)",
         fontsize=FORMATTING["fontsize_panel_labels"],
         fontweight="bold",
@@ -206,7 +211,7 @@ def add_panel_labels_all_experiments(fig):
             label_c = col_label
         fig.text(
             x=col_x,
-            y=layout["right_upper_top"] + panel_y_offset,
+            y=layout["right_upper_top"] + 1.2 * panel_y_offset,
             s=label_c,
             fontsize=FORMATTING["fontsize_panel_labels"],
             fontweight="bold",
@@ -221,7 +226,7 @@ def add_panel_labels_all_experiments(fig):
             label_d = col_label
         fig.text(
             x=col_x,
-            y=layout["right_middle_top"] + panel_y_offset,
+            y=layout["right_middle_top"] + 1.2 * panel_y_offset,
             s=label_d,
             fontsize=FORMATTING["fontsize_panel_labels"],
             fontweight="bold",
@@ -236,13 +241,50 @@ def add_panel_labels_all_experiments(fig):
             label_e = col_label
         fig.text(
             x=col_x,
-            y=layout["right_lower_top"] + panel_y_offset,
+            y=layout["right_lower_top"] + 1.2 * panel_y_offset,
             s=label_e,
             fontsize=FORMATTING["fontsize_panel_labels"],
             fontweight="bold",
             ha="left",
             va="top",
         )
+
+
+def _add_column_titles(fig):
+    """Add descriptive titles above Panel C columns.
+
+    - Column i (interval):  "Interval"
+    - Column ii (duration): "Duration"
+    - Column iii (contrast): "Contrast"
+    """
+    layout = ALL_DYNAMICS_LAYOUT
+    fmt = FORMATTING
+    plots_start = layout["plots_start"]
+    left_width = layout["left_plots_width"]
+    gap_width = layout["gap_width"]
+    column_width = layout["column_width"]
+    column_gap = layout["column_gap"]
+
+    title_kw = dict(
+        fontsize=fmt["fontsize_panel_labels"],
+        fontweight="bold",
+        ha="center",
+        va="bottom",
+        color="dimgray",
+    )
+
+    titles = ["Interval", "Duration", "Contrast"]
+    right_start = plots_start + left_width + gap_width
+    title_y = layout["right_upper_top"] + 0.012
+
+    # Panel A: title centered above left-side performance panel
+    panel_a_x = plots_start + left_width / 2
+    panel_a_y = layout["upper_top"] + 0.015
+    fig.text(panel_a_x, panel_a_y, "Interval", **title_kw)
+
+    for col_idx, title in enumerate(titles):
+        col_x = right_start + col_idx * (column_width + column_gap) + column_width / 2
+        fig.text(col_x, title_y, title, **title_kw)
 
 
 # =============================================================================
@@ -260,6 +302,7 @@ def create_panel_a_performance(
     colors: Dict[str, str],
     dt: float,
     config: Dict,
+    time_offset: float = 0.0,
 ) -> plt.Axes:
     """Create Panel A showing performance traces (accuracy + confidence).
 
@@ -321,7 +364,7 @@ def create_panel_a_performance(
 
     # Create time in ms
     if "time_ms" not in df_filtered.columns and "times_index" in df_filtered.columns:
-        df_filtered["time_ms"] = df_filtered["times_index"] * dt
+        df_filtered["time_ms"] = df_filtered["times_index"] * dt + time_offset
 
     # Standardize category values
     df_filtered[category] = df_filtered[category].astype(str)
@@ -391,6 +434,26 @@ def create_panel_a_performance(
             errorbar=None,
         )
 
+    # Add label indicator step function
+    try:
+        label_indicator_df = calculate_label_indicator(
+            df_filtered,
+            category,
+            (0, 1),
+            0.15,
+        )
+        indicator_time = label_indicator_df["times_index"] * dt + time_offset
+        ax.plot(
+            indicator_time,
+            label_indicator_df["label_indicator"],
+            color="dimgray",
+            linewidth=FORMATTING["linewidth_indicator"],
+            drawstyle="steps-mid",
+            alpha=FORMATTING["alpha_indicator"],
+        )
+    except Exception as e:
+        logger.warning(f"Could not calculate label indicator: {e}")
+
     # Styling
     ax.set_xlabel("Time (ms)", fontsize=FORMATTING["fontsize_label"])
     ax.set_ylabel(
@@ -436,7 +499,7 @@ def create_panel_a_performance(
     if legend_elements:
         ax.legend(
             handles=legend_elements,
-            loc="upper right",
+            loc="lower center",
             frameon=False,
             fontsize=FORMATTING["fontsize_legend"],
             ncol=1,
@@ -448,7 +511,7 @@ def create_panel_a_performance(
     if parameter.lower() in DT_CONVERT_PARAMS and dt is not None:
         try:
             param_val_ms = float(middle_param_value) * dt
-            param_val_str = f"{param_val_ms:.0f} ms"
+            param_val_str = f"{param_display}={param_val_ms:.0f} ms"
         except (ValueError, TypeError):
             pass
 
@@ -546,6 +609,12 @@ def create_panel_c_groen_column(
     """
     pos = _get_column_position(column_idx, "upper")
     ax = fig.add_axes(pos)
+
+    # ax.set_title(
+    #     experiment_type.capitalize(),
+    #     fontsize=FORMATTING["fontsize_title"],
+    #     fontweight="bold",
+    # )
 
     if groen_data_path is None or not Path(groen_data_path).exists():
         ax.text(
@@ -748,7 +817,7 @@ def create_panel_d_metrics_column(
         hue_order=hue_values_str,
         palette=colors,
         markersize=8,
-        linewidth=2,
+        linewidth=FORMATTING["linewidth_main"],
         err_style="bars",
         errorbar="se",
         legend=False,
@@ -925,7 +994,7 @@ def create_panel_e_category2_column(
         hue_order=cat2_values_str,
         palette=colors_cat2,
         markersize=8,
-        linewidth=2,
+        linewidth=FORMATTING["linewidth_main"],
         err_style="bars",
         errorbar="se",
     )
@@ -987,6 +1056,9 @@ def create_panel_e_category2_column(
         )
         legend.get_frame().set_facecolor("white")
         legend.get_frame().set_edgecolor("none")
+        for text in legend.get_texts():
+            if text.get_text() == "1.0":
+                text.set_text("1.0 *")
         if legend.get_title():
             legend.get_title().set_fontweight("bold")
     else:
@@ -1026,6 +1098,7 @@ def plot_all_dynamics_manuscript(
     # Output
     save_path: Optional[Path] = None,
     dt: Optional[float] = None,
+    time_offset: float = 0.0,
     config: Optional[Dict] = None,
 ):
     """Create comprehensive dynamics manuscript figure with all three experiments.
@@ -1117,7 +1190,7 @@ def plot_all_dynamics_manuscript(
     # Convert time if needed
     if dt is not None:
         df_primary = df_primary.copy()
-        df_primary["time_ms"] = df_primary["times_index"] * dt
+        df_primary["time_ms"] = df_primary["times_index"] * dt + time_offset
 
     # Create figure
     fig = plt.figure(
@@ -1144,6 +1217,7 @@ def plot_all_dynamics_manuscript(
         colors,
         dt,
         config,
+        time_offset=time_offset,
     )
 
     # Create Panel B: Ridge plots for focus layer (uses primary/interval experiment's focus layer)
@@ -1159,7 +1233,12 @@ def plot_all_dynamics_manuscript(
         colors,
         dt,
         config,
+        normalize="max",
+        time_offset=time_offset,
     )
+    for ax in panel_b_axes:
+        ax.set_yticks([0, 0.5])
+        ax.set_yticklabels(["0", "0.5"])
 
     # Create right-side panels for each experiment column
     panel_c_axes = []
@@ -1275,12 +1354,14 @@ def plot_all_dynamics_manuscript(
     # Add horizontal legend (between panels A and B)
     legend_left = ALL_DYNAMICS_LAYOUT["plots_start"]
     legend_width = ALL_DYNAMICS_LAYOUT["left_plots_width"]
-    legend_height = ALL_DYNAMICS_LAYOUT["legend_height"] * 1.2
+    legend_height = ALL_DYNAMICS_LAYOUT["legend_height"]
+    # Increased top padding (6× margin instead of 3×) to move legend
+    # further from Panel A; reduced effective bottom padding as a side effect
     legend_bottom = (
-        ALL_DYNAMICS_LAYOUT["lower_top"] + 0.5 * ALL_DYNAMICS_LAYOUT["legend_margin"]
+        ALL_DYNAMICS_LAYOUT["lower_top"] - 3 * ALL_DYNAMICS_LAYOUT["legend_margin"]
     )
 
-    _add_horizontal_legend(
+    legend = _add_horizontal_legend(
         fig=fig,
         hue_var="category",
         hue_key=category,
@@ -1299,6 +1380,15 @@ def plot_all_dynamics_manuscript(
             }
         ),
     )
+    default_values = ["full", "output", "1.0"]
+    if legend is not None:
+        for text in legend.get_texts():
+            label = text.get_text()
+            if str(label).lower() in default_values:
+                text.set_text(f"{label} *")
+
+    # Add column titles
+    _add_column_titles(fig)
 
     # Align y-axis labels across columns
     fig.align_ylabels()
@@ -1436,6 +1526,12 @@ def main():
 
     # Common parameters
     parser.add_argument("--dt", type=float, help="Time step in milliseconds")
+    parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
+    )
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
@@ -1498,6 +1594,10 @@ def main():
             "contrast": layers[2],
         }
 
+    # Compute time offset from idle timesteps
+    _dt = args.dt if args.dt is not None else 1.0
+    time_offset = args.idle_timesteps * _dt
+
     # Create plot
     plot_all_dynamics_manuscript(
         df_interval=df_interval,
@@ -1517,6 +1617,7 @@ def main():
         category2=args.category2,
         save_path=args.output,
         dt=args.dt,
+        time_offset=time_offset,
         config=config,
     )
 

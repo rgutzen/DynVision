@@ -89,7 +89,7 @@ class TestActivityLossAccumulation:
     """Test ActivityLoss accumulation and normalization across timesteps."""
 
     def test_accumulation_across_timesteps(self):
-        """Verify ActivityLoss accumulates energy across multiple timesteps."""
+        """Verify ActivityLoss accumulates activity across multiple timesteps."""
 
         # Create a simple model with one Conv2d layer
         class SimpleModel(nn.Module):
@@ -119,22 +119,24 @@ class TestActivityLossAccumulation:
             x = torch.randn(batch_size, channels, height, width)
             output = model(x)  # This fires the hooks
 
-            # Manually calculate expected energy for this timestep
+            # Manually calculate expected activity for this timestep
             with torch.no_grad():
-                timestep_energy = torch.norm(output, p=1, dim=(1, 2, 3))
-                per_timestep_energies.append(timestep_energy)
+                timestep_activity = torch.norm(output, p=1, dim=(1, 2, 3))
+                per_timestep_energies.append(timestep_activity)
 
         # Now compute the loss (this would be called in LightningBase.compute_loss)
         loss = loss_fn(outputs=None, targets=None)
 
         # Manual calculation
-        total_energy = torch.stack(per_timestep_energies).sum(
+        total_activity = torch.stack(per_timestep_energies).sum(
             dim=0
         )  # Sum over timesteps
         n_units = 8 * 8 * 8  # channels * height * width
-        normalized_energy = total_energy / n_units  # Normalize by spatial dimensions
+        normalized_activity = (
+            total_activity / n_units
+        )  # Normalize by spatial dimensions
         expected_loss = (
-            normalized_energy / n_timesteps
+            normalized_activity / n_timesteps
         ).mean()  # Normalize by timesteps and average over batch
 
         assert torch.allclose(loss, expected_loss, rtol=1e-4)
@@ -179,7 +181,7 @@ class TestActivityLossAccumulation:
         assert len(loss_fn._hook_call_count) == 0
 
     def test_multiple_modules_averaging(self):
-        """Verify energy is correctly averaged across multiple modules."""
+        """Verify activity is correctly averaged across multiple modules."""
 
         class SimpleModel(nn.Module):
             def __init__(self):
@@ -211,7 +213,7 @@ class TestActivityLossAccumulation:
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_device_handling_cuda(self):
-        """Verify energy accumulation handles device transfers correctly."""
+        """Verify activity accumulation handles device transfers correctly."""
 
         class SimpleModel(nn.Module):
             def __init__(self):

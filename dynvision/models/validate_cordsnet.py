@@ -18,10 +18,12 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from PIL import Image
 from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torchvision.transforms as transforms
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -30,6 +32,8 @@ sys.path.insert(0, str(project_root))
 from dynvision.model_components.layer_connections import Skip
 from dynvision.models.cordsnet import CordsNet
 from dynvision.models.cordsnet_original import cordsnet as CordsNetOriginal
+from dynvision.project_paths import project_paths
+
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -597,8 +601,8 @@ class CordsNetValidator:
     def test_4_compare_layer_by_layer(
         self,
         img: torch.Tensor,
-        n_timesteps: int = 10,
-        idle_timesteps: int = 10,
+        n_timesteps: int = 100,
+        idle_timesteps: int = 100,
         alpha: Optional[float] = None,
         verbose: bool = True,
     ) -> Dict[str, any]:
@@ -869,8 +873,8 @@ class CordsNetValidator:
     def test_5_final_output_comparison(
         self,
         img: torch.Tensor,
-        timesteps: int = 10,
-        idle_timesteps: int = 10,
+        timesteps: int = 100,
+        idle_timesteps: int = 100,
         alpha: Optional[float] = None,
     ) -> Dict[str, any]:
         """
@@ -1162,8 +1166,44 @@ class CordsNetValidator:
         results["architectural_issues"] = self.test_2_architectural_issues()
 
         # Phase 3: Trace original dynamics
-        torch.manual_seed(42)
-        test_img = torch.randn(self.batch_size, 3, 224, 224, device=self.device)
+        batch_size = 1
+
+        image_path = (
+            project_paths.data.interim
+            / "imagenette"
+            / "train"
+            / "n01440764"
+            / "n01440764_334.JPEG"
+        )
+
+        if image_path.exists():
+            pil_img = Image.open(image_path).convert("RGB")
+            test_img = transforms.ToTensor()(pil_img)
+            # Resize and center crop to 224x224
+            test_img = transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                ]
+            )(pil_img)
+            test_img = transforms.ToTensor()(test_img)
+            # Add batch dimension
+            test_img = test_img.unsqueeze(0).repeat(batch_size, 1, 1, 1)
+        else:
+            # Fallback to random image if path doesn't exist
+            test_img = torch.randint(
+                0, 256, (batch_size, 3, 224, 224), dtype=torch.float32
+            )
+            test_img = test_img / 255.0
+
+        normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        )
+        test_img = normalize(test_img)
+
+        # torch.manual_seed(42)
+        # test_img = torch.randn(self.batch_size, 3, 224, 224, device=self.device)
+
         self.test_3_trace_original_dynamics(test_img, timesteps=3)
 
         # Use capped values for detailed diagnostics to keep logging manageable

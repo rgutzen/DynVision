@@ -45,21 +45,24 @@ logger.setLevel("INFO")
 LAYOUT = {
     # Figure dimensions
     "figure_height": 14,  # Total figure height in inches
-    "column_width": 7,  # Width of each column in inches
-    "column_spacing": 0.25,  # Spacing between columns in inches
+    "column_width": 6,  # Width of each column in inches
+    "column_spacing": 0.8,  # Spacing between columns in inches
     # Vertical layout in % of figure size (bot = bottom position, pad = whitespace below element)
     "title_bot": 0.96,
     "title_pad": 0.02,  # Space below title
     "accuracy_pad": 0.02,  # Space below accuracy panel
     "accuracy_height": 0.13,  # Fixed height for accuracy panel
-    "legend_pad": 0.02,  # Space below legend
+    "legend_pad": 0.0,  # Space below legend
     "legend_height": 0.1,  # Fixed height for legend
     "ridge_height": 0.65,  # Total height for all ridge plots
-    "ridge_overlap": 0.25,  # Overlap fraction between ridges
+    "ridge_overlap": 0.50,  # Overlap fraction between ridges
     # Margins
     "left_margin": 0.08,
     "right_margin": 0.02,
     "legend_margin": 0.02,
+    # Panel labels
+    "panel_letter_offset_x": -0.01,
+    "panel_letter_offset_y": 0.04,
 }
 
 # Global formatting configuration
@@ -69,6 +72,7 @@ FORMATTING = {
     "fontsize_tick": 16,
     "fontsize_legend": 19,
     "fontsize_label": 18,
+    "fontsize_panel_label": 20,
     "linewidth_main": 3,
     "linewidth_indicator": 3,
     "alpha_line": 0.8,
@@ -510,10 +514,11 @@ def _plot_accuracy_panel(
     hue_values: List[str],
     colors: Dict[str, str],
     dt: float,
-    show_ylabel: bool,
-    show_legend: bool,
-    accuracy_cols: List[str],
-    confidence_cols: List[str],
+    time_offset: float = 0.0,
+    show_ylabel: bool = True,
+    show_legend: bool = True,
+    accuracy_cols: List[str] = None,
+    confidence_cols: List[str] = None,
     **kwargs,
 ) -> None:
     """Plot accuracy and confidence over time.
@@ -542,7 +547,7 @@ def _plot_accuracy_panel(
 
     # Create time in ms
     data_plot = data.copy()
-    data_plot["time_ms"] = data_plot["times_index"] * dt
+    data_plot["time_ms"] = data_plot["times_index"] * dt + time_offset
 
     # Ensure hue column is standardized to match hue_values
     has_hue_column = hue_key in data_plot.columns
@@ -754,7 +759,7 @@ def _plot_accuracy_panel(
                 labels=legend_labels,
                 loc="best",
                 frameon=False,
-                fontsize=fmt["fontsize_legend"] - 1,
+                fontsize=fmt["fontsize_legend"] - 2,
             )
 
     # Add label indicator
@@ -763,9 +768,9 @@ def _plot_accuracy_panel(
             data,
             hue_key,
             ax.get_ylim(),
-            0.1,
+            0.17,
         )
-        indicator_time = label_indicator_df["times_index"] * dt
+        indicator_time = label_indicator_df["times_index"] * dt + time_offset
         ax.plot(
             indicator_time,
             label_indicator_df["label_indicator"],
@@ -811,6 +816,54 @@ def _add_layer_circle(x, y, layer_name, ax=None, config=None, **kwargs):
     )
 
 
+def _normalize_trace(
+    data: pd.DataFrame,
+    response_col: str,
+    normalize: Union[str, bool],
+    group_col: Optional[str] = None,
+) -> pd.DataFrame:
+    """Normalize a response column per trace (group).
+
+    Args:
+        data: DataFrame with response data
+        response_col: Column name to normalize
+        normalize: Normalization mode. Use 'max' to divide each trace by its
+            maximum value. False or None disables normalization.
+        group_col: Column to group by so each group is normalized independently.
+            When None, the entire column is normalized as one trace.
+
+    Returns:
+        DataFrame with normalized response column (copy).
+    """
+    if not normalize or response_col not in data.columns:
+        return data
+
+    result = data.copy()
+
+    if normalize == "max":
+        # Normalize by the max of the per-timestep mean so the plotted
+        # (mean) trace peaks at 1. Dividing by the raw max would yield
+        # peaks well below 1 because individual trial values exceed the mean.
+        if group_col and group_col in result.columns:
+            for group_val in result[group_col].unique():
+                mask = result[group_col] == group_val
+                group_mean_max = (
+                    result.loc[mask].groupby("times_index")[response_col].mean().max()
+                )
+                if pd.notna(group_mean_max) and group_mean_max != 0:
+                    result.loc[mask, response_col] = (
+                        result.loc[mask, response_col] / group_mean_max
+                    )
+        else:
+            col_mean_max = result.groupby("times_index")[response_col].mean().max()
+            if pd.notna(col_mean_max) and col_mean_max != 0:
+                result[response_col] = result[response_col] / col_mean_max
+    else:
+        logger.warning("Unknown normalization mode '%s'; skipping", normalize)
+
+    return result
+
+
 def _plot_response_ridges(
     fig: plt.Figure,
     column_left: float,
@@ -824,9 +877,11 @@ def _plot_response_ridges(
     hue_values: List[str],
     colors: Dict[str, str],
     dt: float,
-    show_ylabel: bool,
-    config: Dict,
+    time_offset: float = 0.0,
+    show_ylabel: bool = True,
+    config: Dict = None,
     ridge_top: Optional[float] = None,
+    normalize: Union[str, bool] = False,
     **kwargs,
 ) -> List[plt.Axes]:
     """Plot ridge plots for responses.
@@ -869,7 +924,7 @@ def _plot_response_ridges(
 
     # Prepare data
     data_plot = data.copy()
-    data_plot["time_ms"] = data_plot["times_index"] * dt
+    data_plot["time_ms"] = data_plot["times_index"] * dt + time_offset
 
     # Ensure categorical columns are standardized to match dimension values
     if hue_key in data_plot.columns and hue_key != "layers":
@@ -896,7 +951,7 @@ def _plot_response_ridges(
         )
 
     global_ymin, global_ymax = fmt["max_global_ymax"], fmt["min_global_ymin"]
-    global_xmin, global_xmax = 0, 0
+    global_xmin, global_xmax = float("inf"), 0
 
     for i, subplot_value in enumerate(subplot_values):
         # Position subplot
@@ -936,6 +991,12 @@ def _plot_response_ridges(
         # Plot lines
         if subplot_var == "layers":
             # Plot layer response colored by hue
+            plot_data = _normalize_trace(
+                plot_data,
+                response_col,
+                normalize,
+                hue_key if hue_var != "layers" else None,
+            )
             sns.lineplot(
                 data=plot_data,
                 x="time_ms",
@@ -963,6 +1024,12 @@ def _plot_response_ridges(
             plot_data = data_plot.copy()
             n_points = len(plot_data)
 
+            plot_data = _normalize_trace(
+                plot_data,
+                response_col,
+                normalize,
+                hue_key if not _is_special_dimension(hue_var) else None,
+            )
             sns.lineplot(
                 data=plot_data,
                 x="time_ms",
@@ -1005,8 +1072,11 @@ def _plot_response_ridges(
                 # Panel B case: plot focus layer response colored by category
                 response_col = f"{focus_layer}_response_avg"
                 if response_col in plot_data.columns:
+                    norm_data = _normalize_trace(
+                        plot_data, response_col, normalize, hue_key
+                    )
                     sns.lineplot(
-                        data=plot_data,
+                        data=norm_data,
                         x="time_ms",
                         y=response_col,
                         hue=hue_key,
@@ -1028,7 +1098,7 @@ def _plot_response_ridges(
                 for hue_val in hue_values:
                     response_col = f"{hue_val}_response_avg"
                     if response_col in plot_data.columns:
-                        hue_data = plot_data.copy()
+                        hue_data = _normalize_trace(plot_data, response_col, normalize)
                         sns.lineplot(
                             data=hue_data,
                             x="time_ms",
@@ -1048,7 +1118,7 @@ def _plot_response_ridges(
                 for hue_val in hue_values:
                     response_col = hue_val
                     if response_col in plot_data.columns:
-                        hue_data = plot_data.copy()
+                        hue_data = _normalize_trace(plot_data, response_col, normalize)
                         sns.lineplot(
                             data=hue_data,
                             x="time_ms",
@@ -1108,9 +1178,9 @@ def _plot_response_ridges(
                 plot_data,
                 subplot_key if subplot_var != "layers" else hue_key,
                 (0, global_ymax),
-                0.1,
+                0.15,
             )
-            indicator_time = label_indicator_df["times_index"] * dt
+            indicator_time = label_indicator_df["times_index"] * dt + time_offset
             ax.plot(
                 indicator_time,
                 label_indicator_df["label_indicator"],
@@ -1280,8 +1350,86 @@ def _add_horizontal_legend(
         # Make legend title bold
         if legend.get_title() is not None:
             legend.get_title().set_fontweight("bold")
+        return legend
     else:
         logger.warning("No legend elements to display")
+
+
+def _add_panel_labels(
+    fig: plt.Figure,
+    n_columns: int,
+    column_positions: List[float],
+    relative_column_width: float,
+    layout: Dict,
+    fmt: Dict,
+) -> None:
+    """Add panel labels: A)/B) for rows, I/II/III/... for columns.
+
+    A) labels the upper performance subplot row, B) labels the lower ridge
+    plot row. Roman numeral column labels (I, II, III, ...) are added when
+    there are multiple columns.
+
+    Args:
+        fig: Matplotlib figure
+        n_columns: Number of subplot columns
+        column_positions: Left x-position of each column in figure coords
+        relative_column_width: Width of each column in figure coords
+        layout: Layout configuration dict
+        fmt: Formatting configuration dict
+    """
+    roman_numerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+
+    accuracy_top = layout["title_bot"] - layout["title_pad"]
+    ridge_top = (
+        accuracy_top
+        - layout["accuracy_height"]
+        - layout["accuracy_pad"]
+        - layout["legend_height"]
+        - layout["legend_pad"]
+    )
+
+    row_labels = [
+        ("A)", accuracy_top),
+        ("B)", ridge_top),
+    ]
+
+    for col_idx, col_left in enumerate(column_positions):
+        x = col_left + layout["panel_letter_offset_x"]
+
+        # Column numerals (only when multiple columns)
+        if n_columns > 1:
+            numeral = (
+                roman_numerals[col_idx]
+                if col_idx < len(roman_numerals)
+                else str(col_idx + 1)
+            )
+            fig.text(
+                col_left - 2 * layout["panel_letter_offset_x"],
+                1,
+                numeral,
+                fontsize=fmt["fontsize_panel_label"],
+                fontweight="bold",
+                ha="left",
+                va="top",
+            )
+
+        # Row labels (A, B) only on the first column
+        if col_idx == 0:
+            for i, (label, y_top) in enumerate(row_labels):
+                y_offset = (
+                    -1 * layout["panel_letter_offset_y"]
+                    if i
+                    else layout["panel_letter_offset_y"]
+                )
+                fig.text(
+                    x,
+                    y_top + y_offset,
+                    label,
+                    fontsize=fmt["fontsize_panel_label"],
+                    fontweight="bold",
+                    ha="right",
+                    va="top",
+                )
 
 
 def plot_temporal_ridge_responses(
@@ -1296,7 +1444,9 @@ def plot_temporal_ridge_responses(
     confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
     accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
+    time_offset: float = 0.0,
     config: Optional[Dict] = None,
+    panel_labels: bool = False,
     **kwargs,
 ) -> None:
     """Plot temporal ridge responses with flexible dimension mapping.
@@ -1318,6 +1468,7 @@ def plot_temporal_ridge_responses(
         accuracy_measure: Column name or list of names for accuracy metrics
         dt: Temporal resolution in ms per timestep
         config: Configuration dict with palette, naming, ordering
+        panel_labels: If True, add panel labels (A/B for rows, I/II/III for columns)
         **kwargs: Override LAYOUT and FORMATTING defaults
     """
     logger.info("=" * 60)
@@ -1491,22 +1642,27 @@ def plot_temporal_ridge_responses(
     )
     sns.set_context("talk")
 
-    # Add figure title
-    if experiment:
-        title_name = (
-            get_display_name(key=f"{experiment}_experiment", config=config)
-            if experiment
-            else ""
-        )
-        fig.suptitle(
-            title_name,
-            fontsize=fmt["fontsize_title"],
-            fontweight="bold",
-            y=0.98,
-        )
+    # # Add figure title
+    # if experiment:
+    #     title_name = (
+    #         get_display_name(key=f"{experiment}_experiment", config=config)
+    #         if experiment
+    #         else ""
+    #     )
+    #     fig.suptitle(
+    #         title_name,
+    #         fontsize=fmt["fontsize_title"],
+    #         fontweight="bold",
+    #         y=0.98,
+    #     )
+
+    # Calculate column dimensions in figure units (0-1)
+    relative_column_width = layout["column_width"] / total_width
+    relative_column_spacing = layout["column_spacing"] / total_width
 
     # Plot each column
     all_ridge_axes = []
+    column_positions = []
     for col_idx, column_value in enumerate(column_values):
         logger.info(
             "#" * 10
@@ -1515,10 +1671,9 @@ def plot_temporal_ridge_responses(
             + "#" * 10
         )
 
-        # Calculate column position - now in figure units (0-1)
-        relative_column_width = layout["column_width"] / total_width
-        relative_column_spacing = layout["column_spacing"] / total_width
+        # Calculate column position
         column_left = col_idx * (relative_column_width + relative_column_spacing)
+        column_positions.append(column_left)
 
         # Filter data for this column
         column_data = _filter_data_for_column(
@@ -1575,6 +1730,7 @@ def plot_temporal_ridge_responses(
             hue_values=hue_values,
             colors=colors,
             dt=dt,
+            time_offset=time_offset,
             show_ylabel=(col_idx == 0),
             show_legend=(col_idx == 0),
             accuracy_cols=accuracy_measures,
@@ -1597,6 +1753,7 @@ def plot_temporal_ridge_responses(
             hue_values=hue_values,
             colors=colors,
             dt=dt,
+            time_offset=time_offset,
             show_ylabel=(col_idx == 0),
             config=config,
             **kwargs,
@@ -1621,7 +1778,7 @@ def plot_temporal_ridge_responses(
         if all_ridge_axes:
             # Align xy-limits across all ridge axes
             global_ymin, global_ymax = fmt["max_global_ymax"], fmt["min_global_ymin"]
-            global_xmin, global_xmax = 0, 0
+            global_xmin, global_xmax = float("inf"), 0
 
             for ax in all_ridge_axes:
                 ymin, ymax = ax.get_ylim()
@@ -1645,6 +1802,17 @@ def plot_temporal_ridge_responses(
         # Align y-labels
         fig.align_ylabels(all_ridge_axes)
         logger.info(f"Aligned y-labels for {len(all_ridge_axes)} axes")
+
+    # Add panel labels if requested
+    if panel_labels:
+        _add_panel_labels(
+            fig=fig,
+            n_columns=n_columns,
+            column_positions=column_positions,
+            relative_column_width=relative_column_width,
+            layout=layout,
+            fmt=fmt,
+        )
 
     # Save
     logger.info(f"Saving figure to: {output}")
@@ -1722,9 +1890,21 @@ def main():
         ),
     )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
+    parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
+    )
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
+    parser.add_argument(
+        "--panel-labels",
+        action="store_true",
+        default=False,
+        help="Add panel labels (A/B for rows, I/II/III for columns)",
+    )
     parser.add_argument(
         "--log-level",
         type=str,
@@ -1756,6 +1936,7 @@ def main():
     data_input = args.data if len(args.data) > 1 else args.data[0]
 
     # Plot
+    time_offset = args.idle_timesteps * args.dt
     plot_temporal_ridge_responses(
         data=data_input,
         output=args.output,
@@ -1768,7 +1949,9 @@ def main():
         confidence_measure=args.confidence_measure,
         accuracy_measure=args.accuracy_measure,
         dt=args.dt,
+        time_offset=time_offset,
         config=config,
+        panel_labels=args.panel_labels,
     )
 
 

@@ -492,7 +492,7 @@ rule aggregate_experiment_data:
         script = SCRIPTS / 'visualization' / 'aggregate_experiment_data.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        additional_parameters = ['seed', 'status', 'epoch', 'energyloss'],  # config keys ('status' and 'epoch' are extracted from file path)
+        additional_parameters = ['seed', 'status', 'epoch', 'activityloss', 'idle_timesteps'],  # config keys ('status' and 'epoch' are extracted from file path)
         sample_resolution = 'sample',  # 'sample' or 'class'
         fail_on_missing_inputs = False,
         execution_cmd = lambda w, input: build_execution_command(
@@ -558,7 +558,7 @@ rule aggregate_experiment_data_single:
         script = SCRIPTS / 'visualization' / 'aggregate_experiment_data.py'
     params:
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        additional_parameters = ['seed', 'status', 'epoch', 'energyloss'],
+        additional_parameters = ['seed', 'status', 'epoch', 'activityloss'],
         sample_resolution = 'sample',
         fail_on_missing_inputs = False,
         execution_cmd = lambda w, input: build_execution_command(

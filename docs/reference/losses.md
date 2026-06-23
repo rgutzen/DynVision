@@ -4,12 +4,12 @@ This reference describes the loss functions available in DynVision and their beh
 
 ## Description
 
-DynVision provides specialized loss functions designed for temporal neural networks. These losses handle timestep-wise computation, masked labels, and energy regularization. Multiple losses can be combined with configurable weights to balance different training objectives.
+DynVision provides specialized loss functions designed for temporal neural networks. These losses handle timestep-wise computation, masked labels, and activity regularization. Multiple losses can be combined with configurable weights to balance different training objectives.
 
 **Key Features:**
 - Temporal normalization accounting for valid vs. invalid timesteps
 - Presentation pattern-aware masking for reaction time windows
-- Hook-based energy computation for efficient memory usage
+- Hook-based activity computation for efficient memory usage
 - Flexible loss combination with weighted sums
 
 ## Available Loss Functions
@@ -57,14 +57,14 @@ Regularization loss that penalizes total neural activity across all timesteps.
 
 **Location:** `dynvision.losses.ActivityLoss`
 
-**Purpose:** Compute total computational energy (neural activity) to encourage efficient, sparse representations.
+**Purpose:** Compute total computational activity (neural activity) to encourage efficient, sparse representations.
 
 **Parameters:**
 - `reduction` (str, default="mean"): How to reduce the loss. Options: "mean", "sum", "none"
-- `p` (int, default=1): Norm order for energy calculation (1=L1, 2=L2)
+- `p` (int, default=1): Norm order for activity calculation (1=L1, 2=L2)
 
 **Normalization Behavior:**
-- Accumulates energy across **all timesteps** (including null inputs and reaction windows)
+- Accumulates activity across **all timesteps** (including null inputs and reaction windows)
 - Uses forward hooks to capture activations during the model's forward pass
 - Normalizes by spatial dimensions, number of monitored modules, and total timesteps
 - Formula: `sum_t(sum_modules(||activation||_p / n_units)) / (n_modules * n_timesteps)`
@@ -72,22 +72,22 @@ Regularization loss that penalizes total neural activity across all timesteps.
 **Hook-Based Operation:**
 - Registers forward hooks on monitored layers (Conv2d, Linear, ConvTranspose2d)
 - Hooks fire once per layer per timestep during forward pass
-- Energy accumulates across timesteps, then gets normalized when loss is computed
+- Activity accumulates across timesteps, then gets normalized when loss is computed
 - Accumulators reset after each batch
 
 **Example:**
 ```python
 from dynvision.losses import ActivityLoss
 
-# Create energy loss
-energy_loss = ActivityLoss(reduction="mean", p=1)  # L1 norm
+# Create activity loss
+activity_loss = ActivityLoss(reduction="mean", p=1)  # L1 norm
 
 # Register hooks on model layers
-energy_loss.register_hooks(model)
+activity_loss.register_hooks(model)
 
-# During training, energy accumulates automatically via hooks
+# During training, activity accumulates automatically via hooks
 # Compute loss (outputs and targets are ignored for ActivityLoss)
-loss = energy_loss(outputs=None, targets=None)
+loss = activity_loss(outputs=None, targets=None)
 # Returns average absolute activity per unit per timestep per module
 ```
 
@@ -99,44 +99,44 @@ loss = energy_loss(outputs=None, targets=None)
 
 **Important Notes:**
 - Must call `register_hooks(model)` before training
-- Energy includes all timesteps (unlike CrossEntropyLoss which respects masking)
+- Activity includes all timesteps (unlike CrossEntropyLoss which respects masking)
 - Hooks automatically handle device transfers (CPU/GPU)
 - Call `remove_hooks()` or rely on `__del__` for cleanup
 
 ### Expected Training Behavior
 
-**Energy loss measures total network activity, not prediction quality.** During training, you should expect:
+**Activity loss measures total network activity, not prediction quality.** During training, you should expect:
 
 **Early Training (epochs 1-10):**
-- Energy typically **increases** as the network learns stronger feature representations
-- Weak random weights → small activations → low energy (~0.05-0.08)
-- Learning requires stronger activations → energy rises (~0.10-0.15)
+- Activity typically **increases** as the network learns stronger feature representations
+- Weak random weights → small activations → low activity (~0.05-0.08)
+- Learning requires stronger activations → activity rises (~0.10-0.15)
 
 **Mid Training (epochs 10-50):**
-- Energy **plateaus** at an operating point
-- Network balances prediction accuracy (minimize CrossEntropy) with activity level (energy regularization)
-- Energy stabilizes (~0.12-0.18) while CrossEntropy continues decreasing
+- Activity **plateaus** at an operating point
+- Network balances prediction accuracy (minimize CrossEntropy) with activity level (activity regularization)
+- Activity stabilizes (~0.12-0.18) while CrossEntropy continues decreasing
 
 **Late Training (epochs 50+):**
-- Energy remains **stable** or slightly decreases
+- Activity remains **stable** or slightly decreases
 - Network has found efficient representations
-- Energy may fluctuate slightly but should not grow unbounded
+- Activity may fluctuate slightly but should not grow unbounded
 
-**This is normal and expected.** The energy regularization is working if:
-- ✅ Energy stabilizes (doesn't continuously grow)
+**This is normal and expected.** The activity regularization is working if:
+- ✅ Activity stabilizes (doesn't continuously grow)
 - ✅ CrossEntropy decreases (network is learning)
-- ✅ Total loss decreases (energy weight is appropriate)
-- ✅ Energy contribution to total loss is small (typically <5%)
+- ✅ Total loss decreases (activity weight is appropriate)
+- ✅ Activity contribution to total loss is small (typically <5%)
 
 **Warning Signs** (indicating actual problems):
-- ❌ Energy continuously growing without plateau (raw energy >1.0)
-- ❌ Energy dominating total loss (weighted_energy > CrossEntropy)
-- ❌ Both energy and CrossEntropy increasing together
+- ❌ Activity continuously growing without plateau (raw activity >1.0)
+- ❌ Activity dominating total loss (weighted_activity > CrossEntropy)
+- ❌ Both activity and CrossEntropy increasing together
 - ❌ Activation magnitudes >10 (check with monitoring)
 
 **Example Training Curve:**
 ```
-Epoch | CrossEntropy | Energy | Weighted Energy (0.05) | Total Loss
+Epoch | CrossEntropy | Activity | Weighted Activity (0.05) | Total Loss
 ------|-------------|--------|------------------------|------------
   1   |    2.30     |  0.05  |        0.0025          |   2.3025
  10   |    1.50     |  0.12  |        0.0060          |   1.5060
@@ -145,7 +145,7 @@ Epoch | CrossEntropy | Energy | Weighted Energy (0.05) | Total Loss
 100   |    0.30     |  0.14  |        0.0070          |   0.3070
 ```
 
-**Key Insight**: Energy increasing from 0.05 to 0.15 while CrossEntropy decreases from 2.3 to 0.5 is **healthy training**. The regularization prevents unbounded growth while allowing the network to learn effective representations.
+**Key Insight**: Activity increasing from 0.05 to 0.15 while CrossEntropy decreases from 2.3 to 0.5 is **healthy training**. The regularization prevents unbounded growth while allowing the network to learn effective representations.
 
 ---
 
@@ -162,7 +162,7 @@ criterion:
     kwargs:
       reduction: mean
       ignore_index: -1
-  - name: energy_loss
+  - name: activity_loss
     weight: 0.05
     kwargs:
       reduction: mean
@@ -179,10 +179,10 @@ criterion:
 ```python
 # Manually combining losses
 ce_loss = criterion_ce(outputs, targets)  # CrossEntropyLoss
-energy = criterion_energy(None, None)      # ActivityLoss
+activity = criterion_activity(None, None)      # ActivityLoss
 
 # Weighted combination
-total_loss = 1.0 * ce_loss + 0.05 * energy
+total_loss = 1.0 * ce_loss + 0.05 * activity
 ```
 
 ---
@@ -269,25 +269,25 @@ def register_hooks(self, model: nn.Module) -> None:
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear, nn.ConvTranspose2d)):
             hook = module.register_forward_hook(
-                lambda module, input, output, name=name: self._accumulate_energy(name, output)
+                lambda module, input, output, name=name: self._accumulate_activity(name, output)
             )
             self.hooks.append(hook)
 ```
 
-**Energy Accumulation:**
+**Activity Accumulation:**
 ```python
-def _accumulate_energy(self, module_name: str, activation: torch.Tensor) -> None:
-    batch_energy = torch.norm(activation, p=self.p, dim=tuple(range(1, activation.ndim)))
+def _accumulate_activity(self, module_name: str, activation: torch.Tensor) -> None:
+    batch_activity = torch.norm(activation, p=self.p, dim=tuple(range(1, activation.ndim)))
 
-    if module_name not in self.batch_energy:
-        self.batch_energy[module_name] = batch_energy
+    if module_name not in self.batch_activity:
+        self.batch_activity[module_name] = batch_activity
         self._hook_call_count[module_name] = 1
     else:
         # Handle device alignment for GPU/CPU transfers
-        existing_energy = self.batch_energy[module_name]
-        if existing_energy.device != batch_energy.device:
-            existing_energy = existing_energy.to(batch_energy.device)
-        self.batch_energy[module_name] = existing_energy + batch_energy
+        existing_activity = self.batch_activity[module_name]
+        if existing_activity.device != batch_activity.device:
+            existing_activity = existing_activity.to(batch_activity.device)
+        self.batch_activity[module_name] = existing_activity + batch_activity
         self._hook_call_count[module_name] += 1
 ```
 
@@ -308,9 +308,9 @@ from dynvision.losses import CrossEntropyLoss, ActivityLoss
 # Classification loss
 ce_loss = CrossEntropyLoss(reduction="mean", ignore_index=-1)
 
-# Energy regularization
-energy_loss = ActivityLoss(reduction="mean", p=1)
-energy_loss.register_hooks(model)
+# Activity regularization
+activity_loss = ActivityLoss(reduction="mean", p=1)
+activity_loss.register_hooks(model)
 
 # In training loop
 def training_step(batch):
@@ -322,10 +322,10 @@ def training_step(batch):
 
     # Compute losses
     ce = ce_loss(outputs_flat, targets_flat)
-    energy = energy_loss(None, None)
+    activity = activity_loss(None, None)
 
     # Combine
-    loss = ce + 0.05 * energy
+    loss = ce + 0.05 * activity
     return loss
 ```
 
@@ -334,7 +334,7 @@ def training_step(batch):
 ```python
 # Log individual components for tracking
 self.log("loss/CrossEntropyLoss", ce_loss.item())
-self.log("loss/ActivityLoss", energy_loss.item())
+self.log("loss/ActivityLoss", activity_loss.item())
 self.log("train_loss", total_loss.item())
 ```
 
@@ -342,7 +342,7 @@ self.log("train_loss", total_loss.item())
 
 ```python
 # Explicit cleanup (automatic on deletion)
-energy_loss.remove_hooks()
+activity_loss.remove_hooks()
 ```
 
 ---
@@ -363,7 +363,7 @@ energy_loss.remove_hooks()
 - Check data for invalid values
 - Verify valid timestep count > 0
 
-### Issue: Energy loss not changing
+### Issue: Activity loss not changing
 
 **Possible Causes:**
 1. Hooks not registered
@@ -373,13 +373,13 @@ energy_loss.remove_hooks()
 **Solutions:**
 ```python
 # Verify hooks are registered
-energy_loss.register_hooks(model)
+activity_loss.register_hooks(model)
 
 # Ensure model is in training mode
 model.train()
 
-# Increase energy loss weight
-total_loss = ce_loss + 0.1 * energy_loss  # Try larger weight
+# Increase activity loss weight
+total_loss = ce_loss + 0.1 * activity_loss  # Try larger weight
 ```
 
 ### Issue: Warning about monitored key not found
@@ -400,7 +400,7 @@ total_loss = ce_loss + 0.1 * energy_loss  # Try larger weight
 
 **ActivityLoss:**
 - Uses hooks to avoid storing full activation tensors
-- Only accumulates scalar energy values per module
+- Only accumulates scalar activity values per module
 - Minimal memory overhead compared to standard forward pass
 
 **CrossEntropyLoss:**
@@ -415,7 +415,7 @@ total_loss = ce_loss + 0.1 * energy_loss  # Try larger weight
 - Pattern detection uses tensor operations only
 
 **Device Handling:**
-- Automatic device alignment in energy accumulation
+- Automatic device alignment in activity accumulation
 - Supports mixed CPU/GPU training
 - Preserves gradients across device transfers
 

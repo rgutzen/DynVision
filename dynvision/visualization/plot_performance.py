@@ -174,8 +174,9 @@ def _plot_accuracy_panel_with_ffonly(
     hue_values: List[str],
     colors: Dict[str, str],
     dt: float,
-    show_ylabel: bool,
-    show_legend: bool,
+    time_offset: float = 0.0,
+    show_ylabel: bool = True,
+    show_legend: bool = True,
     accuracy_cols: Optional[List[str]] = None,
     confidence_cols: Optional[List[str]] = None,
     **kwargs,
@@ -203,7 +204,7 @@ def _plot_accuracy_panel_with_ffonly(
     if "times_index" not in data_plot.columns:
         logger.warning("Missing 'times_index' column; cannot plot performance panel")
         return
-    data_plot["time_ms"] = data_plot["times_index"] * dt
+    data_plot["time_ms"] = data_plot["times_index"] * dt + time_offset
 
     if hue_key in data_plot.columns:
         data_plot[hue_key] = data_plot[hue_key].apply(_standardize_category_value)
@@ -253,7 +254,9 @@ def _plot_accuracy_panel_with_ffonly(
 
     plotted_accuracy_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
     plotted_confidence_full: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
-    plotted_accuracy_feedforward: List[Tuple[str, str, Dict[str, Union[str, float]]]] = []
+    plotted_accuracy_feedforward: List[
+        Tuple[str, str, Dict[str, Union[str, float]]]
+    ] = []
     ff_accuracy_markers: Dict[str, bool] = {}
 
     def _plot_series(
@@ -280,7 +283,9 @@ def _plot_accuracy_panel_with_ffonly(
             )
 
             # Only apply errorbar settings if requested (e.g., for accuracy, not confidence)
-            plot_errorbar_settings = errorbar_settings if use_errorbars else {"errorbar": None}
+            plot_errorbar_settings = (
+                errorbar_settings if use_errorbars else {"errorbar": None}
+            )
 
             if "seed_id" in dataset.columns:
                 for seed_val, seed_data in dataset.groupby("seed_id"):
@@ -700,7 +705,8 @@ def _plot_peak_height_panel(
         "model_type" in row_data.columns and "ffonly" in row_data["model_type"].values
     )
     has_feedforward = (
-        "model_type" in row_data.columns and "feedforward" in row_data["model_type"].values
+        "model_type" in row_data.columns
+        and "feedforward" in row_data["model_type"].values
     )
 
     if not has_accuracy and not has_confidence:
@@ -829,8 +835,11 @@ def _plot_peak_height_panel(
                 else hue_data_ff
             )
             subset_feedforward = (
-                hue_data_feedforward[hue_data_feedforward[subplot_key] == subplot_val_std]
-                if subplot_key in hue_data_feedforward.columns and not hue_data_feedforward.empty
+                hue_data_feedforward[
+                    hue_data_feedforward[subplot_key] == subplot_val_std
+                ]
+                if subplot_key in hue_data_feedforward.columns
+                and not hue_data_feedforward.empty
                 else hue_data_feedforward
             )
 
@@ -918,10 +927,17 @@ def _plot_peak_height_panel(
                         )
 
             # Feedforward-trained model data collection
-            if has_feedforward and len(subset_feedforward) > 0 and has_accuracy and accuracy_column:
+            if (
+                has_feedforward
+                and len(subset_feedforward) > 0
+                and has_accuracy
+                and accuracy_column
+            ):
                 if has_seeds:
                     # Compute peak per seed and add one row per seed
-                    seed_peaks = _compute_peak_per_seed(subset_feedforward, accuracy_column)
+                    seed_peaks = _compute_peak_per_seed(
+                        subset_feedforward, accuracy_column
+                    )
                     for _, seed_row in seed_peaks.iterrows():
                         feedforward_accuracy_plot_data.append(
                             {
@@ -1013,7 +1029,9 @@ def _plot_peak_height_panel(
 
     # Plot feedforward-trained models as grey dashed lines with star markers
     if has_feedforward and feedforward_accuracy_plot_data:
-        feedforward_df = pd.DataFrame(feedforward_accuracy_plot_data).dropna(subset=["x", "y"])
+        feedforward_df = pd.DataFrame(feedforward_accuracy_plot_data).dropna(
+            subset=["x", "y"]
+        )
         if not feedforward_df.empty:
             # Use std error bars when showing seed-level data, otherwise use SEM
             errorbar_config = (
@@ -1509,8 +1527,8 @@ def _add_hue_legend(
     if not hue_values or len(hue_values) <= 1 or not perf_axes or not perf_axes[0]:
         return
 
-    # Place on second subplot of first row
-    legend_ax = perf_axes[0][1]
+    # Place on first subplot of first row
+    legend_ax = perf_axes[0][0]
 
     # Create legend elements
     legend_elements = []
@@ -1557,7 +1575,7 @@ def _add_hue_legend(
     )
 
     # Make the legend title bold
-    hue_legend.get_title().set_fontweight('bold')
+    hue_legend.get_title().set_fontweight("bold")
 
     # Add the hue legend as an artist (preserves the existing accuracy/confidence legend)
     legend_ax.add_artist(hue_legend)
@@ -1576,6 +1594,7 @@ def plot_performance_grid(
     confidence_measure: Optional[Union[str, List[str]]] = "first_label_confidence",
     accuracy_measure: Optional[Union[str, List[str]]] = "accuracy",
     dt: float = 2.0,
+    time_offset: float = 0.0,
     config: Optional[Dict] = None,
     subplot_filter: Optional[List[str]] = None,
     plot_individual_seeds: bool = False,
@@ -2000,6 +2019,7 @@ def plot_performance_grid(
                 hue_values=hue_values,
                 colors=colors,
                 dt=dt,
+                time_offset=time_offset,
                 show_ylabel=(col_idx == 0),
                 show_legend=(
                     row_idx == 0 and col_idx == 0
@@ -2250,6 +2270,12 @@ def main():
         help="Accuracy measure column name or list (comma-separated or Python literal list)",
     )
     parser.add_argument("--dt", type=float, default=2.0, help="Time resolution (ms)")
+    parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
+    )
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
@@ -2266,6 +2292,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Compute time offset from idle timesteps
+    time_offset = args.idle_timesteps * args.dt
 
     # Load config
     config = load_config_from_args(
@@ -2288,6 +2317,7 @@ def main():
         confidence_measure=args.confidence_measure,
         accuracy_measure=args.accuracy_measure,
         dt=args.dt,
+        time_offset=time_offset,
         config=config,
         subplot_filter=args.subplot_filter,
         plot_individual_seeds=args.plot_individual_seeds,

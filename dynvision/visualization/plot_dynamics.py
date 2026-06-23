@@ -70,16 +70,16 @@ DYNAMICS_LAYOUT = {
     # Vertical positions
     "upper_top": 0.98,
     "upper_bottom": 0.65,
-    "lower_top": 0.48,
+    "lower_top": 0.62,  # edited
     "lower_bottom": 0.01,
     "legend_height": 0.1,
     "legend_margin": 0.02,
     # Positioning helpers
-    "y_label_x_position": 0.01,
+    "y_label_x_position": -0.01,
     "panel_label_x_offset": -0.04,
     "panel_label_y_offset": 0.02,
 }
-
+#
 # Style constants
 DYNAMICS_STYLE = {
     "fontsize_panel_labels": 16,
@@ -371,6 +371,7 @@ def create_panel_a(
     colors,
     dt,
     config,
+    time_offset: float = 0.0,
 ):
     """Create Panel A: Ridge plot for layers at middle parameter value."""
     plots_start = DYNAMICS_LAYOUT["plots_start"]
@@ -381,7 +382,7 @@ def create_panel_a(
     # Filter data for middle parameter value
     panel_data = _filter_data_for_column(df, parameter, param_value)
     if dt is not None:
-        panel_data["time_ms"] = panel_data["times_index"] * dt
+        panel_data["time_ms"] = panel_data["times_index"] * dt + time_offset
 
     # Calculate layout parameters for ridge plots compatible with plot_responses
     panel_height = upper_top - upper_bottom
@@ -400,6 +401,7 @@ def create_panel_a(
         hue_values=hue_values,
         colors=colors,
         dt=dt or 1.0,
+        time_offset=time_offset,
         show_ylabel=False,  # We'll add custom y-label
         config=config,
         # Override layout parameters to position correctly in Panel A
@@ -420,8 +422,8 @@ def create_panel_a(
         if hasattr(ax, "get_xlim"):
             xlim = ax.get_xlim()
             # Set xlim to data range with no margins
-            ax.set_xlim(left=0, right=xlim[1])
-            ax.margins(x=0)
+            ax.set_xlim(left=time_offset, right=xlim[1])
+            # ax.margins(x=0)
 
     # Add custom Y-axis label for the panel
     exp_info = determine_experiment_info(parameter, config)
@@ -450,6 +452,8 @@ def create_panel_b(
     colors,
     dt,
     config,
+    normalize=False,
+    time_offset: float = 0.0,
 ):
     """Create Panel B: Ridge plot for focus layer across all parameter values."""
     plots_start = DYNAMICS_LAYOUT["plots_start"]
@@ -460,7 +464,7 @@ def create_panel_b(
     # Prepare data with time conversion and ensure we have the focus layer response
     panel_data = df.copy()
     if dt is not None:
-        panel_data["time_ms"] = panel_data["times_index"] * dt
+        panel_data["time_ms"] = panel_data["times_index"] * dt + time_offset
 
     # Add focus layer response as the y-variable for each parameter subplot
     focus_response_col = f"{focus_layer}_response_avg"
@@ -488,6 +492,7 @@ def create_panel_b(
         hue_values=hue_values,
         colors=colors,
         dt=dt or 1.0,
+        time_offset=time_offset,
         show_ylabel=False,  # We'll add custom y-label
         config=config,
         # Override layout parameters to position correctly in Panel B
@@ -502,6 +507,7 @@ def create_panel_b(
         ridge_overlap=0.2,
         # Add focus layer info so the function knows which response to plot
         focus_layer=focus_layer,
+        normalize=normalize,
         **RESPONSES_FORMATTING,
     )
 
@@ -510,15 +516,19 @@ def create_panel_b(
         if hasattr(ax, "get_xlim"):
             xlim = ax.get_xlim()
             # Set xlim to data range with no margins
-            ax.set_xlim(left=0, right=xlim[1])
-            ax.margins(x=0)
+            ax.set_xlim(left=time_offset, right=xlim[1])
 
     # Add custom Y-axis label
     layer_display = get_display_name(focus_layer, config) or focus_layer.upper()
+    label = (
+        f"Normalized Layer Response ({layer_display})"
+        if normalize
+        else f"Layer Response ({layer_display})"
+    )
     fig.text(
         x=DYNAMICS_LAYOUT["y_label_x_position"],
         y=(lower_top + lower_bottom) / 2,
-        s=f"Layer Response ({layer_display})",
+        s=label,
         rotation=90,
         verticalalignment="center",
         fontsize=RESPONSES_FORMATTING["fontsize_label"],
@@ -701,6 +711,7 @@ def plot_unified_dynamics(
     experiment=None,
     save_path=None,
     dt=None,
+    time_offset: float = 0.0,
     config=None,
 ):
     """Create unified 4-panel dynamics visualization."""
@@ -742,7 +753,7 @@ def plot_unified_dynamics(
     # Convert time if needed
     if dt is not None:
         df = df.copy()
-        df["time_ms"] = df["times_index"] * dt
+        df["time_ms"] = df["times_index"] * dt + time_offset
 
     # Create figure
     fig = plt.figure(
@@ -767,6 +778,7 @@ def plot_unified_dynamics(
         colors,
         dt,
         config,
+        time_offset=time_offset,
     )
 
     logger.info("Creating Panel B: Parameter variation")
@@ -781,6 +793,7 @@ def plot_unified_dynamics(
         colors,
         dt,
         config,
+        time_offset=time_offset,
     )
 
     logger.info("Creating Panel C: Empty panel")
@@ -867,6 +880,12 @@ def main():
         "--focus-layer", type=str, default="V1", help="Layer to focus on"
     )
     parser.add_argument("--dt", type=float, help="Time step in milliseconds")
+    parser.add_argument(
+        "--idle-timesteps",
+        type=int,
+        default=0,
+        help="Number of idle timesteps before recorded data (shifts time axis)",
+    )
     parser.add_argument("--palette", type=str, help="JSON color palette")
     parser.add_argument("--naming", type=str, help="JSON naming dict")
     parser.add_argument("--ordering", type=str, help="JSON ordering dict")
@@ -893,6 +912,9 @@ def main():
         ordering_str=args.ordering,
     )
 
+    # Compute time offset from idle timesteps
+    time_offset = args.idle_timesteps * (args.dt if args.dt is not None else 1.0)
+
     # Create plot
     plot_unified_dynamics(
         df=df,
@@ -902,6 +924,7 @@ def main():
         experiment=args.experiment,
         save_path=args.output,
         dt=args.dt,
+        time_offset=time_offset,
         config=config,
     )
 

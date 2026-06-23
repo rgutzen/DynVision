@@ -38,12 +38,12 @@ DIMENSION_CHOICES = ("category", "connection_type", "status", "layer", "none")
 logger = logging.getLogger(__name__)
 
 DEFAULT_LAYOUT = {
-    "subplot_height": 8.0,
-    "subplot_width": 3.5,
+    "subplot_height": 4.0,
+    "subplot_width": 2.5,
     "spacing_y": 0.3,
     "spacing_x": 0.1,
     "min_width": 2.0,
-    "min_height": 4.0,
+    "min_height": 3.0,
 }
 
 RECURRENT_TOKENS = ("recurrence", "recurrent", "feedback")
@@ -137,12 +137,6 @@ def parse_args() -> argparse.Namespace:
         help="JSON string overriding ordering entries.",
     )
     parser.add_argument(
-        "--title",
-        type=str,
-        default=None,
-        help="Optional title for the figure.",
-    )
-    parser.add_argument(
         "--dpi",
         type=int,
         default=300,
@@ -165,6 +159,13 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional CSV file storing aggregated weight statistics.",
+    )
+    parser.add_argument(
+        "--log-scale",
+        action="store_true",
+        default=False,
+        help="Display weight magnitudes on a log scale. Positive and negative weights "
+        "are shown as separate distributions using symmetric log scaling.",
     )
 
     return parser.parse_args()
@@ -395,8 +396,25 @@ def _prepare_dimension(
 
     ordering = get_ordering(key_for_order, config) or []
     ordering_normalized = [standardize_category_value(value) for value in ordering]
+    if dimension == "layer":
+        ordering_normalized.reverse()
 
-    ordered_values = [value for value in ordering_normalized if value in seen]
+    # Build display map first so we can also match ordering by display name
+    display_map_all = {value: get_display_name(value, config) for value in seen}
+
+    # Match ordering against both raw values and their display names
+    raw_by_display = {}
+    for raw_value, display_value in display_map_all.items():
+        raw_by_display.setdefault(display_value, raw_value)
+
+    ordered_values: List[str] = []
+    for ordering_entry in ordering_normalized:
+        if ordering_entry in seen and ordering_entry not in ordered_values:
+            ordered_values.append(ordering_entry)
+        elif ordering_entry in raw_by_display:
+            raw_value = raw_by_display[ordering_entry]
+            if raw_value not in ordered_values:
+                ordered_values.append(raw_value)
     ordered_values.extend([value for value in seen if value not in ordered_values])
 
     display_map = {value: get_display_name(value, config) for value in ordered_values}
@@ -487,7 +505,7 @@ def _report_connection_type_metrics(
     for _, row in stats.iterrows():
         key = tuple(standardize_category_value(row[col]) for col in group_columns)
         connection_value = standardize_category_value(row[connection_meta.column])
-        if connection_value not in {"feedforward", "recurrence"}:
+        if connection_value.lower() not in {"feedforward", "recurrence"}:
             continue
 
         metrics.setdefault(key, {})[connection_value] = {
@@ -545,9 +563,11 @@ def plot_weight_distributions(
     x_dimension: str,
     config: Dict[str, Dict[str, str]],
     category_key: Optional[str],
-    title: Optional[str],
+    log_scale: bool = False,
 ) -> plt.Figure:
     data = df.copy()
+    if "layer" in data.columns:
+        data = data[data["layer"] != "classifier"]
 
     row_dimension = row_dimension if row_dimension != "none" else None
     column_dimension = column_dimension if column_dimension != "none" else None
@@ -647,8 +667,18 @@ def plot_weight_distributions(
         DEFAULT_LAYOUT["subplot_height"] * max(1, n_rows),
     )
 
-    sns.set_theme(style="whitegrid", context="talk")
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(width, height), sharex=True)
+    if log_scale:
+        abs_nonzero = data["weight"][data["weight"] != 0].abs()
+        if abs_nonzero.empty:
+            _symlog_linthresh = 1e-4
+        else:
+            _symlog_linthresh = float(np.percentile(abs_nonzero, 5))
+            _symlog_linthresh = max(_symlog_linthresh, 1e-8)
+
+    sns.set_theme(style="whitegrid", context="paper", font_scale=2.0)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=(width, height), sharex=True, sharey=True
+    )
 
     if n_rows == 1 and n_cols == 1:
         axes = np.array([[axes]])
@@ -657,7 +687,7 @@ def plot_weight_distributions(
     elif n_cols == 1:
         axes = axes[:, np.newaxis]
 
-    legend_shown = False
+    show_legend = False
 
     for row_idx, row_value in enumerate(row_values):
         for col_idx, col_value in enumerate(column_values):
@@ -683,6 +713,9 @@ def plot_weight_distributions(
                 and len(hue_meta.values) == 2
             )
 
+            if log_scale:
+                ax.set_yscale("symlog", linthresh=_symlog_linthresh)
+
             sns.violinplot(
                 data=subset,
                 x=x_meta.display_column,
@@ -692,17 +725,18 @@ def plot_weight_distributions(
                 hue_order=hue_order,
                 palette=palette,
                 ax=ax,
-                inner="quartile",
+                inner="box",
                 cut=0,
                 density_norm="width",
                 split=split,
                 width=0.95,
             )
 
-            ax.axhline(0.0, linestyle="--", linewidth=0.8, color="gray", alpha=0.5)
+            ax.axhline(0.0, linestyle="-", linewidth=1.5, color="black", zorder=1)
+
             ax.set_xlabel("")
             if col_idx == 0:
-                ax.set_ylabel("Weight", fontsize=12)
+                ax.set_ylabel("Weight")
             else:
                 ax.set_ylabel("")
 
@@ -715,7 +749,9 @@ def plot_weight_distributions(
                 title_parts.append(
                     _format_dimension_label(col_value, column_meta, config)
                 )
-            ax.set_title(" | ".join(title_parts), fontsize=14 if title_parts else 0)
+            ax.set_title(
+                " | ".join(title_parts) if title_parts else "", fontweight="bold"
+            )
 
             if hue_meta and ax.legend_:
                 handles, labels = ax.get_legend_handles_labels()
@@ -730,53 +766,75 @@ def plot_weight_distributions(
                 if legend_title == hue_meta.label_key:
                     legend_title = None
 
-                if legend_shown:
-                    ax.legend_.remove()
-                else:
-                    ax.legend(
+                if show_legend:
+                    legend = ax.legend(
                         deduped_handles,
                         deduped_labels,
                         title=legend_title,
-                        frameon=False,
-                        loc="upper right",
+                        frameon=True,
+                        loc="center right",
                     )
-                    legend_shown = True
+                    if legend and legend.get_title():
+                        legend.get_title().set_fontweight("bold")
+                else:
+                    ax.legend_.remove()
+                    show_legend = True
 
             ax.tick_params(axis="x", rotation=20)
 
-    x_axis_label = _resolve_axis_label(
-        x_meta.label_key or x_dimension, config, "Group"
-    )
-    for ax in axes[-1, :]:
+    # Show only every second y-tick label for readability (after loop so
+    # shared y-limits are finalized)
+    for ax in axes.flat:
         if ax.get_visible():
-            ax.set_xlabel(x_axis_label, fontsize=12)
+            y_ticks = ax.get_yticks()
+            y_labels = [
+                "" if idx % 2 else ax.yaxis.get_major_formatter()(tick)
+                for idx, tick in enumerate(y_ticks)
+            ]
+            ax.set_yticks(y_ticks)
+            ax.set_yticklabels(y_labels)
+
+    # x_axis_label = _resolve_axis_label(
+    #     x_meta.label_key or x_dimension, config, "Group"
+    # )
+    # for ax in axes[-1, :]:
+    #     if ax.get_visible():
+    #         ax.set_xlabel(x_axis_label)
 
     for ax in axes.flat:
         if ax.get_visible():
             sns.despine(ax=ax, left=True)
 
-    default_title = "Weight distributions"
-    if not title and row_dimension == "category" and category_key:
-        default_title = (
-            f"Weight distributions by {get_display_name(category_key, config)}"
-        )
-
-    fig.suptitle(title or default_title, fontsize=16)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.tight_layout()
     return fig
 
 
-def export_summary(df: pd.DataFrame, output_path: Path) -> None:
+def export_summary(
+    df: pd.DataFrame,
+    output_path: Path,
+    group_columns: Optional[List[str]] = None,
+) -> None:
     if df.empty:
         logger.warning("No data available to export summary table")
         return
 
+    if group_columns is None:
+        group_columns = ["layer", "connection_type", "category", "status"]
+
+    group_columns = [col for col in group_columns if col in df.columns]
+    if not group_columns:
+        logger.warning("No valid group columns found for summary export")
+        return
+
     summary = (
-        df.groupby(["layer", "connection_type", "category", "status"], dropna=False)[
-            "weight"
-        ]
-        .agg(["count", "mean", "std"])
-        .rename(columns={"count": "n", "mean": "weight_mean", "std": "weight_std"})
+        df.groupby(group_columns, dropna=False)["weight"]
+        .agg(
+            mean="mean",
+            median="median",
+            min="min",
+            max="max",
+            std="std",
+        )
         .reset_index()
     )
 
@@ -814,7 +872,16 @@ def main() -> None:
         raise ValueError("No weight tensors found in provided checkpoints.")
 
     if args.summary_output:
-        export_summary(weight_table, args.summary_output)
+        group_dimensions = [
+            dim
+            for dim in [args.row, args.column, args.hue, args.x_axis]
+            if dim and dim != "none"
+        ]
+        export_summary(
+            weight_table,
+            args.summary_output,
+            group_columns=group_dimensions or None,
+        )
 
     plot_weight_distributions(
         df=weight_table,
@@ -824,7 +891,7 @@ def main() -> None:
         x_dimension=args.x_axis,
         config=config,
         category_key=args.category_key,
-        title=args.title,
+        log_scale=args.log_scale,
     )
 
     save_plot(args.output, dpi=args.dpi)

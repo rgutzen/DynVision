@@ -13,47 +13,21 @@
 # Figures naming convention:
 # {plot_type}_{category}=*{+model_args}_{focus_layer}_{seed}.png
 
-rule figures_with_updated_local:
+rule current_figure:
     input:
-        # NEURAL DYNAMICS
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
             # experiment=["duration", "contrast", "interval"],
             experiment=["dynamics"],
             model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}),
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}) 
+                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*", "activityloss": "1.0", "pattern": "1011"}),   
             seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
             # plot=[f"dynamics_groen_{focus_layer}" for focus_layer in ['V1', 'V2']],
             plot=[f"dynamics_{focus_layer}_v_groen+activityloss" for focus_layer in ['V2+V2+V1', 'V1+V1+V2']]
-        ),
-
-rule figure_unrolling:
-    input:
-        # UNROLLING
-        expand(project_paths.figures / "unrolling" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "responses_tff={tff}+tsk={tsk}+tfb={tfb}.png",
-            model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"feedback": "add"}),
-            seed=7001,
-            data_name=config.data_name,
-            data_group='one',
-            status=config.status,
-            tff=[10], # 0 in engineering time
-            tsk=[20], # 0 in engineering time
-            tfb=[10], # 30 in engineering time
-        ),
-
-rule reference_models:
-    input:
-        # REFERENCE MODELS
-        expand(project_paths.figures / "{experiment}" / "{model}:{model_args}_{seeds}" / "imagenet:all_init" / "{plot}.png",
-            experiment=['response', 'idleresponse', 'hundred'],
-            model=['CorNetRT', 'CordsNet'],
-            model_args='pretrained=*',
-            seeds="9000",
-            plot='responses',
-        ),
+        )
 
 rule manuscript_figures: # manuscript figures
 # sh snakecharm.sh "manuscript_figures --allowed-rules plot_dynamics plot_responses plot_timeparams_tripytch plot_connection_tripytch plot_timestep_tripytch plot_training plot_performance"
@@ -139,7 +113,7 @@ rule manuscript_figures: # manuscript figures
             data_name=config.data_name,
             data_group=config.data_group,
             status=config.status,
-            plot="performance_manuscript",
+            plot=["performance_manuscript", "performance_manuscript_minimal", "performance_manuscript_minimal_individual-seeds"],
         ),
         # # DEVELOPMENT DURING TRAINING
         expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
@@ -154,17 +128,18 @@ rule manuscript_figures: # manuscript figures
             plot='responses', # set hue=epoch
         ),
         # WEIGHTS
-         expand(project_paths.figures / "weights" / "{model_name}{model_args}_{seed}" / "{data_name}_{status}" / "weights.png",
+        expand(project_paths.figures / "weights" / "{model_name}{model_args}_{seed}" / "{data_name}_{status}" / "weights{logscale}.png",
             model_name=config.model_name,
             model_args=args_product(DEFAULT_MODEL_ARGS | {"rctarget": "*"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "middle", "activityloss": "*"}) 
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}) 
-                     + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "activityloss": "*", "pattern": "1011"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"feedback": "*"}),
-            seed=config.seed,
+                        + args_product(DEFAULT_MODEL_ARGS | {"rctarget": "middle", "activityloss": "*"}) 
+                        + args_product(DEFAULT_MODEL_ARGS | {"rctype": "*", "activityloss": "1.0", "pattern": "1011"}) 
+                        + args_product(DEFAULT_MODEL_ARGS | {"rctype": "full", "activityloss": "*", "pattern": "1011"})
+                        + args_product(DEFAULT_MODEL_ARGS | {"feedback": "*"}),
+            seed=config.seed + [".".join(config.seed)],
             data_name=config.data_name,
-            status=config.status,
-        ),
+            status=['init'], #config.status,
+            logscale=["", "_logscale"],
+            ),
         # UNROLLING
         expand(project_paths.figures / "unrolling" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "responses_tff={tff}+tsk={tsk}+tfb={tfb}.png",
             model_name=config.model_name,
@@ -191,13 +166,23 @@ rule manuscript_figures: # manuscript figures
             plot="responses",
         ),
         # # REFERENCE MODELS
-        # expand(project_paths.figures / "{experiment}" / "{model}:{model_args}_{seeds}" / "imagenet:imagenette_init" / "{plot}.png",
-        #     experiment=['response', 'idleresponse', 'hundred'],
-        #     model=['CorNetRT', 'CordsNet'],
-        #     model_args='pretrained=*',
-        #     seeds=SEED[0],
-        #     plot='responses',
-        # ),
+        expand(project_paths.figures / 'reference_models' / '{model_name}{model_args}_{seeds}' / '{data_name}:{data_group}_{status}' / '{experiment_col3}_{experiment_col1}-{model_col1}{ref_model_args1}_{experiment_col2}-{model_col2}{ref_model_args2}_{data_group_ref}_{status_ref}.png',
+            experiment_col1=['ten'],
+            experiment_col2=['hundred'],
+            experiment_col3=['response'],
+            model_col1=['CorNetRT'], # 'CorNetRT', 
+            model_col2=['CordsNet'], #'CordsNet'], 
+            ref_model_args1=':tff=0+tsk=0+pretrained=*',
+            ref_model_args2=[':tff=2+tsk=2+pretrained=*'],
+            model_args=args_product(DEFAULT_MODEL_ARGS | {"dt": "*"}),
+            seeds=["7000"],
+            model_name=config.model_name,
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            data_group_ref=['imagenette'],
+            status_ref='init',
+        ),
 
 
 rule process_all_wandb_data:
@@ -275,20 +260,6 @@ rule plot_stability: # run with --config test_batch_size=16
             plot="responses",
         )
 
-rule plot_middle_model:
-    input:
-        expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
-            experiment=["contrast", "duration", "interval"],
-            model_name=config.model_name,
-            model_args=args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1"})
-                     + args_product(DEFAULT_MODEL_ARGS | {"activityloss": "*", 'pattern': "1011"}),    
-            seed=[".".join(config.seed)],
-            data_name=config.data_name,
-            data_group=config.data_group,
-            status=config.status,
-            plot=[f"dynamics_groen_{layer}" for layer in ["V1", "V2"]],
-        )
-
 rule plot_performance_manuscript:
     """Plot performance metrics with Jang et al. (2021) benchmarks.
 
@@ -349,6 +320,7 @@ rule plot_performance_manuscript:
         confidence_measure = getattr(config, 'plot_confidence_measure', "none"),
         jang_noise_type = getattr(config, 'jang_noise_type', 'gaussian'),
         dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config[w.experiment]["data_args"].get('idle', 0),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -357,8 +329,15 @@ rule plot_performance_manuscript:
             script_path=input.script,
             use_distributed=False,
         ),
+        extra_flags = lambda w: (
+            ("--no-category2 --no-jang" if w.minimal == "_minimal" else "")
+            + (" --plot-individual-seeds" if w.indiv_seeds == "_individual-seeds" else "")
+        ),
     output:
-        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance_manuscript.png',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance_manuscript{minimal}{indiv_seeds}.png',
+    wildcard_constraints:
+        minimal = "(_minimal)?",
+        indiv_seeds = "(_individual-seeds)?",
     # group: "visualization"
     shell:
         """
@@ -379,10 +358,12 @@ rule plot_performance_manuscript:
             --confidence-measure {params.confidence_measure} \
             --jang-noise-type {params.jang_noise_type} \
             --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q} \
             --subplot-filter {params.subplot_filter} \
+            {params.extra_flags} \
         """
             # --plot-individual-seeds
 
@@ -432,6 +413,7 @@ rule plot_dynamics_manuscript:
         category2 = "activityloss",
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
         dt = getattr(config, 'dt', 2),
+        idle_timesteps = 0,
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -456,6 +438,7 @@ rule plot_dynamics_manuscript:
             --category {wildcards.category} \
             --focus-layer {wildcards.focus_layer} \
             --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q} \
@@ -540,6 +523,7 @@ rule plot_all_dynamics_manuscript:
         category2 = lambda w: w.category2,
         # Common parameters
         dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config["interval"]["data_args"].get('idle', 0),
         palette = lambda w: json.dumps(config.palette),
         naming = lambda w: json.dumps(config.naming),
         ordering = lambda w: json.dumps(config.ordering),
@@ -571,36 +555,11 @@ rule plot_all_dynamics_manuscript:
             --category {params.category} \
             --category2 {params.category2} \
             --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
             --palette {params.palette:q} \
             --naming {params.naming:q} \
             --ordering {params.ordering:q}
         """
-
-# rule plot_unrolling:
-#     input:
-#         engineering_time_data = project_paths.models \
-#             / '{model_name}' \
-#             / '{model_name}:{args1}tff=0+trc=6+tsk=0+tfb=34{args2}+unrolled=false_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
-#         biological_time_data = project_paths.models \
-#             / '{model_name}' \
-#             / '{model_name}:{args1}tff=10+trc=6+tsk=20+tfb=14{args2}+unrolled=true_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}_test_responses.pt',
-#         script = SCRIPTS / 'visualization' / 'plot_unrolling.py'
-#     params:
-#         t_feedforward = 10 // 2,  # tff / dt
-#         execution_cmd = lambda w, input: build_execution_command(
-#             script_path=input.script,
-#             use_distributed=False,
-#         ),
-#     output:
-#         project_paths.figures / 'unrolling' / 'unrolling_{model_name}:{args1}tff=*{args2}_{seed}_{data_name}_{status}_{data_loader}{data_args}_{data_group}.png',
-#     shell:
-#         """
-#         {params.execution_cmd} \
-#             --engineering_time_data {input.engineering_time_data:q} \
-#             --biological_time_data {input.biological_time_data:q} \
-#             --t_feedforward {params.t_feedforward} \
-#             --output {output:q}
-#         """
 
 rule plot_unrolling:
     input:
@@ -608,12 +567,12 @@ rule plot_unrolling:
             / 'unrolling' \
             / '{model_name}{args1}tff={e_tff}+trc={trc}+tsk={e_tsk}{args2}_{seed}' \
             / '{data_name}:{data_group}_{status}' \
-            / 'StimulusDuration:dsteps=40+stim=20+idle=20' / 'test_responses.pt',
+            / 'StimulusDuration:dsteps=40+stim=20' / 'test_responses.pt',
         biological_time_data = project_paths.reports \
             / 'unrolling' \
             / '{model_name}{args1}tff={e_tff}+trc={trc}+tsk={e_tsk}{args2}_{seed}' \
             / '{data_name}:{data_group}_{status}' \
-            / 'StimulusDuration:dsteps=40+stim=20+idle=20+tff={b_tff}+tsk={b_tsk}+tfb={b_tfb}' / 'test_responses.pt',
+            / 'StimulusDuration:dsteps=40+stim=20+tff={b_tff}+tsk={b_tsk}+tfb={b_tfb}' / 'test_responses.pt',
         script = SCRIPTS / 'visualization' / 'plot_unrolling.py'
     params:
         execution_cmd = lambda w, input: build_execution_command(
@@ -623,6 +582,7 @@ rule plot_unrolling:
         # Convert feedforward delay from ms to timesteps (tff / dt)
         t_feedforward = lambda w: int(int(w.b_tff) // getattr(config, 'dt', 2)),
         dt = getattr(config, 'dt', 2),
+        idle_timesteps = 0,
     output:
         project_paths.figures / 'unrolling' / '{model_name}{args1}tff={e_tff}+trc={trc}+tsk={e_tsk}{args2}_{seed}' / '{data_name}:{data_group}_{status}' / 'responses_tff={b_tff}+tsk={b_tsk}+tfb={b_tfb}.png',
     shell:
@@ -632,15 +592,116 @@ rule plot_unrolling:
             --biological_time_data {input.biological_time_data:q} \
             --t_feedforward {params.t_feedforward} \
             --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
             --output {output:q}
         """
 
-
-rule unrolling:
+rule plot_reference_models:
+    """Plot reference model response dynamics (3-column comparison)."""
     input:
-        expand(project_paths.models / "DyRCNNx8" / "DyRCNNx8:tsteps=30+rctype=full+rctarget=output+dt=2+tau=5+tff=10+trc=6+tsk=20+tfb=10+skip=true+feedback=true+lossrt=4_{seed}" / "imagenette" / "{status}.pt",
-        seed=SEED,
-        status=config.status)
+        # Column I: CorNetRT + DyRCNNx8
+        data_cornetrt_col1 = expand(
+            project_paths.reports
+            / '{{experiment_col1}}'
+            / '{{model_col1}}{{ref_model_args1}}_{seeds}'
+            / 'imagenet:{{data_group_ref}}_{{status_ref}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        data_dyrcnn_col1 = expand(
+            project_paths.reports
+            / '{{experiment_col1}}'
+            / '{{model_name}}{{model_args}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        # Column II: CordsNet + DyRCNNx8
+        data_cordsnet_col2 = expand(
+            project_paths.reports
+            / '{{experiment_col2}}'
+            / '{{model_col2}}{{ref_model_args2}}_{seeds}'
+            / 'imagenet:{{data_group_ref}}_{{status_ref}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        data_dyrcnn_col2 = expand(
+            project_paths.reports
+            / '{{experiment_col2}}'
+            / '{{model_name}}{{model_args}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        # Column III: all three models
+        data_cornetrt_col3 = expand(
+            project_paths.reports
+            / '{{experiment_col3}}'
+            / '{{model_col1}}{{ref_model_args1}}_{seeds}'
+            / 'imagenet:{{data_group_ref}}_{{status_ref}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        data_cordsnet_col3 = expand(
+            project_paths.reports
+            / '{{experiment_col3}}'
+            / '{{model_col2}}{{ref_model_args2}}_{seeds}'
+            / 'imagenet:{{data_group_ref}}_{{status_ref}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        data_dyrcnn_col3 = expand(
+            project_paths.reports
+            / '{{experiment_col3}}'
+            / '{{model_name}}{{model_args}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        script = SCRIPTS / 'visualization' / 'plot_reference_models.py'
+    params:
+        dt = getattr(config, 'dt', 2),
+        cordsnet_layer_indices = getattr(config, 'cordsnet_layer_indices', "1,4,7,8"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy, accuracy_top3"),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    wildcard_constraints:
+        ref_model_args1 = r'(:[a-z,;:\+=\d\.\*]+)',
+        ref_model_args2 = r'(:[a-z,;:\+=\d\.\*]+)',
+        model_col_1 = r'CorNetRT|CordsNet',
+        model_col_2 = r'CorNetRT|CordsNet',
+    output:
+        project_paths.figures / 'reference_models' / '{model_name}{model_args}_{seeds}' / '{data_name}:{data_group}_{status}' / '{experiment_col3}_{experiment_col1}-{model_col1}{ref_model_args1}_{experiment_col2}-{model_col2}{ref_model_args2}_{data_group_ref}_{status_ref}.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --data-cornetrt-col1 {input.data_cornetrt_col1:q} \
+            --ref-data-col1 {input.data_dyrcnn_col1:q} \
+            --data-cordsnet-col2 {input.data_cordsnet_col2:q} \
+            --ref-data-col2 {input.data_dyrcnn_col2:q} \
+            --data-cornetrt-col3 {input.data_cornetrt_col3:q} \
+            --data-cordsnet-col3 {input.data_cordsnet_col3:q} \
+            --ref-data-col3 {input.data_dyrcnn_col3:q} \
+            --output {output:q} \
+            --experiment-col1 {wildcards.experiment_col1} \
+            --experiment-col2 {wildcards.experiment_col2} \
+            --experiment-col3 {wildcards.experiment_col3} \
+            --model-name-col1 {wildcards.model_col1} \
+            --model-name-col2 {wildcards.model_col2} \
+            --cordsnet-layer-indices {params.cordsnet_layer_indices} \
+            --accuracy-measure {params.accuracy_measure} \
+            --confidence-measure {params.confidence_measure} \
+            --dt {params.dt} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
+        """
 
 rule dataloader:
     input:
@@ -660,4 +721,111 @@ rule imagenet:  # run with --config use_distributed_mode=True
             seed=config.seed,
             data_name='imagenet',
             status='trained',
+        ),
+
+
+# ── Benchmarking: missing configurations for resource-demand table ──────────
+# See dynvision/visualization/fetch_benchmarks.py
+#
+# These rules generate training runs to fill gaps identified during
+# benchmarking analysis.  **Runs will execute on NVIDIA H200** (A100 retired
+# ~March 2026), so the Dataloader / Unrolling rows in the table are
+# H200-based, while the main table is A100-based.  Absolute memory values
+# differ between GPU types, but deltas within each GPU-type group remain
+# internally consistent.
+#
+# Configurations:
+#   1. ENGINEERING_UNROLLING_BASELINE  – default model at bs=256, FP32
+#      (provides valid baseline for biological-unrolling comparison)
+#
+#   2. BIOLOGICAL_UNROLLING           – tff=10, tsk=20, tfb=10, tsteps=40
+#      (tsteps=40 required because tff=10 → 5-step feedforward delay per
+#       layer × 4 layers = 20 timesteps before the signal reaches the
+#       classifier; _extend_residual_timesteps appends at the wrong end,
+#       so the residual timesteps have ignored labels and the model sees
+#       no valid signal with only 20 timesteps)
+#
+# IMPORTANT: must run with --config precision=32
+
+ENGINEERING_UNROLLING_ARGS = args_product(DEFAULT_MODEL_ARGS)
+BIOLOGICAL_UNROLLING_ARGS = args_product(DEFAULT_MODEL_ARGS | {"tff": "10", "tsk": "20", "tfb": "10"})
+
+# Seeds for engineering unrolling baseline (batch_size=256, FP32).
+# Using 71xx range to avoid collision with existing benchmark seeds.
+ENGINEERING_UNROLLING_SEEDS = ["7210", "7211", "7212"]
+
+
+rule benchmark_training:
+    """Train models needed to fill gaps in the benchmarking resource-demand table.
+
+    Generates training runs with FP32 precision and Lightning 1.9.5 for direct
+    comparability with the existing benchmark table (seeds 7000-7002, bs=192).
+
+    Override batch_size via --config batch_size=256 to train the engineering
+    unrolling baseline needed for valid comparison against biological-unrolling
+    runs.
+    """
+    input:
+        # # Engineering unrolling baseline (default model, bs=256 or bs=192)
+        # expand(
+        #     project_paths.models / "{model_name}" / "{model_name}{model_args}_{seed}" / "{data_name}" / "{status}.pt",
+        #     model_name=config.model_name,
+        #     model_args=ENGINEERING_UNROLLING_ARGS,
+        #     seed=ENGINEERING_UNROLLING_SEEDS,
+        #     data_name=config.data_name,
+        #     status="trained",
+        # ),
+        # Biological unrolling (tff=10, tsk=20, tfb=10)
+        expand(
+            project_paths.models / "{model_name}" / "{model_name}{model_args}_{seed}" / "{data_name}" / "{status}.pt",
+            model_name=config.model_name,
+            model_args=BIOLOGICAL_UNROLLING_ARGS,
+            seed=ENGINEERING_UNROLLING_SEEDS,
+            data_name=config.data_name,
+            status="trained",
+        ),
+
+
+# ── Dagger-row re-runs: counterintuitive memory values ─────────────────────
+# The benchmarking table flagged two entries with daggers (†) because their
+# GPU memory deltas contradict the model architecture:
+#   • self recurrence (+8 GB) — has fewer params than full, should use ≤ memory
+#   • rctarget=middle (+6 GB) — identical channels to output, should use = memory
+# These are likely sweep-to-sweep measurement artifacts.  Re-running on the
+# same hardware (H200) with the same config as the default model eliminates
+# the sweep-to-sweep variability.
+#
+# Run with:
+#   snakemake -s snake_manuscript.smk benchmark_dagger_reruns --config precision=32
+
+SELF_RECURRENCE_ARGS = args_product(DEFAULT_MODEL_ARGS | {"rctype": "self"})
+MIDDLE_TARGET_ARGS = args_product(DEFAULT_MODEL_ARGS | {"rctarget": "middle"})
+DAGGER_RERUN_SEEDS = ["7300", "7301", "7302"]
+
+
+rule benchmark_dagger_reruns:
+    """Re-run the two model variants with counterintuitive memory values (†).
+
+    Trains both self-recurrence and middle-target models with the default
+    model configuration (FP32, batch_size=192) on H200 to eliminate the
+    sweep-to-sweep measurement artifacts identified in the benchmarking table.
+    """
+    input:
+        # Self recurrence (rctype=self, all other params at default)
+        expand(
+            project_paths.models / "{model_name}" / "{model_name}{model_args}_{seed}" / "{data_name}" / "{status}.pt",
+            model_name=config.model_name,
+            model_args=SELF_RECURRENCE_ARGS,
+            seed=DAGGER_RERUN_SEEDS,
+            data_name=config.data_name,
+            status="trained",
+        ),
+        # Middle recurrence target (rctarget=middle, all other params at default)
+        expand(
+            project_paths.models / "{model_name}" / "{model_name}{model_args}_{seed}" / "{data_name}" / "{status}.pt",
+            model_name=config.model_name,
+            model_args=MIDDLE_TARGET_ARGS,
+            seed=DAGGER_RERUN_SEEDS,
+            data_name=config.data_name,
+            status="trained",
         ),

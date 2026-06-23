@@ -13,7 +13,7 @@
 
 module purge
 
-singularity exec --nv \
+singularity exec --nv \ 
     --overlay /scratch/rg5022/images/rva.ext3:ro \
     --overlay /projects/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro \
     --overlay /projects/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro \

@@ -19,8 +19,8 @@ experiment_config:
     dloader: ['ffcv', 'torch']
     ffonly: ['true', 'false']
     pretrained: ['true', 'false']
-    # energyloss: ['0', '0.0002', '0.002', '0.02', '0.2', '1.0']  # '0.00002',
-    energyloss: ['0', '0.0002', '0.02', '0.2', '1.0'] # '0.002',
+    # activityloss: ['0', '0.0002', '0.002', '0.02', '0.2', '1.0']  # '0.00002',
+    activityloss: ['0', '0.0002', '0.02', '0.2', '1.0'] # '0.002',
     pretrained: ['true']
     
   response:
@@ -241,7 +241,16 @@ experiment_config:
     parameter: stim
     data_loader: StimulusDuration
     data_args:
-      dsteps: 100
+      dsteps: 200
       stim: 100
       intro: 0
       idle: 100
+
+  ten:
+    parameter: stim
+    data_loader: StimulusDuration
+    data_args:
+      dsteps: 10
+      stim: 5
+      intro: 0
+      idle: 0

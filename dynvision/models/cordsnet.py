@@ -224,6 +224,10 @@ class CordsNet(BaseModel):
             layer = getattr(self, layer_name)
             if hasattr(layer, "reset"):
                 layer.reset()
+            # Reset dynamics solver hidden states
+            tstep = getattr(self, f"tstep_{layer_name}", None)
+            if tstep is not None and hasattr(tstep, "reset"):
+                tstep.reset()
 
     def _define_architecture(self) -> None:
         """
@@ -506,42 +510,44 @@ class CordsNet(BaseModel):
             auto_adapt=False,
         )
 
-    def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
-        """Replicate CordsNet's original accuracy computation.
 
-        The reference implementation only evaluated predictions over the
-        concluding portion of the trial (timesteps >= 70). To mirror that
-        behaviour we fill guesses with the model's ``non_label_index`` for
-        the earlier timesteps and use per-timestep argmax predictions on the
-        last 70 steps. This ensures the upstream accuracy metric matches the
-        legacy code path, which summed accuracies across that evaluation
-        window.
-        """
+#  SPECIAL PREDICTOR THAT WAS APPLIED DURING TRAINING
+# def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
+#     """Replicate CordsNet's original accuracy computation.
 
-        if outputs.ndim != 3:
-            raise ValueError(
-                f"Expected classifier outputs with shape (batch, timesteps, classes), got {outputs.shape}"
-            )
+#     The reference implementation only evaluated predictions over the
+#     concluding portion of the trial (timesteps >= 70). To mirror that
+#     behaviour we fill guesses with the model's ``non_label_index`` for
+#     the earlier timesteps and use per-timestep argmax predictions on the
+#     last 70 steps. This ensures the upstream accuracy metric matches the
+#     legacy code path, which summed accuracies across that evaluation
+#     window.
+#     """
 
-        batch_size, n_timesteps, _ = outputs.shape
-        eval_window = min(70, n_timesteps)
+#     if outputs.ndim != 3:
+#         raise ValueError(
+#             f"Expected classifier outputs with shape (batch, timesteps, classes), got {outputs.shape}"
+#         )
 
-        # Prepare default predictions ignored by accuracy for earlier steps.
-        guess_index = torch.full(
-            (batch_size, n_timesteps),
-            fill_value=int(getattr(self, "non_label_index", -1)),
-            dtype=torch.long,
-            device=outputs.device,
-        )
+#     batch_size, n_timesteps, _ = outputs.shape
+#     eval_window = min(70, n_timesteps)
 
-        if eval_window == 0:
-            return guess_index
+#     # Prepare default predictions ignored by accuracy for earlier steps.
+#     guess_index = torch.full(
+#         (batch_size, n_timesteps),
+#         fill_value=int(getattr(self, "non_label_index", -1)),
+#         dtype=torch.long,
+#         device=outputs.device,
+#     )
 
-        guess_index[:, -eval_window:] = torch.argmax(
-            outputs[:, -eval_window:, :], dim=-1
-        )
+#     if eval_window == 0:
+#         return guess_index
 
-        return guess_index
+#     guess_index[:, -eval_window:] = torch.argmax(
+#         outputs[:, -eval_window:, :], dim=-1
+#     )
+
+#     return guess_index
 
 
 if __name__ == "__main__":
