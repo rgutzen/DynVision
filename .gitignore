@@ -18,6 +18,7 @@ config_runtime.yaml
 temp_*
 *_old.py
 *_old.md
+*_backup.py
 
 # data
 /data/
