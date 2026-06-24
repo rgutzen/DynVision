@@ -1,34 +1,79 @@
 # Cluster Scripts
 
-NOTE: The presented cluster files are personalized to a specific cluster environment setup. They are thought to provide a template to facilitate scaling up workflows on HPC resources by letting snakemake itself submit rules as individual jobs. They do need to be adapted to your environment (e.g. conda and singularity commands)!
+This folder contains example scripts for executing DynVision workflows on a compute cluster with a SLURM queuing system. The scripts use Snakemake's cluster profile to submit individual rules as SLURM jobs and manage dependencies automatically.
 
-This folder contains example scripts for executing the workflow on a compute cluster with a SLURM queuing system.
+**Note**: These scripts are templates — you **must** fill in your own system-specific values before use. Look for `<YOUR_...>` placeholders in each file.
+
+## Quick Setup
+
+1. **Replace all `<YOUR_...>` placeholders** in the cluster scripts and config:
+   - `<YOUR_PROJECT_PATH>` — path to your working directory (models, data, logs)
+   - `<YOUR_SLURM_ACCOUNT>` — your SLURM account name
+   - `<YOUR_OVERLAY_PATH>` — path to your Singularity overlay image
+   - `<YOUR_CONTAINER_IMAGE_PATH>` — path to the CUDA container image
+   - `<YOUR_CONDA_MODULE>` — the conda module to load (e.g. `anaconda3/2025.06`)
+   - `<YOUR_SNAKEMAKE_ENV>` — conda environment with Snakemake installed
+   - `<YOUR_CONDA_ENV>` — conda environment for running DynVision
+   - `<GPU_TYPE>` — GPU model available on your cluster (e.g. `h200`, `a100`, `v100`)
+
+2. **Set your project paths** in `dynvision/project_paths.py` — cluster execution auto-detects via SLURM environment variables.
 
 ## Scripts
 
-- **snakejob.sh**: This script is used to submit a job to the SLURM scheduler. It sets up the environment and runs the Snakemake workflow.
-- **snakecharm.sh**: This script runs the Snakemake workflow in the background and logs the output to a file.
+| Script | Purpose |
+|--------|---------|
+| `snakecharm.sh` | Wraps `_snakecharm.sh` and runs the workflow in the background with logging |
+| `_snakecharm.sh` | Core cluster execution: loads modules, activates conda, runs Snakemake with slurm profile |
+| `snakejob.sh` | Submits a single SLURM job (with SBATCH directives inline) for direct execution |
+| `snakejob_example.sh` | Example SLURM submission script with extended time and GPU constraint |
+| `executor_wrapper.sh` | Singularity container wrapper for training — handles distributed env setup |
+| `setup_distributed_execution.sh` | Distributed training setup: GPU detection, NCCL config, MASTER_ADDR/PORT |
+| `profiles/slurm/config.yaml` | Snakemake slurm profile: default resources, per-rule overrides |
 
 ## Usage
 
-1. **snakejob.sh**:
-   - Submit the job to the SLURM scheduler using the following command:
-     ```bash
-     sbatch snakejob.sh
-     ```
+### Snakecharm (background workflow manager)
 
-2. **snakecharm.sh**:
-   - Run the workflow in the background using the following command:
-     ```bash
-     ./snakecharm.sh [snakemake arguments]
-     ```
-   - Check the log file for details:
-     ```bash
-     tail -f ../../logs/slurm/snakecharm_[arguments].log
-     ```
+Runs the entire Snakemake workflow in the background, submitting individual rules as SLURM jobs via the cluster profile:
 
-## Notes
+```bash
+cd dynvision/cluster
+./snakecharm.sh --config experiment=duration model_name=DyRCNNx4 data_name=cifar100
+```
 
-- Path settings are globally defined in `../project_paths.py`.
-- You may adapt the `snakecharm` script for other non-SLURM compute clusters by defining other Snakemake cluster profiles in the `../workflow/profiles` folder and setting the corresponding configurations in its `config.yaml` file.
-- Modify the SLURM job parameters (e.g., time, memory, CPUs) as needed for your specific requirements.
+Check progress:
+```bash
+tail -f ../../logs/slurm/snakecharm_<args>.log
+```
+
+### Direct SLURM submission
+
+For when you need a single node to run all rules sequentially:
+
+```bash
+cd dynvision/cluster
+sbatch snakejob.sh
+```
+
+Or with custom arguments to Snakemake (after editing the script to pass `$@`):
+```bash
+sbatch snakejob.sh -- --config experiment=contrast
+```
+
+### Distributed training
+
+For multi-GPU jobs, edit the `train_model_distributed` section in `profiles/slurm/config.yaml` and ensure `setup_distributed_execution.sh` is sourced before running your workflow.
+
+## Adapting to Your Cluster
+
+1. **SLURM accounts**: Replace all `<YOUR_SLURM_ACCOUNT>` placeholders with your institution's account name
+2. **Container paths**: Update container image paths to match your cluster's available images
+3. **Conda modules**: The module used to load conda varies by cluster — check `module avail` for available options
+4. **GPU types**: Replace `<GPU_TYPE>` with the GPU model on your cluster
+5. **Overlay images**: Create your own SquashFS overlay with your conda environment, or use a different container strategy
+
+## Non-SLURM Clusters
+
+For PBS, SGE, LSF, or other schedulers:
+- Create a new profile in `profiles/<scheduler>/config.yaml`
+- Snakemake supports these via executor plugins — see the [Snakemake docs](https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles) for details

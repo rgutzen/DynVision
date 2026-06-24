@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Cluster execution script for the snakemake workflow using a cluster profile (e.g. slurm). Is being wrapped by snakecharm.sh, so call snakecharm.sh instead of this script directly.
+# Cluster execution script for the snakemake workflow using a cluster profile (e.g. slurm).
+# Is being wrapped by snakecharm.sh, so call snakecharm.sh instead of this script directly.
 
 # Save args immediately before source/module commands clobber $@
 args=("$@")
@@ -9,11 +10,11 @@ source ~/.bashrc
 # source ~/.bash_profile  # make sure custom commands are available
 # module load anaconda3/2020.07  # conda needs to be available
 module purge
-module load anaconda3/2025.06
+# Load your conda module (adjust to your system)
+module load <YOUR_CONDA_MODULE>  # e.g. anaconda3/2025.06
 # module load bioinformatics/20251223  # disabled: using conda env's snakemake instead
 # source activate snake-env  # environment that contains snakemake
-conda activate /scratch/rg5022/environments/snake-env
-# source ./clean_env_vars.sh
+conda activate <YOUR_SNAKEMAKE_ENV>  # e.g. /scratch/<user>/environments/snake-env
 
 # Set paths
 current_dir=$(pwd)

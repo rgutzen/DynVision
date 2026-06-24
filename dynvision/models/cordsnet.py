@@ -403,7 +403,7 @@ class CordsNet(BaseModel):
         """
         Define skip connections matching original CordsNet pattern.
 
-        Skip pattern from original (cordsnet_original.py lines 162-177):
+        Skip pattern from original CordsNet (lines 162-177):
         - layer2 (area 1): relu(r[0]) + inp_skip(inp)  - 3x3 conv, 64→64, same size
         - layer3 (area 2): relu(r[1]) + relu(r[0])  - direct, 64→64, same size
         - layer4 (area 3): relu(r[2]) + skip_area[0](relu(r[1]))  - 1x1 conv stride 2, 64→128

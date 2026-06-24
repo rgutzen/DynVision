@@ -6,12 +6,12 @@ set -eo pipefail  # Exit on error, preserve exit codes in pipes, but allow unset
 
 # Configuration
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly CONTAINER_IMAGE="/share/apps/images/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif"
-readonly CONDA_ENV="rva"
+readonly CONTAINER_IMAGE="<YOUR_CONTAINER_IMAGE_PATH>"  # e.g. /share/apps/images/cuda12.2.2-cudnn8.9.4-devel-ubuntu22.04.3.sif
+readonly CONDA_ENV="<YOUR_CONDA_ENV>"  # e.g. rva
 
 # Overlay mounts - organized for clarity
 readonly OVERLAYS=(
-    "/scratch/rg5022/images/rva.ext3:ro"
+    "<YOUR_OVERLAY_PATH>/rva.ext3:ro"  # e.g. /scratch/<user>/images/rva.ext3:ro
     "/projects/work/public/ml-datasets/imagenet/imagenet-train.sqf:ro"
     "/projects/work/public/ml-datasets/imagenet/imagenet-val.sqf:ro"
     "/projects/work/public/ml-datasets/imagenet/imagenet-test.sqf:ro"
