@@ -54,6 +54,7 @@ lightning_logs/
 !/.gitignore
 !/.github
 !/.pre-commit-config.yaml
+!/.zenodo.json
 
 # Mac OS-specific storage files
 .DS_Store

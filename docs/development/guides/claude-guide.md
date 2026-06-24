@@ -66,6 +66,45 @@ make lint
 
 Note: Makefile targets reference old project name `rhythmic_visual_attention` instead of `dynvision` - this needs updating.
 
+### Release & Publishing
+
+DynVision uses [flit](https://flit.pypa.io/) as its build backend and GitHub Actions to
+automatically publish to PyPI via OIDC trusted publishing.
+
+**How to create a release:**
+
+1. Update the version in `pyproject.toml` (e.g., `version = "0.1.0"`).
+   For pre-releases, use `0.1.0rc1` — rc/beta tags are published to Test PyPI.
+
+2. Update `CHANGELOG.md` with the new version section.
+
+3. Commit and push, then create a version tag:
+   ```bash
+   git add pyproject.toml CHANGELOG.md
+   git commit -m "Bump version to 0.1.0"
+   git tag v0.1.0
+   git push origin main --tags
+   ```
+
+4. The `.github/workflows/publish.yml` action triggers on `v*` tags and will:
+   - Build the package with `flit build`
+   - Publish to **Test PyPI** if the tag contains `rc` or `beta`
+   - Publish to **production PyPI** for all other `v*` tags
+
+**Tag naming convention:**
+
+| Tag            | Destination   | Example version    |
+|----------------|---------------|--------------------|
+| `v*rc*`        | Test PyPI     | `v0.1.0rc1`        |
+| `v*beta*`      | Test PyPI     | `v0.1.0beta1`      |
+| `v*` (other)   | PyPI          | `v0.1.0`           |
+
+**Prerequisites (one-time setup):**
+
+Add the Lindsay-Lab/DynVision repository as a trusted publisher on both:
+- [PyPI](https://pypi.org/manage/project/dynvision/settings/publishing/)
+- [Test PyPI](https://test.pypi.org/manage/project/dynvision/settings/publishing/)
+
 ### Data Management
 Data is automatically downloaded and prepared on first use. Manual data preparation:
 ```bash

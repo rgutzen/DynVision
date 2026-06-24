@@ -1,0 +1,38 @@
+{
+  "title": "DynVision: A Modeling Toolbox for Biologically Plausible Recurrent Visual Networks",
+  "description": "DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks, bridging computational neuroscience and deep learning.",
+  "creators": [
+    {
+      "name": "Gutzen, Robin",
+      "affiliation": "New York University",
+      "orcid": "0000-0001-6131-9222"
+    },
+    {
+      "name": "Lindsay, Grace W.",
+      "affiliation": "New York University",
+      "orcid": "0000-0002-1851-2082"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "computational neuroscience",
+    "recurrent neural networks",
+    "visual processing",
+    "deep learning",
+    "biological plausibility",
+    "temporal dynamics",
+    "convolutional neural networks"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/Lindsay-Lab/DynVision",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ],
+  "communities": [
+    {
+      "identifier": "neuroinformatics"
+    }
+  ]
+}

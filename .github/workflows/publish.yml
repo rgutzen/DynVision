@@ -1,0 +1,43 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for OIDC trusted publishing
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flit
+
+      - name: Build package
+        run: flit build
+
+      - name: Publish to Test PyPI
+        if: contains(github.ref, 'rc') || contains(github.ref, 'beta')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI
+        if: ${{ !(contains(github.ref, 'rc') || contains(github.ref, 'beta')) }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses OIDC Trusted Publisher by default.
+        # Setup: add GitHub repo in PyPI project settings →
+        #   https://pypi.org/manage/project/dynvision/settings/publishing/

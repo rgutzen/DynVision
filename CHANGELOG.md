@@ -39,6 +39,7 @@ All notable changes to DynVision will be documented in this file.
 - Logging standardization across params module
 - Pre-commit hooks and CI/CD pipeline
 - Quick-start Jupyter notebook
+- Zenodo DOI archival (see `.zenodo.json`; DOI assigned on first release)
 
 ---
 

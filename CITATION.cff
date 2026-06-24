@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use DynVision in your research, please cite the following paper."
+title: "DynVision: A Modular Toolbox for Biologically Plausible Recurrent Visual Networks"
+authors:
+  - family-names: Gutzen
+    given-names: Robin
+    orcid: "https://orcid.org/0000-0001-6131-9222"
+  - family-names: Lindsay
+    given-names: Grace
+    orcid: "https://orcid.org/0000-0002-1851-2082"
+year: 2025
+doi: 10.1101/2025.08.11.669756
+url: "https://doi.org/10.1101/2025.08.11.669756"
+repository-code: "https://github.com/Lindsay-Lab/DynVision"
+license: MIT
+type: article
+journal: bioRxiv
