@@ -1,6 +1,7 @@
 # DynVision 0.1 Release Preparation Roadmap
 
 **Created**: 2026-06-23
+**Status**: ✅ All 10 tasks completed. Remaining: git tag v0.1.0.
 **Goal**: Prepare DynVision for its 0.1 release and accompany the manuscript submission.
 **Current commit**: `babbf28 feat: 0.1 release preparation`
 

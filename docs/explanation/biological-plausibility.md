@@ -168,6 +168,28 @@ Researchers can use DynVision to test hypotheses about the role of recurrence in
 - What is the functional significance of different recurrence types?
 - How do feedback connections modulate feedforward processing?
 
+## Empirical Findings
+
+Systematic exploration with DynVision has revealed several insights about recurrent dynamics in visual processing. These findings, validated against human cortical recordings (Groen et al., 2022) and behavioral benchmarks (Jang et al., 2021), highlight the toolbox's ability to uncover functional principles that would be difficult to identify with less flexible frameworks.
+
+### Recurrence Implements Temporal Normalization
+
+A key finding is that continuous-time recurrent dynamics can naturally reproduce cortical temporal phenomena — including adaptation, sublinear temporal summation, and contrast-dependent response timing — without requiring explicit divisive normalization operations. Models with full lateral recurrence targeting the layer output, trained with metabolic constraints (activity loss), develop effectively inhibitory recurrent weights. This inhibitory organization emerges from a standard image classification objective with no task-specific incentive to produce normalization-like dynamics. The result demonstrates that biologically plausible temporal dynamics can arise from simple recurrent connections combined with metabolic constraints, consistent with theoretical work showing that recurrence alone can implement divisive normalization (Heeger & Mackey, 2019; Rubin et al., 2015).
+
+### Two Distinct Functional Regimes
+
+Strikingly, different architectural configurations produce qualitatively distinct dynamic regimes:
+
+1. **Temporal normalization regime**: Full recurrence targeting layer output with strong activity loss weights promotes adaptation, sublinear summation, and contrast-dependent timing — replicating hallmark cortical response properties.
+
+2. **Noise robustness regime**: Full recurrence targeting the middle of a layer's computations with minimal metabolic constraints achieves substantially improved robustness to Gaussian noise, approaching human-level performance, while showing weaker temporal normalization.
+
+This dissociation suggests that recurrence serves functionally distinct roles depending on architectural context, potentially mapping onto different cortical circuit motifs such as laminar feedback projections versus horizontal lateral connections.
+
+### Weight Distribution Insights
+
+Analysis of learned weights reveals systematic patterns across recurrence types: self-recurrence produces strongly negative weights (inhibitory self-regulation), local recurrence yields mostly negative weight distributions with greater variance, while full recurrence maintains near-zero mean weights with tighter dispersion. These learned connectivity patterns align with theoretical predictions about how different recurrence topologies shape network dynamics.
+
 ## Limitations and Future Directions
 
 While DynVision implements several biologically plausible features, many aspects of biological neural processing remain to be incorporated:
@@ -181,6 +203,8 @@ Potential extensions to enhance biological plausibility:
 3. **Prediction error coding**: Implementing predictive coding principles
 4. **Diverse learning rules**: More biologically realistic learning rules
 5. **Attention mechanisms**: Incorporating spatial and feature-based attention
+6. **Cell-type-specific connectivity rules**: Hierarchy-specific projection patterns between cortical areas
+7. **Spike-based computation**: Moving beyond rate-based dynamics to capture spike-timing-dependent effects
 
 ## References
 
@@ -189,3 +213,5 @@ Potential extensions to enhance biological plausibility:
 3. Kar et al. (2019). Evidence that recurrent circuits are critical to the ventral stream's execution of core object recognition behavior.
 4. Groen et al. (2022). Temporal Dynamics of Neural Responses in Human Visual Cortex.
 5. Rubin et al. (2015). The stabilized supralinear network: A unifying circuit motif underlying multi-input integration in sensory cortex.
+6. Jang et al. (2021). Noise-trained deep neural networks effectively predict human vision in a crowded task.
+7. Heeger & Mackey (2019). Oscillatory recurrent gated neural integrator circuits (ORGaNICs), a unifying theoretical framework for neural dynamics.

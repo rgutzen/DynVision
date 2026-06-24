@@ -1,4 +1,5 @@
 # Hierarchical File Organization and Model Identifier Hashing
+**Status:** ⚠️ ARCHIVED — Decision was NOT to implement model hashing. Kept for reference.
 
 **Status:** ❌ SUPERSEDED - Model hashing was NOT implemented
 **Created:** 2025-12-06

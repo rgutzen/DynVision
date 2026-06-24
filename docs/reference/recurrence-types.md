@@ -145,6 +145,12 @@ Local recurrence captures the 2-D topology of visual cortices by arranging units
 - Respects the topographic organization of visual cortex (e.g., orientation pinwheels in V1).
 - Models how features that are close in feature space (e.g., similar orientations) interact more strongly.
 
+<p align="center">
+  <img src="../assets/local_recurrence_mapping.png" alt="Local Recurrence Topographic Mapping" width="500"/>
+</p>
+
+*Figure: Local recurrence maps the 3D activation tensor to a 2D cortical plane where nearby units have similar feature preferences. A convolution on this plane captures topographically organized lateral interactions.*
+
 **Usage Example**:
 ```python
 from dynvision.models import DyRCNNx4

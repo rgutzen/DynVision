@@ -210,6 +210,53 @@ class Feedback(nn.Module):
     """
 ```
 
+### Supralinear Activation
+
+A power-law nonlinearity that models the supralinear response properties observed in cortical neurons: `f(x) = k · sign(x) · |x|^n`. Individual neurons often exhibit nonlinear amplification where strong inputs lead to disproportionately large activations. The influence of recurrent connections is necessary to stabilize this explosive activity (Sanzeni et al., 2020). The supralinear activation function is inspired by stabilized supralinear network models of visual cortex (Rubin et al., 2015).
+
+```python
+class SupraLinearity(nn.Module):
+    """
+    Power-law nonlinearity for supralinear activation.
+    
+    Args:
+        exponent (float): Power exponent n (n > 1 for supralinear)
+        gain (float): Multiplicative gain factor k
+    """
+    
+    def forward(self, x):
+        """
+        Apply supralinear transformation.
+        
+        Returns:
+            torch.Tensor: k * sign(x) * |x|^n
+        """
+```
+
+### Retina and Pre-cortical Processing
+
+Two biologically-inspired input preprocessing components are available:
+
+1. **Input adaptation**: A simple adaptation factor (fixed or learnable) that reduces input values to the network over time, making the model more dependent on recurrent connections to retain information.
+
+2. **Retina/LGN module**: A layer representing the retina and LGN that models the representational bottleneck in early visual processing — reducing dimensionality of the input while enhancing relevant features and suppressing noise.
+
+```python
+class Retina(nn.Module):
+    """
+    Retina/LGN preprocessing layer.
+    
+    Implements center-surround receptive fields and contrast adaptation
+    inspired by early visual processing stages.
+    
+    Args:
+        in_channels (int): Input image channels (typically 3 for RGB)
+        out_channels (int): Output feature channels
+        kernel_size (int): Receptive field size
+        stride (int): Spatial downsampling factor
+    """
+```
+
 ## Initialization
 
 Parameter initialization utilities:

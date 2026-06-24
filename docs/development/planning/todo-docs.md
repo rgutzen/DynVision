@@ -1,5 +1,7 @@
 # Documentation and Implementation TODO
 
+> **Updated 2026-06-23**: Many items addressed in 0.1 release prep. See [todo-release-0.1.md](todo-release-0.1.md) for completed tasks.
+
 This file tracks inconsistencies between documentation and implementation, areas needing improvement, and future work items.
 
 ## Critical Issues
@@ -18,7 +20,7 @@ This file tracks inconsistencies between documentation and implementation, areas
   - Reconcile project naming in `project_paths.py`
   - Update documentation to reflect single canonical name
 
-### 2. Documentation References Non-Existent Files ✅ PARTIALLY FIXED
+### 2. Documentation References Non-Existent Files ✅ FIXED
 
 **Issue**: Documentation links to files that don't exist
 - **Location**: `docs/index.md`

@@ -89,6 +89,16 @@ model = CordsNet(
 )
 ```
 
+## Model Comparison
+
+DynVision enables systematic comparison of different recurrent architectures. The figure below compares training performance across reference models and DynVision variants trained on ImageNet:
+
+<p align="center">
+  <img src="../assets/reference_models.png" alt="Reference Model Comparison" width="700"/>
+</p>
+
+*Figure: Training comparison of reference RCNN implementations (CorNet-RT, CordsNet) and DynVision's DyRCNNx8 across ImageNet training. DynVision achieves faster training while supporting more biologically detailed architectures.*
+
 ## Component Integration
 
 DynVision models are built from several key components, each documented in detail in their respective reference files:
