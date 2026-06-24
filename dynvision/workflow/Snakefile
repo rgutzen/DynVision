@@ -1,6 +1,7 @@
 include: "snake_utils.smk"
 include: "snake_data.smk"
 include: "snake_runtime.smk"
+include: "snake_processing.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 

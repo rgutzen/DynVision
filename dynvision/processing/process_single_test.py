@@ -30,7 +30,7 @@ from dynvision.utils.memory_efficient_loading import (
 )
 
 # Import shared processing functions from process_test_data
-from dynvision.visualization.process_test_data import (
+from dynvision.processing.process_test_data import (
     MeasureConfig,
     build_measure_config,
     process_test_performance,

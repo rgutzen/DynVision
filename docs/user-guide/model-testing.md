@@ -92,7 +92,7 @@ Inside `process_test_data.py`:
 ### Custom Invocation
 You can call the script directly, for example:
 ```bash
-python dynvision/visualization/process_test_data.py \
+python dynvision/processing/process_test_data.py \
   --responses path/to/test_responses.pt \
   --test_outputs path/to/test_outputs.csv \
   --output reports/duration/run_01/test_data.csv \
@@ -150,4 +150,4 @@ filtered = test_data.query("first_label_index == 5 and times_index <= 10")
 - `docs/user-guide/training.md` for generating checkpoints.
 - `docs/development/guides/ai-style-guide.md` for workflow conventions.
 - `docs/reference/workflow-overview.md` (if available) for a schematic of Snakemake rules.
-- Source scripts in `dynvision/runtime/test_model.py` and `dynvision/visualization/process_test_data.py` for implementation details.
+- Source scripts in `dynvision/runtime/test_model.py` and `dynvision/processing/process_test_data.py` for implementation details.

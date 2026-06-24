@@ -54,7 +54,7 @@ reports/
 
 ### Script
 
-`dynvision/visualization/process_single_test.py`
+`dynvision/processing/process_single_test.py`
 
 ### Purpose
 
@@ -105,7 +105,7 @@ The `test_data.csv` file contains:
 
 ### Script
 
-`dynvision/visualization/aggregate_experiment_data.py`
+`dynvision/processing/aggregate_experiment_data.py`
 
 ### Purpose
 
@@ -240,7 +240,7 @@ Extracts status value from file path.
 **Example:**
 ```python
 from pathlib import Path
-from dynvision.visualization.process_test_data import extract_status_from_path
+from dynvision.processing.process_test_data import extract_status_from_path
 
 path = Path("reports/exp1/model/imagenette:all_trained-epoch=150/test1/test_data.csv")
 status = extract_status_from_path(path)
@@ -263,7 +263,7 @@ Parses status string to extract base status and optional epoch.
 
 **Example:**
 ```python
-from dynvision.visualization.process_test_data import parse_status_string
+from dynvision.processing.process_test_data import parse_status_string
 
 status, epoch = parse_status_string("trained-epoch=150")
 print(f"Status: {status}, Epoch: {epoch}")  # Output: Status: trained-epoch=150, Epoch: 150
@@ -343,7 +343,7 @@ Aggregates multiple test_data.csv files with metadata extraction.
 **Example:**
 ```python
 from pathlib import Path
-from dynvision.visualization.aggregate_experiment_data import aggregate_test_data
+from dynvision.processing.aggregate_experiment_data import aggregate_test_data
 
 test_files = [
     Path("reports/exp1/model1/data_trained/test1/test_data.csv"),

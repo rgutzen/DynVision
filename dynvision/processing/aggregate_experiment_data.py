@@ -26,7 +26,7 @@ from dynvision.utils import str_to_bool
 from dynvision.utils.data_utils import load_df
 
 # Import metadata extraction and resolution functions from process_test_data
-from dynvision.visualization.process_test_data import (
+from dynvision.processing.process_test_data import (
     compress_to_presentation_level,
     _extract_metadata,
     FileMetadata,

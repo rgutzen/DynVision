@@ -191,7 +191,6 @@ wildcard_constraints:
     test_identifier = r'([a-zA-Z0-9,;:=\-\+\.]+)',  # Polymorphic: hash or full spec, allows periods for floats
 
 localrules: all, symlink_data_subsets, symlink_data_groups
-ruleorder: aggregate_experiment_data > aggregate_experiment_data_single
 ruleorder: symlink_data_subsets > symlink_data_groups 
 ruleorder: train_model_distributed > train_model
 
