@@ -3,13 +3,12 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-red.svg)](https://pytorch.org/)
 [![PyPI](https://img.shields.io/pypi/v/dynvision)](https://pypi.org/project/dynvision/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![DOI](https://badges.ws/badge/Preprint-10.1101%2F2025.08.11.669756%20-B31B1B)](https://doi.org/10.1101/2025.08.11.669756)
-<!-- Zenodo DOI badge: replace XXXXXXXX after first GitHub release triggers archival -->
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXXX)
 [![CI](https://github.com/Lindsay-Lab/DynVision/actions/workflows/test.yml/badge.svg)](https://github.com/Lindsay-Lab/DynVision/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Preprint](https://badges.ws/badge/Preprint-10.1101%2F2025.08.11.669756%20-B31B1B)](https://doi.org/10.1101/2025.08.11.669756)
+<!-- Zenodo DOI badge: replace XXXXXXXX after first GitHub release triggers archival -->
+<!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXXX) -->
 [![Docs](https://img.shields.io/badge/docs-up%20to%20date-brightgreen)](https://dynvision.readthedocs.io)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks and how these networks can be aligned with properties of biological visual systems.
 
