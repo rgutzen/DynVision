@@ -4,14 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build-and-publish:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write  # Required for OIDC trusted publishing
-      contents: read
-
     steps:
       - uses: actions/checkout@v4
 
@@ -24,19 +23,60 @@ jobs:
       - name: Install build dependencies
         run: |
           pip install --upgrade pip
-          pip install flit
+          pip install flit twine
 
       - name: Build package
         run: flit build
 
+      - name: Check package metadata
+        run: twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-test-pypi:
+    needs: build
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'push' && (
+        contains(github.ref, 'rc') || contains(github.ref, 'beta')
+      ))
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
       - name: Publish to Test PyPI
-        if: contains(github.ref, 'rc') || contains(github.ref, 'beta')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+        continue-on-error: true  # OK if version already exists on Test PyPI (PR re-runs)
+
+  publish-pypi:
+    needs: build
+    if: |
+      github.event_name == 'push' &&
+      !contains(github.ref, 'rc') &&
+      !contains(github.ref, 'beta')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
 
       - name: Publish to PyPI
-        if: ${{ !(contains(github.ref, 'rc') || contains(github.ref, 'beta')) }}
         uses: pypa/gh-action-pypi-publish@release/v1
         # Uses OIDC Trusted Publisher by default.
         # Setup: add GitHub repo in PyPI project settings →
