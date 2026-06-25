@@ -33,8 +33,8 @@ DynVision provides a Snakemake workflow for dataset preparation. For CIFAR-10:
 snakemake project_paths.data.raw/cifar10/train
 
 # Create symbolic links for the full dataset
-snakemake project_paths.data.interim/cifar10/train_all/folder.link
-snakemake project_paths.data.interim/cifar10/test_all/folder.link
+snakemake project_paths.data.interim/cifar10/train_all.ready
+snakemake project_paths.data.interim/cifar10/test_all.ready
 
 # Convert to FFCV format for faster loading
 snakemake project_paths.data.processed/cifar10/train_all/train.beton
@@ -216,7 +216,7 @@ snakemake train_model --config \
   epochs=100 \
   batch_size=256 \
   learning_rate=0.0005 \
-  loss="[CrossEntropyLoss,EnergyLoss]"
+  loss="[CrossEntropyLoss,ActivityLoss]"
 ```
 
 This example:
@@ -226,7 +226,26 @@ This example:
 - Trains for more epochs (100)
 - Uses a larger batch size (256)
 - Uses a lower learning rate (0.0005)
-- Adds an energy loss term to promote stable activity
+- Adds an activity loss term to promote stable activity
+
+You can also control temporal data presentation patterns:
+
+```bash
+# Train with stimulus/null presentation pattern and reaction time masking
+snakemake train_model --config \
+  model_name=DyRCNNx4 \
+  model_args="{rctype:full,pattern:1011,shufflepattern:true,lossrt:4}" \
+  data_name=cifar10 \
+  seed=0001 \
+  epochs=50
+```
+
+This example adds:
+- `pattern:1011`: Alternating stimulus (1) and null (0) presentation
+- `shufflepattern:true`: Randomly shuffle the pattern per batch
+- `lossrt:4`: Mask labels for 4ms after stimulus onset
+
+For details on temporal presentation options, see the [Temporal Data Presentation Guide](../user-guide/temporal-data-presentation.md).
 
 ## Conclusion
 

@@ -1,0 +1,105 @@
+# config_visualization.yaml
+
+# Combined color palette for all visualization elements
+palette:
+  # Model categories
+  full: "#B8860B"  # Dark goldenrod
+  self: "#2E8B57"  # Sea green
+  depthpointwise: "#1E3A8A"  # Dark blue
+  pointdepthwise: "#3B82F6"  # Bright blue
+  local: "#E91E63"  # Pink/red
+  localdepthwise: "#FF6347" # Tomato
+  none: "#808080"  # Gray
+  nan: "#808080"  # Gray
+  accent: "#EC4899"  # Pink/magenta 
+  feedforward: "#D4A373"  # Muted orange
+  recurrence: "#9B59B6"  # Soft purple
+  # Layers
+  V1: "#ff69b4ff"
+  V2: "#dda0ddff"
+  V4: "#da70d6ff"
+  IT: "#ba55d3ff"
+  classifier: "#808080ff"
+  input: "#6BAA75"
+  middle: "#E9C46A"
+  output: "#C0533A"
+  DyRCNNx8: "#c0c0c0ff"
+  CordsNet: "#9B59B6ff"
+  CorNetRT: "#C88B4Aff"
+            
+# Combined naming dictionary for display labels and symbols
+naming:
+  # Parameters
+  duration: "$D$"
+  contrast: "$C$"
+  interval: "$I$"
+  noiselevel: "$\\sigma$"
+  ssnr: "SSNR"
+  noise: "$\\sigma$"
+  stim: "$D$"
+  stimulus: "$D$"
+  tau: "$\\tau$"
+  trc: "$\\Delta_{RC}$"
+  tsk: "$\\Delta_{SK}$"
+  rctarget: "Recurrence Target"
+  rctype: "Recurrence Type"
+  lossrt: "$t_{loss}$"
+  idle: "$t_{idle}$"
+  activityloss: "Activity Loss Weight"
+  tsteps: "$T$"
+  feedback: "Feedback"
+  skip: "Skip"
+  add: "Additive"
+  mul: "Multiplicative"
+  nan: "None"
+  none: "None"
+  pattern: "Presentation Pattern"
+  seed: "Seed"
+  ffonly: "Feedforward Only"
+  feedforward: "Feedforward"
+  recurrence: "Recurrent"
+  addskip_V4: "Skip V1->V4"
+  addskip_IT: "Skip V1->IT"
+  addfeedback_V1: "Feedback V1<-V4"
+  addfeedback_V2: "Feedback V2<-IT"
+  layer: "Layer"
+  status: "Status"
+  true: "True"
+  false: "False"
+  trained: "Trained"
+  # Layers
+  layer1: "V1"
+  layer2: "V2"
+  layer3: "V4"
+  layer4: "IT"
+  # Metrics
+  accuracy: "Accuracy"
+  confidence: "Confidence"
+  peak_height: "Peak Height"
+  peak_time: "Peak Time"
+  peak_ratio: "Peak Ratio"
+  power: "Power"
+  # Experiments
+  duration_experiment: "Stimulus Duration"
+  contrast_experiment: "Stimulus Contrast"
+  interval_experiment: "Stimulus Interval"
+  stability_experiment: "Stability"
+  response_experiment: "Response"
+  responseintermediate_experiment: "Intermediate Responses"
+  responseffonly_experiment: "Feedforward Only"
+  nullcondition_experiment: "Null Condition"
+  uniformnoise_experiment: "Uniform Noise"
+  poissonnoise_experiment: "Poisson Noise"
+  saltpeppernoise_experiment: "Salt & Pepper"
+  gaussiannoise_experiment: "Gaussian Noise"
+  gaussiancorrnoise_experiment: "Correlated Gaussian Noise"
+  phasescramblednoise_experiment: "Phase-scrambled Noise"
+
+# Ordering dictionaries for consistent display order
+ordering:
+  layers: ["Skip V2->IT", "Skip V1->V4", "Feedback V2<-IT", "Feedback V1<-V4", "IT", "V4", "V2", "V1", 'layer8', 'layer7', 'layer6', 'layer5', 'layer4', 'layer3', 'layer2', 'layer1']
+  rctype: ["full", "self", "depthpointwise", "pointdepthwise", "local", "localdepthwise", "none"]
+  rctarget: ['input', 'middle', 'output', 'null']
+  feedback: ['false', 'add', 'mul']
+  connection_type: ["feedforward", "recurrence"]
+  status: ["trained"]

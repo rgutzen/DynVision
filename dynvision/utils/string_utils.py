@@ -31,13 +31,16 @@ def path_to_index(path: Union[str, Path], non_index: int = -1) -> int:
     if not isinstance(path, str) or isinstance(path, Path):
         warnings.warn(f"Invalid path type: {path}")
         return non_index
-    name = Path(path).stem
+    name = Path(path).name
     index = int(name.split("_")[-1])
     return index
 
 
 def extract_param_from_string(
-    s: str, key: str = "contrast", value_type: Optional[type] = None
+    s: str,
+    key: str,
+    value_type: Optional[type] = None,
+    assigner: str = "=",
 ) -> Union[int, float, str, bool, None]:
     """Extract parameter value from string.
 
@@ -57,25 +60,25 @@ def extract_param_from_string(
         -> 0.5
     """
     if value_type == int:
-        match = re.search(rf"{key}=(\d+)", s)
+        match = re.search(rf"{key}{assigner}(\d+)", s)
     elif value_type == float:
-        match = re.search(rf"{key}=(\d+(\.\d+)?)", s)
+        match = re.search(rf"{key}{assigner}(\d+(\.\d+)?)", s)
     elif value_type == str:
-        match = re.search(rf"{key}=([a-z]+)", s)
+        match = re.search(rf"{key}{assigner}([a-z]+)", s)
     elif value_type is None:
-        match = re.search(rf"{key}=([\da-z\.]+)", s)
+        match = re.search(rf"{key}{assigner}([\da-z\.]+)", s)
         value_type = guess_type
     else:
         raise ValueError(f"Invalid value type: {value_type}")
     if match:
-        return value_type(match.group(1))
+        return value_type(str(match.group(1)))
     else:
         raise ValueError(f"No {key} value found in the string!")
 
 
 def replace_param_in_string(
     s: str,
-    key: str = "contrast",
+    key: str,
     value_type: Optional[type] = None,
     new_value: str = "*",
 ) -> str:

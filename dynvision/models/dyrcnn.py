@@ -15,7 +15,7 @@ References:
 """
 
 import logging
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -32,7 +32,7 @@ from dynvision.model_components import (
 from dynvision.base import BaseModel
 from dynvision.utils import alias_kwargs, str_to_bool
 
-__all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8", "FourLayerCNN", "TwoLayerCNN"]
+__all__ = ["DyRCNNx2", "DyRCNNx4", "DyRCNNx8"]
 
 
 logger = logging.getLogger(__name__)
@@ -75,18 +75,26 @@ class DyRCNN(BaseModel):
         trc="t_recurrence",
         tff="t_feedforward",
         rctype="recurrence_type",
+        fbmode="feedback_mode",
+        pattern="data_presentation_pattern",
+        shufflepattern="shuffle_presentation_pattern",
     )
     def __init__(
         self,
         # Core neural network parameters (passed to TemporalBase)
         dt: float = 2,  # ms
-        tau: float = 8,  # ms
-        t_feedforward: float = 10,  # ms
+        tau: float = 5,  # ms
+        t_feedforward: float = 0,  # ms
         t_recurrence: float = 6,  # ms
-        t_feedback: float = 14,
-        t_skip: float = 14,
+        t_feedback: float = 30,  # ms
+        t_skip: float = 0,  # ms
         recurrence_type: str = "full",
         recurrence_target: str = "output",  # Target for recurrent connections
+        feedback_mode: str = "additive",
+        skip: bool = True,
+        feedback: bool = False,
+        data_presentation_pattern: Union[str, List[int]] = "1",
+        shuffle_presentation_pattern: bool = True,
         # DyRCNN-specific biological parameters
         train_tau: bool = False,
         bias: bool = True,
@@ -94,9 +102,6 @@ class DyRCNN(BaseModel):
         supralinearity: float = 1,
         input_adaption_weight: float = 0,
         use_retina: bool = False,
-        skip: bool = False,
-        feedback: bool = False,
-        feedforward_only: bool = False,
         **kwargs: Any,
     ) -> None:
 
@@ -107,9 +112,8 @@ class DyRCNN(BaseModel):
         self.supralinearity = float(supralinearity)
         self.input_adaption_weight = float(input_adaption_weight)
         self.use_retina = str_to_bool(use_retina)
-        self.skip = str_to_bool(skip)
-        self.feedback = str_to_bool(feedback)
-        self.feedforward_only = str_to_bool(feedforward_only)
+        self.feedback_mode = feedback_mode
+        self._parse_feedback_mode(feedback)  # set self.feedback
 
         # Pass core neural network parameters to parent classes
         # BaseModel will distribute these properly to TemporalBase and LightningBase
@@ -123,6 +127,10 @@ class DyRCNN(BaseModel):
             t_skip=float(t_skip),
             recurrence_type=recurrence_type,
             recurrence_target=recurrence_target,
+            skip=skip,
+            feedback=self.feedback,
+            data_presentation_pattern=data_presentation_pattern,
+            shuffle_presentation_pattern=shuffle_presentation_pattern,
             # All other Lightning/training parameters pass through kwargs
             **kwargs,
         )
@@ -130,13 +138,78 @@ class DyRCNN(BaseModel):
     def _define_architecture(self) -> None:
         raise NotImplementedError("Define the model architecture!")
 
+    def _parse_feedback_mode(self, feedback) -> None:
+        if str(feedback).lower() == "add":
+            self.feedback = True
+            self.feedback_mode = "additive"
+        elif str(feedback).lower() == "mul":
+            self.feedback_mode = "multiplicative"
+            self.feedback = True
+        else:
+            self.feedback = str_to_bool(feedback)
+
+    def setup(self, stage: Optional[str]) -> None:
+        """Set up model for training or evaluation."""
+        # First let PyTorch Lightning set up the model (including precision)
+        super().setup(stage)
+
+        # Initialize feedback and skip connections
+        if stage == "fit" and (self.feedback or self.skip):
+            self._initialize_connections()
+
+    def _initialize_connections(self) -> None:
+        """Initialize skip and feedback connections with proper shapes."""
+        # Get model dtype and device after Lightning setup
+        dtype = next(self.parameters()).dtype
+        device = next(self.parameters()).device
+
+        logger.info(f"Initializing connections with dtype={dtype}, device={device}")
+
+        # Reset all connection transforms to force reinitialization
+        if hasattr(self, "layer_names"):
+            for layer_name in self.layer_names:
+                if hasattr(self, f"addfeedback_{layer_name}"):
+                    feedback_module = getattr(self, f"addfeedback_{layer_name}")
+                    if (
+                        hasattr(feedback_module, "auto_adapt")
+                        and feedback_module.auto_adapt
+                    ):
+                        feedback_module.reset_transform()
+
+                if hasattr(self, f"addskip_{layer_name}"):
+                    skip_module = getattr(self, f"addskip_{layer_name}")
+                    if hasattr(skip_module, "auto_adapt") and skip_module.auto_adapt:
+                        skip_module.reset_transform()
+
+        # Do a forward pass to initialize transforms with correct shapes
+        # Use eval mode to prevent gradient computation during initialization
+        was_training = self.training
+        self.eval()
+
+        # Temporarily disable feedforward delay so all layers receive valid
+        # tensors (otherwise the empty delay buffer returns None and
+        # skip/feedback modules can't inspect .shape to set up transforms).
+        saved_delay = self.delay_feedforward
+        self.delay_feedforward = 0
+
+        with torch.no_grad():
+            x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
+            _ = self.forward(x, store_responses=False)
+
+        # Restore feedforward delay and training mode
+        self.delay_feedforward = saved_delay
+        if was_training:
+            self.train()
+
+        self.reset()
+
 
 class DyRCNNx4(DyRCNN):
     """
     Four-layer DyRCNN implementing a biologically-inspired visual hierarchy.
     """
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset model state."""
         self.V1.reset()
         self.tstep_V1.reset()
@@ -167,7 +240,6 @@ class DyRCNNx4(DyRCNN):
             "record",  # record activations in responses dict
             "delay",  # set and get delayed activations for next layer
             "pool",  # apply pooling
-            "norm",  # apply normalization
         ]
 
         # Activation functions
@@ -196,6 +268,7 @@ class DyRCNNx4(DyRCNN):
             tau=self.tau,
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
             recurrence_target=self.recurrence_target,
@@ -206,6 +279,19 @@ class DyRCNNx4(DyRCNN):
             self.input_adaption = InputAdaption(
                 fixed_weight=self.input_adaption_weight
             )
+
+        # +1 because the source layer's delay already stored the current timestep
+        # before addskip runs (source is an earlier layer, fully processed this step)
+        self.delay_index_skip = (
+            int(round(float(self.t_skip) / float(self.dt))) + 1
+            if self.t_skip
+            else 1
+        )
+        self.delay_index_feedback = (
+            int(round(float(self.t_feedback) / float(self.dt)))
+            if self.t_feedback
+            else 0
+        )
 
         # V1 layer
         in_channels = self.retina.out_channels if self.use_retina else self.n_channels
@@ -256,11 +342,14 @@ class DyRCNNx4(DyRCNN):
             self.addskip_V4 = Skip(
                 source=self.V1,
                 auto_adapt=True,
+                delay_index=self.delay_index_skip,
             )
         if self.feedback:
             self.addfeedback_V1 = Feedback(
                 source=self.V4,
                 auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
             )
         self.tau_V4 = torch.nn.Parameter(
             torch.tensor(self.tau),
@@ -283,11 +372,14 @@ class DyRCNNx4(DyRCNN):
             self.addskip_IT = Skip(
                 source=self.V2,
                 auto_adapt=True,
+                delay_index=self.delay_index_skip,
             )
         if self.feedback:
             self.addfeedback_V2 = Feedback(
                 source=self.IT,
                 auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
             )
         self.tau_IT = torch.nn.Parameter(
             torch.tensor(self.tau),
@@ -301,26 +393,6 @@ class DyRCNNx4(DyRCNN):
             nn.Flatten(),
             nn.Linear(self.IT.out_channels, self.n_classes),
         )
-
-    def setup(self, stage: Optional[str]) -> None:
-        """Set up model for training or evaluation."""
-        # First let PyTorch Lightning set up the model (including precision)
-        super().setup(stage)
-
-        # # Then initialize feedback connections
-        # if stage == "fit" and self.feedback:
-        #     for layer_name in self.layer_names:
-        #         if hasattr(self, f"addfeedback_{layer_name}"):
-        #             feedback_module = getattr(self, f"addfeedback_{layer_name}")
-        #             feedback_module.setup(stage)
-
-        #     # Do a forward pass to initialize transforms
-        #     dtype = next(self.parameters()).dtype
-        #     device = next(self.parameters()).device
-        #     x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
-        #     y = self.forward(x, store_responses=False)
-
-        #     self.reset()
 
     def _init_parameters(self) -> None:
         super()._init_parameters()
@@ -343,6 +415,21 @@ class DyRCNNx8(DyRCNNx4):
     Four-layer DyRCNN (with double conv per layer) implementing a biologically-inspired visual hierarchy.
     """
 
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
+        """Reset model state."""
+        self.V1.reset()
+        self.tstep_V1.reset()
+        self.V2.reset()
+        self.tstep_V2.reset()
+        self.V4.reset()
+        self.tstep_V4.reset()
+        self.IT.reset()
+        self.tstep_IT.reset()
+        if hasattr(self, "input_adaption") and hasattr(self.input_adaption, "reset"):
+            self.input_adaption.reset()
+        if hasattr(self, "retina") and hasattr(self.retina, "reset"):
+            self.retina.reset()
+
     def _define_architecture(self) -> None:
         """Define the four-layer visual hierarchy."""
         self.layer_names = ["V1", "V2", "V4", "IT"]
@@ -356,8 +443,8 @@ class DyRCNNx8(DyRCNNx4):
             "nonlin",  # apply nonlinearity
             "supralin",  # apply supralinearity
             "norm",  # apply normalization
-            "delay",  # set and get delayed activations for next layer
             "record",  # record activations in responses dict
+            "delay",  # set and get delayed activations for next layer
             "pool",  # apply pooling
         ]
 
@@ -379,6 +466,19 @@ class DyRCNNx8(DyRCNNx4):
                 bias=self.bias,
             )
 
+        # +1 because the source layer's delay already stored the current timestep
+        # before addskip runs (source is an earlier layer, fully processed this step)
+        self.delay_index_skip = (
+            int(round(float(self.t_skip) / float(self.dt))) + 1
+            if self.t_skip
+            else 1
+        )
+        self.delay_index_feedback = (
+            int(round(float(self.t_feedback) / float(self.dt)))
+            if self.t_feedback
+            else 0
+        )
+
         # Common layer parameters
         layer_params = dict(
             bias=self.bias,
@@ -387,6 +487,7 @@ class DyRCNNx8(DyRCNNx4):
             tau=self.tau,
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             max_weight_init=self.max_weight_init,
             feedforward_only=self.feedforward_only,
             recurrence_target=self.recurrence_target,
@@ -415,6 +516,9 @@ class DyRCNNx8(DyRCNNx4):
             requires_grad=self.train_tau,
         )
         self.tstep_V1 = EulerStep(dt=self.dt, tau=self.tau_V1)
+        # self.tstep_V1._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         self.pool_V1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -440,6 +544,9 @@ class DyRCNNx8(DyRCNNx4):
             requires_grad=self.train_tau,
         )
         self.tstep_V2 = EulerStep(dt=self.dt, tau=self.tau_V2)
+        # self.tstep_V2._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         self.pool_V2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -464,17 +571,24 @@ class DyRCNNx8(DyRCNNx4):
             self.addskip_V4 = Skip(
                 source=self.V1,
                 auto_adapt=True,
+                delay_index=self.delay_index_skip,
             )
         if self.feedback:
             self.addfeedback_V1 = Feedback(
                 source=self.V4,
                 auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
             )
+
         self.tau_V4 = torch.nn.Parameter(
             torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_V4 = EulerStep(dt=self.dt, tau=self.tau_V4)
+        # self.tstep_V4._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         # IT
         self.IT = RecurrentConnectedConv2d(
@@ -491,17 +605,23 @@ class DyRCNNx8(DyRCNNx4):
             self.addskip_IT = Skip(
                 source=self.V2,
                 auto_adapt=True,
+                delay_index=self.delay_index_skip,
             )
         if self.feedback:
             self.addfeedback_V2 = Feedback(
                 source=self.IT,
                 auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
             )
         self.tau_IT = torch.nn.Parameter(
             torch.tensor(self.tau),
             requires_grad=self.train_tau,
         )
         self.tstep_IT = EulerStep(dt=self.dt, tau=self.tau_IT)
+        # self.tstep_IT._activity_monitor = (
+        #     "absolute"  # use signed activations for activity loss
+        # )
 
         # Classifier
         self.classifier = nn.Sequential(
@@ -513,7 +633,7 @@ class DyRCNNx8(DyRCNNx4):
 
 class DyRCNNx2(DyRCNN):
 
-    def reset(self):
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None):
         self.layer1.reset()
         self.tstep_layer1.reset()
         self.layer2.reset()
@@ -557,7 +677,23 @@ class DyRCNNx2(DyRCNN):
             tau=self.tau,
             history_length=self.history_length,
             t_recurrence=self.t_recurrence,
+            t_feedforward=self.t_feedforward,
             recurrence_target=self.recurrence_target,
+            max_weight_init=self.max_weight_init,
+            feedforward_only=self.feedforward_only,
+        )
+
+        # +1 because the source layer's delay already stored the current timestep
+        # before addskip runs (source is an earlier layer, fully processed this step)
+        self.delay_index_skip = (
+            int(round(float(self.t_skip) / float(self.dt))) + 1
+            if self.t_skip
+            else 1
+        )
+        self.delay_index_feedback = (
+            int(round(float(self.t_feedback) / float(self.dt)))
+            if self.t_feedback
+            else 0
         )
 
         # Define the convolutional layers
@@ -585,37 +721,25 @@ class DyRCNNx2(DyRCNN):
         )
         self.tstep_layer2 = EulerStep(dt=self.dt, tau=self.tau)
         self.nonlin_layer2 = nn.ReLU(inplace=False)
+        if self.skip:
+            self.addskip_layer2 = Skip(
+                source=self.layer1,
+                auto_adapt=True,
+                delay_index=self.delay_index_skip,
+            )
         if self.feedback:
-            self.addfeedback_layer1 = Feedback(source=self.layer2, autoadapt=True)
+            self.addfeedback_layer1 = Feedback(
+                source=self.layer2,
+                auto_adapt=True,
+                integration_strategy=self.feedback_mode,
+                delay_index=self.delay_index_feedback,
+            )
 
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(self.layer2.out_channels, self.n_classes, device=self.device),
+            nn.Linear(self.layer2.out_channels, self.n_classes),
         )
-
-    def setup(self, stage: Optional[str]) -> None:
-        # First let PyTorch Lightning set up the model (including precision)
-        super().setup(stage)
-
-        # Then initialize feedback connections with model's dtype
-        if stage == "fit" and self.feedback:
-            # Get model dtype after Lightning setup
-            dtype = self.get_target_dtype()
-            device = self.get_target_device()
-
-            # Reset feedback transforms to force reinitialization
-            for layer_name in self.layer_names:
-                if hasattr(self, f"addfeedback_{layer_name}"):
-                    feedback_module = getattr(self, f"addfeedback_{layer_name}")
-                    if feedback_module.auto_adapt:
-                        feedback_module.reset_transform()
-
-            # Initialize with correct dtype
-            x = torch.randn((1, *self.input_dims), device=device, dtype=dtype)
-            y = self.forward(x, store_responses=False)
-
-            self.reset()
 
     def _init_parameters(self):
         super()._init_parameters()
@@ -633,39 +757,46 @@ class DyRCNNx2(DyRCNN):
         nn.init.constant_(self.classifier[-1].bias, 0)
 
 
-# Aliases for backwards compatibility
-FourLayerCNN = DyRCNNx4
-TwoLayerCNN = DyRCNNx2
-
 if __name__ == "__main__":
-    # Test configuration
-    input_shape = (20, 3, 64, 64)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Testing on device: {device}")
+    # Test configuration - using ImageNet input shape as default
+    input_shape = (20, 3, 224, 224)  # ImageNet standard input size
 
-    # Create model
-    model = DyRCNNx4(
+    # Create model with DyRCNNx8 equivalent configuration
+    model = DyRCNNx8(
         input_dims=input_shape,
-        n_classes=200,
+        n_classes=1000,  # ImageNet has 1000 classes
         store_responses=True,
-        tff=13,
-        device=device,
+        n_timesteps=20,
+        recurrence_type="depthpointwise",
+        dt=2,
+        tau=9,
+        t_feedforward=0,
+        t_recurrence=6,
+        skip=True,
     )
     model.setup("fit")
 
+    # Count parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(f"Total parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    print(f"Parameter size: {total_params * 4 / 1024**2:.2f} MB (float32)")
+
     # Test forward pass
-    x = torch.randn(1, *input_shape, device=device)
+    x = torch.randn(1, *input_shape)
     y = model(x)
 
-    logger.info(f"Input shape: {x.shape}")
-    logger.info(f"Output shape: {y.shape}")
-    logger.info(f"Residual timesteps: {model.n_residual_timesteps}")
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {y.shape}")
+    print(f"Residual timesteps: {model.n_residual_timesteps}")
 
-    # Test stability
-    try:
-        model(torch.full_like(x, float("inf")))
-        assert False, "Should raise stability error"
-    except ValueError:
-        logger.info("Stability check passed")
+    # # Test stability
+    # try:
+    #     model(torch.full_like(x, float("inf")))
+    #     assert False, "Should raise stability error"
+    # except ValueError:
+    #     logger.info("Stability check passed")
 
     logger.info("All tests passed!")

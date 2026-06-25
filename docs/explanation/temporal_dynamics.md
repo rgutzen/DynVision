@@ -111,6 +111,12 @@ These delays approximate the signal propagation times in biological systems, whe
 - Feedforward connections involve longer-range projections
 - Recurrent connections involve shorter-range lateral interactions
 
+<p align="center">
+  <img src="../assets/rcnn_unrolling_diagram.png" alt="Engineering vs Biological Time Unrolling" width="700"/>
+</p>
+
+*Figure: The same recurrent network can be unrolled in engineering time (left, all delays collapsed) or biological time (right, delays match cortical propagation distances). The toolbox automatically converts between these conventions.*
+
 ### 4. Time Constants
 
 Different neural populations have different time constants governing their dynamics:
@@ -125,9 +131,9 @@ DynVision allows setting these time constants for each layer, enabling layer-spe
 
 To test temporal dynamics, DynVision provides specialized data loaders:
 
-- **StimulusDurationDataLoader**: Presents stimuli for varying durations
-- **StimulusIntervalDataLoader**: Presents repeated stimuli with varying intervals
-- **StimulusContrastDataLoader**: Presents stimuli at different contrast levels
+- **StimulusDuration**: Presents stimuli for varying durations
+- **StimulusInterval**: Presents repeated stimuli with varying intervals
+- **StimulusContrast**: Presents stimuli at different contrast levels
 
 These loaders create temporal stimulus patterns that probe specific aspects of temporal processing.
 
@@ -187,6 +193,22 @@ The models also show contrast-dependent response timing:
 2. Higher contrast → Earlier peak response
 
 This emerges from the interaction between input strength and the threshold dynamics in the neural equations.
+
+<p align="center">
+  <img src="../assets/ordering_dyrcnn.png" alt="Layer Operations Order" width="500"/>
+</p>
+
+*Figure: The configurable ordering of operations within each layer (convolution → bias → dynamics step → nonlinearity → pooling) determines where in the neuron activation sequence recurrent signals are integrated.*
+
+## Empirical Validation
+
+DynVision models have been validated against electrophysiological recordings from human visual cortex (Groen et al., 2022), showing that continuous-time recurrent dynamics can naturally reproduce key cortical temporal phenomena including adaptation, sublinear temporal summation, and contrast-dependent response timing — without requiring explicit divisive normalization mechanisms.
+
+<p align="center">
+  <img src="../assets/performance_rctarget.png" alt="Performance Comparison by Recurrence Target" width="700"/>
+</p>
+
+*Figure: systematic comparison of model performance across recurrence targets (left vs center panels), demonstrating that the location where recurrent signals are integrated (pre- vs post-activation) qualitatively changes the learned dynamics.*
 
 ## Computational Considerations
 

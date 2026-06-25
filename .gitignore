@@ -1,12 +1,24 @@
+# manuscript files
+# /manuscript/
+*.sty
+*.bib
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+
 # user files
 Makefile
+./project_paths.py
 
 # runtime files
 config_runtime.yaml
 
 # temporary files 
 temp_*
-*old
+*_old.py
+*_old.md
+*_backup.py
 
 # data
 /data/
@@ -42,6 +54,7 @@ lightning_logs/
 !/.gitignore
 !/.github
 !/.pre-commit-config.yaml
+!/.zenodo.json
 
 # Mac OS-specific storage files
 .DS_Store

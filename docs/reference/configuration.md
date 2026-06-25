@@ -10,7 +10,7 @@ The configuration system is organized into several YAML files, each handling spe
 dynvision/configs/
 ├── config_defaults.yaml       # Base configuration with sensible defaults
 ├── config_data.yaml           # Dataset-specific configurations
-├── config_visualizations.yaml # General visualization settings
+├── config_visualization.yaml  # General visualization settings
 ├── config_experiments.yaml    # Experiment-specific settings
 ├── config_workflow.yaml       # Workflow execution parameters
 └── README.md                  # Configuration documentation
@@ -22,13 +22,135 @@ The configuration files are loaded in the workflow file `snake_utils.smk` in the
 
 1. `config_defaults.yaml`
 2. `config_data.yaml`
-3. `config_visualizations.yaml`
+3. `config_visualization.yaml`
 4. `config_experiments.yaml`
 5. `config_workflow.yaml`
 
 When DynVision runs, these files are loaded in sequence, so that in case of redundant or conflicting parameter definitions later definitions files taking precedence over earlier ones. The compiled configuration is then saved to `config_runtime.yaml` for reference and reproducibility.
 
 The runtime scripts `init_model.py`, `train_model.py`, `test_model.py` get their required parameters as commandline arguments and accept both a path to a config file and explicit parameter values, e.g. `python init_model.py --config_path="../configs/config_runtime.yaml" --model_name AlexNet`, where all explicit parameter values overwrite the values in the config file. So, the scripts can be used flexibly within the workflow with the right parameter combinations (e.g. for parameter sweeps) and as stand-alone resources.
+
+## Parameter Precedence and Defaults
+
+DynVision uses a **sentinel-based parameter system** with a three-tier hierarchy for parameter resolution. This allows model classes to define their own defaults while still supporting framework-wide configuration.
+
+### Three-Tier Hierarchy
+
+Parameters are resolved in the following priority order:
+
+1. **Explicit Values (Highest Priority)**
+   Parameters explicitly set via CLI arguments or YAML config files always take precedence.
+   ```bash
+   python init_model.py --dt 1.0  # Overrides everything
+   ```
+
+2. **Framework Defaults (Medium Priority)**
+   Parameters defined in `config_defaults.yaml` provide framework-wide defaults for common configurations.
+   These defaults are used when no explicit value is provided but before falling back to model-specific defaults.
+   ```yaml
+   # config_defaults.yaml
+   dt: 2  # Framework default used by most models
+   ```
+
+3. **Model Class Defaults (Lowest Priority)**
+   Each model class defines its own defaults in the `__init__` method signature.
+   These are used only when a parameter is not set at higher levels (i.e., when the parameter value is `None`).
+   ```python
+   class CorNetRT(DyRCNN):
+       def __init__(
+           self,
+           dt: float = 2.0,  # Used if config.dt is None
+           fixed_self_weight: float = 1.0,  # Model-specific default
+           ...
+       ):
+   ```
+
+### Sentinel-Based Parameter Passing
+
+The Pydantic parameter classes use `None` as a **sentinel value** to distinguish between:
+
+- **Explicitly set**: Value provided via CLI or YAML → passed to model
+- **Not set**: Value is `None` → **not passed** to model, allowing model default to be used
+
+This is implemented through automatic filtering in `get_model_kwargs()`, which removes all `None` values before passing parameters to the model constructor.
+
+#### In YAML Files
+
+```yaml
+# Explicitly set framework default (passed to all models)
+dt: 2
+
+# Commented out = not loaded = None in Pydantic = not passed = model decides
+# tau: 5
+
+# Explicit null = None in Pydantic = not passed = model decides
+recurrence_bias: ~
+
+# Empty dict/list are still "set" (not None), so they ARE passed
+optimizer_kwargs: {}  # Passed as empty dict to model
+```
+
+#### In Model Classes
+
+```python
+class CorNetRT(DyRCNN):
+    def __init__(
+        self,
+        dt: float = 2.0,  # Used if config.dt is None
+        fixed_self_weight: float = 1.0,  # Model-specific default
+        recurrence_target: str = "middle",  # Model-specific default
+        ...
+    ):
+        # If user doesn't set these in YAML, model defaults are used
+        super().__init__(dt=dt, ...)
+```
+
+#### Parameter Flow Example
+
+```
+User YAML: (dt commented out, fixed_self_weight not mentioned)
+    ↓
+Pydantic loads: dt=None, fixed_self_weight=None
+    ↓
+get_model_kwargs() filters: {} (both None, so excluded)
+    ↓
+Model instantiation: CorNetRT()
+    ↓
+Model uses its defaults: dt=2.0, fixed_self_weight=1.0
+```
+
+```
+User YAML: dt: 1.0
+    ↓
+Pydantic loads: dt=1.0, fixed_self_weight=None
+    ↓
+get_model_kwargs() filters: {"dt": 1.0} (fixed_self_weight excluded)
+    ↓
+Model instantiation: CorNetRT(dt=1.0)
+    ↓
+Model uses: dt=1.0 (explicit), fixed_self_weight=1.0 (default)
+```
+
+### Best Practice: When to Define Defaults
+
+| Location | Purpose | Example |
+|----------|---------|---------|
+| **config_defaults.yaml** | Framework-wide defaults applicable to most models | `dt: 2`, `n_timesteps: 20` |
+| **Model class `__init__`** | Model-specific defaults that may differ between architectures | `fixed_self_weight: 1.0` (CorNet-specific) |
+| **Pydantic classes** | No defaults! Use `Optional[T] = None` for model parameters | `dt: Optional[float] = None` |
+
+### Debugging Parameter Resolution
+
+To see which parameters are being passed to your model:
+
+```python
+from dynvision.params import ModelParams
+
+params = ModelParams.from_cli_and_config(config_path="config.yaml")
+model_kwargs = params.get_model_kwargs(MyModel)
+print(f"Parameters passed to model: {model_kwargs.keys()}")
+# Any parameter not in this dict will use the model's default
+```
 
 ## Core Configuration Files
 
@@ -38,10 +160,20 @@ The configuration system is divided into four main files, each responsible for a
 
 Provides the foundational configuration layer with sensible defaults for all components. Contains:
 - Model parameters (time steps, delays, neural dynamics)
+- Temporal presentation parameters (patterns, reaction time masking)
 - Basic training settings (batch size, epochs, optimizer)
 - Response storage configuration
 - Default loss function settings
 - Base data parameters
+
+**Key Temporal Parameters:**
+
+- `n_timesteps`: Number of temporal processing steps in the model (commented out by default, allowing model-specific defaults)
+- `data_presentation_pattern`: Controls stimulus/null presentation pattern (default: `[1]` for continuous stimulus)
+- `loss_reaction_time`: Reaction time window for loss masking in milliseconds (default: `0`)
+- `data_timesteps`: Number of timesteps for data loader temporal expansion (default: `1`)
+
+See [Temporal Data Presentation Guide](../user-guide/temporal-data-presentation.md) for detailed usage.
 
 These defaults can be overridden by other configuration files or command-line arguments.
 

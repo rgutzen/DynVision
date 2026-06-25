@@ -12,23 +12,18 @@ Usage:
     python ffcv_datasets.py --input data/raw --output_train data/train.beton --output_val data/val.beton
 """
 
-import argparse
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
-
-import numpy as np
-import PIL
 import torch
-from ffcv.fields import IntField, RGBImageField, TorchTensorField
+from ffcv.fields import IntField, RGBImageField
 from ffcv.writer import DatasetWriter
 from torchvision import datasets
 from torchvision.datasets.folder import IMG_EXTENSIONS
-from torchvision.transforms import ToPILImage
 
 
 from dynvision.data.datasets import get_dataset, load_raw_data
 from dynvision.params.data_params import DataParams
+from dynvision.utils import log_section, format_value
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +32,35 @@ def main() -> None:
     """Main function with error handling and resource management."""
     config = DataParams.from_cli_and_config()
 
+    # Align logging with project-wide configuration and emit condensed overview
+    config.setup_logging()
+    log_section(
+        logger,
+        "FFCV dataset build",
+        [
+            ("Input", format_value(config.input), None),
+            ("Train output", format_value(config.output_train), None),
+            ("Val output", format_value(config.output_val), None),
+            ("Train ratio", format_value(config.train_ratio), None),
+        ],
+    )
+    config.log_summary(
+        logger=logger,
+        title="Data parameters",
+        include_defaults=False,
+    )
+
     # Load dataset
     dataset = get_dataset(
-        Path(config.input),
+        data_path=Path(config.input),
         dataset_class=datasets.DatasetFolder,
         loader=load_raw_data,
         extensions=IMG_EXTENSIONS,
-        data_transform=None,
-        target_transform=f"{config.data_name}_all",
+        transform_backend="torch",
+        transform_context="train",
+        transform_preset="ffcv-build",
+        target_data_name=config.data_name,
+        target_data_group="all",
         pil_to_tensor=False,
         dtype=None,
         normalize=None,

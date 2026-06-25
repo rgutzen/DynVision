@@ -1,4 +1,5 @@
 # see snakemake profile documentation for details: https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles
+# NOTE: runtime values are in seconds (plugin divides by 60 for SLURM --time in minutes)
 
 # DON'T CHANGE
 executor: slurm
@@ -11,99 +12,118 @@ local-cores: 2
 latency-wait: "90"
 use-conda: "False"
 use-singularity: "False"
-jobs: "150"
+jobs: "200"
 printshellcmds: "True"
 keep-going: "True"
 rerun-incomplete: "True"
+rerun-triggers:
+  - mtime
 nolock: "True"
 
 # CHANGE AS NEEDED
-slurm-logdir: "/home/rg5022/rhythmic_visual_attention/logs/slurm"
-slurm-keep-successful-logs: true
-slurm-delete-logfiles-older-than: 5 # specify the number of days
+slurm-logdir: "<YOUR_PROJECT_PATH>/logs/slurm"  # e.g. /home/<user>/DynVision_Working/logs/slurm
+slurm-keep-successful-logs: false
+slurm-delete-logfiles-older-than: 2 # specify the number of days
 
 default-resources:
-  runtime: 60  # 1 hour
-  mem_mb: 16000  # 16 GB
-  disk_mb: 100000  # 100 GB
+  runtime: 1800  # 30 minutes
+  mem_mb: 32000  # 32 GB
+  disk_mb: 1000  # 1 GB
   cpus_per_task: 16
   cpu: 16
+  slurm_account: "<YOUR_SLURM_ACCOUNT>"  # e.g. torch_pr_628_cds
 
-# dynamic resources keywords
+#############################
+# dynamic resources keywords:
+#############################
 # max(1.5 * input.size_mb, 100)
 # attempt * 200
 
 set-resources:
 
   init_model:
-    mem: 16G # use 32GB of memory
-    runtime: 30 # run for 30 minutes
+    mem: 16G
+    runtime: 9600  # 160 minutes
     cpus_per_task: 16
     cpu: 16
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+
 
   test_model:
-    mem: 80G # use 80GB of memory
-    runtime: 60 # run for 2 hours
-    gpu: 1 # use one GPU
-    cpus_per_task: 16 # use 16 cores
-    slurm_extra: "'--gres=gpu:1'"
+    mem: 80G * attempt
+    runtime: 120 * attempt  # 120 minutes per attempt (dynamic expressions are in minutes, not seconds)
+    cpus_per_task: 16
+    disk_mb: 30000  # ~30 GB per test_responses.pt; throttle with --resources disk_mb=<total_budget>
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+    slurm_extra: "'--gpus-per-node=1'"
 
   train_model:
-    mem: 80G # use 80GB of memory
-    runtime: 360 # run for 6 hours
-    # mem_mb_per_cpu: 8000  # 80GB total process memory
-    gpu: 1 # use one GPU
-    cpu: 32
-    cpus_per_task: 32 # use 32 cores
-    constraint: "a100|h100" # limit to fast GPUs
-    slurm_extra: "'--gres=gpu:1'"
+    mem: 80G
+    runtime: 48000  # 800 minutes (~13 hours)
+    cpus_per_task: 16
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+    slurm_extra: "'--gpus-per-node=<GPU_TYPE>:1'"  # e.g. h200:1 or a100:1
 
   train_model_distributed:
-    mem: 80G # use 120GB of memory
-    runtime: 720        # 12 hours
-    # mem_mb_per_cpu: 16000  # 80GB total process memory
-    cpus_per_gpu: 16    # 64 CPU cores
-    gpus_per_node: 4    # Use 4 GPUs per node
-    ntasks: 1           # Single task
-    nodes: 1            # Run on a single node
-    constraint: "a100|h100" # limit to fast GPUs
-    slurm_extra: "'--gres=gpu:4'"
+    mem: 120G
+    disk: 400G
+    runtime: 360000  # 6000 minutes (100 hours)
+    cpus_per_task: 16
+    nodes: 1
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+    slurm_extra: "'--gpus-per-node=<GPU_TYPE>:4 --ntasks-per-node=4'"  # e.g. h200:4 or a100:4
 
   symlink_data_subsets:
-    mem: 4000 # use 4GB of memory
-    runtime: 30 # run for 30 minutes  
+    mem: 32G
+    runtime: 600  # 10 minutes
     cpus_per_task: 4
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
 
   symlink_data_groups:
-    mem: 4000 # use 4GB of memory
-    runtime: 30 # run for 30 minutes
+    mem: 32G
+    runtime: 600  # 10 minutes
     cpus_per_task: 4
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
 
   build_ffcv_datasets:
-    # mem: 64000 # use 64GB of memory
-    mem: 240000 # use 240GB of memory
-    runtime: 1440 # run for 24 hours
+    mem: 120G
+    runtime: 7200  # 120 minutes
     cpu: 32
     cpus_per_task: 32
-    # constraint: "a100|h100" # limit to fast GPUs
-    # slurm_extra: "'--gres=gpu:1'"
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
 
-  process_plotting_data:
-    mem: 120G # use 64GB of memory
-    runtime: 150 # run for 1 hour
+  process_test_data:
+    mem: 120G
+    runtime: 21600  # 360 minutes (6 hours)
     cpus_per_task: 16
-    
-  plot_adaption:
-    mem: 32G # use 64GB of memory
-    runtime: 10 # run for 1 hour
-    cpus_per_task: 8
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
 
-  temp:
-    mem: 32G # use 64GB of memory
-    runtime: 5 # run for 1 hour
-    cpus_per_task: 8
+  process_single_test:
+    mem: 120G
+    runtime: 1800  # 30 minutes
+    cpus_per_task: 16
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
 
-  checkpoint_to_statedict:
-    mem: 16G # use 16GB of memory
-    runtime: 5 # run for 30 minutes
+  aggregate_test_results:
+    mem: 64G
+    runtime: 900  # 15 minutes
     cpus_per_task: 4
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+
+  best_checkpoint_to_statedict:
+    mem: 16G
+    runtime: 900  # 15 minutes
+    cpus_per_task: 4
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+
+  intermediate_checkpoint_to_statedict:
+    mem: 16G
+    runtime: 900  # 15 minutes
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"
+    cpus_per_task: 4
+
+  plot_unrolling:
+    mem: 120G
+    runtime: 3600  # 60 minutes
+    cpus_per_task: 16
+    slurm_account: "<YOUR_SLURM_ACCOUNT>"

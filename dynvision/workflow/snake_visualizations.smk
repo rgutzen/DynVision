@@ -1,8 +1,59 @@
 """Visualization workflow for model analysis and results.
+
+This workflow handles all visualization-related tasks including:
+- Confusion matrix generation
+- Classifier response analysis
+- Weight distribution visualization
+- Experiment result plotting
+- Adaptation analysis
+- Interactive notebook generation
+- Enhanced model visualization
+- Model architecture visualization
+- Enhanced weight analysis
+- Temporal dynamics visualization
+- Interactive notebook generation
 """
 
 logger = logging.getLogger('workflow.visualizations')
 
+
+rule plot_confusion_matrix:
+    """Generate and save confusion matrix visualization.
+
+    Input:
+        test_results: Model evaluation results
+        dataset: Test dataset for class information
+        script: Plotting script
+    
+    Output:
+        Confusion matrix plot
+
+    Parameters:
+        palette: Color palette for visualization
+    """
+    input:
+        test_results = project_paths.reports / '{path}_{data_name}_testing_results.csv',
+        dataset_ready = project_paths.data.interim / '{data_name}' / 'test_all.ready',
+        script = SCRIPTS / 'visualization' / 'plot_confusion_matrix.py'
+    params:
+        palette = 'cividis',
+        dataset_path = lambda w: project_paths.data.interim / w.data_name / 'test_all',
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+    output:
+        plot = project_paths.figures / '{path}_{data_name}_confusion.{format}'
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            --input {input.test_results:q} \
+            --output {output.plot:q} \
+            --dataset_path {params.dataset_path:q} \
+            --palette {params.palette} \
+            --format {wildcards.format} 
+        """
 
 rule plot_classifier_responses:
     """Analyze and visualize classifier responses.
@@ -19,21 +70,21 @@ rule plot_classifier_responses:
     """
     input:
         dataframe = project_paths.reports \
-            / '{model_name}' \
-            / '{model_name}{data_identifier}_test_outputs.csv',
+            / '{data_loader}' \
+            / '{model_name}{data_identifier}' \
+            / 'test_outputs.csv',
         script = SCRIPTS / 'visualization' / 'plot_classifier_responses.py'
     params:
         n_units = 10,
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
         directory(project_paths.figures \
             / 'classifier_response' \
             / '{model_name}{data_identifier}')
-    group: "visualization"
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
@@ -56,189 +107,410 @@ rule plot_weight_distributions:
         Weight distribution plot
     """
     input:
-        state = project_paths.models \
-            / '{model_name}' \
-            / '{model_name}{data_identifier}_{status}.pt',
+        model = expand(project_paths.models \
+            / '{{model_name}}' \
+            / '{{model_name}}{{args1}}{{category}}={cat_value}{{args2}}_{seeds}'
+            / '{{data_name}}' \
+            / '{{status}}.pt',
+            cat_value = lambda w: config.experiment_config['categories'].get(w.category, []),
+            seeds=lambda w: w.seeds.split('.')
+            ),
         script = SCRIPTS / 'visualization' / 'plot_weight_distributions.py'
     params:
+        row = 'connection_type',  # status
+        column = None,
+        hue = 'category',  # connection_type
+        x_axis = 'layer',
+        category_key = lambda w: w.category,
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        log_scale = lambda w: '--log-scale' if w.logscale else '',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        plot = project_paths.figures \
-            / 'weight_distributions' \
-            / '{model_name}{data_identifier}_{status}_weights.{format}'
-    group: "visualization"
+        figure = project_paths.figures / 'weights' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}_{status}' / 'weights{logscale}.png',
+        summary = project_paths.figures / 'weights' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}_{status}' / 'weights_summary{logscale}.csv',
+    wildcard_constraints:
+        logscale = r'(_logscale)?',
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
-            --input {input.state:q} \
-            --output {output.plot:q} \
-            --format {wildcards.format} 
+            --input {input.model:q} \
+            --output {output.figure:q} \
+            --row {params.row} \
+            --column {params.column} \
+            --hue {params.hue} \
+            --x_axis {params.x_axis} \
+            --category-key {params.category_key} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --summary-output {output.summary:q} \
+            {params.log_scale}
         """
 
-rule plot_experiment_outputs:
-    """Visualize experiment results.
 
-    This rule creates comprehensive visualizations of
-    experiment outputs and comparisons.
+rule plot_performance:
+    """Plot performance metrics (hierarchical structure).
 
-    Input:
-        test_outputs: Experiment results
-        script: Visualization script
-    
-    Output:
-        Experiment visualization
+    Input/Output follow new pattern:
+    - Input: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/test_data.csv
+    - Output: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/performance.png
     """
     input:
-        test_outputs = expand(project_paths.reports \
-            / '{{model_name}}' \
-            / '{{model_name}}:{{category}}={category_value}{args}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}test_outputs.csv',
-            category_value = lambda w: config.model_args[w.category],
-            args = lambda w: args_product(dict_poped(config.model_args, w.category), prefix=','),
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
+        data = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seed=lambda w: w.seeds.split('.'),
         ),
-        script = SCRIPTS / 'visualization' / 'plot_experiment_outputs.py'
+        # data_ffonly = expand(
+        #     project_paths.reports
+        #     / '{{experiment}}ffonly'
+        #     / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seed}'
+        #     / '{{data_name}}:{{data_group}}_{{status}}'
+        #     / 'test_data.csv',
+        #     seed=lambda w: w.seeds.split('.'),
+        # ),
+        script = SCRIPTS / 'visualization' / 'plot_performance.py'
     params:
+        data_ffonly = lambda w: [project_paths.reports / f'{w.experiment}ffonly' / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{seed}' / f'{w.data_name}:{w.data_group}_{w.status}' / 'test_data.csv' for seed in w.seeds.split('.')],
+        row = None,
+        subplot = 'parameter',
+        hue = 'category',
         parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category,
+        experiment = lambda w: ['uniformnoise', 'poissonnoise', 'gaussiannoise', 'gaussiancorrnoise'] if w.experiment == 'noise' else w.experiment,
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config[w.experiment]["data_args"].get('idle', 0),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        subplot_filter = [], #[0.2, 0.6, 1.0], #[0.1, 0.5, 1.0], #lambda w: config.experiment_config[w.experiment].get('subplot_filter', []),
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
         ),
     output:
-        plot = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{category}=*_{seed}_{data_name}_{status}_{data_group}' / 'experiment_outputs_label{label_target}.{format}'
-    group: "visualization"
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'performance.png',
     shell:
         """
         {params.execution_cmd} \
-            --test_outputs {input.test_outputs:q} \
-            --output {output.plot:q} \
-            --parameter {params.parameter} \
-            --category {wildcards.category} \
-            --format {wildcards.format} \
-            --style {params.style} 
-        """
-
-rule process_plotting_data:
-    input:
-        responses = expand(project_paths.models \
-            / '{{model_name}}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_responses.pt',
-            category_value = lambda w: config.experiment_config['categories'][w.category],
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
-        ),
-        test_outputs = expand(project_paths.reports \
-            / '{{model_name}}' \
-            / '{{model_name}}:{{args1}}{{category}}={category_value}{{args2}}_{{seed}}_{{data_name}}_{{status}}_{data_loader}{data_args}_{{data_group}}_test_outputs.csv',
-            category_value = lambda w: config.experiment_config['categories'][w.category],
-            data_loader = lambda w: config.experiment_config[w.experiment]['data_loader'],
-            data_args = lambda w: args_product(config.experiment_config[w.experiment]['data_args']),
-        ),
-        script = SCRIPTS / 'visualization' / 'process_plotting_data.py'
-    params:
-        measures = ['power', 'peak_height', 'peak_time'],
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
-        execution_cmd = lambda w, input: build_execution_command(
-            script_path=input.script,
-            use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
-        ),
-    output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
-    shell:
-        """
-        {params.execution_cmd} \
-            --responses {input.responses:q} \
-            --test_outputs {input.test_outputs:q} \
+            --data {input.data:q} \
+            --data-ffonly {params.data_ffonly:q} \
             --output {output:q} \
-            --parameter {params.parameter} \
-            --category {wildcards.category} \
-            --measures {params.measures} 
+            --row {params.row} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --parameter-key {params.parameter} \
+            --category-key {params.category} \
+            --experiment {params.experiment} \
+            --confidence-measure {params.confidence_measure} \
+            --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --subplot-filter {params.subplot_filter}
         """
+            # --plot-individual-seeds
 
 
-checkpoint plot_adaption:
-    """Analyze and visualize model adaptation.
-
-    This rule generates visualizations of how models
-    adapt to different conditions over time.
-
-    Input:
-        responses: Model responses
-        test_outputs: Test results
-        script: Analysis script
-    
-    Output:
-        Adaptation analysis plots
-    """
+rule plot_training:
+    """Plot training metrics (hierarchical structure)."""
     input:
-        data = project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'layer_power.csv',
-        script = SCRIPTS / 'visualization' / 'plot_{plot}.py'
+        test_data = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        script = SCRIPTS / 'visualization' / 'plot_training.py'
     params:
-        measures = ['power', 'peak_height', 'peak_time'],
-        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+            # / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_{".".join(config.seed)}_accuracy.csv',
+        accuracy_csv = lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_7000.7001.7002_accuracy.csv',
+        loss_csv= lambda w: project_paths.reports \
+            / 'wandb' \
+            / f'{w.model_name}{w.args1}{w.category}=*{w.args2}_7000.7001.7002_loss.csv',
         execution_cmd = lambda w, input: build_execution_command(
             script_path=input.script,
             use_distributed=False,
-            use_executor=get_param('use_executor', False)(w)
+        ),
+        validation_frequency = 10,
+        column = getattr(config, 'column', 'parameter'),
+        subplot = getattr(config, 'subplot', 'layers'),
+        hue = getattr(config, 'hue', 'category'),
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category,
+        dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config[w.experiment]["data_args"].get('idle', 0),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+    output:
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'training.png',
+    shell:
+        """
+        {params.execution_cmd} \
+            --test_data {input.test_data:q} \
+            --accuracy_csv {params.accuracy_csv:q} \
+            --loss_csv {params.loss_csv:q} \
+            --column {params.column} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --category-key {params.category} \
+            --parameter-key {params.parameter} \
+            --confidence-measure {params.confidence_measure} \
+            --accuracy-measure {params.accuracy_measure} \
+            --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --output {output:q} \
+            --validation-frequency {params.validation_frequency}
+        """
+
+
+rule plot_dynamics:
+    """Plot dynamics (hierarchical structure)."""
+    input:
+        data = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}{{args1}}{{category}}=*{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        script = SCRIPTS / 'visualization' / 'plot_dynamics.py'
+    params:
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config[w.experiment]["data_args"].get('idle', 0),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
         ),
     output:
-        project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / '{plot}.flag',
+        project_paths.figures / '{experiment}' / '{model_name}{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'dynamics_{focus_layer}.png',
+    # group: "visualization"
     shell:
         """
         {params.execution_cmd} \
             --data {input.data:q} \
             --output {output:q} \
             --parameter {params.parameter} \
+            --experiment {wildcards.experiment} \
             --category {wildcards.category} \
-            --measures {params.measures} 
+            --focus-layer {wildcards.focus_layer} \
+            --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
         """
 
-rule plot_experiments:
-    """Collect and organize experiment visualizations.
 
-    This rule aggregates visualizations from multiple
-    experiments for comparison and analysis.
-    """
+rule plot_responses:
+    """Plot responses (hierarchical structure)."""
     input:
-        expand(project_paths.figures / '{experiment}' / '{experiment}_{model_name}:{args1}{category}=*{args2}_{seed}_{data_name}_{status}_{data_group}' / 'adaption.csv',
-            experiment = config.experiment,
-            model_name = config.model_name,
-            category = list(config.model_args.keys())[0],
-            args1 = "tsteps=20+",
-            args2 = args_product(dict_poped(config.model_args, [list(config.model_args.keys())[0], "tsteps"]), prefix='+'),
-            seed = config.seed,
-            data_name = config.data_name,
-            status = config.status,
-            data_group = config.data_group,
-        )
-    group: "visualization"
-
-
-rule plot_experiments_on_models:
-    """Generate comparative visualizations across models.
-
-    This rule creates visualizations that compare
-    experiment results across different model architectures.
-    """
-    input:
-        expand(project_paths.figures / '{experiment}' / '{experiment}_{model_name}{{model_args}}_{seed}_{data_name}_{status}_{data_group}' / 'adaption.csv',
-            experiment = config.experiment,
-            model_name = config.model_name,
-            seed = config.seed,
-            data_name = config.data_name,
-            status = config.status,
-            data_group = config.data_group,
-        )
+        data = expand(
+            project_paths.reports
+            / '{{experiment}}'
+            / '{{model_name}}:{{args1}}{{category}}=*{{args2}}_{seeds}'
+            / '{{data_name}}:{{data_group}}_{{status}}'
+            / 'test_data.csv',
+            seeds=lambda w: w.seeds.split('.'),
+        ),
+        script = SCRIPTS / 'visualization' / 'plot_responses.py'
+    params:
+        column = getattr(config, 'column', 'parameter'),  # first_label_index, epoch
+        subplot = getattr(config, 'subplot', 'layers'),  # classifier_topk
+        hue = getattr(config, 'hue', 'category'),
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        category = lambda w: w.category,
+        dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config[w.experiment]["data_args"].get('idle', 0),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
     output:
-        temp(project_paths.figures / 'plot_experiments_on_models{model_args}.done')
+        project_paths.figures / '{experiment}' / '{model_name}:{args1}{category}=*{args2}_{seeds}' / '{data_name}:{data_group}_{status}' / 'responses.png',
     shell:
         """
-        touch {output:q} 
+        {params.execution_cmd} \
+            --data {input.data:q} \
+            --output {output:q} \
+            --column {params.column} \
+            --subplot {params.subplot} \
+            --hue {params.hue} \
+            --parameter-key {params.parameter} \
+            --category-key {params.category} \
+            --experiment {wildcards.experiment} \
+            --confidence-measure {params.confidence_measure} \
+            --accuracy-measure {params.accuracy_measure} \
+            --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q} \
+            --panel-labels
         """
 
+def _get_triptych_value(category: str) -> str:
+    """Resolve the fixed value for one triptych axis.
+
+    For "seed", returns "-" placeholder since all seeds are used (no default value).
+    This placeholder won't match any actual seed, so no asterisk marking is added.
+    """
+    if category == "seed":
+        return "-"
+
+    model_args = getattr(config, "model_args", {})
+
+    if isinstance(model_args, dict) and category in model_args:
+        return str(model_args[category])
+
+    if hasattr(model_args, category):
+        return str(getattr(model_args, category))
+
+    categories = getattr(config, "experiment_config", {}).get("categories", {})
+    if category in categories and categories[category]:
+        return str(categories[category][0])
+
+    raise ValueError(f"No default value available for triptych category '{category}'.")
+
+
+def _build_triptych_identifier(wildcards, star_slot: int) -> str:
+    """Build the model identifier with wildcards for glob matching.
+
+    Categories set to "seed" are skipped since seed is in the path suffix,
+    not the model identifier. However, the prefix before seed (which may
+    contain other parameters) is preserved.
+    """
+    cats = [wildcards.cat1, wildcards.cat2, wildcards.cat3]
+    prefixes = [wildcards.a1, wildcards.a2, wildcards.a3]
+    values = [
+        '*' if star_slot == i + 1 else _get_triptych_value(cat)
+        for i, cat in enumerate(cats)
+    ]
+
+    parts = []
+    for prefix, cat, value in zip(prefixes, cats, values):
+        if cat == "seed":
+            # When skipping seed, keep the prefix content (e.g., "+skip=true+feedback=false+")
+            # but strip the trailing '+' that would have connected to seed=value
+            trimmed_prefix = prefix.rstrip('+')
+            if trimmed_prefix:
+                parts.append(trimmed_prefix)
+            continue
+        parts.append(f"{prefix}{cat}={value}")
+
+    return "".join(parts) + wildcards.a4
+
+
+def _get_triptych_data_inputs(wildcards, star_slot: int) -> list:
+    """Get input data files for a triptych column.
+
+    Returns empty list when the category is "seed" since seed variation
+    is already present in the other data files (they expand over seeds).
+    """
+    cats = [wildcards.cat1, wildcards.cat2, wildcards.cat3]
+    if cats[star_slot - 1] == "seed":
+        return []
+
+    return expand(
+        project_paths.reports
+        / wildcards.experiment
+        / f'{wildcards.model_name}:{{model_identifier}}_{{seed}}'
+        / f'{wildcards.data_name}:{wildcards.data_group}_{wildcards.status}'
+        / 'test_data.csv',
+        model_identifier=_build_triptych_identifier(wildcards, star_slot),
+        seed=wildcards.seeds.split('.'),
+    )
+
+
+rule plot_responses_tripytch:
+    input:
+        data1 = lambda w: _get_triptych_data_inputs(w, star_slot=1),
+        data2 = lambda w: _get_triptych_data_inputs(w, star_slot=2),
+        data3 = lambda w: _get_triptych_data_inputs(w, star_slot=3),
+        script = SCRIPTS / 'visualization' / 'plot_response_tripytch.py'
+    params:
+        accuracy1 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=1)}_7000.7001.7002_accuracy.csv",
+        accuracy2 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=2)}_7000.7001.7002_accuracy.csv",
+        accuracy3 = lambda w: project_paths.reports / 'wandb' / f"{w.model_name}:{_build_triptych_identifier(w, star_slot=3)}_7000.7001.7002_accuracy.csv",
+        parameter = lambda w: config.experiment_config[w.experiment]['parameter'],
+        execution_cmd = lambda w, input: build_execution_command(
+            script_path=input.script,
+            use_distributed=False,
+        ),
+        # Build data arguments conditionally - skip empty inputs (seed categories)
+        data1_arg = lambda w, input: f"--data {' '.join(shlex.quote(str(f)) for f in input.data1)}" if input.data1 else "",
+        data2_arg = lambda w, input: f"--data2 {' '.join(shlex.quote(str(f)) for f in input.data2)}" if input.data2 else "",
+        data3_arg = lambda w, input: f"--data3 {' '.join(shlex.quote(str(f)) for f in input.data3)}" if input.data3 else "",
+        category = lambda w: ' '.join([w.cat1, w.cat2, w.cat3]),
+        default_category_values = lambda w: ' '.join([_get_triptych_value(cat) for cat in [w.cat1, w.cat2, w.cat3]]),
+        dt = getattr(config, 'dt', 2),
+        idle_timesteps = lambda w: config.experiment_config[w.experiment]["data_args"].get('idle', 0),
+        palette = lambda w: json.dumps(config.palette),
+        naming = lambda w: json.dumps(config.naming),
+        ordering = lambda w: json.dumps(config.ordering),
+        confidence_measure = getattr(config, 'plot_confidence_measure', "first_label_confidence"),
+        accuracy_measure = getattr(config, 'plot_accuracy_measure', "accuracy"),
+    output:
+        project_paths.figures / '{experiment}' / '{model_name}:{a1}{cat1}=*{a2}{cat2}=*{a3}{cat3}=*{a4}_{seeds}' / '{data_name}:{data_group}_{status}' / 'responses_tripytch.png',
+    wildcard_constraints:
+        a1 = r'([a-z,;\+\-=\d\.]*?)',
+        a2 = r'([a-z,;\+\-=\d\.]*?)',
+        a3 = r'([a-z,;\+\-=\d\.]*?)',
+        a4 = r'([a-z,;\+\-=\d\.]+|\s?)',
+        cat1 = r'[a-z]+',
+        cat2 = r'[a-z]+',
+        cat3 = r'[a-z]+',
+    # group: "visualization"
+    shell:
+        """
+        {params.execution_cmd} \
+            {params.data1_arg} \
+            {params.data2_arg} \
+            {params.data3_arg} \
+            --accuracy1 {params.accuracy1:q} \
+            --accuracy2 {params.accuracy2:q} \
+            --accuracy3 {params.accuracy3:q} \
+            --output {output:q} \
+            --parameter {params.parameter} \
+            --experiment {wildcards.experiment} \
+            --category {params.category:q} \
+            --default-category-values {params.default_category_values:q} \
+            --dt {params.dt} \
+            --idle-timesteps {params.idle_timesteps} \
+            --confidence-measure {params.confidence_measure} \
+            --accuracy-measure {params.accuracy_measure} \
+            --palette {params.palette:q} \
+            --naming {params.naming:q} \
+            --ordering {params.ordering:q}
+        """

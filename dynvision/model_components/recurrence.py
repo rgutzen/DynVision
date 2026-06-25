@@ -1,5 +1,4 @@
-from collections import deque
-from typing import Callable, Optional, Union, Deque, Dict, Any
+from typing import Callable, Optional, Union, Dict, Any, Tuple, List
 
 import torch
 import torch.nn as nn
@@ -9,9 +8,11 @@ from dynvision.model_components.topographic_recurrence import (
     LocalLateralConnection,
     LocalSeparableConnection,
 )
-from dynvision.model_components.base import DtypeDeviceCoordinatorMixin
+
+# from dynvision.base import DtypeDeviceCoordinatorMixin
 from dynvision.model_components.integration_strategy import setup_integration_strategy
 from dynvision.utils import apply_parametrization, str_to_bool, calculate_conv_out_dim
+from dynvision.base.storage import DataBuffer
 from pytorch_lightning import LightningModule
 import logging
 
@@ -26,10 +27,11 @@ __all__ = [
     "SelfConnection",
     "InputAdaption",
     "RecurrentConnectedConv2d",
+    "RConv2d",  # alias
 ]
 
 
-class RecurrenceBase(LightningModule, DtypeDeviceCoordinatorMixin):
+class RecurrenceBase(LightningModule):
     """
     Base class for recurrent connections providing common parameter initialization
     and argument validation.
@@ -80,83 +82,248 @@ class ForwardRecurrenceBase(RecurrenceBase):
     Base class for combined forward and recurrence operations.
     """
 
-    def reset(self) -> None:
-        self.hidden_states: Deque[torch.Tensor] = deque(maxlen=self.n_hidden_states)
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
+        """Reset hidden states using DataBuffer with CyclicStrategy.
+
+        Configuration:
+        - cpu_offload=False: Keep on GPU for fast recurrent access
+        - detach_tensors=False: Preserve gradients through recurrence
+        - thread_safe=True: Safe for distributed training
+        """
+        self._hidden_states = DataBuffer(
+            max_size=self.n_hidden_states,
+            strategy="cyclic",
+            cpu_offload=False,
+            detach_tensors=False,
+            thread_safe=True,
+        )
 
     def get_hidden_state(self, delay: Optional[int] = None) -> Optional[torch.Tensor]:
         """
-        Get the hidden state at a specific index.
-        The index is the delay in time steps.
-        Index 0 is the newest entry, index 1 is the previous entry.
+        Get the hidden state at a specific delay.
+        The delay is measured in timesteps from the present.
 
         Args:
-            i (Optional[int]): Index of the hidden state. Default is None.
+            delay (Optional[int]): Delay in timesteps. delay=0 is the most recent state,
+                                   delay=1 is one timestep back, etc. If None, defaults to 0.
 
         Returns:
-            Optional[torch.Tensor]: Hidden state tensor.
+            Optional[torch.Tensor]: Hidden state tensor at the specified delay, or None if unavailable.
         """
-        if delay is None:
-            return self.hidden_states
-        elif delay >= 0:
-            i = -1 * (delay + 1)
-        else:
-            i = delay
+        # Default to most recent state
+        if delay is None or delay == 0:
+            delay = 1
 
-        if abs(i) > len(self.hidden_states):
+        # Check if buffer is empty
+        if len(self._hidden_states) == 0:
             return None
-        else:
-            return self.hidden_states[i]
+
+        # Check if requested delay exceeds available history
+        # Use > not >= to allow recurrence (accessed before set) to work:
+        # At t=1: buffer=[state_t0] (1 entry), delay_recurrence=1 should return state_t0
+        if delay > len(self._hidden_states):
+            return None
+
+        # Convert delay to buffer index: delay=1 → -1, delay=2 → -2, etc.
+        try:
+            return self._hidden_states.get(-delay)
+        except (IndexError, ValueError):
+            # Index out of range - shouldn't happen with our check, but handle gracefully
+            return None
 
     def get_oldest_hidden_state(self) -> Optional[torch.Tensor]:
-        if len(self.hidden_states):
-            return self.hidden_states[0]
-        else:
+        """Get the oldest hidden state in the buffer.
+
+        Returns:
+            Optional[torch.Tensor]: Oldest hidden state, or None if buffer is empty.
+        """
+        if len(self._hidden_states) == 0:
+            return None
+        try:
+            return self._hidden_states.get(0)
+        except (IndexError, ValueError):
             return None
 
     def get_newest_hidden_state(self) -> Optional[torch.Tensor]:
-        if len(self.hidden_states):
-            return self.hidden_states[-1]
-        else:
+        """Get the newest hidden state in the buffer.
+
+        Returns:
+            Optional[torch.Tensor]: Newest hidden state, or None if buffer is empty.
+        """
+        if len(self._hidden_states) == 0:
+            return None
+        try:
+            return self._hidden_states.get(-1)
+        except (IndexError, ValueError):
             return None
 
     def set_hidden_state(self, h: torch.Tensor, delay: Optional[int] = None) -> None:
-        """Fast reference storage - only coordinate if actually needed."""
-        if delay is None:
-            self.hidden_states.append(h)
-            return
-        elif delay >= 0:
-            i = -1 * (delay + 1)
-        else:
-            i = delay
+        """Store a hidden state in the buffer.
 
-        self.hidden_states[i] = h
+        Args:
+            h (torch.Tensor): Hidden state tensor to store.
+            delay (Optional[int]): If None, appends the state as the newest entry.
+                                   Setting at specific delays is not supported with DataBuffer.
+
+        Raises:
+            NotImplementedError: If delay is specified (not supported with circular buffer).
+        """
+        if delay is None:
+            self._hidden_states.append(h)
+            return
+        else:
+            raise NotImplementedError(
+                "Setting hidden states at specific delays is not supported with DataBuffer. "
+                "Only appending new states (delay=None) is allowed."
+            )
+
+    def detach_hidden_states(self) -> None:
+        """Detach all hidden states from the computation graph.
+
+        This preserves the hidden state values but breaks gradient connections,
+        freeing memory from intermediate activations. Useful after idle timesteps
+        to prevent backpropagation through the warmup period.
+        """
+        if hasattr(self, "_hidden_states") and self._hidden_states is not None:
+            self._hidden_states.detach()
+            # Clear GPU cache immediately to free memory
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+    def reenable_grad_on_hidden_states(self) -> None:
+        """Re-enable gradients on hidden states after no_grad context.
+
+        DEPRECATED: This method is kept for backward compatibility but should not
+        be used. Use initialize_hidden_states() instead for proper gradient flow.
+
+        This is used after running idle timesteps in a torch.no_grad() context.
+        It detaches the tensors (removing the no_grad computation graph) and
+        re-enables gradient tracking for future forward passes.
+
+        This allows us to:
+        1. Run idle timesteps without building computation graphs (saves memory)
+        2. Keep the converged hidden state values
+        3. Enable gradients for the actual training timesteps
+        """
+        if hasattr(self, "_hidden_states") and self._hidden_states is not None:
+            self._hidden_states.detach_and_reenable_grad()
+
+    def cache_hidden_states(self) -> List[Optional[torch.Tensor]]:
+        """Cache current hidden state values for later restoration.
+
+        Returns a list of cloned tensors representing the current buffer state.
+        These values can be used to initialize a fresh buffer later.
+
+        Returns:
+            List of cached hidden state tensors (cloned to preserve values)
+
+        Example:
+            # After idle timesteps
+            cached = layer.cache_hidden_states()
+
+            # Reset and reinitialize
+            layer.reset(input_shape)
+            layer.initialize_hidden_states(cached)
+        """
+        if not hasattr(self, "_hidden_states") or self._hidden_states is None:
+            return []
+
+        cached = []
+        for i in range(len(self._hidden_states)):
+            tensor = self._hidden_states[i]
+            if tensor is not None:
+                # Clone to preserve values independent of original buffer
+                cached.append(tensor.clone())
+            else:
+                cached.append(None)
+        return cached
+
+    def initialize_hidden_states(self, values: List[Optional[torch.Tensor]]) -> None:
+        """Initialize hidden state buffer with pre-computed values.
+
+        This method resets the hidden state buffer and populates it with the
+        provided values. Used to set initial conditions from idle timesteps
+        or other state preparation processes.
+
+        The buffer is first reset (cleared), then initialized with the values.
+        This ensures a fresh buffer that will participate in new computation
+        graphs during subsequent forward passes.
+
+        Args:
+            values: List of tensors to initialize buffer with. Should match
+                   the expected buffer structure (same length as n_hidden_states)
+
+        Example:
+            # Compute initial states through idle period
+            with torch.no_grad():
+                for t in range(idle_timesteps):
+                    layer.forward(null_input)
+
+            # Cache and reset
+            cached = layer.cache_hidden_states()
+            layer.reset(input_shape)
+            layer.initialize_hidden_states(cached)
+
+            # Now layer is ready for training with converged initial states
+        """
+        # Reset buffer (creates fresh DataBuffer)
+        self.reset(input_shape=None)
+
+        # Initialize with provided values
+        if hasattr(self, "_hidden_states") and self._hidden_states is not None:
+            self._hidden_states.initialize_from_values(values)
 
     def sync_persistent_state(self) -> None:
-        """Only sync if there's actually a mismatch."""
-        if not hasattr(self, "hidden_states") or not self.hidden_states:
+        """Sync hidden states to match model's device and dtype.
+
+        Only performs synchronization if there's actually a device/dtype mismatch.
+        """
+        if not hasattr(self, "_hidden_states") or len(self._hidden_states) == 0:
             return
 
         target_dtype = self.get_target_dtype()
         target_device = self.get_target_device()
 
         # Check if any tensor needs syncing
-        needs_sync = any(
-            h.dtype != target_dtype or h.device != target_device
-            for h in self.hidden_states
-        )
+        needs_sync = False
+        for i in range(len(self._hidden_states)):
+            try:
+                h = self._hidden_states.get(i)
+                if h is not None and (
+                    h.dtype != target_dtype or h.device != target_device
+                ):
+                    needs_sync = True
+                    break
+            except (IndexError, ValueError):
+                break
 
         if needs_sync:
-            # Only then do the coordination (preserves references when possible)
-            synced_states = deque(maxlen=self.n_hidden_states)
-            for hidden in self.hidden_states:
-                if hidden.dtype != target_dtype or hidden.device != target_device:
-                    synced_states.append(
-                        hidden.to(dtype=target_dtype, device=target_device)
-                    )
-                else:
-                    synced_states.append(hidden)  # Keep original reference
+            # Create new buffer and sync all tensors
+            synced_buffer = DataBuffer(
+                max_size=self.n_hidden_states,
+                strategy="cyclic",
+                cpu_offload=False,
+                detach_tensors=False,
+                thread_safe=True,
+            )
 
-            self.hidden_states = synced_states
+            for i in range(len(self._hidden_states)):
+                try:
+                    hidden = self._hidden_states.get(i)
+                    if hidden is not None:
+                        if (
+                            hidden.dtype != target_dtype
+                            or hidden.device != target_device
+                        ):
+                            synced_buffer.append(
+                                hidden.to(dtype=target_dtype, device=target_device)
+                            )
+                        else:
+                            synced_buffer.append(hidden)  # Keep original reference
+                except (IndexError, ValueError):
+                    break
+
+            self._hidden_states = synced_buffer
 
 
 class DepthwiseSeparableConnection(RecurrenceBase):
@@ -350,8 +517,8 @@ class SelfConnection(RecurrenceBase):
 
     def __init__(
         self,
-        fixed_weight: Optional[float] = None,
         max_weight_init: float = 0.2,
+        fixed_weight: Optional[float] = None,
         bias: bool = True,
         **kwargs,
     ) -> None:
@@ -366,33 +533,48 @@ class SelfConnection(RecurrenceBase):
         super().__init__(max_weight_init=max_weight_init, **kwargs)
 
         # Store initialization arguments as attributes
+        self.bias = bias
         self.fixed_weight = fixed_weight
-        self.bias_enabled = bias
-        self.requires_grad = fixed_weight is None
-
         self._define_architecture()
 
     def _define_architecture(self) -> None:
-        """Define the architecture of the self connection."""
-        self.weight = nn.Parameter(torch.Tensor([1]), requires_grad=self.requires_grad)
-        if self.bias_enabled:
-            self.bias = nn.Parameter(torch.Tensor([0]), requires_grad=True)
+
+        if self.fixed_weight is None:
+            self.weight = nn.Parameter(torch.zeros(1))
+        else:
+            self.weight = nn.Parameter(
+                torch.tensor(
+                    [self.fixed_weight],
+                    requires_grad=False,
+                    device=self.get_target_device(),
+                )
+            )
+
+        if self.bias:
+            self.bias = nn.Parameter(
+                torch.zeros(1), requires_grad=self.fixed_weight is None
+            )
+            # self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if hasattr(self, "bias"):
-            return x * self.weight + self.bias
-        return x * self.weight
+        if x.device != self.weight.device:
+            logger.error(
+                f"Input device {x.device} does not match weight device {self.weight.device}"
+            )
+            self.weight = self.weight.to(device=x.device)
+        out = x * self.weight
 
-    def _init_parameters(self) -> None:
-        """
-        Initialize parameters for the self-connection.
-        """
-        if self.requires_grad:
-            nn.init.uniform_(self.weight, a=-self.max_weight_init, b=0)
-        else:
-            self.weight.data.fill_(self.fixed_weight)
-        if hasattr(self, "bias"):
-            nn.init.constant_(self.bias, 0)
+        if self.bias:
+            out = out + self.bias
+
+        return out
+
+    def _init_parameters(self):
+        """Initialize parameters."""
+        with torch.no_grad():
+            nn.init.uniform_(self.weight, -self.max_weight_init, self.max_weight_init)
+            if self.bias is not None:
+                nn.init.zeros_(self.bias)
 
 
 class InputAdaption(LightningModule):
@@ -404,6 +586,7 @@ class InputAdaption(LightningModule):
         self,
         fixed_weight: Optional[float] = None,
         max_weight_init: float = 0.2,
+        bias: bool = False,
         **kwargs,
     ) -> None:
         """
@@ -418,12 +601,12 @@ class InputAdaption(LightningModule):
         self.recurrence = SelfConnection(
             fixed_weight=fixed_weight,
             max_weight_init=max_weight_init,
-            bias=False,
+            bias=bias,
             **kwargs,
         )
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """
         Reset the hidden state.
         """
@@ -456,15 +639,18 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         kernel_size: int,
         stride: Optional[int] = None,
         mid_channels: Optional[int] = None,
+        mid_modules: Optional[nn.Module] = None,
         padding: Optional[int] = None,
         bias: bool = True,
         dim_y: Optional[int] = None,
         dim_x: Optional[int] = None,
         dt: float = 1,  # ms
-        tau: float = 1,  # ms
         recurrence_target: str = "output",
         recurrence_type: str = "self",
+        recurrence_kernel_size: Optional[int] = None,  # defaults to kernel_size
+        recurrence_bias: Optional[bool] = None,  # defaults to bias
         t_recurrence: float = 0,  # ms
+        t_feedforward: Optional[float] = 0,  # ms,
         integration_strategy: Union[Callable, str] = "additive",
         history_length: Optional[int] = None,  # ms
         fixed_self_weight: Optional[float] = None,
@@ -481,16 +667,42 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.bias = bias
+        self.stride = stride
         self.parametrization = parametrization
+        self.mid_modules = mid_modules
 
-        if padding is None:
-            padding = kernel_size // 2
-        self.padding = padding
+        # Handle list/tuple arguments for two-stage convolution
+        if mid_channels is not None:
+            # Convert single values to tuples for two-stage convolution
+            self.stride = (
+                stride if isinstance(stride, (list, tuple)) else (stride, stride)
+            )
+            self.kernel_size = (
+                kernel_size
+                if isinstance(kernel_size, (list, tuple))
+                else (kernel_size, kernel_size)
+            )
 
-        if mid_channels is not None and not isinstance(stride, (list, tuple)):
-            self.stride = (stride, stride)
+            if isinstance(padding, (list, tuple)):
+                self.padding = padding
+            elif padding is None:
+                self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
+            else:
+                self.padding = (padding, padding)
+
+            self.bias = bias if isinstance(bias, (list, tuple)) else (bias, bias)
         else:
-            self.stride = stride
+            self.padding = kernel_size // 2 if padding is None else padding
+
+        # Store recurrence convolution parameters
+        self.recurrence_kernel_size = recurrence_kernel_size or (
+            self.kernel_size[0] if mid_channels else kernel_size
+        )
+        self.recurrence_bias = (
+            recurrence_bias
+            if recurrence_bias is not None
+            else (self.bias[0] if mid_channels else bias)
+        )
 
         # Store spatial dimensions
         self.dim_y = dim_y
@@ -498,9 +710,9 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
 
         # Store recurrence parameters
         self.dt = dt
-        self.tau = tau
         self.recurrence_type = recurrence_type
         self.t_recurrence = t_recurrence
+        self.t_feedforward = t_feedforward  # Optional per-layer feedforward delay
         self.integration_strategy = integration_strategy
         self.recurrence_target = recurrence_target
         self.fixed_self_weight = fixed_self_weight
@@ -537,10 +749,30 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             dim_y = self._calculate_conv_out_dim(self.dim_y)
             dim_x = self._calculate_conv_out_dim(self.dim_x)
         else:
-            dim_y = self._calculate_conv_out_dim(self.dim_y, stride=self.stride[0])
-            dim_y = self._calculate_conv_out_dim(dim_y, stride=self.stride[1])
-            dim_x = self._calculate_conv_out_dim(self.dim_x, stride=self.stride[0])
-            dim_x = self._calculate_conv_out_dim(dim_x, stride=self.stride[1])
+            dim_y = self._calculate_conv_out_dim(
+                self.dim_y,
+                kernel_size=self.kernel_size[0],
+                stride=self.stride[0],
+                padding=self.padding[0],
+            )
+            dim_y = self._calculate_conv_out_dim(
+                dim_y,
+                kernel_size=self.kernel_size[1],
+                stride=self.stride[1],
+                padding=self.padding[1],
+            )
+            dim_x = self._calculate_conv_out_dim(
+                self.dim_x,
+                kernel_size=self.kernel_size[0],
+                stride=self.stride[0],
+                padding=self.padding[0],
+            )
+            dim_x = self._calculate_conv_out_dim(
+                dim_x,
+                kernel_size=self.kernel_size[1],
+                stride=self.stride[1],
+                padding=self.padding[1],
+            )
         return dim_y, dim_x
 
     def _calculate_recurrence_output_dims(self) -> tuple[int, int]:
@@ -551,8 +783,18 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             dim_y = self.dim_y
             dim_x = self.dim_x
         elif self.recurrence_target == "middle":
-            dim_y = self._calculate_conv_out_dim(self.dim_y, stride=self.stride[0])
-            dim_x = self._calculate_conv_out_dim(self.dim_x, stride=self.stride[0])
+            dim_y = self._calculate_conv_out_dim(
+                self.dim_y,
+                kernel_size=self.kernel_size[0],
+                stride=self.stride[0],
+                padding=self.padding[0],
+            )
+            dim_x = self._calculate_conv_out_dim(
+                self.dim_x,
+                kernel_size=self.kernel_size[0],
+                stride=self.stride[0],
+                padding=self.padding[0],
+            )
         elif self.recurrence_target == "output":
             dim_y, dim_x = self._calculate_feedforward_output_dims()
         else:
@@ -562,10 +804,12 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
     def _setup_hidden_state_memory(
         self, history_length: Optional[float] = None
     ) -> None:
-        self.history_length = (
-            self.t_recurrence if history_length is None else history_length
-        )
-        self.n_hidden_states = int(self.history_length / self.dt) + 1
+        if history_length is None:
+            self.history_length = max(self.t_recurrence, self.t_feedforward)
+        else:
+            self.history_length = history_length
+
+        self.n_hidden_states = int(self.history_length / self.dt)  # + 1
         self.delay_recurrence = int(self.t_recurrence / self.dt)
 
     def _define_architecture(self) -> None:
@@ -579,34 +823,38 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             self._setup_recurrence()
 
     def _setup_feedforward_conv(self) -> None:
-        conv_kwargs = dict(
-            kernel_size=self.kernel_size,
-            stride=self.stride,
-            padding=self.padding,
-            bias=self.bias,
-        )
-
         if self.mid_channels is None:
             self.conv = nn.Conv2d(
                 in_channels=self.in_channels,
                 out_channels=self.out_channels,
-                **conv_kwargs,
+                kernel_size=self.kernel_size,
+                stride=self.stride,
+                padding=self.padding,
+                bias=self.bias,
             )
+            if self.parametrization is not None:
+                self.conv = apply_parametrization(self.conv, self.parametrization)
         else:
             self.conv = nn.Conv2d(
                 in_channels=self.in_channels,
                 out_channels=self.mid_channels,
-                **conv_kwargs | {"stride": self.stride[0]},
+                kernel_size=self.kernel_size[0],
+                stride=self.stride[0],
+                padding=self.padding[0],
+                bias=self.bias[0],
             )
             self.nonlin = nn.ReLU(inplace=False)
             self.conv2 = nn.Conv2d(
                 in_channels=self.mid_channels,
                 out_channels=self.out_channels,
-                **conv_kwargs | {"stride": self.stride[1]},
+                kernel_size=self.kernel_size[1],
+                stride=self.stride[1],
+                padding=self.padding[1],
+                bias=self.bias[1],
             )
-
-        if self.parametrization is not None:
-            self.conv = apply_parametrization(self.conv, self.parametrization)
+            if self.parametrization is not None:
+                self.conv = apply_parametrization(self.conv, self.parametrization)
+                self.conv2 = apply_parametrization(self.conv2, self.parametrization)
 
     def _setup_recurrence(self) -> None:
         """Set up the recurrent connection based on specified type."""
@@ -631,9 +879,8 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             self.upsample = nn.Upsample(size=(out_dim_y, out_dim_x))
 
         recurrence_params = dict(
-            kernel_size=self.kernel_size,
-            bias=self.bias,
-            parametrization=self.parametrization,
+            kernel_size=self.recurrence_kernel_size,
+            bias=self.recurrence_bias,
             max_weight_init=self.max_weight_init,
             fixed_weight=self.fixed_self_weight,
             in_channels=self.out_channels,
@@ -662,6 +909,23 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         else:
             recurrence_class = recurrence_types[self.recurrence_type.lower()]
             self.recurrence = recurrence_class(**recurrence_params)
+            if self.parametrization is not None:
+                if hasattr(self.recurrence, "conv"):
+                    self.recurrence.conv = apply_parametrization(
+                        self.recurrence.conv, self.parametrization
+                    )
+                elif hasattr(self.recurrence, "depthwise_conv"):
+                    self.recurrence.depthwise_conv = apply_parametrization(
+                        self.recurrence.depthwise_conv, self.parametrization
+                    )
+                elif hasattr(self.recurrence, "pointwise_conv"):
+                    self.recurrence.pointwise_conv = apply_parametrization(
+                        self.recurrence.pointwise_conv, self.parametrization
+                    )
+                elif hasattr(self.recurrence, "weight"):
+                    self.recurrence.weight = apply_parametrization(
+                        self.recurrence.weight, self.parametrization
+                    )
 
         # Configure recurrence influence
         self.integrate_signal = setup_integration_strategy(self.integration_strategy)
@@ -680,6 +944,7 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
                 nn.init.constant_(conv_layer.bias, 0)
 
         init_conv_layer(self.conv)
+
         if self.mid_channels is not None:
             init_conv_layer(self.conv2)
 
@@ -722,8 +987,14 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
     ):
         if x is None:
             return None
-        else:
-            x = self.conv(x)
+
+        x = self.conv(x)
+
+        if self.mid_modules is not None:
+            x = self.mid_modules(x)
+        if self.mid_channels is not None:
+            x = self.nonlin(x)
+
         return x
 
     def forward_feedforward2(
@@ -732,7 +1003,7 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
     ):
         if x is None:
             return None
-        else:
+        elif self.mid_channels is not None:
             x = self.conv2(x)
         return x
 
@@ -740,24 +1011,29 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         self,
         x: Optional[torch.Tensor] = None,
         h: Optional[torch.Tensor] = None,
+        feedforward_only: bool = False,
         **kwargs,
     ) -> Optional[torch.Tensor]:
 
-        if self.recurrence_target == "input":
+        if self.feedforward_only or self.recurrence is None:
+            x = self.forward_feedforward(x)
+            if self.mid_channels:
+                x = self.forward_feedforward2(x)
+            return x
+
+        elif self.recurrence_target == "input":
             # Adding recurrence to layer input
             x = self.forward_recurrence(x, h)
             # Feedforward combined activity
             x = self.forward_feedforward(x)
             # Feedforward2 combined activity
-            if self.mid_channels:
-                x = self.forward_feedforward2(x)
+            x = self.forward_feedforward2(x)
 
         elif self.recurrence_target == "output":
             # Feedforward input activity
             x = self.forward_feedforward(x)
             # Feedforward2 combined activity
-            if self.mid_channels:
-                x = self.forward_feedforward2(x)
+            x = self.forward_feedforward2(x)
             # Adding recurrence to layer output
             x = self.forward_recurrence(x, h)
 
@@ -767,13 +1043,56 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
             # Adding recurrence to layer output
             x = self.forward_recurrence(x, h)
             # Feedforward2 combined activity
-            if self.mid_channels:
-                x = self.forward_feedforward2(x)
+            x = self.forward_feedforward2(x)
 
         else:
             raise ValueError(f"Invalid recurrence target: {self.recurrence_target}")
 
         return x
+
+    def delay(
+        self, x: torch.Tensor, delay_feedforward: Optional[int] = None
+    ) -> torch.Tensor:
+        """
+        Apply delay operation: store current state and retrieve delayed state.
+
+        This method handles the feedforward delay by storing the current activation
+        in the hidden state buffer and retrieving a delayed version for feedforward
+        to the next layer.
+
+        Args:
+            x: Current activation to store
+            delay_feedforward: Optional override for feedforward delay in timesteps.
+                             If None, uses layer's t_feedforward parameter.
+
+        Returns:
+            Delayed activation for feedforward to next layer
+        """
+        # Determine delay amount
+        if delay_feedforward is not None:
+            # Use provided delay
+            delay = delay_feedforward
+        elif hasattr(self, "t_feedforward"):
+            # Use per-layer t_feedforward if defined
+            delay = int(self.t_feedforward / self.dt)
+        else:
+            # Default to no delay if not specified
+            delay = 0
+
+        # Retrieve delayed state before updating with current state
+        if delay > 0:
+            out = self.get_hidden_state(delay)
+        else:
+            out = x
+
+        # Store current state
+        self.set_hidden_state(x)
+
+        return out
+
+
+# Create alias for shorter name
+RConv2d = RecurrentConnectedConv2d
 
 
 if __name__ == "__main__":

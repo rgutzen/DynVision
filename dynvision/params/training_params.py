@@ -4,19 +4,24 @@ import math
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
 
 # Import the Pydantic parameter classes
 from dynvision.params import (
-    BaseParams,
     DynVisionValidationError,
-    DynVisionConfigError,
     ModelParams,
     TrainerParams,
     DataParams,
+)
+from dynvision.params.composite_params import CompositeParams
+from dynvision.utils import (
+    SummaryItem,
+    log_section,
+    log_section_table,
+    format_value,
 )
 
 from pydantic import (
@@ -33,7 +38,7 @@ logger = logging.getLogger(__name__)
 REFERENCE_BATCH_SIZE = 64
 
 
-class TrainingParams(BaseParams):
+class TrainingParams(CompositeParams):
     """
     Composite configuration for model training with comprehensive validation.
 
@@ -41,6 +46,17 @@ class TrainingParams(BaseParams):
     properties for training optimization, consistency checking, and automatic
     parameter scaling based on effective batch size and distributed setup.
     """
+
+    mode_name: ClassVar[str] = "train"
+    component_classes: ClassVar[Dict[str, type]] = {
+        "model": ModelParams,
+        "trainer": TrainerParams,
+        "data": DataParams,
+    }
+
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
 
     # === CORE COMPONENT COMPOSITION ===
     model: ModelParams = Field(
@@ -54,6 +70,9 @@ class TrainingParams(BaseParams):
     # === SCRIPT-SPECIFIC PARAMETERS ===
     input_model_state: Path = Field(description="Path to initial model state")
     output_model_state: Path = Field(description="Path to save trained model")
+    checkpoint_dir: Optional[Path] = Field(
+        default=None, description="Directory to save training checkpoints"
+    )
     dataset_link: Optional[Path] = Field(
         default=None, description="Path to training dataset"
     )
@@ -70,6 +89,26 @@ class TrainingParams(BaseParams):
         use_enum_values=True,
         validate_by_name=True,
     )
+
+    summary_sections: ClassVar[Dict[str, Tuple[SummaryItem, ...]]] = {
+        "Run": (
+            SummaryItem("seed", always=True),
+            SummaryItem("log_level"),
+            SummaryItem(
+                lambda cfg: cfg.global_batch_size,
+                "global_batch_size",
+            ),
+            SummaryItem(
+                lambda cfg: cfg.effective_batch_size,
+                "effective_batch_size",
+            ),
+            SummaryItem(
+                lambda cfg: cfg.effective_learning_rate,
+                "effective_learning_rate",
+                formatter=lambda value: f"{value:.6f}",
+            ),
+        ),
+    }
 
     def update_model_parameters_from_data(
         self,
@@ -176,7 +215,7 @@ class TrainingParams(BaseParams):
                 f"Data dtype ({self.data.dtype}) differs from trainer dtype ({trainer_dtype}). "
                 f"Aligning data dtype to trainer."
             )
-            self.data.dtype = trainer_dtype
+            self.data.update_field("dtype", trainer_dtype, mutation_tag="derived")
 
         # Store for model initialization
         self._coordinated_dtype = trainer_dtype
@@ -199,7 +238,13 @@ class TrainingParams(BaseParams):
                 "was not set to 'all'! Updating config to train on full "
                 "dataset. Build a separate dataset if you want to train on a subset."
             )
-            self.data.update_field("data_group", "all", verbose=True, validate=False)
+            self.data.update_field(
+                "data_group",
+                "all",
+                verbose=True,
+                validate=False,
+                mutation_tag="derived",
+            )
 
     def apply_parameter_scaling(self) -> None:
         """
@@ -209,14 +254,14 @@ class TrainingParams(BaseParams):
         eps = 1e-6
 
         # Log scaling information without modifying the actual parameters
-        if abs(self.local_batch_size - self.data.batch_size) > eps:
-            logger.info(
-                f"Distributed training detected: "
-                f"batch_size ({self.data.batch_size}) scaled to "
-                f"local batch_size ({self.local_batch_size}) "
-                f"according to world size ({self.trainer.world_size})"
-            )
-            self.data.update_field("batch_size", self.local_batch_size)
+        # if abs(self.local_batch_size - self.data.batch_size) > eps:
+        #     logger.info(
+        #         f"Distributed training detected: "
+        #         f"batch_size ({self.data.batch_size}) scaled to "
+        #         f"local batch_size ({self.local_batch_size}) "
+        #         f"according to world size ({self.trainer.world_size})"
+        #     )
+        #     self.data.update_field("batch_size", self.local_batch_size)
 
         if abs(self.model.learning_rate - self.effective_learning_rate) > eps:
             logger.info(
@@ -226,7 +271,99 @@ class TrainingParams(BaseParams):
                 f"effective_learning_rate ({self.effective_learning_rate}) "
                 f"according to effective_effective_size ({self.effective_batch_size})"
             )
-            self.model.update_field("learning_rate", self.effective_learning_rate)
+            self.model.update_field(
+                "learning_rate",
+                self.effective_learning_rate,
+                mutation_tag="derived",
+            )
+
+    def log_training_overview(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Log a structured overview of the training run."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        entries = [
+            ("seed", format_value(self.seed), None),
+            ("input_model_state", format_value(self.input_model_state), None),
+            ("output_model_state", format_value(self.output_model_state), None),
+            ("data_name", format_value(self.data.data_name), None),
+            ("dataset_link", format_value(self.dataset_link), None),
+            ("dataset_train", format_value(self.dataset_train), None),
+            ("dataset_val", format_value(self.dataset_val), None),
+            ("batch_size", format_value(self.data.batch_size), None),
+            ("global_batch_size", format_value(self.global_batch_size), None),
+            ("effective_batch_size", format_value(self.effective_batch_size), None),
+            (
+                "effective_learning_rate",
+                f"{self.effective_learning_rate:.6f}",
+                None,
+            ),
+            ("epochs", format_value(self.trainer.epochs), None),
+            ("precision", format_value(self.trainer.precision), None),
+            ("optimizer", format_value(self.model.optimizer), None),
+            ("use_ffcv", format_value(self.data.use_ffcv), None),
+            (
+                "is_distributed",
+                format_value(self.trainer.is_distributed),
+                None,
+            ),
+        ]
+
+        if self.trainer.is_distributed:
+            entries.extend(
+                [
+                    ("world_size", format_value(self.trainer.world_size), None),
+                    ("strategy", format_value(self.trainer.strategy), None),
+                    ("num_nodes", format_value(self.trainer.num_nodes), None),
+                    ("devices", format_value(self.trainer.devices), None),
+                ]
+            )
+
+        table_rows = [(label, value) for label, value, _ in entries]
+        log_section_table(
+            run_logger,
+            "training_run",
+            columns=("field", "value"),
+            rows=table_rows,
+        )
+        self.log_overview(
+            logger=run_logger.getChild("params"),
+            include_components=True,
+            include_defaults=False,
+        )
+
+    def log_dataloader_creation(
+        self,
+        *,
+        dataloader_class,
+        dataloader_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+        context: str = "active",
+        previous_kwargs: Optional[Dict[str, Any]] = None,
+        level: int = logging.INFO,
+    ) -> None:
+        self.data.log_dataloader_creation(
+            dataloader_class=dataloader_class,
+            dataloader_kwargs=dataloader_kwargs,
+            logger=logger,
+            context=context,
+            previous_kwargs=previous_kwargs,
+            level=level,
+        )
+
+    def log_trainer_creation(
+        self,
+        *,
+        trainer_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        self.trainer.log_trainer_creation(
+            trainer_kwargs=trainer_kwargs,
+            logger=logger,
+        )
 
     def _validate_required_paths(self) -> None:
         """Validate that required paths exist."""
@@ -236,24 +373,41 @@ class TrainingParams(BaseParams):
                 f"Input model state not found: {self.input_model_state}"
             )
 
-        print(
-            f"use ffcv {self.data.use_ffcv}, {self.dataset_train}, {self.dataset_val}, {self.dataset_link}"
-        )  # debugging
+        log_section(
+            logger,
+            "training_dataset_paths",
+            [
+                ("use_ffcv", format_value(self.data.use_ffcv), None),
+                ("dataset_train", format_value(self.dataset_train), None),
+                ("dataset_val", format_value(self.dataset_val), None),
+                ("dataset_link", format_value(self.dataset_link), None),
+            ],
+            level=logging.DEBUG,
+        )
 
-        if not self.dataset_train.exists():
-            raise DynVisionValidationError(
-                f"Training dataset not found: {self.dataset_train}"
-            )
+        def _ensure_path(path: Optional[Path], label: str, *, required: bool) -> None:
+            if path is None:
+                if required:
+                    raise DynVisionValidationError(
+                        f"{label} is required when use_ffcv={self.data.use_ffcv}"
+                    )
+                return
 
-        if not self.dataset_val.exists():
-            raise DynVisionValidationError(
-                f"Validation dataset not found: {self.dataset_val}"
-            )
+            if not path.exists():
+                raise DynVisionValidationError(f"{label} not found: {path}")
 
-        if not self.dataset_link.exists():
-            raise DynVisionValidationError(
-                f"dataset folder link not found: {self.dataset_link}"
-            )
+        # FFCV pipelines require explicit train/val dataset files, while
+        # PyTorch loaders only need the dataset symlink.
+        _ensure_path(
+            self.dataset_train, "Training dataset", required=self.data.use_ffcv
+        )
+        _ensure_path(
+            self.dataset_val, "Validation dataset", required=self.data.use_ffcv
+        )
+        _ensure_path(
+            self.dataset_link, "Dataset folder link", required=not self.data.use_ffcv
+        )
+
         # Ensure output directory exists
         self.output_model_state.parent.mkdir(parents=True, exist_ok=True)
 
@@ -270,8 +424,12 @@ class TrainingParams(BaseParams):
                 f"data={self.data.data_timesteps}, resolved_to={resolved_timesteps}"
             )
             # Update both to the larger value
-            self.model.update_field("n_timesteps", resolved_timesteps)
-            self.data.update_field("data_timesteps", resolved_timesteps)
+            self.model.update_field(
+                "n_timesteps", resolved_timesteps, mutation_tag="derived"
+            )
+            self.data.update_field(
+                "data_timesteps", resolved_timesteps, mutation_tag="derived"
+            )
 
     # === CONFIGURATION EXPORT ===
 
@@ -379,93 +537,21 @@ class TrainingParams(BaseParams):
         override_kwargs: Optional[Dict[str, Any]] = None,
         args: Optional[List[str]] = None,
     ) -> "TrainingParams":
-        """
-        Create TrainingParams instance from CLI and config with proper component separation.
-        """
-        # Get raw parameters using BaseParams method
-        params = cls.get_params_from_cli_and_config(
+        instance = super().from_cli_and_config(
             config_path=config_path,
             override_kwargs=override_kwargs,
             args=args,
         )
-
-        # Separate into component configurations
-        separated_params = cls._separate_component_configs(params)
-
-        print("Training Params:\n", separated_params)
-
-        # Create the TrainingParams instance
-        try:
-            instance = cls(**separated_params)
-            # Apply scaling after successful creation to avoid recursion
-            instance.apply_parameter_scaling()
-            return instance
-        except Exception as e:
-            raise DynVisionValidationError(f"TrainingParams creation failed: {e}")
+        instance.apply_parameter_scaling()
+        return instance
 
     @classmethod
-    def _separate_component_configs(cls, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Separate flat parameter dict into component configurations."""
-        model_params = {}
-        trainer_params = {}
-        data_params = {}
-        base_params = {}
-
-        # Get field names for each component
-        model_fields = set(ModelParams.model_fields.keys())
-        trainer_fields = set(TrainerParams.model_fields.keys())
-        data_fields = set(DataParams.model_fields.keys())
-        base_fields = set(cls.model_fields.keys()) - {"model", "trainer", "data"}
-
-        for key, value in params.items():
-            # Handle dotted notation (e.g., "model.learning_rate")
-            if "." in key:
-                component, field = key.split(".", 1)
-                if component == "model":
-                    model_params[field] = value
-                elif component == "trainer":
-                    trainer_params[field] = value
-                elif component == "data":
-                    data_params[field] = value
-                else:
-                    base_params[key] = value
-            else:
-                # Assign to ALL component classes that have this field
-                assigned_to = []
-
-                if key in model_fields:
-                    model_params[key] = value
-                    assigned_to.append("model")
-                if key in trainer_fields:
-                    trainer_params[key] = value
-                    assigned_to.append("trainer")
-                if key in data_fields:
-                    data_params[key] = value
-                    assigned_to.append("data")
-                if key in base_fields:
-                    base_params[key] = value
-                    assigned_to.append("base")
-
-                if assigned_to:
-                    # Log when parameters are shared across components
-                    if len(assigned_to) > 1:
-                        logger.debug(
-                            f"Parameter '{key}' assigned to multiple components: {assigned_to}"
-                        )
-                else:
-                    # Unknown parameters go to model_params as fallback
-                    model_params[key] = value
-                    logger.debug(
-                        f"Assigning unknown parameter '{key}' to model_params"
-                    )
-        # Create component instances
-        try:
-            components = {
-                "model": ModelParams(**model_params),
-                "trainer": TrainerParams(**trainer_params),
-                "data": DataParams(**data_params),
-                **base_params,
-            }
-            return components
-        except Exception as e:
-            raise DynVisionValidationError(f"Component configuration failed: {e}")
+    def _handle_unscoped_param(
+        cls,
+        key: str,
+        value: Any,
+        component_data: Dict[str, Dict[str, Any]],
+        base_params: Dict[str, Any],
+    ) -> None:
+        logger.debug("Assigning unscoped parameter '%s' to model component", key)
+        component_data.setdefault("model", {})[key] = value

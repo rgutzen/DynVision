@@ -8,7 +8,17 @@ including response storage configuration and memory-optimized settings.
 import logging
 import math
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterable,
+    Optional,
+    Tuple,
+    List,
+    Sequence,
+)
 
 from pydantic import (
     Field,
@@ -18,21 +28,49 @@ from pydantic import (
     field_validator,
 )
 
-from dynvision.params.base_params import BaseParams, DynVisionValidationError
+from dynvision.params.base_params import DynVisionValidationError
+from dynvision.params.composite_params import CompositeParams
 from dynvision.params.model_params import ModelParams
 from dynvision.params.trainer_params import TrainerParams
 from dynvision.params.data_params import DataParams
+from dynvision.utils import SummaryItem, log_section, format_value
 
 logger = logging.getLogger(__name__)
 
 
-class TestingParams(BaseParams):
+class TestingParams(CompositeParams):
     """
     Composite configuration for model testing with comprehensive validation.
 
     Combines ModelParams, TrainerParams, and DataParams with testing-specific configuration
     for model evaluation, response storage, and result analysis.
     """
+
+    mode_name: ClassVar[str] = "test"
+    component_classes: ClassVar[Dict[str, type]] = {
+        "model": ModelParams,
+        "trainer": TrainerParams,
+        "data": DataParams,
+    }
+
+    summary_sections: ClassVar[Dict[str, Sequence[SummaryItem]]] = {
+        "Run": (
+            SummaryItem("mode_name", always=True),
+            SummaryItem("seed", always=True),
+            SummaryItem("log_level", always=True),
+            SummaryItem("verbose", always=True),
+        ),
+        "Paths": (
+            SummaryItem("dataset_path", always=True),
+            SummaryItem("input_model_state", always=True),
+            SummaryItem("output_results", always=True),
+            SummaryItem("output_responses", always=True),
+        ),
+    }
+
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
 
     # === CORE COMPONENT COMPOSITION ===
     model: ModelParams = Field(
@@ -47,7 +85,7 @@ class TestingParams(BaseParams):
     input_model_state: Path = Field(
         description="Path to trained model state for evaluation"
     )
-    dataset: Path = Field(description="Path to test dataset")
+    dataset_path: Path = Field(description="Path to test dataset")
     output_results: Path = Field(description="Path to save test results (CSV)")
     output_responses: Path = Field(
         description="Path to save model responses (PT tensors)"
@@ -55,7 +93,7 @@ class TestingParams(BaseParams):
 
     # Testing behavior configuration
     verbose: bool = Field(
-        default=False, description="Enable verbose logging and error reporting"
+        ..., description="Enable verbose logging and error reporting"
     )
 
     model_config = ConfigDict(
@@ -64,24 +102,6 @@ class TestingParams(BaseParams):
         use_enum_values=True,
         validate_by_name=True,
     )
-
-    @computed_field
-    @property
-    def effective_batch_size(self) -> int:
-        """Calculate effective batch size for testing (optimized for memory)."""
-        base_size = self.data.batch_size
-
-        # Memory optimization based on model complexity
-        if hasattr(self.model, "input_dims") and len(self.model.input_dims) >= 3:
-            height, width = self.model.input_dims[-2:]
-            if height * width > 224 * 224:  # High resolution
-                base_size = min(base_size, 16)
-
-        # Further reduce for temporal models with many timesteps
-        if self.model.n_timesteps > 10:
-            base_size = min(base_size, 8)
-
-        return max(1, base_size)
 
     @computed_field
     @property
@@ -106,6 +126,34 @@ class TestingParams(BaseParams):
 
         return self
 
+    @classmethod
+    def get_component_assignment_order(cls) -> Iterable[str]:
+        return ("model", "data", "trainer")
+
+    @classmethod
+    def get_component_preprocessors(
+        cls,
+    ) -> Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]:
+        return {
+            "data": cls.validate_data_config,
+            "trainer": cls.validate_trainer_config,
+            "model": cls.validate_model_config,
+        }
+
+    @classmethod
+    def _handle_unscoped_param(
+        cls,
+        key: str,
+        value: Any,
+        component_data: Dict[str, Dict[str, Any]],
+        base_params: Dict[str, Any],
+    ) -> None:
+        component_data.setdefault("model", {})[key] = value
+        component_data.setdefault("data", {})[key] = value
+        logger.debug(
+            "Assigning unscoped parameter '%s' to model and data components", key
+        )
+
     def _validate_required_paths(self) -> None:
         """Validate that required paths exist."""
         if not self.input_model_state.exists():
@@ -113,8 +161,10 @@ class TestingParams(BaseParams):
                 f"Input model state not found: {self.input_model_state}"
             )
 
-        if not self.dataset.exists():
-            raise DynVisionValidationError(f"Test dataset not found: {self.dataset}")
+        if not self.dataset_path.exists():
+            raise DynVisionValidationError(
+                f"Test dataset not found: {self.dataset_path}"
+            )
 
         # Ensure output directories exist
         self.output_results.parent.mkdir(parents=True, exist_ok=True)
@@ -122,75 +172,61 @@ class TestingParams(BaseParams):
 
     @classmethod
     def validate_data_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply testing-specific optimizations to the data configuration."""
-        updates = {
-            "train": False,
-            "shuffle": False,
-            "use_distributed": False,
-            "use_ffcv": False,
-            "pin_memory": True,
-            "drop_last": False,
-            "persistent_workers": False,
-            "prefetch_factor": None,
-            "max_workers": min(4, config.get("num_workers", 0)),
-        }
-        config = cls.update_kwargs(config, updates, verbose=True)
+        """Validate testing data config (warnings only)."""
+        # Check for unusual configurations
+        if config.get("train", False):
+            logger.warning(
+                "Testing with train=True is unusual - data augmentation may be active"
+            )
+        if config.get("shuffle", False):
+            logger.warning("Testing with shuffle=True may affect reproducibility")
+
+        # Dynamic value: max_workers based on num_workers
+        # This is kept as dynamic logic since it depends on another parameter
+        if "max_workers" not in config and "num_workers" in config:
+            config["max_workers"] = min(4, config["num_workers"])
+
         return config
 
     @classmethod
     def validate_trainer_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply testing-specific optimizations to the trainer configuration."""
-        updates = {
-            "devices": 1,
-            "num_nodes": 1,
-            "strategy": "auto",
-            "accelerator": "auto",
-            "logger": None,
-            "enable_checkpointing": False,
-            "enable_progress_bar": True,
-        }
-        config = cls.update_kwargs(config, updates, verbose=True)
+        """Validate testing trainer config (warnings only)."""
+        # Check for unusual configurations
+        if config.get("devices", 1) > 1:
+            logger.warning("Testing with multiple devices may affect determinism")
         return config
 
     @classmethod
     def validate_model_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply testing-specific optimizations to the model configuration."""
-        updates = {
-            "store_responses_on_cpu": True,
-        }
-        config = cls.update_kwargs(config, updates, verbose=True)
+        """Validate testing model config (warnings only)."""
+        # No forced updates - values come from config files under test.model.*
         return config
 
     def _optimize_memory_usage(self) -> None:
         """Optimize memory usage based on model and data characteristics."""
 
         # Check for memory-intensive configurations
-        if self.model.store_responses > 10000:
+        store_responses = getattr(self.model, "store_responses", None)
+
+        # Nothing to validate when store_responses is unset/None
+        if store_responses is None:
+            return
+
+        if store_responses > 10000:
             logger.warning(
-                f"Large store_responses ({self.model.store_responses}) may cause memory issues. "
+                f"Large store_responses ({store_responses}) may cause memory issues. "
                 "Consider reducing or using store_responses=0 for no response storage."
             )
-        elif self.model.store_responses == -1:
+        elif store_responses == -1:
             logger.warning(
                 "store_responses=-1 (all responses) may cause memory issues with large datasets. "
                 "Consider using a specific number or store_responses=0 for no storage."
             )
 
-        # Optimize batch size for memory safety
-        memory_safe_batch = self.effective_batch_size
-        if self.data.batch_size > memory_safe_batch * 2:
-            logger.warning(
-                f"Reducing batch size from {self.data.batch_size} to {memory_safe_batch} "
-                "for memory safety during testing"
-            )
-            self.data.update_field(
-                "batch_size", memory_safe_batch, verbose=True, validate=False
-            )
-
     def update_model_parameters_from_data(
         self,
         input_dims: Tuple[int, ...],
-        n_classes: Optional[int] = None,
+        n_classes: Optional[int] = None,  # DEPRECATED
         dataset_size: Optional[int] = None,
         verbose: bool = True,
     ) -> None:
@@ -215,6 +251,7 @@ class TestingParams(BaseParams):
 
         # Update n_classes if provided
         if n_classes is not None and self.model.n_classes != n_classes:
+            logger.warning("Number of classes mismatches between model and data!")
             self.model.update_field("n_classes", n_classes, verbose=verbose)
 
         # Optimize response storage based on dataset size
@@ -249,11 +286,68 @@ class TestingParams(BaseParams):
     def get_model_kwargs(self, model_class=None) -> Dict[str, Any]:
         return self.model.get_model_kwargs(model_class)
 
-    def get_dataloader_kwargs(self) -> Dict[str, Any]:
-        return self.data.get_dataloader_kwargs()
+    def get_dataloader_kwargs(self, dataloader_class=None) -> Dict[str, Any]:
+        return self.data.get_dataloader_kwargs(dataloader_class=dataloader_class)
 
     def get_trainer_kwargs(self) -> Dict[str, Any]:
         return self.trainer.get_trainer_kwargs()
+
+    def log_dataloader_creation(
+        self,
+        *,
+        dataloader_class,
+        dataloader_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+        context: str = "active",
+        previous_kwargs: Optional[Dict[str, Any]] = None,
+        level: int = logging.INFO,
+    ) -> None:
+        self.data.log_dataloader_creation(
+            dataloader_class=dataloader_class,
+            dataloader_kwargs=dataloader_kwargs,
+            logger=logger,
+            context=context,
+            previous_kwargs=previous_kwargs,
+            level=level,
+        )
+
+    def log_trainer_creation(
+        self,
+        *,
+        trainer_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        self.trainer.log_trainer_creation(
+            trainer_kwargs=trainer_kwargs,
+            logger=logger,
+        )
+
+    def log_testing_overview(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Log a structured overview of the testing run."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        entries = [
+            ("seed", format_value(self.seed), None),
+            ("input_model_state", format_value(self.input_model_state), None),
+            ("dataset_path", format_value(self.dataset_path), None),
+            ("output_results", format_value(self.output_results), None),
+            ("output_responses", format_value(self.output_responses), None),
+            ("data_name", format_value(self.data.data_name), None),
+            ("batch_size", format_value(self.data.batch_size), None),
+            ("precision", format_value(self.trainer.precision), None),
+            ("verbose", format_value(self.verbose), None),
+        ]
+
+        log_section(run_logger, "testing_run", entries)
+        self.log_overview(
+            logger=run_logger.getChild("params"),
+            include_components=True,
+            include_defaults=False,
+        )
 
     @classmethod
     def get_aliases(cls) -> Dict[str, str]:
@@ -263,11 +357,24 @@ class TestingParams(BaseParams):
         # Add testing-specific aliases
         aliases.update(
             {
+                # Testing-specific aliases
+                "dataset": "dataset_path",  # CLI convenience alias
                 # Model aliases (routed to model component)
                 "model_name": "model.model_name",
                 "classes": "model.n_classes",
                 "tsteps": "model.n_timesteps",
                 "rctype": "model.recurrence_type",
+                "rctarget": "model.recurrence_target",
+                # Model timing aliases (needed for biological time overrides in test identifiers)
+                "tff": "model.t_feedforward",
+                "tfb": "model.t_feedback",
+                "tsk": "model.t_skip",
+                "trc": "model.t_recurrence",
+                "dt": "model.dt",
+                "tau": "model.tau",
+                "lossrt": "model.loss_reaction_time",
+                "pattern": "model.data_presentation_pattern",
+                "solver": "model.dynamics_solver",
                 # Trainer aliases (routed to trainer component)
                 "precision": "trainer.precision",
                 "benchmark": "trainer.benchmark",
@@ -279,95 +386,10 @@ class TestingParams(BaseParams):
                 "resolution": "data.resolution",
                 "data_loader": "data.data_loader",
                 "data_group": "data.data_group",
-                # Testing-specific aliases
+                # Storage aliases
                 "responses": "store_responses",
                 "cache": "cache_size",
             }
         )
 
         return aliases
-
-    @classmethod
-    def from_cli_and_config(
-        cls,
-        config_path: Optional[Path] = None,
-        override_kwargs: Optional[Dict[str, Any]] = None,
-        args: Optional[List[str]] = None,
-    ) -> "TestingParams":
-        """
-        Create TestingParams instance from CLI and config with proper component separation.
-        """
-        # Get raw parameters using BaseParams method
-        params = cls.get_params_from_cli_and_config(
-            config_path=config_path,
-            override_kwargs=override_kwargs,
-            args=args,
-        )
-        # Separate into component configurations
-        separated_params = cls._separate_component_configs(params)
-
-        # Create the TestingParams instance
-        try:
-            return cls(**separated_params)
-        except Exception as e:
-            raise DynVisionValidationError(f"TestingParams creation failed: {e}")
-
-    @classmethod
-    def _separate_component_configs(cls, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Separate flat parameter dict into component configurations."""
-        model_params = {}
-        trainer_params = {}
-        data_params = {}
-        base_params = {}
-
-        # Get field names for each component
-        model_fields = set(ModelParams.model_fields.keys())
-        trainer_fields = set(TrainerParams.model_fields.keys())
-        data_fields = set(DataParams.model_fields.keys())
-        base_fields = set(cls.model_fields.keys()) - {"model", "trainer", "data"}
-
-        for key, value in params.items():
-            # Handle dotted notation (e.g., "model.learning_rate")
-            if "." in key:
-                component, field = key.split(".", 1)
-                if component == "model":
-                    model_params[field] = value
-                elif component == "trainer":
-                    trainer_params[field] = value
-                elif component == "data":
-                    data_params[field] = value
-                else:
-                    base_params[key] = value
-            else:
-                # Use mutually exclusive assignment logic
-                if key in model_fields:
-                    model_params[key] = value
-                elif key in data_fields:
-                    data_params[key] = value
-                elif key in trainer_fields:
-                    trainer_params[key] = value
-                elif key in base_fields:
-                    base_params[key] = value
-                else:
-                    # Unknown parameters go to both model and data params for flexibility
-                    model_params[key] = value
-                    data_params[key] = value
-                    logger.debug(
-                        f"Assigning unknown parameter '{key}' to both model_params and data_params"
-                    )
-
-        # Validate component configurations
-        cls.validate_data_config(data_params)
-        cls.validate_model_config(model_params)
-        cls.validate_trainer_config(trainer_params)
-
-        try:
-            components = {
-                "model": ModelParams(**model_params),
-                "trainer": TrainerParams(**trainer_params),
-                "data": DataParams(**data_params),
-                **base_params,
-            }
-            return components
-        except Exception as e:
-            raise DynVisionValidationError(f"Component configuration failed: {e}")

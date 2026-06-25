@@ -1,10 +1,71 @@
 data_timesteps: 1
-data_presentation_pattern: [1]
+# data_presentation_pattern: [1]  # use model default
 
 mounted_datasets:
     - imagenet
 
-use_ffcv: False
+# Transform presets for data augmentation
+# Structure: backend → context → preset_name → list of transform strings
+# Strings support two formats:
+#   - Bare module name: "RandomHorizontalFlip"
+#   - With arguments: "RandomBrightness(0.2)"
+# Backend-specific modules:
+#   - torch: Uses torchvision.transforms.v2 (https://pytorch.org/vision/main/transforms.html)
+#   - ffcv: Uses ffcv.transforms (https://docs.ffcv.io/api/transforms.html)
+transform_presets:
+  torch:
+    train:
+      base:
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "RandomHorizontalFlip()"
+        - "ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)"
+      ffcv-build: []
+      mnist:
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "Grayscale(num_output_channels=1)"
+      imagenet:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "RandomHorizontalFlip()"
+        - "ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)"
+      imagenette:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+        - "RandomRotation(10)"
+        - "RandomAffine(0, translate=(0.1, 0.1))"
+        - "RandomHorizontalFlip()"
+        - "ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)"
+    test:
+      base: []
+      imagenet:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+      imagenette:
+        - "Resize(256)"
+        - "CenterCrop(224)"
+  ffcv:
+    train:
+      base:
+        - "RandomHorizontalFlip()"
+        - "RandomBrightness(0.2)"
+        - "RandomContrast(0.2)"
+        - "RandomSaturation(0.2)"
+        - "RandomTranslate(padding=22, fill=(0, 0, 0))"
+      mnist:
+        - "RandomBrightness(0.2)"
+        - "RandomContrast(0.2)"
+        - "RandomSaturation(0.2)"
+    test:
+      base: []
+
+class_index_files:
+    imagenet: imagenet_class_index.json
+    imagenette: imagenet_class_index.json
+    tinyimagenet: tinyimagenet_class_index.json
 
 # used for setup the ffcv dataloader
 data_resolution:
@@ -16,6 +77,7 @@ data_resolution:
     snakenet: 224
     imagenette: 224
 
+# data statistics for normalization
 data_statistics:
     mnist:
         mean: [0.1307]
@@ -36,6 +98,8 @@ data_statistics:
         mean: [0.485, 0.456, 0.406]
         std: [0.229, 0.224, 0.225]
 
+# predefined data subgroups for testing
+# selected via wildcards in filenames "*_{data_name}_{status}_{data_group}"
 data_groups:
     mnist:
         '01':
@@ -99,6 +163,11 @@ data_groups:
             - 317 # leafhopper
             - 318 # lacewing
             - 319 # dragonfly
+        one:
+            - 0 # tench
+    imagenette:
+        one:
+            - 0 # tench
     snakenet:
         cool:
             - 1  # night_snake

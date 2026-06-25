@@ -1,12 +1,24 @@
 include: "snake_utils.smk"
 include: "snake_data.smk"
 include: "snake_runtime.smk"
+include: "snake_processing.smk"
 include: "snake_visualizations.smk"
 include: "snake_experiments.smk"
 
-setup_logger()
 
 rule all:
+    """Default target: generate all figures (hierarchical structure).
+
+    Output path: {experiment}/{model_identifier}/{data_name}:{data_group}_{status}/{plot}.png
+    """
     input:
-        expand(project_paths.reports / 'experiment_{experiment}.done',
-            experiment = config.experiment)
+        [expand(project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{data_name}:{data_group}_{status}" / "{plot}.png",
+            experiment=config.experiment,
+            model_name=config.model_name,
+            model_args=args_product(DEFAULT_MODEL_ARGS | {category: "*"}),
+            seed=config.seed,
+            data_name=config.data_name,
+            data_group=config.data_group,
+            status=config.status,
+            plot='responses',
+        ) for category in config.category]

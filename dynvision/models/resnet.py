@@ -206,7 +206,7 @@ class ResNetx4(torch_models.ResNet, BaseModel):
         """Forward pass with base class handling."""
         return BaseModel.forward(self, x, **kwargs)
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset model state."""
         pass
 

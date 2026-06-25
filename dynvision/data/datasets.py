@@ -223,37 +223,21 @@ class PathFolder(datasets.DatasetFolder):
             return sample, target
 
 
-def insert_a_before_b(
-    transform_list: List[Any],
-    a: Callable = transforms.ToTensor(),
-    b: transforms.Normalize = transforms.Normalize,
-) -> List[Any]:
-    """Insert transform before another in list.
-
-    Args:
-        transform_list: List of transforms
-        a: Transform to insert
-        b: Transform to insert before
-
-    Returns:
-        Modified transform list
-    """
-    if isinstance(transform_list, list):
-        for i, transform in enumerate(transform_list):
-            if isinstance(transform, b):
-                transform_list.insert(i, a)
-                break
-    return transform_list
-
-
 def get_dataset(
     data_path: Path,
     data_name: Optional[str] = None,
-    data_transform: Optional[Union[str, Callable]] = None,
-    target_transform: Optional[Union[str, Callable]] = None,
+    # Transform interface
+    transform_backend: str = "torch",
+    transform_context: str = "train",
+    transform_preset: Optional[str] = None,
+    # Target transform interface
+    target_data_name: Optional[str] = None,
+    target_data_group: str = "all",
+    # Other parameters
     dataset_class: Callable[..., Dataset] = PathFolder,
     normalize: Optional[Tuple[List[float], List[float]]] = None,
     dtype: Optional[torch.dtype] = None,
+    pixel_range: str = "0-1",
     cache_size: int = 1000,
     pin_memory: bool = False,
     pil_to_tensor: bool = True,
@@ -268,6 +252,8 @@ def get_dataset(
         target_transform: Target transform name or callable
         dataset_class: Dataset class to use
         normalize: Normalization parameters (mean, std)
+        dtype: Target dtype for tensors
+        pixel_range: Pixel value range - "0-1" (scaled) or "0-255" (raw)
         cache_size: Size of LRU cache
         pin_memory: Whether to pin memory
         pil_to_tensor: Whether to convert PIL images to tensors
@@ -295,21 +281,29 @@ def get_dataset(
 
     # image transforms
     transform = []
+
+    # Get data transforms
     additional_transforms = get_data_transform(
-        transform=data_transform, data_name=data_name
+        backend=transform_backend,
+        context=transform_context,
+        dataset_or_preset=transform_preset,
     )
+
     if additional_transforms is not None:
         transform.extend(additional_transforms)
 
     # image -> tensor
     if pil_to_tensor:
         transform.append(tv.transforms.PILToTensor())
-    # else:
-    #     transform.append(tv.transforms.ToTensor())
 
-    # dtype transform
+    # dtype transform with pixel range control
     if dtype is not None:
-        transform.append(tv.transforms.ConvertImageDtype(dtype))
+        if pixel_range == "0-255":
+            # Convert dtype WITHOUT scaling (keep [0, 255] range)
+            transform.append(tv.transforms.Lambda(lambda x: x.to(dtype)))
+        else:
+            # Default: convert and scale to [0, 1]
+            transform.append(tv.transforms.ConvertImageDtype(dtype))
 
     # tensor transforms
     if normalize:
@@ -321,8 +315,13 @@ def get_dataset(
         )
 
     logger.info(f"Transform sequence: {transform}")
+
     # target transforms
-    target_transform = get_target_transform(target_transform)
+    target_name = target_data_name or data_name or "unknown"
+    target_transform = get_target_transform(
+        data_name=target_name,
+        data_group=target_data_group,
+    )
 
     if isinstance(transform, list):
         transform = transforms.Compose(transform)

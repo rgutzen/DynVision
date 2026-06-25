@@ -1,8 +1,7 @@
 """
-Refined data buffer for DynVision PyTorch Lightning workflows.
+Enhanced data buffer for DynVision PyTorch Lightning workflows.
 
-Provides efficient storage for neural network responses and records with
-clear indexing behavior, thread safety, and efficient tensor operations.
+Provides efficient storage for neural network responses and records with unlimited storage option, and improved memory management.
 """
 
 import logging
@@ -15,7 +14,10 @@ from pytorch_lightning import LightningModule
 import torch
 import pandas as pd
 import numpy as np
-import time
+from dynvision.utils.visualization_utils import (
+    layer_response_avg,
+    layer_response_std,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ class SamplingStrategy:
         """Get the index where to store the sample, or None if shouldn't store."""
         raise NotImplementedError
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         """Reset strategy state."""
         pass
 
@@ -77,12 +79,29 @@ class CyclicStrategy(SamplingStrategy):
             return max(0, min(requested_index, buffer_size - 1))
         else:
             # Buffer full - circular indexing
-            # Negative indexing: -1 is newest, -2 is second newest, etc.
-            # Positive indexing: 0 is oldest, 1 is second oldest, etc.
             physical_index = (self.head + requested_index) % max_size
             return physical_index
 
-    def reset(self) -> None:
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for the most recent n_items."""
+        n_items = min(n_items, buffer_size)
+        if buffer_size < max_size:
+            # Buffer not full - take last n_items
+            return list(range(buffer_size - n_items, buffer_size))
+        else:
+            # Buffer full - take last n_items from circular buffer
+            indices = []
+            for i in range(n_items):
+                logical_idx = -(n_items - i)  # -n_items, -(n_items-1), ..., -1
+                physical_idx = self.get_logical_index(
+                    logical_idx, buffer_size, max_size
+                )
+                indices.append(physical_idx)
+            return indices
+
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         self.head = 0
 
 
@@ -118,7 +137,53 @@ class FixedStrategy(SamplingStrategy):
             requested_index = buffer_size + requested_index
         return max(0, min(requested_index, buffer_size - 1))
 
-    def reset(self) -> None:
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for the most recent n_items."""
+        n_items = min(n_items, buffer_size)
+        return list(range(buffer_size - n_items, buffer_size))
+
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
+        pass
+
+
+class UnlimitedStrategy(SamplingStrategy):
+    """
+    Unlimited storage strategy - stores all samples without size limit.
+
+    Indexing behavior:
+    - get(0): first item stored
+    - get(-1): last item stored
+    - get(-x): x-th from last item stored
+
+    Similar to fixed strategy but without size restrictions.
+    """
+
+    def should_store(self, buffer_size: int, total_seen: int, max_size: int) -> bool:
+        return True  # Always store
+
+    def get_storage_index(
+        self, buffer_size: int, total_seen: int, max_size: int
+    ) -> int | None:
+        return buffer_size  # Always append to end
+
+    def get_logical_index(
+        self, requested_index: int, buffer_size: int, max_size: int
+    ) -> int:
+        """Convert logical index to physical storage index."""
+        if requested_index < 0:
+            requested_index = buffer_size + requested_index
+        return max(0, min(requested_index, buffer_size - 1))
+
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for the most recent n_items."""
+        n_items = min(n_items, buffer_size)
+        return list(range(buffer_size - n_items, buffer_size))
+
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         pass
 
 
@@ -165,28 +230,35 @@ class ReservoirStrategy(SamplingStrategy):
             requested_index = buffer_size + requested_index
         return max(0, min(requested_index, buffer_size - 1))
 
-    def reset(self) -> None:
+    def get_recent_indices(
+        self, buffer_size: int, max_size: int, n_items: int
+    ) -> List[int]:
+        """Get indices for recent items (order not meaningful for reservoir)."""
+        n_items = min(n_items, buffer_size)
+        return list(range(min(n_items, buffer_size)))
+
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
         pass
 
 
 class DataBuffer:
     """
-    High-performance buffer for neural network data.
+    High-performance buffer for neural network data with flexible sizing.
 
     Thread Safety:
     - self._lock: Ensures thread-safe operations for multi-GPU distributed training
-    - When multiple processes access the buffer simultaneously, the lock prevents
-      data corruption and ensures consistent state updates
 
     Indexing Behavior:
     - Depends on the sampling strategy used
     - CyclicStrategy: Maintains temporal order (newest/oldest semantics)
     - FixedStrategy: Simple list-like indexing (predictable order)
+    - UnlimitedStrategy: Stores all data without size limit
     - ReservoirStrategy: Order not guaranteed (for statistical sampling)
 
     Memory Management:
     - Explicit cleanup to prevent memory leaks
     - Efficient tensor operations with minimal copying
+    - Support for unlimited growth when max_size < 0
     """
 
     __slots__ = [
@@ -201,6 +273,7 @@ class DataBuffer:
         "_total_seen",
         "_lock",
         "name",
+        "_unlimited",
     ]
 
     def __init__(
@@ -216,34 +289,41 @@ class DataBuffer:
         Initialize data buffer.
 
         Args:
-            max_size: Maximum number of samples to store
-            strategy: Sampling strategy ("cyclic", "fixed", "reservoir")
+            max_size: Maximum number of samples to store, or -1 for unlimited
+            strategy: Sampling strategy ("cyclic", "fixed", "reservoir", "unlimited")
             cpu_offload: Move data to CPU to save GPU memory
             detach_tensors: Detach tensors from computation graph
             thread_safe: Use thread-safe operations (important for distributed training)
             name: Buffer name for debugging
         """
-        self.max_size = max_size
-        self.strategy_name = strategy
+        # Handle unlimited storage
+        if max_size < 0 or strategy == "unlimited":
+            self._unlimited = True
+            self.max_size = -1
+            self.strategy_name = "unlimited"
+            self._storage: List[Any] = []
+        else:
+            self._unlimited = False
+            self.max_size = max_size
+            self.strategy_name = strategy
+            # Pre-allocate storage for efficiency
+            self._storage: List[Any] = [None] * max_size if max_size > 0 else []
+
         self.cpu_offload = cpu_offload
         self.detach_tensors = detach_tensors
         self.thread_safe = thread_safe
         self.name = name
 
-        # Pre-allocate storage for efficiency
-        self._storage: List[Any] = [None] * max_size if max_size > 0 else []
-        self._strategy = self._create_strategy(strategy)
+        self._strategy = self._create_strategy(self.strategy_name)
         self._size = 0
         self._total_seen = 0
 
         # Thread safety for distributed training
-        # This lock prevents race conditions when multiple GPU processes
-        # access the buffer simultaneously (e.g., in distributed validation)
         self._lock = threading.RLock() if thread_safe else None
 
         logger.debug(
-            f"Created {self.name}: max_size={max_size}, strategy={strategy}, "
-            f"thread_safe={thread_safe}"
+            f"Created {self.name}: max_size={max_size}, strategy={self.strategy_name}, "
+            f"thread_safe={thread_safe}, unlimited={self._unlimited}"
         )
 
     def _create_strategy(self, strategy: str) -> SamplingStrategy:
@@ -252,6 +332,7 @@ class DataBuffer:
             "cyclic": CyclicStrategy,
             "fixed": FixedStrategy,
             "reservoir": ReservoirStrategy,
+            "unlimited": UnlimitedStrategy,
         }
 
         if strategy not in strategies:
@@ -261,36 +342,65 @@ class DataBuffer:
 
         return strategies[strategy]()
 
-    def _preprocess_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Preprocess tensor for storage."""
-        # Detach from computation graph to prevent memory leaks
+    def _preprocess_tensor(
+        self, tensor: torch.Tensor, defer_cache_clear: bool = False
+    ) -> torch.Tensor:
+        """Enhanced preprocessing with immediate GPU memory release."""
+        # Detach from computation graph
         if self.detach_tensors and tensor.requires_grad:
             tensor = tensor.detach()
 
-        # Move to CPU if requested (saves GPU memory)
+        # Move to CPU if requested with immediate GPU cleanup
         if self.cpu_offload and tensor.device.type != "cpu":
-            tensor = tensor.cpu()
+            # Clone to CPU and immediately clear GPU reference
+            cpu_tensor = tensor.cpu()
 
-        # Ensure contiguous memory layout for efficiency
+            # Force immediate GPU memory release
+            del tensor
+            # Only clear cache if not deferring (for batch efficiency)
+            if not defer_cache_clear and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            tensor = cpu_tensor
+
+        # Ensure contiguous memory layout
         if not tensor.is_contiguous():
             tensor = tensor.contiguous()
 
         return tensor
 
-    def _preprocess_data(self, data: Any) -> Any:
+    def _preprocess_data(self, data: Any, defer_cache_clear: bool = False) -> Any:
         """Recursively preprocess data."""
         if isinstance(data, torch.Tensor):
-            return self._preprocess_tensor(data)
+            return self._preprocess_tensor(data, defer_cache_clear=defer_cache_clear)
         elif isinstance(data, dict):
-            return {k: self._preprocess_data(v) for k, v in data.items()}
+            # Defer cache clearing for dict processing to batch GPU cleanup
+            result = {
+                k: self._preprocess_data(v, defer_cache_clear=True)
+                for k, v in data.items()
+            }
+            # Clear GPU cache once after processing all dict items
+            if (
+                self.cpu_offload
+                and not defer_cache_clear
+                and torch.cuda.is_available()
+            ):
+                torch.cuda.empty_cache()
+            return result
         elif isinstance(data, (list, tuple)):
-            return type(data)(self._preprocess_data(item) for item in data)
+            return type(data)(
+                self._preprocess_data(item, defer_cache_clear=defer_cache_clear)
+                for item in data
+            )
         else:
             return data
 
     def should_store(self) -> bool:
         """Determine if the current data should be stored based on the strategy."""
-        return self._strategy.should_store(self._size, self._total_seen, self.max_size)
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
+        return self._strategy.should_store(
+            self._size, self._total_seen, effective_max_size
+        )
 
     def append(self, data: Any) -> bool:
         """
@@ -314,6 +424,12 @@ class DataBuffer:
 
     def _append_impl(self, data: Any) -> bool:
         """Internal append implementation."""
+        # For unlimited storage, expand storage as needed
+        if self._unlimited:
+            effective_max_size = len(self._storage)
+        else:
+            effective_max_size = self.max_size
+
         # Check if strategy wants to store this sample
         if not self.should_store():
             self._total_seen += 1
@@ -321,7 +437,7 @@ class DataBuffer:
 
         # Get storage index from strategy
         storage_idx = self._strategy.get_storage_index(
-            self._size, self._total_seen, self.max_size
+            self._size, self._total_seen, effective_max_size
         )
         if storage_idx is None:
             self._total_seen += 1
@@ -335,8 +451,13 @@ class DataBuffer:
             self._total_seen += 1
             return False
 
+        # For unlimited storage, expand list if needed
+        if self._unlimited:
+            while len(self._storage) <= storage_idx:
+                self._storage.append(None)
+
         # Store data with explicit cleanup of old data
-        if storage_idx < self._size and self._storage[storage_idx] is not None:
+        if storage_idx < len(self._storage) and self._storage[storage_idx] is not None:
             # Clear old reference to prevent memory leaks
             self._storage[storage_idx] = None
 
@@ -355,7 +476,7 @@ class DataBuffer:
 
         Indexing behavior depends on strategy:
         - Cyclic: get(0)=oldest, get(-1)=newest
-        - Fixed: get(0)=first stored, get(-1)=last stored
+        - Fixed/Unlimited: get(0)=first stored, get(-1)=last stored
         - Reservoir: order not meaningful
 
         Args:
@@ -379,8 +500,9 @@ class DataBuffer:
             raise IndexError("Buffer is empty")
 
         # Convert logical index to physical storage index
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
         physical_index = self._strategy.get_logical_index(
-            index, self._size, self.max_size
+            index, self._size, effective_max_size
         )
 
         if physical_index < 0 or physical_index >= self._size:
@@ -395,7 +517,7 @@ class DataBuffer:
         Get all stored data in logical order.
 
         For cyclic strategy: returns oldest to newest
-        For fixed strategy: returns first stored to last stored
+        For fixed/unlimited strategy: returns first stored to last stored
         For reservoir strategy: arbitrary order
         """
         if self.max_size == 0:
@@ -413,15 +535,53 @@ class DataBuffer:
             return []
 
         result = []
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
+
         for i in range(self._size):
             try:
                 physical_index = self._strategy.get_logical_index(
-                    i, self._size, self.max_size
+                    i, self._size, effective_max_size
                 )
-                if self._storage[physical_index] is not None:
+                if (
+                    physical_index < len(self._storage)
+                    and self._storage[physical_index] is not None
+                ):
                     result.append(self._storage[physical_index])
             except IndexError:
                 break
+
+        return result
+
+    def get_recent_items(self, n_items: int) -> List[Any]:
+        """
+        Get the most recent n_items from the buffer.
+
+        Args:
+            n_items: Number of recent items to retrieve
+
+        Returns:
+            List of recent items in chronological order (oldest to newest)
+        """
+        if self.max_size == 0 or self._size == 0:
+            return []
+
+        if self._lock:
+            with self._lock:
+                return self._get_recent_items_impl(n_items)
+        else:
+            return self._get_recent_items_impl(n_items)
+
+    def _get_recent_items_impl(self, n_items: int) -> List[Any]:
+        """Internal implementation for getting recent items."""
+        effective_max_size = len(self._storage) if self._unlimited else self.max_size
+        indices = self._strategy.get_recent_indices(
+            self._size, effective_max_size, n_items
+        )
+
+        result = []
+        for idx in indices:
+            if idx < len(self._storage) and self._storage[idx] is not None:
+                result.append(self._storage[idx])
 
         return result
 
@@ -439,18 +599,142 @@ class DataBuffer:
         for i in range(len(self._storage)):
             self._storage[i] = None
 
+        # For unlimited storage, also reset the list
+        if self._unlimited:
+            self._storage = []
+
         # Reset state
         self._size = 0
         self._total_seen = 0
         self._strategy.reset()
 
-        # clear GPU memory if offloading
+        # Clear GPU memory if offloading
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
 
         # Force garbage collection
         gc.collect()
+
+    def detach(self) -> None:
+        """Detach all tensors in storage from the computation graph.
+
+        This preserves the tensor values but breaks gradient connections,
+        freeing memory from intermediate activations while keeping the state.
+        Useful for breaking computation graphs in recurrent operations.
+        """
+        if self._lock:
+            with self._lock:
+                self._detach_impl()
+        else:
+            self._detach_impl()
+
+    def _detach_impl(self) -> None:
+        """Internal detach implementation."""
+        for i in range(len(self._storage)):
+            if self._storage[i] is not None and isinstance(
+                self._storage[i], torch.Tensor
+            ):
+                # Detach ALL tensors, not just those with requires_grad=True
+                # Even tensors without requires_grad can hold references to the computation graph
+                self._storage[i] = self._storage[i].detach()
+
+    def detach_and_reenable_grad(self) -> None:
+        """Detach tensors from computation graph and re-enable gradients.
+
+        This is useful after no_grad contexts where you want to:
+        1. Keep the tensor values (no computation graph from previous operations)
+        2. But enable gradient tracking for future operations
+
+        Example use case: After idle timesteps run in no_grad context,
+        we want to keep the converged hidden state values but enable
+        gradients for the actual training timesteps.
+        """
+        if self._lock:
+            with self._lock:
+                self._detach_and_reenable_grad_impl()
+        else:
+            self._detach_and_reenable_grad_impl()
+
+    def _detach_and_reenable_grad_impl(self) -> None:
+        """Internal implementation of detach and re-enable grad."""
+        for i in range(len(self._storage)):
+            if self._storage[i] is not None and isinstance(
+                self._storage[i], torch.Tensor
+            ):
+                # Detach (remove computation graph) and re-enable gradients
+                self._storage[i] = self._storage[i].detach().requires_grad_(True)
+
+    def initialize_from_values(self, values: List[Optional[torch.Tensor]]) -> None:
+        """Initialize buffer with pre-computed values.
+
+        This is used to set initial buffer state from values computed elsewhere
+        (e.g., from idle timesteps). The buffer is first cleared, then populated
+        with the provided values.
+
+        Args:
+            values: List of tensors to initialize buffer with. Can contain None.
+                   Should match the buffer's expected size/structure.
+
+        Example:
+            # Compute initial hidden states
+            with torch.no_grad():
+                for t in range(warmup_steps):
+                    state = compute_state(...)
+                    buffer.append(state)
+
+            # Cache values
+            cached = [buffer[i] for i in range(len(buffer))]
+
+            # Later: initialize fresh buffer with cached values
+            new_buffer = DataBuffer(...)
+            new_buffer.initialize_from_values(cached)
+        """
+        if self._lock:
+            with self._lock:
+                self._initialize_from_values_impl(values)
+        else:
+            self._initialize_from_values_impl(values)
+
+    def _initialize_from_values_impl(
+        self, values: List[Optional[torch.Tensor]]
+    ) -> None:
+        """Internal implementation of initialize from values.
+
+        Note: This method does NOT preprocess values. The values are expected to
+        already be in the correct format (device, dtype, etc.) and should preserve
+        their gradient tracking state. This is critical for initialization from
+        cached hidden states that need to enable gradient flow during training.
+        """
+        # Clear existing storage and reset state
+        self._storage.clear()
+        self._size = 0
+        self._total_seen = 0
+
+        # For cyclic buffers, pre-allocate storage to max_size
+        # This ensures subsequent cyclic appends can use index assignment
+        if not self._unlimited:
+            self._storage = [None] * self.max_size
+
+        # Populate storage with provided values (no preprocessing)
+        # Values are stored directly to preserve gradient tracking
+        for i, value in enumerate(values):
+            if value is not None:
+                # Ensure tensors have requires_grad enabled for gradient flow
+                if isinstance(value, torch.Tensor) and not value.requires_grad:
+                    value = value.detach().requires_grad_(True)
+
+                if self._unlimited:
+                    self._storage.append(value)
+                else:
+                    # For cyclic buffers, use index assignment
+                    self._storage[i] = value
+            else:
+                if self._unlimited:
+                    self._storage.append(None)
+                # For cyclic buffers, None is already in pre-allocated storage
+            self._size += 1
+            self._total_seen += 1
 
     def to_tensor(self, dim: int = 0) -> torch.Tensor:
         """
@@ -516,7 +800,6 @@ class DataBuffer:
 
             if tensors:
                 try:
-                    # This can be expensive for large dicts with many keys
                     result[key] = torch.cat(tensors, dim=dim)
                 except RuntimeError as e:
                     logger.warning(
@@ -528,7 +811,9 @@ class DataBuffer:
     def get_storage_size(self, unit="GB") -> float:
         """Return the current size of the storage in specified unit (GB, MB, or bytes)."""
         total_bytes = 0
-        for item in self._storage:
+        storage_to_check = self._storage[: self._size] if self._size > 0 else []
+
+        for item in storage_to_check:
             if isinstance(item, torch.Tensor):
                 total_bytes += item.element_size() * item.nelement()
             elif isinstance(item, dict):
@@ -558,8 +843,13 @@ class DataBuffer:
         return self.get(index)
 
     def __repr__(self) -> str:
+        size_str = (
+            f"{self._size}/unlimited"
+            if self._unlimited
+            else f"{self._size}/{self.max_size}"
+        )
         return (
-            f"DataBuffer(name='{self.name}', size={self._size}/{self.max_size}, "
+            f"DataBuffer(name='{self.name}', size={size_str}, "
             f"strategy={self.strategy_name})"
         )
 
@@ -567,55 +857,89 @@ class DataBuffer:
 @dataclass
 class Record:
     """
-    Combined storage for model records.
+    Flexible storage for model records with core and extensible fields.
 
-    Contains data that varies per batch sample and timestep:
-    - guess_indices: Model predictions (batch_size, n_timesteps)
-    - label_indices: Ground truth labels (batch_size, n_timesteps)
-    - image_indices: Unique identifiers for input images (batch_size, n_timesteps)
+    Core fields (always present):
+    - guess_index: Model predictions (batch_size, n_timesteps)
+    - label_index: Ground truth labels (batch_size, n_timesteps)
+    - image_index: Unique identifiers for input images (batch_size, n_timesteps)
 
-    Metadata like sample indices and times indices are generated when needed.
+    Extensible fields (optional, stored in extras dict):
+    - Any additional torch.Tensor data passed as kwargs
+    - Examples: first_label_index, guess_confidence, label_confidence, etc.
+
+    This design allows unlimited extensibility while maintaining type safety for core fields.
     """
 
-    guess_indices: torch.Tensor
-    label_indices: torch.Tensor
-    image_indices: torch.Tensor
+    guess_index: torch.Tensor
+    label_index: torch.Tensor
+    image_index: torch.Tensor
+    extras: Dict[str, torch.Tensor] = None
+
+    def __post_init__(self):
+        """Initialize extras dict if not provided."""
+        if self.extras is None:
+            self.extras = {}
 
     def to_cpu(self) -> "Record":
         """Move all tensors to CPU."""
+        extras_cpu = {
+            k: v.cpu().float() if isinstance(v, torch.Tensor) else v
+            for k, v in self.extras.items()
+        }
         return Record(
-            guess_indices=self.guess_indices.cpu(),
-            label_indices=self.label_indices.cpu(),
-            image_indices=self.image_indices.cpu(),
+            guess_index=self.guess_index.cpu(),
+            label_index=self.label_index.cpu(),
+            image_index=self.image_index.cpu(),
+            extras=extras_cpu,
         )
 
     def detach(self) -> "Record":
         """Detach all tensors from computation graph."""
+        extras_detached = {k: v.detach() for k, v in self.extras.items()}
         return Record(
-            guess_indices=self.guess_indices.detach(),
-            label_indices=self.label_indices.detach(),
-            image_indices=self.image_indices.detach(),
+            guess_index=self.guess_index.detach(),
+            label_index=self.label_index.detach(),
+            image_index=self.image_index.detach(),
+            extras=extras_detached,
         )
+
+    def keys(self) -> List[str]:
+        """Get all field names (core + extras)."""
+        return ["guess_index", "label_index", "image_index"] + list(self.extras.keys())
+
+    def get(self, key: str, default=None) -> Optional[torch.Tensor]:
+        """Get a field value by key (works for both core and extra fields)."""
+        if key == "guess_index":
+            return self.guess_index
+        elif key == "label_index":
+            return self.label_index
+        elif key == "image_index":
+            return self.image_index
+        else:
+            return self.extras.get(key, default)
+
+    def __getitem__(self, key: str) -> torch.Tensor:
+        """Dictionary-style access to fields."""
+        result = self.get(key)
+        if result is None:
+            raise KeyError(f"Field '{key}' not found in Record")
+        return result
 
 
 class StorageBuffer:
     """
     High-level buffer management for DynVision.
 
-    Combines response and record storage with efficient operations.
-    Designed to be created in Lightning hooks and cleared when done.
+    Combines response and record storage with efficient operations..
 
     Usage:
-        # In on_validation_start():
-        self.storage = StorageBuffer(max_responses=1000, max_records=500)
+        self.storage = StorageBuffer(
+            max_responses=100, response_strategy="cyclic",
+            max_records=1000, record_strategy="unlimited"
+        )
 
-        # In validation steps:
-        self.storage.store_responses(response_dict)
-        self.storage.store_records(guess_indices, label_indices, image_indices)
-
-        # In on_validation_end():
         df = self.storage.get_dataframe()
-        self.storage.clear_all()
     """
 
     def __init__(
@@ -626,6 +950,8 @@ class StorageBuffer:
         record_strategy: str = "fixed",
         cpu_offload: bool = True,
         thread_safe: bool = True,
+        response_resolution: str = "unit",
+        classifier_name: str = "classifier",
     ):
         # Response buffer for layer activations
         self.responses = DataBuffer(
@@ -645,43 +971,136 @@ class StorageBuffer:
             name="RecordBuffer",
         )
 
+        self.response_resolution = response_resolution
+        self.classifier_name = classifier_name
+
         logger.debug(
             f"Storage buffers created: responses={max_responses}({response_strategy}), "
-            f"records={max_records}({record_strategy})"
+            f"records={max_records}({record_strategy}), resolution={response_resolution}"
         )
 
-    def store_responses(self, response_dict: Dict[str, torch.Tensor]) -> bool:
-        """Store neural network layer responses."""
-        return self.responses.append(response_dict)
+    def store_responses(
+        self, response_dict: Dict[str, torch.Tensor], precision: int = 16
+    ) -> bool:
+        """
+        Store neural network layer responses.
+
+        Args:
+            response_dict: Dictionary of layer name to response tensor
+            precision: Bit precision to store tensors (16 or 32)
+
+        Returns:
+            bool: True if data was stored, False otherwise
+        """
+        # Convert tensors to specified precision with immediate GPU cleanup
+        processed_dict = {}
+        for key, tensor in response_dict.items():
+            if precision == 16 and tensor.dtype != torch.float16:
+                # Convert precision and immediately detach from original
+                converted = tensor.to(dtype=torch.float16)
+                processed_dict[key] = converted
+            elif precision == 32 and tensor.dtype != torch.float32:
+                # Convert precision and immediately detach from original
+                converted = tensor.to(dtype=torch.float32)
+                processed_dict[key] = converted
+            else:
+                processed_dict[key] = tensor
+
+        # Apply layer-wise reduction if configured
+        if self.response_resolution == "layer":
+            processed_dict = self._reduce_to_layer_stats(processed_dict)
+
+        # Clear original response_dict references to allow GPU memory release
+        # before CPU offload in append() - critical for preventing OOM
+        result = self.responses.append(processed_dict)
+        del processed_dict
+
+        return result
+
+    def _reduce_to_layer_stats(
+        self, response_dict: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Reduce full layer tensors to spatially averaged statistics.
+
+        Replaces each non-classifier layer tensor (dim > 2) with two (B, T) tensors:
+        {layer}_response_avg and {layer}_response_std. The classifier layer and
+        already-2D tensors pass through unchanged.
+
+        Args:
+            response_dict: Dictionary of layer name to response tensor
+
+        Returns:
+            Dictionary with reduced tensors
+        """
+
+        reduced = {}
+        for key, tensor in response_dict.items():
+            if key == self.classifier_name or tensor.dim() <= 2:
+                reduced[key] = tensor
+            else:
+                with torch.no_grad():
+                    reduced[f"{key}_response_avg"] = layer_response_avg(tensor)
+                    reduced[f"{key}_response_std"] = layer_response_std(tensor)
+        return reduced
 
     def store_records(
         self,
-        guess_indices: torch.Tensor,
-        label_indices: torch.Tensor,
-        image_indices: Optional[torch.Tensor] = None,
+        guess_index: torch.Tensor,
+        label_index: torch.Tensor,
+        image_index: Optional[torch.Tensor] = None,
+        **extra_tensors: torch.Tensor,
     ) -> bool:
         """
-        Store model records.
+        Store model records with flexible extensibility.
 
         Args:
-            guess_indices: Model predictions (batch_size, n_timesteps)
-            label_indices: Ground truth labels (batch_size, n_timesteps)
-            image_indices: Unique image identifiers (batch_size, n_timesteps)
+            guess_index: Model predictions (batch_size, n_timesteps)
+            label_index: Ground truth labels (batch_size, n_timesteps)
+            image_index: Unique image identifiers (batch_size, n_timesteps)
+            **extra_tensors: Any additional tensor fields to store
+                Examples: first_label_index, guess_confidence, label_confidence, etc.
+
+        Returns:
+            bool: True if data was stored, False otherwise
+
+        Example:
+            storage.store_records(
+                guess_index=guesses,
+                label_index=labels,
+                image_index=images,
+                first_label_index=first_labels,  # Extra field
+                guess_confidence=conf_guesses,     # Extra field
+                label_confidence=conf_labels,      # Extra field
+            )
         """
         if not self.records.should_store():
             self.records._total_seen += 1
             return False
 
-        if image_indices is None:
-            batch_size, n_timesteps = label_indices.shape
-            image_indices = (
-                torch.arange(batch_size).unsqueeze(1).expand(-1, n_timesteps)
-            )
+        if image_index is None:
+            last_record = self.records.get_recent_items(1)
+            if last_record:
+                last_image_index = last_record[0].image_index.max()
+            else:
+                last_image_index = 0
 
+            batch_size, n_timesteps = label_index.shape
+            image_index = (
+                torch.arange(batch_size, device=label_index.device)
+                .unsqueeze(1)
+                .expand(-1, n_timesteps)
+            )
+            # Should we increment from last_image_index so each image has a unique index?
+            #     + last_image_index
+            #     + 1
+            # )
+
+        # Create record with core fields and extras
         record = Record(
-            guess_indices=guess_indices,
-            label_indices=label_indices,
-            image_indices=image_indices,
+            guess_index=guess_index,
+            label_index=label_index,
+            image_index=image_index,
+            extras=extra_tensors,  # Dict of additional tensors
         )
 
         # Apply preprocessing
@@ -692,154 +1111,156 @@ class StorageBuffer:
 
         return self.records.append(record)
 
-    def get_dataframe(self, layer_name: str = "classifier") -> pd.DataFrame:
+    def get_dataframe(self) -> pd.DataFrame:
         """
-        Generate classifier DataFrame efficiently.
+        Generate DataFrame from stored records with.
 
-        IMPORTANT: This function requires both response and record buffers to use
-        the same sampling strategy to ensure proper alignment between responses and records.
+        Processes all record fields (core + extras) and creates a flattened DataFrame
+        with sample_index and times_index for each observation.
 
-        Generates sample_indices and times_indices on-the-fly to save memory.
+        Response data is not included in the DataFrame - responses are stored separately
+        in their dict format and can be accessed directly via self.responses.
+
+        Returns:
+            pd.DataFrame: Flattened records with columns:
+                - sample_index: Sample identifier
+                - times_index: Timestep within sample
+                - guess_index: Model prediction
+                - label_index: Ground truth label
+                - image_index: Image identifier
+                - [extra fields]: Any additional fields stored (e.g., guess_confidence, first_label_index)
         """
 
         try:
-            # Quick check for zero-capacity buffers
-            if self.responses.max_size == 0 or self.records.max_size == 0:
+            # Quick check for zero-capacity buffer
+            if self.records.max_size == 0:
+                logger.warning("Records buffer has zero capacity")
                 return pd.DataFrame()
 
-            # Critical alignment check: ensure both buffers use same strategy
-            if self.responses.strategy_name != self.records.strategy_name:
-                logger.error(
-                    f"Cannot combine responses (strategy='{self.responses.strategy_name}') "
-                    f"with records (strategy='{self.records.strategy_name}'). "
-                    f"Different strategies lead to misaligned data. Both buffers must use the same strategy."
-                )
-                return pd.DataFrame()
-
-            # Get raw data from buffers
-            response_data = self.responses.get_all()
+            # Get record data
             record_data = self.records.get_all()
 
-            if not response_data or not record_data:
-                logger.warning("No data stored in buffers")
+            if not record_data:
+                logger.warning("No record data available")
                 return pd.DataFrame()
 
-            # Ensure matching lengths between responses and records
-            min_length = min(len(response_data), len(record_data))
-            if min_length == 0:
-                return pd.DataFrame()
-
-            # Take matching portion from both buffers to ensure alignment
-            # Since both use the same strategy, index i corresponds to the same logical sample
-            response_data = response_data[:min_length]
-            record_data = record_data[:min_length]
-
-            # Check if the layer exists in responses
-            if layer_name not in response_data[0]:
-                available_layers = (
-                    list(response_data[0].keys()) if response_data else []
-                )
-                logger.warning(
-                    f"Layer '{layer_name}' not found. Available: {available_layers}"
-                )
-                return pd.DataFrame()
-
-            # Extract response tensors and pad them to the same time step length
-            max_timesteps = max(item[layer_name].shape[1] for item in response_data)
-            response_tensors = []
-            for item in response_data:
-                tensor = item[layer_name]
-                pad_len = max_timesteps - tensor.shape[1]
-                if pad_len > 0:
-                    # Pad at the start along axis 1 (time steps) with zeros
-                    # For shape [batch, timesteps, n_channels, dim_y, dim_x], pad for axis 1
-                    # torch.nn.functional.pad expects (dim_x, dim_y, n_channels, timesteps)
-                    # So pad = (0,0, 0,0, 0,0, pad_len,0)
-                    pad = (0, 0, 0, 0, 0, 0, pad_len, 0)
-                    tensor = torch.nn.functional.pad(
-                        tensor, pad, mode="constant", value=0
-                    )
-                response_tensors.append(tensor)
-
-            layer_responses = torch.cat(response_tensors, dim=0)
-
-            # Extract and concatenate records
-            guess_tensors = [record.guess_indices for record in record_data]
-            guess_data = torch.cat(guess_tensors, dim=0)
-
-            label_tensors = [record.label_indices for record in record_data]
-            label_data = torch.cat(label_tensors, dim=0)
-
-            image_tensors = [record.image_indices for record in record_data]
-            image_data = torch.cat(image_tensors, dim=0)
-
-            # Ensure all data has the same length (number of samples)
-            valid_data_length = min(
-                len(layer_responses),
-                len(guess_data),
-                len(label_data),
-                len(image_data),
+            logger.info(
+                f"Processing {len(record_data)} records with strategy: {self.records.strategy_name}"
             )
 
-            layer_responses = layer_responses[:valid_data_length]
+            # Log record structure (including extras)
+            if record_data:
+                logger.info(f"First record item type: {type(record_data[0])}")
+                if hasattr(record_data[0], "guess_index"):
+                    logger.info(f"  guess_index: {record_data[0].guess_index.shape}")
+                    logger.info(f"  label_index: {record_data[0].label_index.shape}")
+                    logger.info(f"  image_index: {record_data[0].image_index.shape}")
+                    # Log all extra fields
+                    if record_data[0].extras:
+                        logger.info(f"  extras: {list(record_data[0].extras.keys())}")
+                        for key, value in record_data[0].extras.items():
+                            if isinstance(value, torch.Tensor):
+                                logger.info(f"    {key}: {value.shape}")
+
+            # Extract and concatenate core record fields
+            guess_tensors = [record.guess_index for record in record_data]
+            guess_data = torch.cat(guess_tensors, dim=0)
+
+            label_tensors = [record.label_index for record in record_data]
+            label_data = torch.cat(label_tensors, dim=0)
+
+            image_tensors = [record.image_index for record in record_data]
+            image_data = torch.cat(image_tensors, dim=0)
+
+            # Collect all unique extra field names across all records
+            all_extra_keys = set()
+            for record in record_data:
+                all_extra_keys.update(record.extras.keys())
+
+            # Extract and concatenate extra fields
+            extra_data = {}
+            for key in all_extra_keys:
+                tensors = []
+                for record in record_data:
+                    if key in record.extras and record.extras[key] is not None:
+                        tensors.append(record.extras[key])
+                    else:
+                        # Create dummy tensor with same shape as core indices
+                        batch_size, n_timesteps = record.guess_index.shape
+                        dummy = torch.zeros(
+                            batch_size, n_timesteps, device=record.guess_index.device
+                        )
+                        tensors.append(dummy)
+
+                if tensors:
+                    extra_data[key] = torch.cat(tensors, dim=0)
+
+            # Ensure all data has the same length
+            data_lengths = [len(guess_data), len(label_data), len(image_data)]
+            data_lengths.extend(len(v) for v in extra_data.values())
+
+            valid_data_length = min(data_lengths)
+
             guess_data = guess_data[:valid_data_length]
             label_data = label_data[:valid_data_length]
             image_data = image_data[:valid_data_length]
+            for key in extra_data:
+                extra_data[key] = extra_data[key][:valid_data_length]
 
             # Convert to CPU and numpy
-            response = layer_responses.cpu().float().numpy()
-            label_indices = label_data.cpu().numpy()
-            guess_indices = guess_data.cpu().numpy()
-            image_indices = image_data.cpu().numpy()
+            label_index = label_data.cpu().numpy()
+            guess_index = guess_data.cpu().numpy()
+            image_index = image_data.cpu().numpy()
+            extra_numpy = {
+                k: v.cpu().float().numpy() if isinstance(v, torch.Tensor) else v
+                for k, v in extra_data.items()
+            }
 
             # Get dimensions
-            n_samples, n_timesteps, n_classes = response.shape
+            n_samples, n_timesteps = label_index.shape
 
             # Create indices for DataFrame structure
-            sample_indices, times_indices, class_indices = np.meshgrid(
+            sample_index, times_index = np.meshgrid(
                 np.arange(n_samples),
                 np.arange(n_timesteps),
-                np.arange(n_classes),
                 indexing="ij",
             )
-            label_sets = np.array(["".join(row.astype(str)) for row in label_indices])
-            label_sets = (
-                label_sets[:, None, None]
-                .repeat(n_timesteps, axis=-2)
-                .repeat(n_classes, axis=-1)
-            )
-            label_indices = label_indices[..., None].repeat(n_classes, axis=-1)
-            guess_indices = guess_indices[..., None].repeat(n_classes, axis=-1)
-            image_indices = image_indices[..., None].repeat(n_classes, axis=-1)
 
-            df = pd.DataFrame(
-                {
-                    "sample_index": sample_indices.ravel(),
-                    "times_index": times_indices.ravel(),
-                    "class_index": class_indices.ravel(),
-                    "response": response.ravel(),
-                    "label_index": label_indices.ravel(),
-                    "guess_index": guess_indices.ravel(),
-                    "image_index": image_indices.ravel(),
-                    "label_set": label_sets.ravel(),
-                }
-            )
+            # Build DataFrame data dict with core fields
+            df_data = {
+                "sample_index": sample_index.ravel(),
+                "times_index": times_index.ravel(),
+                "label_index": label_index.ravel(),
+                "guess_index": guess_index.ravel(),
+                "image_index": image_index.ravel(),
+            }
+
+            # Add extra fields to DataFrame
+            for key, data in extra_numpy.items():
+                df_data[key] = data.ravel()
+
+            df = pd.DataFrame(df_data)
+
+            logger.info(f"Created DataFrame with shape: {df.shape}")
+            logger.info(f"Columns: {list(df.columns)}")
 
             # Clean up memory
             del (
-                response,
-                label_indices,
-                guess_indices,
-                image_indices,
-                sample_indices,
-                times_indices,
-                class_indices,
+                label_index,
+                guess_index,
+                image_index,
+                sample_index,
+                times_index,
+                extra_numpy,
             )
 
             return df
 
         except Exception as e:
-            logger.error(f"Error generating classifier DataFrame: {e}")
+            logger.error(f"Error generating DataFrame: {e}")
+            import traceback
+
+            traceback.print_exc()
             return pd.DataFrame()
 
     def clear_all(self) -> None:
@@ -847,7 +1268,7 @@ class StorageBuffer:
         self.responses.clear()
         self.records.clear()
 
-    def get_storage_size(self, unit="GB") -> None:
+    def get_storage_size(self, unit="GB") -> float:
         """Get the size of the storage."""
         return self.responses.get_storage_size(unit) + self.records.get_storage_size(
             unit
@@ -859,61 +1280,77 @@ class StorageBuffer:
             "responses_size": len(self.responses),
             "records_size": len(self.records),
             "total_items": len(self.responses) + len(self.records),
+            "responses_strategy": self.responses.strategy_name,
+            "records_strategy": self.records.strategy_name,
         }
 
 
 class StorageBufferMixin(LightningModule):
     """
     Mixin class for automatic StorageBuffer lifecycle management in PyTorch Lightning.
-
-    IMPORTANT: For get_dataframe() to work correctly, both response and record
-    buffers must use the same sampling strategy to ensure proper data alignment.
     """
 
-    # Default storage configurations - both use same strategy for alignment
+    # Default storage configurations - can use different strategies
     training_storage_config: Dict[str, Any] = {
         "max_responses": 0,  # Disabled by default
         "max_records": 0,  # Disabled by default
-        "response_strategy": "fixed",  # Same strategy for alignment
-        "record_strategy": "fixed",  # Same strategy for alignment
+        "response_strategy": "fixed",
+        "record_strategy": "fixed",
         "cpu_offload": True,
         "thread_safe": True,
     }
 
     validation_storage_config: Dict[str, Any] = {
-        "max_responses": 1,  # Enabled by default
-        "max_records": 1,  # Enabled by default
-        "response_strategy": "fixed",  # Same strategy for alignment
-        "record_strategy": "fixed",  # Same strategy for alignment
+        "max_responses": 0,  # Enabled by default
+        "max_records": 0,  # Enabled by default
+        "response_strategy": "fixed",
+        "record_strategy": "fixed",
         "cpu_offload": True,
         "thread_safe": True,
     }
 
     testing_storage_config: Dict[str, Any] = {
-        "max_responses": 10,  # Enabled by default for analysis
-        "max_records": 10,  # Enabled by default for analysis
-        "response_strategy": "fixed",  # Same strategy for alignment
-        "record_strategy": "fixed",  # Same strategy for alignment
+        "max_responses": 6,  # Enabled by default for analysis
+        "max_records": 40,  # Much larger for detailed analysis
+        "response_strategy": "fixed",  # Keep recent responses
+        "record_strategy": "fixed",  # Keep all records
         "cpu_offload": True,
         "thread_safe": True,
     }
 
     def __init__(
         self,
-        store_train_responses: int = 0,
-        store_val_responses: int = 1,
-        store_test_responses: int = 10,
+        store_train_responses: Optional[int] = None,
+        store_val_responses: Optional[int] = None,
+        store_test_responses: Optional[int] = None,
+        store_train_records: Optional[int] = None,
+        store_val_records: Optional[int] = None,
+        store_test_records: Optional[int] = None,
+        early_test_stop: bool = True,
+        response_resolution: str = "unit",
         **kwargs,
     ):
-        """Initialize with empty storage buffer."""
-        super().__init__(**kwargs)
+        """Initialize with flexible storage configuration."""
+        self._response_resolution = response_resolution
 
-        self.training_storage_config["max_responses"] = store_train_responses
-        self.training_storage_config["max_records"] = store_train_responses
-        self.validation_storage_config["max_responses"] = store_val_responses
-        self.validation_storage_config["max_records"] = store_val_responses
-        self.testing_storage_config["max_responses"] = store_test_responses
-        self.testing_storage_config["max_records"] = store_test_responses
+        # Update response configs only if provided
+        if store_train_responses is not None:
+            self.training_storage_config["max_responses"] = store_train_responses
+        if store_val_responses is not None:
+            self.validation_storage_config["max_responses"] = store_val_responses
+        if store_test_responses is not None:
+            self.testing_storage_config["max_responses"] = store_test_responses
+
+        # Update record configs only if provided
+        if store_train_records is not None:
+            self.training_storage_config["max_records"] = store_train_records
+        if store_val_records is not None:
+            self.validation_storage_config["max_records"] = store_val_records
+        if store_test_records is not None:
+            self.testing_storage_config["max_records"] = store_test_records
+
+        # Set early stopping configuration
+        self.early_test_stop = early_test_stop
 
         # Always create a storage instance (with zero capacity initially)
         self.storage = StorageBuffer(
@@ -923,8 +1360,78 @@ class StorageBufferMixin(LightningModule):
             thread_safe=True,
         )
 
+        # Flag to track when to stop testing early
+        self._stop_testing_early = False
+        super().__init__(**kwargs)
+
     def get_dataframe(self, **kwargs) -> pd.DataFrame:
         return self.storage.get_dataframe(**kwargs)
+
+    def _check_memory_usage(self, stage: str):
+        """Monitor memory usage and warn about potential issues."""
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated() / 1024**2  # MB
+            cached = torch.cuda.memory_reserved() / 1024**2  # MB
+
+            if (
+                allocated
+                > 0.8 * torch.cuda.get_device_properties(0).total_memory / 1024**2
+            ):
+                logger.warning(
+                    f"High GPU memory usage in {stage}: {allocated:.0f}MB allocated, "
+                    f"{cached:.0f}MB cached"
+                )
+
+                # Emergency buffer reduction
+                if hasattr(self.storage, "clear_all"):
+                    logger.warning("Emergency: Clearing storage buffers")
+                    self.storage.clear_all()
+                    torch.cuda.empty_cache()
+
+    def _check_buffer_filled(self) -> bool:
+        """
+        Check if response buffer is filled and should stop early.
+
+        Returns:
+            bool: True if testing should be stopped early
+        """
+        # Only check if early stopping is enabled
+        if not self.early_test_stop:
+            return False
+
+        # Skip for unlimited or non-fixed strategies
+        if max(
+            self.storage.responses.max_size, self.storage.records.max_size
+        ) <= 0 or self.storage.responses.strategy_name not in ["fixed"]:
+            return False
+
+        # Check if buffer is filled
+        is_filled = (
+            len(self.storage.responses) >= self.storage.responses.max_size
+            and len(self.storage.records) >= self.storage.records.max_size
+        )
+
+        if is_filled and not self._stop_testing_early:
+            logger.info(
+                f"Buffer filled. "
+                f"Responses: ({len(self.storage.responses)}/{self.storage.responses.max_size}). "
+                f"Records: ({len(self.storage.records)}/{self.storage.records.max_size}). "
+                f"Stopping testing early."
+            )
+            self._stop_testing_early = True
+
+        return is_filled
+
+    def on_test_batch_end(self, *args, **kwargs):
+        self._check_memory_usage("test")
+
+        # Check if we should stop testing early
+        if self._check_buffer_filled():
+            # Signal to PyTorch Lightning to stop the test loop
+            # This is done by raising a specific exception that PL handles
+            from pytorch_lightning.utilities.exceptions import _TunerExitException
+
+            raise _TunerExitException("Stopping test early: response buffer filled")
 
     def on_train_epoch_start(self) -> None:
         """Initialize storage buffer at start of training epoch."""
@@ -992,10 +1499,19 @@ class StorageBufferMixin(LightningModule):
         except AttributeError:
             pass
 
+        # Reset early stop flag
+        self._stop_testing_early = False
+
         # Create storage with testing configuration
         self.storage.clear_all()
-        self.storage = StorageBuffer(**self.testing_storage_config)
-        logger.debug(f"Testing storage: {self.testing_storage_config}")
+        self.storage = StorageBuffer(
+            **self.testing_storage_config,
+            response_resolution=self._response_resolution,
+            classifier_name=getattr(self, "classifier_name", "classifier"),
+        )
+        logger.debug(
+            f"Testing storage: {self.testing_storage_config}, resolution={self._response_resolution}"
+        )
 
     def on_test_end(self) -> None:
         """Clear storage buffer at end of testing."""
@@ -1006,75 +1522,61 @@ class StorageBufferMixin(LightningModule):
 
 
 if __name__ == "__main__":
-    print("Testing refined DataBuffer implementation...")
+    print("Testing enhanced DataBuffer implementation...")
 
-    # Test zero-capacity buffer behavior
-    print("\n=== Testing Zero-Capacity Buffer ===")
-    zero_buffer = DataBuffer(max_size=0, strategy="fixed")
-    print(f"Zero buffer append result: {zero_buffer.append(torch.tensor([1]))}")
-    print(f"Zero buffer get_all: {zero_buffer.get_all()}")
+    # Test unlimited strategy
+    print("\n=== Testing Unlimited Strategy ===")
+    unlimited_buffer = DataBuffer(max_size=-1, strategy="unlimited")
+    for i in range(5):
+        result = unlimited_buffer.append(torch.tensor([i]))
+        print(f"Append {i}: {result}, size: {len(unlimited_buffer)}")
 
-    storage_zero = StorageBuffer(max_responses=0, max_records=0)
-    print(f"Zero storage DataFrame: {storage_zero.get_dataframe().shape}")
+    print(
+        f"Unlimited buffer contents: {[item.item() for item in unlimited_buffer.get_all()]}"
+    )
 
-    # Test StorageBufferMixin
-    print("\n=== Testing StorageBufferMixin ===")
+    # Test mixed strategies alignment
+    print("\n=== Testing Mixed Strategy Alignment ===")
 
     class TestModel(StorageBufferMixin):
-        """Test model with mixin."""
+        """Test model with mixed strategies."""
 
-        # Override storage configs
-        training_storage_config = {
-            "max_responses": 10,  # No training storage
-            "max_records": 10,
-            "response_strategy": "fixed",
-            "record_strategy": "fixed",
-        }
-
-        validation_storage_config = {
-            "max_responses": 100,  # Validation storage enabled
-            "max_records": 100,
-            "response_strategy": "cyclic",
-            "record_strategy": "cyclic",
+        testing_storage_config = {
+            "max_responses": 3,  # Small response buffer
+            "max_records": 10,  # Larger record buffer
+            "response_strategy": "cyclic",  # Keep recent responses
+            "record_strategy": "unlimited",  # Keep all records
         }
 
         def __init__(self):
             super().__init__()
 
-    # Test lifecycle
+    # Test lifecycle with mixed strategies
     model = TestModel()
-    print(
-        f"Initial storage: responses={model.storage.responses.max_size}, records={model.storage.records.max_size}"
-    )
+    print(f"Initial storage: {model.storage.get_memory_info()}")
 
-    # Start validation
-    model.on_validation_epoch_start()
-    print(
-        f"Validation storage: responses={model.storage.responses.max_size}, records={model.storage.records.max_size}"
-    )
+    # Start testing
+    model.on_test_start()
+    print(f"Test storage: {model.storage.get_memory_info()}")
 
-    # Store some data
-    for i in range(3):
-        responses = {"classifier": torch.randn(2, 5, 4)}  # (batch, timesteps, classes)
-        records_stored = model.storage.store_responses(responses)
+    # Store different amounts of data
+    for i in range(7):
+        responses = {"classifier": torch.randn(1, 5, 4)}  # (batch, timesteps, classes)
+        model.storage.store_responses(responses)
 
         records_stored = model.storage.store_records(
-            guess_indices=torch.randint(0, 4, (2, 5)),
-            label_indices=torch.randint(0, 4, (2, 5)),
-            image_indices=torch.arange(2).unsqueeze(1).expand(2, 5),
+            guess_index=torch.randint(0, 4, (1, 5)),
+            label_index=torch.randint(0, 4, (1, 5)),
         )
-        print(
-            f"  Batch {i}: stored={records_stored}, storage_size=({len(model.storage.responses)}, {len(model.storage.records)})"
-        )
+        print(f"  Batch {i}: stored, storage_size={model.storage.get_memory_info()}")
 
-    # Generate DataFrame
+    # Generate DataFrame with alignment
     df = model.storage.get_dataframe()
-    print(f"Generated DataFrame: {df.shape}")
+    print(f"Generated DataFrame with mixed strategies: {df.shape}")
 
-    # End validation
-    model.on_validation_epoch_end()
-    print(
-        f"After clearing: responses={model.storage.responses.max_size}, records={model.storage.records.max_size}"
-    )
+    if not df.empty:
+        print(
+            f"Sample indices range: {df['sample_index'].min()} to {df['sample_index'].max()}"
+        )
 
-    print("\nIntegrated implementation tests completed!")
+    print("\nEnhanced implementation tests completed!")

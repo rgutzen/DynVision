@@ -38,7 +38,8 @@ class BaseSolver(LightningModule):
 
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self, input_shape: Optional[Tuple[int, ...]] = None) -> None:
+        """Reset hidden state."""
         self.hidden_state = None
 
 

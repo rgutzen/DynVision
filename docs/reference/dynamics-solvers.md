@@ -6,15 +6,22 @@ DynVision models the dynamics of neural activity using continuous-time different
 
 The core of DynVision's dynamics is the following differential equation:
 
-<p align="center">
-  <img src="docs/assets/dynamical_systems_equation.png" alt="Dynamical Systems ODE" width="800"/>
-</p>
+$$
+\tau \frac{dx}{dt} = -x + \Phi[f(t, r_n, r_{n-1})]
+$$
 
-This equation is solved numerically using one of the available solvers in DynVision.
+Where $\tau$ is the time constant, $x$ is the neural activity, $\Phi$ is a nonlinearity, and $f$ represents the inputs to the neuron. This equation is solved numerically using one of the available solvers in DynVision.
 
 ## Available Solvers
 
-DynVision provides two main solvers for the neural dynamics equation:
+DynVision provides two main solvers for the neural dynamics equation. When configuring a model, use the string identifier (e.g., `"euler"`, `"rk4"`), which maps to the corresponding solver class (`EulerStep`, `RungeKuttaStep`).
+
+**Solver identifiers (config/CLI) vs class names:**
+
+| Config String | Class Name | Method |
+|---------------|------------|--------|
+| `"euler"` | `EulerStep` | First-order Euler |
+| `"rk4"` | `RungeKuttaStep` | 4th-order Runge-Kutta |
 
 ### 1. EulerStep
 

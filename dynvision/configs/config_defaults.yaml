@@ -1,45 +1,155 @@
-# Namespace
+# Note that defaults parameters in config files overwrite model class defaults.
+# Model parameters that are set as wildcards in the respective filenames have higher priority.
+
+# ===== NAMESPACE =====
 classifier_name: classifier
 
-# Model
-retain_graph: False  # retain the computational graph for repeated backprop paths
+# ===== MODEL STATUS =====
 status: trained
-n_timesteps: 20
-dt: 2  # ms
-tau: 9  # ms
-t_recurrence: 6  # ms
-t_feedforward: 10  # ms
-t_skip: 10  # ms
-t_feedback: 10  # ms
-recurrence_type: 'none'
-integration_strategy: 'additive'  # 'additive' or 'multiplicative'
-dynamics_solver: "euler" 
-init_with_pretrained: False
-store_train_responses: 0 # n_batches
-store_val_responses: 1  # n_batches
-store_test_responses: 2  # n_batches
-store_responses_on_cpu: True
+
+# ===== INIT MODE OVERRIDES =====
+# Parameters specific to model initialization
+init:
+  # Data configuration for initialization
+  data:
+    use_ffcv: false              # Don't require FFCV dataset for init
+    use_distributed: false       # Single-process initialization
+    num_workers: 0               # Single-threaded data loading
+    pin_memory: false            # No need for pinned memory
+  
+  model:
+    store_responses: 0           # Don't store responses during init
+
+# ===== TRAINING MODE OVERRIDES =====
+# Parameters specific to model training
+train:
+  # Data configuration for training
+  data:
+    train: true                  # Enable training mode (augmentation, etc.)
+    shuffle: true                # Shuffle training data
+    drop_last: true              # Drop incomplete batches
+    use_distributed: false       # Override in distributed mode if needed
+  
+  # Trainer configuration for training
+  trainer:
+    enable_progress_bar: false    # Show training progress
+    enable_checkpointing: true   # Save model checkpoints
+
+# ===== TESTING MODE OVERRIDES =====
+# Parameters specific to model testing and evaluation
+test:
+  # Base test overrides (apply to any component)
+  verbose: true                  # Enable detailed logging
+
+  model:
+    init_with_pretrained: false
+  
+  # Data configuration for testing
+  data:
+    train: false                 # Evaluation mode (no augmentation)
+    shuffle: false               # Sequential sampling
+    sampler: "RoundRobinSampler" # Representative sampling across dataset
+    use_distributed: false       # Single-process testing
+    use_ffcv: false              # Use standard PyTorch for compatibility
+    pin_memory: true             # Pin memory for faster GPU transfer
+    drop_last: true              # Consistent batch sizes
+    prefetch_factor: null        # Disable prefetching
+    num_workers: 4               # Moderate parallelism
+    batch_size: 32               # Smaller batch size for testing
+  
+  # Trainer configuration for testing
+  trainer:
+    devices: 1                   # Single device for determinism
+    num_nodes: 1                 # Single node
+    strategy: "auto"             # Automatic strategy selection
+    accelerator: "auto"          # Automatic accelerator selection
+    logger: null                 # No training logger
+    enable_checkpointing: false  # No checkpoints during testing
+    enable_progress_bar: true    # Show testing progress
+  
+  # Model configuration for testing
+  model:
+    store_responses_on_cpu: true # Store responses on CPU to save GPU memory
+
+# ===== CORE ARCHITECTURE =====
+# # Framework defaults - models can override in their __init__
+# n_classes: 10  # Number of output classes
+# input_dims: [1, 3, 224, 224]  # (timesteps, channels, height, width)
+# n_timesteps: 20  # Number of temporal timesteps
+# data_presentation_pattern: [1]  # 1 = present input, 0 = blank
+# input_adaption_weight: 0.0  # Weight for consecutive timestep inputs
+# init_with_pretrained: false
+
+# # ===== BIOLOGICAL PARAMETERS =====
+# dt: 2  # ms - integration time step
+# tau: 10  # ms - neural time constant
+# t_feedforward: 0  # ms - feedforward delay
+# t_recurrence: 6  # ms - recurrent delay
+# t_feedback: 34  # ms - feedback delay
+# t_skip: 0  # ms - skip connection delay
+# dynamics_solver: "euler"  # "euler" or "rk4"
+# idle_timesteps: 0  # Idle timesteps for convergence
+# feedforward_only: False  # Use only feedforward connections
+# truncated_bptt_timesteps: 0  # Truncated backprop through time - detach every N timesteps (0=disabled)
+
+# # ===== RECURRENT ARCHITECTURE =====
+# recurrence_type: "none"  # "full", "self", "depthwise", etc.
+
+# # ===== CONNECTIVITY =====
+# skip: False  # Enable skip connections
+# feedback: False  # Enable feedback connections
+
+# # ===== NONLINEARITIES =====
+# supralinearity: 1  # Supralinearity exponent
+
+# ===== RESPONSE STORAGE =====
+store_responses: 0  # DEPRECATED: use store_test_responses
+store_train_responses: 0  # n_batches
+store_val_responses: 0  # n_batches
+store_test_responses: 12  # n_batches
+store_responses_on_cpu: True  # Store on CPU to save GPU memory
+early_test_stop: True  # Stop testing early when buffer filled
+response_resolution: layer  # "unit" = full tensors, "layer" = spatially averaged (~100x smaller)
+
+# ===== LOSS CONFIGURATION =====
+loss: CrossEntropyLoss  # Loss function name
+loss_reaction_time: 0  # ms - reaction time for loss calculation
+non_label_index: -1  # Index for non-label timesteps
+
+# ===== TRAINING BEHAVIOR =====
+target_dtype: "float16"  # Target dtype for model outputs
+retain_graph: False  # Retain computational graph for repeated backprop
 
 # Data
-data_name: mnist
+data_name: imagenette
 data_group: all
-data_timesteps: 1
-prefetch_factor: 1
+train: true
+use_distributed: false
+pixel_range: "0-1"
+encoding: image
+writer_mode: proportion
+max_resolution: 224
+compress_probability: 0.25
+jpeg_quality: 60
+chunksize: 1000
+page_size: 4194304  # 4 MiB
+batches_ahead: 3
+shuffle: true
+cache_size: 1000
 
 # Training run
-seed: "0000"
-train_ratio: 0.8
-epochs: 200
-batch_size: 64
-check_val_every_n_epoch: 15
+seed: 0
+train_ratio: 0.9
+epochs: 300
+check_val_every_n_epoch: 10
 log_every_n_steps: 20
 accumulate_grad_batches: 4
 num_sanity_val_steps: 0
-precision: "bf16-mixed"
+precision: "32"
 profiler: None
 benchmark: True
 enable_progress_bar: False
-limit_val_batches: 0.25
+limit_val_batches: 0.2
 reload_dataloaders_every_n_epochs: 0
 automatic_optimization: True
 clip_gradients: False
@@ -47,33 +157,57 @@ gradient_clip_algorithm: "norm"  # "norm" or "value"
 gradient_clip_val: 1.0  # global clip value
 deterministic: False  # Consider setting to true if unstable
 devices: 1
+num_nodes: 1
+accelerator: auto
+strategy_kwargs: {}  # Strategy-specific keyword arguments (see config_modes.yaml for examples)
+early_stopping_min_delta: 0.0
+early_stopping_monitor: val_loss
+early_stopping_mode: min
+save_top_k: 2
+monitor_checkpoint: val_loss
+checkpoint_mode: min
+save_last: true
+every_n_epochs: 50
+
+# DataLoader
+batch_size: 192
+test_batch_size: 32
+order: "QUASI_RANDOM"
+os_cache: True
+# chunksize: 5000
+drop_last: True  # Ensure all batches are of the same size
+use_ffcv: False
+num_workers: 4
+persistent_workers: True
+pin_memory: False
+prefetch_factor: 1
+dataloader_kwargs: {}  # Additional custom arguments for dataloader functions
 
 # Test run
 logger: False
+verbose: false
 
-# Loss
-loss: 
+# ===== LOSS CONFIGURATION (DETAILED) =====
+loss:
   - CrossEntropyLoss
 loss_configs:
   CrossEntropyLoss:
     weight: 1
     ignore_index: -1
-  EnergyLoss:
-    weight: 0.1
-    p: 1
-loss_reaction_time: 0  # ms (+ residual time)
-non_label_index: -1
-non_input_value: -1
+  ActivityLoss:
+    weight: 0.0002
+    ord: 1
+non_input_value: 0
 
-# Optimizer
+# ===== OPTIMIZER CONFIGURATION =====
 optimizer: Adam
 optimizer_kwargs:
   weight_decay: 0.0005
   fused: False
 optimizer_configs:
-  monitor: train_loss
+  monitor: val_loss
 
-# Learning rate parameter groups
+# ===== LEARNING RATE PARAMETER GROUPS =====
 lr_parameter_groups:
   regular:
     lr_factor: 1.0
@@ -82,22 +216,28 @@ lr_parameter_groups:
   feedback:
     lr_factor: 0.5
 
-# Learning rate
+# ===== LEARNING RATE & SCHEDULER =====
 learning_rate: 0.0002
+# scheduler: LinearWarmupCosineAnnealingLR
 scheduler: CosineAnnealingLR
 scheduler_kwargs:
-  T_max: 250
+  # warmup_epochs: 10
+  # max_epochs: 350
+  # warmup_start_lr: 0.0000001
+  # eta_min: 0.0000001
+  T_max: 500
 scheduler_configs:
   interval: epoch
   frequency: 1
   monitor: train_loss
   name: lr_scheduled
 lr_scaling:
-  enabled: False  # whether to scale learning rate with batch size
+  enabled: True  # whether to scale learning rate with batch size
   ref_batch_size: 64  # reference batch size for scaling
   threshold_factor: 8  # maximum scaling threshold
 
 # System
 log_level: info
-use_executor: False  # automatic setting (don't change)
+# use_executor removed: cluster execution now auto-detected via environment variables
+# See: docs/development/planning/cluster-execution.md
 verbose: True

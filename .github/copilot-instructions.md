@@ -1,0 +1,36 @@
+# DynVision Copilot Instructions
+- **Prime Context**: skim `docs/development/guides/ai-style-guide.md` then `docs/development/guides/claude-guide.md` before coding; they describe research workflow expectations.
+- **Active Codebase**: treat `dynvision/` as authoritative; `SCRIPTS/` mirrors legacy structure and should only be touched when explicitly required for backward compatibility.
+- **Architecture Skeleton**: Models inherit `dynvision/base/BaseModel` (TemporalBase → LightningBase → StorageBufferMixin → MonitoringMixin → DtypeDeviceCoordinatorMixin).
+- **Temporal Core**: `dynvision/base/temporal.py` drives timestep loops; customize by setting `self.layer_names` and optional `self.layer_operations` (reserved ops: `layer`, `tstep`, `addskip`, `addfeedback`, `record`, `delay`, `pool`, `norm`).
+- **Component Library**: Use `dynvision/model_components/` for recurrence (`recurrence.py`), solvers (`dynamics_solver.py`), skip/feedback (`layer_connections.py`), retina, supralinearity, etc.; prefer extending these modules over ad-hoc layers.
+- **Parameter Flow**: expose new kwargs via `alias_kwargs` decorator and corresponding Pydantic classes in `dynvision/params/*.py`; update aliases so Snakemake CLI short-hands remain functional (`rctype`, `tff`, `trc`, etc.).
+- **Config Sources**: YAML files in `dynvision/configs/` stack as defaults → experiment → runtime overrides; `workflow/config_handler.py` injects modes (`debug`, `large_dataset`, `distributed`) and wildcards, so keep keys snake_case and mode-friendly.
+- **Workflow Entry**: Run Snakemake from `dynvision/workflow/` (`cd dynvision/workflow && snakemake --config experiment=duration model_name=DyRCNNx4 data_name=cifar100`); CLI wildcards map to YAML keys and end up in generated configs under `logs/configs/`.
+- **Runtime Scripts**: Snakemake rules call `dynvision/runtime/{init_model,train_model,test_model}.py`; when changing model/trainer/data params ensure these scripts deserialize new fields through their `Params` dataclasses.
+- **Data Layout**: `project_paths.py` controls local vs cluster directories and still defaults to the legacy `rhythmic_visual_attention` working tree; adjust that file if you relocate datasets to avoid mismatched symlinks in `data/{raw,interim,processed}`.
+- **Cluster Execution**: Scripts in `dynvision/cluster/` plus `workflow/profiles/` template SLURM jobs; replicate credentials by editing `snakejob.sh` and matching Makefile sync targets (`sync_code*`, `sync_data*`).
+- **Make Targets**: `Makefile` still references the old package name; prefer direct `black --config pyproject.toml dynvision` and `flake8 dynvision` until the targets are modernized.
+- **Dependency Baseline**: Python 3.11 with PyTorch ≥2.2, PyTorch Lightning, Snakemake 9, FFCV 1.0; install via `pip install -e .` inside the activated `dynvision` conda env.
+- **Testing Reality**: No automated test suite exists (`pytest` deps unused); rely on targeted scripts (e.g., `runtime/init_model.py --help`) and short Snakemake dry-runs (`snakemake -n ...`) when validating changes.
+- **Logging & Storage**: `StorageBufferMixin` writes responses; check `logs/` or `logs/configs/` for generated files; `project_paths` reroutes large artifacts to `/scratch` when hostname matches cluster patterns.
+- **Monitoring Hooks**: Use `MonitoringMixin` utilities (`log_param_stats`, `_check_weights`) when debugging NaNs; enabling `self.monitor` requires the mixin to stay in the MRO.
+- **Model Init Order**: `BaseModel.__init__` saves all serializable attrs after instantiation; avoid storing tensors or callables on `self` before calling `super().__init__()` unless they should be persisted.
+- **Adding Layers**: When extending DyRCNN variants (`models/dyrcnn.py`), wire new modules into `layer_operations` and implement matching helper modules (`addskip_{layer}`, `tstep_{layer}`); keep trunc-normal weight init in `_init_parameters`.
+- **Feedforward-Only Mode**: Respect `feedforward_only` toggles by skipping operations listed in `self.non_feedforward_operations`; verify recurrent modules guard against `None` inputs for idle timesteps.
+- **Parameter Recording**: `BaseModel._save_all_hyperparameters` captures scalar tensors; for structured metadata use primitive containers (dict/list) so Lightning checkpoints remain serializable.
+- **Visualization Workflow**: Response processing lives in `workflow/snake_visualizations.smk` and `visualization/`; ensure new metrics write via `dynvision/utils/visualization_utils.py` to stay compatible with Snakemake rules.
+- **Docs Alignment**: Update `docs/development/guides/claude-guide.md` and related markdown whenever changing architecture or CLI signatures; documentation is treated as authoritative for AI assistants.
+- **Legacy Mirrors**: If you must keep Rhythmic Visual Attention repo parity, edit both this package and the mirrored copy under `/home/.../rhythmic_visual_attention/`; otherwise focus on DynVision and document divergences.
+- **Before PR**: Run `black`, `flake8`, and a Snakemake dry-run for affected experiments; verify `logs/configs/` diff to confirm new parameters propagated.
+- **When Confused**: Cross-check `docs/development/guides/claude-guide.md` sections on multi-inheritance and common workflows—they explain most non-obvious design choices.
+
+## AI Assistant Working Checklist
+- [ ] Refresh context: skim `docs/development/guides/ai-style-guide.md`, then `docs/development/guides/claude-guide.md`, and glance at `docs/development/index.md` when starting significant work.
+- [ ] Trace end-to-end flow before coding: config → params (`dynvision/params`) → runtime scripts (`dynvision/runtime`) → workflow rules (`dynvision/workflow`).
+- [ ] Check for existing utilities or patterns in `dynvision/model_components/`, `dynvision/utils/`, and YAML configs before creating new abstractions.
+- [ ] Prefer configuration or parameter updates over new code; when extending code, wire changes through alias decorators and Params classes.
+- [ ] Validate scientific correctness: confirm time units, solver stability, tensor shapes, and reproducibility hooks (seeds, logging) after modifications.
+- [ ] Profile or reason about performance impacts, keeping computation on GPU and respecting data buffers when touching temporal loops.
+- [ ] Communicate trade-offs (scientific impact, maintainability, effort) and offer 2–3 options when requirements are uncertain.
+- [ ] Sync documentation, configs, and instructions with code changes; call out open questions or testing gaps immediately.

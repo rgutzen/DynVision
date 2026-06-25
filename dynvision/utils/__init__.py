@@ -42,6 +42,16 @@ from .config_utils import (
     alias_kwargs,
 )
 
+from .logging_utils import (
+    configure_logging,
+    log_section,
+    log_section_table,
+    format_value,
+    SummaryItem,
+    build_section,
+    resolve_signature_defaults,
+)
+
 from .data_utils import (
     load_df,
     identity,
@@ -57,6 +67,7 @@ from .torch_utils import (
     get_effective_dtype_from_precision,
     determine_target_dtype,
     calculate_conv_out_dim,
+    _torch_load_with_retries,
 )
 
 from .model_utils import (
@@ -67,14 +78,25 @@ from .model_utils import (
 )
 
 from .visualization_utils import (
-    layer_power,
-    peak_time,
-    peak_height,
-    peak_ratio,
+    aggregate_plot_data,
     calculate_accuracy,
+    calculate_label_indicator,
+    find_classifier_meta_columns,
+    find_classifier_value_columns,
+    find_layer_response_columns,
+    layer_response_avg,
+    layer_response_std,
     load_responses,
     load_responses_in_batches,
+    parse_error_type,
+    peak_height,
+    peak_ratio,
+    peak_time,
+    time_averaged_response,
+    resolve_measure_columns,
     save_plot,
+    standardize_category_value,
+    standardize_series,
 )
 
 # For backward compatibility, expose all utilities at package level
@@ -100,6 +122,14 @@ __all__ = [
     "filter_kwargs",
     "update_config_with_kwargs",
     "alias_kwargs",
+    # Logging utilities
+    "configure_logging",
+    "log_section",
+    "log_section_table",
+    "format_value",
+    "SummaryItem",
+    "build_section",
+    "resolve_signature_defaults",
     # Data utilities
     "load_df",
     "identity",
@@ -113,17 +143,29 @@ __all__ = [
     "get_effective_dtype_from_precision",
     "determine_target_dtype",
     "calculate_conv_out_dim",
+    "_torch_load_with_retries",
     # Model utilities
     "check_stability",
     "check_weights",
     "handle_errors",
     "load_model_and_weights",
     # Visualization utilities
-    "layer_power",
+    "standardize_category_value",
+    "standardize_series",
+    "parse_error_type",
+    "aggregate_plot_data",
+    "find_layer_response_columns",
+    "find_classifier_value_columns",
+    "find_classifier_meta_columns",
+    "resolve_measure_columns",
+    "layer_response_avg",
+    "layer_response_std",
     "peak_time",
     "peak_height",
     "peak_ratio",
+    "time_averaged_response",
     "calculate_accuracy",
+    "calculate_label_indicator",
     "load_responses",
     "load_responses_in_batches",
     "save_plot",

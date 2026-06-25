@@ -8,8 +8,13 @@ import pytorch_lightning as pl
 import torch
 import wandb
 
-from dynvision import losses
+from dynvision.losses import lr_scheduler
 from dynvision.utils import alias_kwargs
+from dynvision.utils.performance_measures import (
+    calculate_accuracy,
+    calculate_confidence,
+)
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +25,7 @@ class LightningBase(pl.LightningModule):
     @alias_kwargs(
         lr="learning_rate",
         solver="dynamics_solver",
-        lossrt="loss_reaction_time",
+        activityloss="activity_loss_weight",
     )
     def __init__(
         self,
@@ -30,7 +35,7 @@ class LightningBase(pl.LightningModule):
         criterion_params: List[Tuple[str, Dict[str, Any]]] = [
             ("CrossEntropyLoss", {"weight": 1.0})
         ],
-        loss_reaction_time: float = 0.0,
+        activity_loss_weight: Optional[float] = None,
         non_label_index: int = -1,
         # Optimizer configuration
         optimizer: str = "Adam",
@@ -47,14 +52,17 @@ class LightningBase(pl.LightningModule):
         log_every_n_steps: int = 50,
         **kwargs: Any,
     ) -> None:
-        super().__init__()
-        pl.LightningModule.__init__(self)
-
-        # Store Lightning-specific attributes
+        # Store Lightning-specific attributes BEFORE calling super()
+        # This ensures they're available if other classes need them
         self.retain_graph = retain_graph
         self.criterion_params = criterion_params
-        self.loss_reaction_time = float(loss_reaction_time)
         self.non_label_index = non_label_index
+        self.activity_loss_weight = (
+            float(activity_loss_weight) if activity_loss_weight is not None else None
+        )
+        self.update_criterion_params(
+            "ActivityLoss", {"weight": self.activity_loss_weight}
+        )
 
         # Optimizer attributes
         self.optimizer = optimizer
@@ -62,7 +70,6 @@ class LightningBase(pl.LightningModule):
         self.optimizer_configs = optimizer_configs
         self.learning_rate = float(learning_rate)
         self.lr_parameter_groups = lr_parameter_groups
-        self.loss_reaction_time = float(loss_reaction_time)
 
         # Scheduler attributes
         self.scheduler = scheduler
@@ -73,39 +80,97 @@ class LightningBase(pl.LightningModule):
         self.log_level = log_level
         self.log_every_n_steps = int(log_every_n_steps)
 
+        # Call super().__init__() with kwargs to continue MRO chain
+        super().__init__(**kwargs)
+
     # Core training steps
     #####################
     def model_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, **kwargs
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        compute_confidence: bool = True,
+        **kwargs,
     ) -> Tuple[torch.Tensor, float, torch.Tensor]:
 
         if hasattr(self, "_process_batch"):
             batch = self._process_batch(batch, batch_idx)
 
-        inputs, label_indices, *paths = batch
+        # inputs: (batch_size, n_timesteps, n_channels, height, width)
+        inputs, label_index, *paths = batch
+        batch_size, n_timesteps = label_index.shape
+
+        # Create image indices for storage
+        image_index = torch.arange(batch_size, device=inputs.device) + (
+            batch_idx * batch_size
+        )
+        image_index = image_index.unsqueeze(1).expand(batch_size, n_timesteps)
+
+        # Extract first non-negative label index for each sample in the batch
+        first_label_index = label_index[
+            torch.arange(label_index.size(0), device=label_index.device),
+            torch.argmax((label_index >= 0).float(), dim=1),
+        ]
+        first_label_index = first_label_index.unsqueeze(1).expand(
+            batch_size, n_timesteps
+        )
 
         # forward
-        outputs = self.forward(inputs, **kwargs)
+        outputs = self.forward(
+            inputs, **kwargs
+        )  # shape: batch_size, n_timesteps, n_classes
 
         # calculate loss
         loss = self.compute_loss(
             outputs,
-            label_indices=label_indices,
+            label_index=label_index,
         )
-        # calculate accuracy
-        guess_indices = self.predictor(outputs)
-        accuracy = self.calc_accuracy(label_indices, guess_indices)
+        # calculate performance metrics
+        guess_index = self.predictor(outputs)
+        accuracy = self.calculate_accuracy(guess_index, label_index)
+
+        metrics = {
+            "loss": loss,
+            "accuracy": accuracy,
+        }
+
+        # Extract confidences at guess and first label positions
+        if compute_confidence:
+            guess_confidence, first_label_confidence = self.calculate_confidence(
+                outputs, [guess_index, first_label_index]
+            )
+            metrics.update(
+                {
+                    "guess_confidence": guess_confidence.mean(),
+                    "first_label_confidence": first_label_confidence.mean(),
+                }
+            )
+        else:
+            guess_confidence = None
+            first_label_confidence = None
 
         if hasattr(self, "storage"):
-            self.storage.store_records(
-                guess_indices, label_indices, label_indices
-            )  # todo: flexibly accept image_indices
+            # Store records with flexible extras - all additional fields go to extras dict
+            storage_kwargs = {
+                "guess_index": guess_index,
+                "label_index": label_index,
+                "image_index": image_index,
+                "first_label_index": first_label_index,
+            }
+            if compute_confidence:
+                storage_kwargs.update(
+                    {
+                        "guess_confidence": guess_confidence,
+                        "first_label_confidence": first_label_confidence,
+                    }
+                )
+            self.storage.store_records(**storage_kwargs)
 
         del outputs
-        return loss, accuracy
+        return metrics
 
     def predictor(self, outputs: torch.Tensor) -> torch.Tensor:
-        return torch.argmax(outputs, dim=-1)
+        return torch.argmax(torch.softmax(outputs, dim=-1), dim=-1)
 
     # Lightning step methods
     ########################
@@ -123,17 +188,17 @@ class LightningBase(pl.LightningModule):
             torch.Tensor: Training loss.
         """
         batch_size = batch[0].size(0)
-        loss, accuracy = self.model_step(batch, batch_idx)
+        metrics = self.model_step(batch, batch_idx, compute_confidence=False)
 
-        metrics = {"train_loss": loss, "train_accuracy": accuracy}
+        train_metrics = {f"train_{k}": v for k, v in metrics.items()}
         self.log_dict(
-            metrics,
+            train_metrics,
             prog_bar=True,
             batch_size=batch_size,
             sync_dist=True,
             rank_zero_only=True,
         )
-        return loss
+        return metrics
 
     def validation_step(
         self,
@@ -152,18 +217,22 @@ class LightningBase(pl.LightningModule):
         """
 
         batch_size = batch[0].size(0)
-        loss, accuracy = self.model_step(batch, batch_idx)
 
-        metrics = {"val_loss": loss, "val_accuracy": accuracy}
+        with torch.no_grad():
+            metrics = self.model_step(batch, batch_idx)
+
+        val_metrics = {f"val_{k}": v for k, v in metrics.items()}
         self.log_dict(
-            metrics,
+            val_metrics,
             prog_bar=True,
             batch_size=batch_size,
             sync_dist=True,
             rank_zero_only=True,
         )
 
-        return loss, accuracy
+        torch.cuda.empty_cache()
+        gc.collect()
+        return metrics
 
     def test_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -179,89 +248,35 @@ class LightningBase(pl.LightningModule):
             Tuple[torch.Tensor, float]: Test loss and accuracy.
         """
         batch_size = batch[0].size(0)
-        loss, accuracy = self.model_step(batch, batch_idx)
+        metrics = self.model_step(batch, batch_idx)
 
-        metrics = {"test_loss": loss, "test_accuracy": accuracy}
+        test_metrics = {f"test_{k}": v for k, v in metrics.items()}
         self.log_dict(
-            metrics,
+            test_metrics,
             prog_bar=True,
             on_step=True,
             batch_size=batch_size,
             sync_dist=True,
             rank_zero_only=True,
         )
-        return loss, accuracy
-
-    # Loss and accuracy
-    ###################
-    def _init_loss(self) -> None:
-        self.criterion = []
-
-        if hasattr(self, "loss_reaction_time") and self.loss_reaction_time:
-            self.ignore_initial_n_labels = self.n_residual_timesteps + int(
-                self.loss_reaction_time / self.dt
-            )
-        else:
-            self.ignore_initial_n_labels = 0
-
-        for criterion_name, criterion_config in self.criterion_params:
-            # Set criterion weight
-            if "weight" in criterion_config.keys():
-                criterion_weight = criterion_config.pop("weight")
-            else:
-                criterion_weight = 1
-
-            # Add ignore_index for cross entropy loss if not specified
-            if (
-                criterion_name.lower() in ["crossentropyloss", "cross_entropy_loss"]
-                and "ignore_index" not in criterion_config
-            ):
-                criterion_config["ignore_index"] = self.non_label_index
-                logger.info(
-                    f"Setting ignore_index={self.non_label_index} for {criterion_name}"
-                )
-
-            logger.info(
-                f"Criterion: {criterion_name} with weight: {criterion_weight} and config: {criterion_config}"
-            )
-
-            # Init loss
-            if hasattr(losses, criterion_name):
-                criterion_fn = getattr(losses, criterion_name)(**criterion_config)
-                self.criterion += [(criterion_fn, criterion_weight)]
-
-            else:
-                raise ValueError(f"Invalid loss function: {criterion_name}")
-
-            # Init hooks if required
-            try:
-                criterion_fn.register_hooks(self)
-                logger.debug(f"registered hook for {criterion_fn}")
-            except Exception as e:
-                pass
-
-        return None
+        return metrics
 
     def compute_loss(
         self,
         outputs: torch.Tensor,
-        label_indices: torch.Tensor,
+        label_index: torch.Tensor,
     ) -> torch.Tensor:
 
         batch_size, *_, n_classes = outputs.shape
 
-        # Apply loss reaction time
-        if hasattr(self, "ignore_initial_n_labels") and self.ignore_initial_n_labels:
-            label_indices[:, : self.ignore_initial_n_labels] = self.non_label_index
-
         # Flatten time dimension
         outputs = outputs.view(-1, n_classes)
-        label_indices = label_indices.reshape(-1)
+        label_index = label_index.reshape(-1)
 
         # Quick validation
-        invalid_mask = (label_indices < 0) | (label_indices >= n_classes)
+        invalid_mask = (label_index < 0) | (label_index >= n_classes)
         if invalid_mask.all():
-            logger.warning(f"All labels invalid! \n {label_indices}")
+            logger.warning(f"All labels invalid! \n {label_index}")
             # return torch.tensor(0.0, device=outputs.device, requires_grad=True)
 
         # Calculate loss for each criterion
@@ -273,7 +288,7 @@ class LightningBase(pl.LightningModule):
             else:
                 weight = 1
 
-            loss_value = weight * criterion_fn(outputs, label_indices)
+            loss_value = weight * criterion_fn(outputs, label_index)
             loss_values[i] = loss_value
 
             self.log_dict(
@@ -291,26 +306,38 @@ class LightningBase(pl.LightningModule):
 
         return loss
 
-    def calc_accuracy(
+    def calculate_confidence(
         self,
-        label_indices: torch.Tensor,
-        guess_indices: torch.Tensor,
+        outputs: torch.Tensor,
+        indices: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Calculate confidence scores for the given outputs."""
+        return calculate_confidence(outputs, indices)
+
+    def calculate_accuracy(
+        self,
+        label_index: torch.Tensor,
+        guess_index: torch.Tensor,
     ) -> float:
+        return calculate_accuracy(label_index, guess_index)
 
-        # Create mask for valid labels (excluding non_label_index)
-        valid_mask = (label_indices >= 0) & (label_indices < self.n_classes)
-        if not valid_mask.all():
-            if valid_mask.any():
-                label_indices = label_indices[valid_mask]
-                guess_indices = guess_indices[valid_mask]
-            else:
-                logger.warning("All labels invalid, returning zero accuracy")
-                return 0.0
+    def backward(
+        self,
+        loss: torch.Tensor,
+        optimizer: Any = None,
+        optimizer_idx: int = 0,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Perform backward pass with optional retain_graph.
 
-        accuracy = (guess_indices == label_indices).float().mean().item()
-        return accuracy
-
-    def backward(self, loss: torch.Tensor) -> None:
+        Args:
+            loss: The loss tensor to backpropagate
+            optimizer: The optimizer (unused, for Lightning compatibility)
+            optimizer_idx: The optimizer index (unused, for Lightning compatibility)
+            *args: Additional positional arguments (unused, for Lightning compatibility)
+            **kwargs: Additional keyword arguments (unused, for Lightning compatibility)
+        """
         if self.retain_graph:
             loss.backward(retain_graph=True)
         else:
@@ -449,17 +476,72 @@ class LightningBase(pl.LightningModule):
         Returns:
             Dict[str, Any]: Scheduler configuration
         """
-        if not hasattr(torch.optim.lr_scheduler, self.scheduler):
+        if hasattr(lr_scheduler, self.scheduler):
+            scheduler = getattr(lr_scheduler, self.scheduler)(
+                optimizer, **self.scheduler_kwargs
+            )
+            return {
+                "scheduler": scheduler,
+                **self.scheduler_configs,
+            }
+        elif hasattr(torch.optim.lr_scheduler, self.scheduler):
+            scheduler = getattr(torch.optim.lr_scheduler, self.scheduler)(
+                optimizer, **self.scheduler_kwargs
+            )
+            return {
+                "scheduler": scheduler,
+                **self.scheduler_configs,
+            }
+        else:
             raise ValueError(f"Unknown scheduler: {self.scheduler}")
 
-        scheduler = getattr(torch.optim.lr_scheduler, self.scheduler)(
-            optimizer, **self.scheduler_kwargs
-        )
+    def update_criterion_params(
+        self, criterion_name: str, config: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Generalized updater for self.criterion_params.
 
-        return {
-            "scheduler": scheduler,
-            **self.scheduler_configs,
-        }
+        - Merges non-None entries from `config` into any existing criterion configs
+            whose name matches `criterion_name` (case-insensitive).
+        - If no matching criterion exists, will append a new (name, config) tuple
+            only when `config` contains at least one non-None value.
+        - Avoids mutating caller-owned dicts by copying configs.
+        """
+        if config is None:
+            return
+
+        # Ensure criterion_params exists and is a list
+        if not hasattr(self, "criterion_params") or self.criterion_params is None:
+            self.criterion_params = []
+
+        name_lower = criterion_name.lower()
+        updated = False
+
+        for idx, (cname, cconfig) in enumerate(list(self.criterion_params)):
+            if isinstance(cname, str) and cname.lower() == name_lower:
+                # copy existing config (or start new) and merge non-None updates
+                new_config = dict(cconfig) if isinstance(cconfig, dict) else {}
+                for k, v in config.items():
+                    if v is not None:
+                        new_config[k] = v
+                # replace tuple with copied config to avoid mutating caller objects
+                self.criterion_params[idx] = (cname, dict(new_config))
+                logger.debug(
+                    f"Updated criterion_params[{idx}] ({cname}) with {config}"
+                )
+                updated = True
+
+        # If nothing matched, append only if config contains meaningful values
+        if not updated:
+            if any(v is not None for v in config.values()):
+                self.criterion_params.append((criterion_name, dict(config)))
+                logger.debug(
+                    f"Appended new criterion '{criterion_name}' with {config}"
+                )
+            else:
+                logger.debug(
+                    f"No update/appended for '{criterion_name}' because config values were all None"
+                )
 
     # Logging
     #########
@@ -489,13 +571,6 @@ class LightningBase(pl.LightningModule):
 
     # Hooks
     #######
-    def setup(self, stage: Optional[str] = None) -> None:
-        """Lightning setup hook."""
-        super().setup(stage) if hasattr(super(), "setup") else None
-
-        # Initialize loss functions
-        self._init_loss()
-
     def on_fit_start(self) -> None:
         """Called at the start of fit."""
         super().on_fit_start() if hasattr(super(), "on_fit_start") else None
@@ -529,39 +604,61 @@ class LightningBase(pl.LightningModule):
         super().on_test_start() if hasattr(super(), "on_test_start") else None
 
     def on_train_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
-        """Called before each training batch."""
-        (
-            super().on_train_batch_start(batch, batch_idx)
-            if hasattr(super(), "on_train_batch_start")
-            else None
-        )
+        """Called before each training batch.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
+        if hasattr(super(), "on_train_batch_start"):
+            super().on_train_batch_start(batch, batch_idx, dataloader_idx)
 
     def on_validation_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
-        """Called before each validation batch."""
-        (
-            super().on_validation_batch_start(batch, batch_idx)
-            if hasattr(super(), "on_validation_batch_start")
-            else None
-        )
+        """Called before each validation batch.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
+        if hasattr(super(), "on_validation_batch_start"):
+            super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
 
     def on_train_batch_end(
-        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self,
+        outputs: Any,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
-        """Called after each training batch."""
-        (
-            super().on_train_batch_end(outputs, batch, batch_idx)
-            if hasattr(super(), "on_train_batch_end")
-            else None
-        )
+        """Called after each training batch.
 
-    def on_before_optimizer_step(self, optimizer: Any) -> None:
-        """Called before optimizer step."""
-        (
-            super().on_before_optimizer_step(optimizer)
-            if hasattr(super(), "on_before_optimizer_step")
-            else None
-        )
+        Args:
+            outputs: Outputs from training_step
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
+        if hasattr(super(), "on_train_batch_end"):
+            super().on_train_batch_end(outputs, batch, batch_idx, dataloader_idx)
+
+    def on_before_optimizer_step(self, optimizer: Any, optimizer_idx: int = 0) -> None:
+        """Called before optimizer step.
+
+        Args:
+            optimizer: The optimizer being stepped
+            optimizer_idx: The optimizer index (for multiple optimizers)
+        """
+        if hasattr(super(), "on_before_optimizer_step"):
+            super().on_before_optimizer_step(optimizer, optimizer_idx)

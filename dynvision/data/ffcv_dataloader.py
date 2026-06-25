@@ -40,10 +40,6 @@ def _build_image_pipeline(
     if encoding == "tensor":
         pipeline = [NDArrayDecoder(), ToTensor()]
     elif encoding == "image":
-        # pipeline = [
-        #     SimpleRGBImageDecoder(),
-        #     RandomResizedCrop(scale=(1, 1), ratio=(1, 1), size=resolution),
-        # ]
         pipeline = [RandomResizedCropRGBImageDecoder((resolution, resolution))]
     else:
         raise ValueError(f"Unsupported encoding type: {encoding}")
@@ -72,8 +68,8 @@ def _build_image_pipeline(
         pipeline.append(ToDevice(device))
 
     # Then extend time dimension after tensor is in correct format
-    # if n_timesteps > 1:
-    #     pipeline.append(ExtendDataTimeFFCV(n_timesteps))
+    if n_timesteps > 1:
+        pipeline.append(ExtendDataTimeFFCV(n_timesteps))
 
     return pipeline
 
@@ -91,8 +87,8 @@ def _build_label_pipeline(
     if device:
         pipeline.append(ToDevice(device))
 
-    # if n_timesteps > 1:
-    #     pipeline.append(ExtendLabelTimeFFCV(n_timesteps))
+    if n_timesteps > 1:
+        pipeline.append(ExtendLabelTimeFFCV(n_timesteps))
 
     return pipeline
 
@@ -103,8 +99,14 @@ def get_ffcv_dataloader(
     batch_size: int = 1,
     data_timesteps: int = 0,
     num_workers: int = 4,
-    data_transform: Optional[Union[str, List[str]]] = None,
-    target_transform: Optional[str] = None,
+    # Transform interface
+    transform_backend: str = "ffcv",
+    transform_context: str = "train",
+    transform_preset: Optional[str] = None,
+    # Target transform interface
+    target_data_name: Optional[str] = None,
+    target_data_group: str = "all",
+    # Other parameters
     normalize: Optional[Tuple[List, List]] = None,  # (mean, std)
     order: OrderOption = OrderOption.RANDOM,
     os_cache: Optional[bool] = None,
@@ -112,7 +114,7 @@ def get_ffcv_dataloader(
     resolution: int = 224,
     drop_last: bool = True,
     dtype: Optional[torch.dtype] = torch.float16,
-    batches_ahead: int = 3,
+    batches_ahead: int = 2,
     train: bool = True,
     verbose: bool = False,
     device: Optional[torch.device] = None,
@@ -134,10 +136,28 @@ def get_ffcv_dataloader(
             )
             distributed = False
 
-    target_transform = get_target_transform(target_transform) or []
+    # Get target transforms
+    if target_data_name:
+        target_transform = (
+            get_target_transform(
+                data_name=target_data_name,
+                data_group=target_data_group,
+            )
+            or []
+        )
+    else:
+        target_transform = []
 
-    if train:    
-        data_transform = get_data_transform(data_transform) or []
+    # Get data transforms
+    if train:
+        data_transform = (
+            get_data_transform(
+                backend=transform_backend,
+                context=transform_context,
+                dataset_or_preset=transform_preset,
+            )
+            or []
+        )
     else:
         encoding = "image"
         data_transform = []

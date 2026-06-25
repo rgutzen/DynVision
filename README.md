@@ -1,9 +1,14 @@
 # DynVision: A Modeling Toolbox for Biologically Plausible Recurrent Visual Networks
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-red.svg)](https://pytorch.org/)
+[![PyPI](https://img.shields.io/pypi/v/dynvision)](https://pypi.org/project/dynvision/)
+[![CI](https://github.com/Lindsay-Lab/DynVision/actions/workflows/test.yml/badge.svg)](https://github.com/Lindsay-Lab/DynVision/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Preprint](https://badges.ws/badge/Preprint-10.1101%2F2025.08.11.669756%20-B31B1B)](https://doi.org/10.1101/2025.08.11.669756)
+<!-- Zenodo DOI badge: replace XXXXXXXX after first GitHub release triggers archival -->
+<!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXXX) -->
+[![Docs](https://img.shields.io/badge/docs-up%20to%20date-brightgreen)](https://dynvision.readthedocs.io)
 
 DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks and how these networks can be aligned with properties of biological visual systems.
 
@@ -26,20 +31,25 @@ DynVision is a modular toolbox for constructing and evaluating recurrent convolu
 - **Efficient Workflow Management**: Leverages Snakemake for reproducible experiments and parameter sweeps
 - **PyTorch Lightning Integration**: Standardized training with minimal boilerplate
 - **Optimized Performance**: Fast data loading with FFCV, GPU acceleration, mixed precision
-- **Comprehensive Model Zoo**: Access pre-implemented architectures like AlexNet, CorNetRT, ResNet, CordsNet, and DyRCNNx4
+- **Pre-built Model Zoo**: Access pre-implemented architectures like AlexNet, CorNetRT, ResNet variants, CordsNet, and DyRCNNx4/8
 
 ## Installation
+
+**Python requirement**: Python 3.11+ (3.12 support pending FFCV compatibility testing — see [Python 3.12 Compatibility](docs/development/python-3.12-compatibility.md)).
 
 ```bash
 # Clone repository
 git clone https://github.com/Lindsay-Lab/dynvision.git
 cd dynvision
 
-# Create conda environment
+# Create conda environment (recommended)
 conda create -n dynvision python=3.11
 conda activate dynvision
 
-# Install dependencies
+# Install PyTorch with CUDA (adjust as needed)
+conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
+
+# Install DynVision in editable mode
 pip install -e .
 ```
 
@@ -92,23 +102,37 @@ snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rcty
 - [API Reference](docs/reference/index.md): Technical documentation
 - [Concepts](docs/explanation/concepts.md): Explanation of core concepts
 - [Contributing](docs/contributing.md): How to contribute to the project
+- [Developer Guide](docs/development/index.md): Resources for contributors and AI assistants
 
-<!-- ## Citation
+> **For Claude Code Users**: The comprehensive developer guide (formerly `CLAUDE.md` in project root) is now at [`docs/development/guides/claude-guide.md`](docs/development/guides/claude-guide.md).
 
-If you use DynVision in your research, please cite our paper:
+## Citation
+
+If you use DynVision in your research, please cite both the software and the preprint:
 
 ```bibtex
-@article{dynvision2023,
-  title={DynVision: A Modeling Toolbox for Biologically Plausible Recurrent Visual Networks},
-  author={Anonymous},
-  journal={ArXiv},
-  year={2023}
+@software{Gutzen_DynVision,
+  author       = {Gutzen, Robin and Lindsay, Grace W.},
+  title        = {DynVision: A Modeling Toolbox for Biologically Plausible
+                   Recurrent Visual Networks},
+  year         = 2026,
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.XXXXXXXX},
+  url          = {https://github.com/Lindsay-Lab/DynVision},
+  note         = {Replace XXXXXXXX with DOI from https://zenodo.org after first release}
 }
-``` 
 
-TODO: add rrid, zenodo
-
--->
+@article{Gutzen2025_2025.08.11.669756,
+  title        = {DynVision: A Toolbox for Biologically Plausible Recurrent
+                   Convolutional Networks},
+  shorttitle   = {{{DynVision}}},
+  author       = {Gutzen, Robin and Lindsay, Grace W.},
+  year         = 2025,
+  pages        = {2025.08.11.669756},
+  publisher    = {bioRxiv},
+  doi          = {10.1101/2025.08.11.669756},
+}
+```
 
 ## License
 

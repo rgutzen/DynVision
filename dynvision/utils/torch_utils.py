@@ -9,6 +9,7 @@ This module provides PyTorch-specific utilities:
 
 import logging
 import random
+import time
 from contextlib import contextmanager
 from typing import Any, Optional, Tuple, Union, Callable
 
@@ -360,8 +361,44 @@ def get_effective_dtype_from_precision(precision: str) -> str:
         "64": "float64",
     }
 
-    return precision_to_dtype.get(precision, "float32")
+    return precision_to_dtype.get(precision, "float16")
 
-def calculate_conv_out_dim(in_dim: int, kernel_size: int, padding: int, stride: int = 1) -> int:
+
+def calculate_conv_out_dim(
+    in_dim: int, kernel_size: int, padding: int, stride: int = 1
+) -> int:
     out_dim = int((in_dim + 2 * padding - kernel_size) / stride) + 1
     return out_dim
+
+
+def _torch_load_with_retries(
+    path_or_buf: Union[str, "PathLike[str]"],
+    map_location: Union[str, torch.device] = "cpu",
+    weights_only: bool = False,
+    retries: int = 4,
+    initial_delay: float = 0.2,
+    backoff: float = 2.0,
+):
+    """Robust torch.load with retries for flaky filesystems."""
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max(1, retries) + 1):
+        try:
+            return torch.load(
+                path_or_buf, map_location=map_location, weights_only=weights_only
+            )
+        except Exception as e:  # noqa: BLE001
+            last_exc = e
+            if attempt < retries:
+                sleep_s = initial_delay * (backoff ** (attempt - 1))
+                logger.warning(
+                    "torch.load failed on %s (attempt %d/%d): %s; retrying in %.2fs",
+                    path_or_buf,
+                    attempt,
+                    retries,
+                    e,
+                    sleep_s,
+                )
+                time.sleep(sleep_s)
+            else:
+                break
+    raise RuntimeError(f"torch.load failed after {retries} attempts: {last_exc}")

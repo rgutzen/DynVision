@@ -6,25 +6,36 @@ including dataset dimension inference and pretrained model configuration.
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Any, Callable, ClassVar, Dict, Iterable, Optional, Tuple
 import logging
 
 from pydantic import Field, model_validator, ConfigDict
 
-from dynvision.params.base_params import BaseParams, DynVisionValidationError
+from dynvision.params.composite_params import CompositeParams
 from dynvision.params.model_params import ModelParams
 from dynvision.params.data_params import DataParams
+from dynvision.utils import log_section, format_value
 
 logger = logging.getLogger(__name__)
 
 
-class InitParams(BaseParams):
+class InitParams(CompositeParams):
     """
     Model initialization parameters with automatic dimension inference.
 
     Combines ModelParams and DataParams with initialization-specific configuration
     for creating and saving initialized models.
     """
+
+    mode_name: ClassVar[str] = "init"
+    component_classes: ClassVar[Dict[str, type]] = {
+        "model": ModelParams,
+        "data": DataParams,
+    }
+
+    # ===== COMMON PARAMETERS =====
+    seed: int = Field(description="Random seed for reproducibility")
+    log_level: str = Field(description="Logging level")
 
     # === CORE COMPONENT COMPOSITION ===
     model: ModelParams = Field(description="Model architecture parameters")
@@ -33,14 +44,10 @@ class InitParams(BaseParams):
     )
 
     # === INITIALIZATION-SPECIFIC PARAMETERS ===
-    dataset: Optional[Path] = Field(
+    dataset_path: Optional[Path] = Field(
         default=None, description="Path to dataset for dimension inference"
     )
     output: Path = Field(description="Path to save initialized model")
-    seed: int = Field(default=42, description="Random seed for initialization")
-    init_with_pretrained: bool = Field(
-        default=False, description="Initialize with pretrained weights if available"
-    )
 
     model_config = ConfigDict(
         extra="allow",  # Allow additional CLI arguments
@@ -57,6 +64,8 @@ class InitParams(BaseParams):
         # Add initialization-specific aliases
         aliases.update(
             {
+                # Initialization aliases
+                "dataset": "dataset_path",  # CLI convenience alias
                 # Model aliases (routed to model component)
                 "model_name": "model.model_name",
                 "classes": "model.n_classes",
@@ -79,24 +88,63 @@ class InitParams(BaseParams):
         return self
 
     @classmethod
-    def validate_data_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        update_dict = {
-            "use_ffcv": False,
-            "use_distributed": False,
-            "batch_size": 32,
-            "num_workers": 0,
-            "pin_memory": False,
+    def get_component_assignment_order(cls) -> Iterable[str]:
+        return ("data", "model")
+
+    @classmethod
+    def get_component_preprocessors(
+        cls,
+    ) -> Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]]:
+        return {
+            "data": cls.validate_data_config,
+            "model": cls.validate_model_config,
         }
-        config = cls.update_kwargs(config, update_dict, verbose=True)
+
+    @classmethod
+    def _handle_unscoped_param(
+        cls,
+        key: str,
+        value: Any,
+        component_data: Dict[str, Dict[str, Any]],
+        base_params: Dict[str, Any],
+    ) -> None:
+        component_data.setdefault("model", {})[key] = value
+        logger.debug("Assigning unscoped parameter '%s' to model component", key)
+
+    @classmethod
+    def validate_data_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate initialization data config (warnings only)."""
+        # No forced updates - values come from config files under init.data.*
+        # Optional: Add warnings for unusual configurations
+        if config.get("use_ffcv", False):
+            logger.info("Initialization with use_ffcv=True (FFCV dataset required)")
         return config
 
     @classmethod
     def validate_model_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
-        update_dict = {
-            "store_responses": 0,
-        }
-        config = cls.update_kwargs(config, update_dict, verbose=True)
+        """Validate initialization model config (warnings only)."""
+        # No forced updates - values come from config files under init.model.*
         return config
+
+    def log_initialization_overview(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Log a structured overview of the initialization run."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        log_section(
+            run_logger,
+            "initialization_run",
+            [
+                ("seed", format_value(self.seed), None),
+                ("output", format_value(self.output), None),
+                ("dataset_path", format_value(self.dataset_path), None),
+            ],
+        )
+
+        self.log_overview(logger=run_logger, include_defaults=False)
 
     def update_model_parameters_from_dataset(
         self,
@@ -132,83 +180,41 @@ class InitParams(BaseParams):
     def get_dataset_kwargs(self) -> Dict[str, Any]:
         return self.data.get_dataset_kwargs()
 
-    def get_dataloader_kwargs(self) -> Dict[str, Any]:
-        return self.data.get_dataloader_kwargs()
+    def get_dataloader_kwargs(self, dataloader_class=None) -> Dict[str, Any]:
+        return self.data.get_dataloader_kwargs(dataloader_class=dataloader_class)
 
-    @classmethod
-    def from_cli_and_config(
-        cls,
-        config_path: Optional[Path] = None,
-        override_kwargs: Optional[Dict[str, Any]] = None,
-        args: Optional[list] = None,
-    ) -> "InitParams":
-        """
-        Create InitParams instance from CLI and config with proper component separation.
-        """
-        # Get raw parameters using BaseParams method
-        params = cls.get_params_from_cli_and_config(
-            config_path=config_path,
-            override_kwargs=override_kwargs,
-            args=args,
+    def log_model_creation(
+        self,
+        *,
+        model_class,
+        model_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        """Delegate model creation logging to the model params."""
+
+        run_logger = logger or logging.getLogger(__name__)
+        self.model.log_model_creation(
+            model_class=model_class,
+            model_kwargs=model_kwargs,
+            logger=run_logger,
         )
 
-        # Separate into component configurations
-        separated_params = cls._separate_component_configs(params)
-
-        # Create the InitParams instance
-        try:
-            return cls(**separated_params)
-        except Exception as e:
-            raise DynVisionValidationError(f"InitParams creation failed: {e}")
-
-    @classmethod
-    def _separate_component_configs(cls, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Separate flat parameter dict into component configurations."""
-        model_params = {}
-        data_params = {}
-        base_params = {}
-
-        # Get field names for each component
-        model_fields = set(ModelParams.model_fields.keys())
-        data_fields = set(DataParams.model_fields.keys())
-        base_fields = set(cls.model_fields.keys()) - {"model", "data"}
-
-        for key, value in params.items():
-            # Handle dotted notation (e.g., "model.learning_rate")
-            if "." in key:
-                component, field = key.split(".", 1)
-                if component == "model":
-                    model_params[field] = value
-                elif component == "data":
-                    data_params[field] = value
-                else:
-                    base_params[key] = value
-            else:
-                # Use mutually exclusive assignment logic
-                if key in data_fields:
-                    data_params[key] = value
-                elif key in base_fields:
-                    base_params[key] = value
-                elif key in model_fields:
-                    model_params[key] = value
-                else:
-                    # Unknown parameters go to model_params as fallback
-                    model_params[key] = value
-                    logger.debug(
-                        f"Assigning unknown parameter '{key}' to model_params"
-                    )
-
-        # Validate component configurations
-        cls.validate_data_config(data_params)
-        cls.validate_model_config(model_params)
-
-        # Create component instances
-        try:
-            components = {
-                "model": ModelParams(**model_params),
-                "data": DataParams(**data_params),
-                **base_params,
-            }
-            return components
-        except Exception as e:
-            raise DynVisionValidationError(f"Component configuration failed: {e}")
+    def log_dataloader_creation(
+        self,
+        *,
+        dataloader_class,
+        dataloader_kwargs: Dict[str, Any],
+        logger: Optional[logging.Logger] = None,
+        context: str = "active",
+        previous_kwargs: Optional[Dict[str, Any]] = None,
+        level: int = logging.INFO,
+    ) -> None:
+        run_logger = logger or logging.getLogger(__name__)
+        self.data.log_dataloader_creation(
+            dataloader_class=dataloader_class,
+            dataloader_kwargs=dataloader_kwargs,
+            logger=run_logger,
+            context=context,
+            previous_kwargs=previous_kwargs,
+            level=level,
+        )

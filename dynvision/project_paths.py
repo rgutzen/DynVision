@@ -1,12 +1,3 @@
-"""
-This module defines the `project_paths_class`, which provides a structured way to manage and access various project and toolbox directory paths for the 'rhythmic_visual_attention' project. It automatically detects if the code is running on a cluster and adapts paths accordingly, including moving large folders to a scratch partition when necessary.
-
-Note:
-    This file contains hardcoded paths and project-specific settings. 
-    **You must adapt this file to fit your own path organization and project structure.**
-    Update the `project_name`, `toolbox_name`, `user_name`, and default directory paths as needed for your environment.
-"""
-
 import inspect
 import os
 from pathlib import Path
@@ -19,9 +10,9 @@ logger = logging.getLogger(__name__)
 class project_paths_class:
 
     this_file = Path(inspect.getfile(lambda: None)).resolve()
-    project_name = "<name_of_project_folder>"
+    project_name = "DynVision_Working"  # working directory name (separate from toolbox_name)
     toolbox_name = "DynVision"
-    user_name = "<cluster_user_name>"
+    user_name = "rg5022"
 
     def __init__(self, working_dir=None, toolbox_dir=None):
         if self.iam_on_cluster():
@@ -29,7 +20,7 @@ class project_paths_class:
             toolbox_dir = Path().home() / self.toolbox_name / self.toolbox_name.lower()
 
         if working_dir is None:
-            working_dir = Path(f"~/{self.project_name}").expanduser().resolve()
+            working_dir = Path("/home/rgutzen/01_PROJECTS/Modeling_Dynamical_Vision")
         if toolbox_dir is None:
             toolbox_dir = self.this_file.parents[0].resolve()
 
@@ -41,18 +32,26 @@ class project_paths_class:
         if self.iam_on_cluster():
             # move large folders to scratch partition
             self.data.raw = Path("/scratch") / self.user_name / "data" / "raw"
+            self.data.interim = Path("/scratch") / self.user_name / "data" / "interim"
             self.data.processed = (
                 Path("/scratch") / self.user_name / "data" / "processed"
             )
+            self.data.external = (
+                Path("/scratch") / self.user_name / "data" / "external"
+            )
+
             self.models = (
                 Path("/scratch") / self.user_name / self.project_name / "models"
             )
+
             self.reports = (
                 Path("/scratch") / self.user_name / self.project_name / "reports"
             )
+
             self.large_logs = (
                 Path("/scratch") / self.user_name / self.project_name / "logs"
             )
+            self.references = Path().home() / self.toolbox_name / "references"
 
         os.environ["WANDB_DIR"] = str(self.large_logs.resolve())
         return None
@@ -80,7 +79,7 @@ class project_paths_class:
         self.notebooks = working_dir / "notebooks"
         self.references = working_dir / "references"
         self.reports = working_dir / "reports"
-        self.figures = working_dir / "reports" / "figures"
+        self.figures = working_dir / "figures"
         self.logs = working_dir / "logs"
         self.large_logs = working_dir / "logs"
         self.benchmarks = self.logs / "benchmarks"
@@ -92,7 +91,6 @@ class project_paths_class:
         self.scripts.models = self.scripts_path / "models"
         self.scripts.losses = self.scripts_path / "losses"
         self.scripts.configs = self.scripts_path / "configs"
-        self.scripts.features = self.scripts_path / "features"
         self.scripts.workflow = self.scripts_path / "workflow"
         self.scripts.visualization = self.scripts_path / "visualization"
         return None

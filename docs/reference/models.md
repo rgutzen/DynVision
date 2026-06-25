@@ -75,22 +75,6 @@ model = AlexNet(
 
 ### 3. Research Models
 
-Specialized architectures for specific research questions:
-
-#### BLT (Biological Local Training)
-
-```python
-from dynvision.models import BLT
-
-model = BLT(
-    n_classes=1000,
-    input_dims=(20, 3, 224, 224),
-    local_learning=True,        # Enable biologically-plausible local learning
-    dt=2.0,
-    tau=10.0
-)
-```
-
 #### CordsNet
 
 ```python
@@ -104,6 +88,16 @@ model = CordsNet(
     tau=10.0
 )
 ```
+
+## Model Comparison
+
+DynVision enables systematic comparison of different recurrent architectures. The figure below compares training performance across reference models and DynVision variants trained on ImageNet:
+
+<p align="center">
+  <img src="../assets/reference_models.png" alt="Reference Model Comparison" width="700"/>
+</p>
+
+*Figure: Training comparison of reference RCNN implementations (CorNet-RT, CordsNet) and DynVision's DyRCNNx8 across ImageNet training. DynVision achieves faster training while supporting more biologically detailed architectures.*
 
 ## Component Integration
 

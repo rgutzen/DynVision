@@ -8,7 +8,9 @@ import torch.nn as nn
 from typing import Any, Dict, List, Optional, Tuple
 from pytorch_lightning import LightningModule
 import wandb
+
 from dynvision.data.operations import _adjust_data_dimensions, _adjust_label_dimensions
+from dynvision.utils import log_section, format_value
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,19 @@ class Monitoring:
             data_attr="grad.data",
             raise_error=raise_error,
         )
+        connection_issues = []
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                connection_issues.append(f"Not trainable: {name}")
+            elif param.grad is None:
+                connection_issues.append(f"No gradient: {name}")
+            elif param.grad.abs().sum() == 0:
+                connection_issues.append(f"Zero gradient: {name}")
+
+        if connection_issues:
+            logger.warning("Connection gradient issues:")
+            for issue in connection_issues:
+                logger.warning(f"  {issue}")
 
     def _check_weights(self, raise_error: bool = False) -> None:
         self._check_tensors(
@@ -188,7 +203,7 @@ class Monitoring:
                 metrics = [m for m in metrics if m != "hist"]
             else:
                 return
-        
+
         for name, param in self.named_parameters():
             if log_only_trainable and not param.requires_grad:
                 continue
@@ -213,30 +228,38 @@ class Monitoring:
                     else:
                         logger.debug(f"Metric {metric} not available!")
             else:
-                self.log(f"{section}/{name}", param.detach().data, sync_dist=True, rank_zero_only=True)
+                self.log(
+                    f"{section}/{name}",
+                    param.detach().data,
+                    sync_dist=True,
+                    rank_zero_only=True,
+                )
 
     # System monitoring
     ###################
     def _log_system_info(self) -> None:
         """Log essential system information at training start."""
-        logger.info("=" * 60)
-        logger.info("🚀 TRAINING STARTED")
-        logger.info("=" * 60)
 
-        # Model basics
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        logger.info(
-            f"Model: {self.__class__.__name__} | Params: {total_params:,} ({trainable_params:,} trainable)"
-        )
-        logger.info(
-            f"Config: {self.n_classes} classes | {self.n_timesteps} timesteps | non_label_idx: {self.non_label_index}"
-        )
 
-        # System info
+        entries = [
+            ("model_name", format_value(self.__class__.__name__), None),
+            ("total_params", f"{total_params:,}", None),
+            ("trainable_params", f"{trainable_params:,}", None),
+            ("n_classes", format_value(getattr(self, "n_classes", "unset")), None),
+            ("n_timesteps", format_value(getattr(self, "n_timesteps", "unset")), None),
+            (
+                "non_label_index",
+                format_value(getattr(self, "non_label_index", "unset")),
+                None,
+            ),
+        ]
+
         if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name()
-            logger.info(f"Device: {device_name}")
+            entries.append(("device", torch.cuda.get_device_name(), None))
+
+        log_section(logger, "training_start", entries)
 
     def _log_memory_usage(self) -> None:
         """Log detailed and consistent memory and CPU usage statistics."""
@@ -247,29 +270,45 @@ class Monitoring:
         cpu_percent = psutil.cpu_percent(interval=0.1)
         process_mem_gb = process.memory_info().rss / (1024**3)
 
-        logger.info(
-            f"\t{'System RAM':<18}: {ram_used_gb:6.2f} GB / {ram_total_gb:.2f} GB ({ram.percent:.1f}%)"
-        )
-        logger.info(f"\t{'CPU Usage':<18}: {cpu_percent:6.1f}%")
-        logger.info(f"\t{'Process Memory':<18}: {process_mem_gb:6.2f} GB")
+        entries = [
+            (
+                "system_ram",
+                f"{ram_used_gb:6.2f} GB / {ram_total_gb:.2f} GB ({ram.percent:.1f}%)",
+                None,
+            ),
+            ("cpu_usage", f"{cpu_percent:6.1f}%", None),
+            ("process_memory", f"{process_mem_gb:6.2f} GB", None),
+        ]
 
         if torch.cuda.is_available():
             gpu_mem_gb = torch.cuda.memory_allocated() / (1024**3)
             gpu_mem_reserved_gb = torch.cuda.memory_reserved() / (1024**3)
             gpu_total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            logger.info(
-                f"\t{'GPU Memory Used':<18}: {gpu_mem_gb:6.2f} GB / {gpu_total_gb:.2f} GB"
+            entries.extend(
+                [
+                    (
+                        "gpu_memory_used",
+                        f"{gpu_mem_gb:6.2f} GB / {gpu_total_gb:.2f} GB",
+                        None,
+                    ),
+                    (
+                        "gpu_memory_reserved",
+                        f"{gpu_mem_reserved_gb:6.2f} GB / {gpu_total_gb:.2f} GB",
+                        None,
+                    ),
+                ]
             )
-            logger.info(
-                f"\t{'GPU Memory Reserved':<18}: {gpu_mem_reserved_gb:6.2f} GB / {gpu_total_gb:.2f} GB"
-            )
+
+        log_section(logger, "system_resources", entries)
 
     def _log_training_summary(self) -> None:
         """Log training completion summary."""
         try:
-            logger.info(
-                f"✅ Training completed: {self.trainer.current_epoch} epochs | {self.trainer.global_step} steps"
-            )
+            entries = [
+                ("epochs", format_value(self.trainer.current_epoch), None),
+                ("global_steps", format_value(self.trainer.global_step), None),
+            ]
+            log_section(logger, "training_complete", entries)
         except RuntimeError:
             return
 
@@ -327,48 +366,88 @@ class MonitoringMixin(Monitoring, LightningModule):
         self._log_memory_usage()
 
     def on_train_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Check for critical data issues early in training."""
+        """Check for critical data issues early in training.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
         try:
-            super().on_train_batch_start(batch, batch_idx)
-        except AttributeError:
-            pass
+            super().on_train_batch_start(batch, batch_idx, dataloader_idx)
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept dataloader_idx
+            try:
+                super().on_train_batch_start(batch, batch_idx)
+            except (AttributeError, TypeError):
+                pass
         if batch_idx < 2:  # Only check first few batches
             self._validate_batch_data(batch, batch_idx, "train")
 
     def on_validation_batch_start(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Check for critical data issues in validation."""
+        """Check for critical data issues in validation.
+
+        Args:
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
         try:
-            super().on_validation_batch_start(batch, batch_idx)
-        except AttributeError:
-            pass
+            super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept dataloader_idx
+            try:
+                super().on_validation_batch_start(batch, batch_idx)
+            except (AttributeError, TypeError):
+                pass
         if batch_idx == 0:  # Only check first validation batch
             self._validate_batch_data(batch, batch_idx, "val")
             self._log_memory_usage()
 
     def on_train_batch_end(
-        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, outputs: Any, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int, dataloader_idx: int = 0
     ) -> None:
-        """Monitor training progress and check for issues."""
+        """Monitor training progress and check for issues.
+
+        Args:
+            outputs: Outputs from training_step
+            batch: Batch of input data and labels
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (for multiple dataloaders)
+        """
         try:
-            super().on_train_batch_end(outputs, batch, batch_idx)
-        except AttributeError:
-            pass
+            super().on_train_batch_end(outputs, batch, batch_idx, dataloader_idx)
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept dataloader_idx
+            try:
+                super().on_train_batch_end(outputs, batch, batch_idx)
+            except (AttributeError, TypeError):
+                pass
         loss = outputs if isinstance(outputs, torch.Tensor) else outputs.get("loss")
         self._check_training_health(loss, batch_idx)
 
         if batch_idx % self.log_every_n_steps == 0:
             self.log_param_stats()
 
-    def on_before_optimizer_step(self, optimizer: Any) -> None:
-        """Check gradients before optimizer step."""
+    def on_before_optimizer_step(self, optimizer: Any, optimizer_idx: int = 0) -> None:
+        """Check gradients before optimizer step.
+
+        Args:
+            optimizer: The optimizer being stepped
+            optimizer_idx: The optimizer index (for multiple optimizers)
+        """
         try:
-            super().on_before_optimizer_step(optimizer)
-        except AttributeError:
-            pass
+            super().on_before_optimizer_step(optimizer, optimizer_idx)
+        except (AttributeError, TypeError):
+            # Fallback for parent classes that don't accept optimizer_idx
+            try:
+                super().on_before_optimizer_step(optimizer)
+            except (AttributeError, TypeError):
+                pass
         if self.log_level.upper() == "DEBUG":
             self._check_gradients()
 
@@ -401,8 +480,15 @@ class MonitoringMixin(Monitoring, LightningModule):
 
         # Log first batch info
         if batch_idx == 0:
-            logger.info(
-                f"📦 [{stage.upper()}] First batch: {inputs.shape} | Labels: [{label_min}, {label_max}] | Device: {inputs.device}"
+            entries = [
+                ("batch_shape", format_value(tuple(inputs.shape)), None),
+                ("labels", f"[{label_min}, {label_max}]", None),
+                ("device", format_value(str(inputs.device)), None),
+            ]
+            log_section(
+                logger,
+                f"{stage}_batch_preview",
+                entries,
             )
 
     def _check_training_health(self, loss: torch.Tensor, batch_idx: int) -> None:
@@ -415,6 +501,16 @@ class MonitoringMixin(Monitoring, LightningModule):
             logger.warning(
                 f"⚠️  Batch {batch_idx}: Loss is {'NaN' if torch.isnan(loss) else 'Inf'}"
             )
+        elif batch_idx == 0:
+            entries = [
+                ("batch_idx", format_value(batch_idx), None),
+                (
+                    "loss",
+                    format_value(loss.item() if hasattr(loss, "item") else loss),
+                    None,
+                ),
+            ]
+            log_section(logger, "training_loss", entries)
 
         # Check for extremely high loss
         loss_val = loss.item() if hasattr(loss, "item") else float(loss)

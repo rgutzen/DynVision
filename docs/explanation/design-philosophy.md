@@ -41,7 +41,7 @@ DynVision prioritizes biological plausibility in several key aspects:
 
 - **Topographic Organization**: Support for spatial organization of features that reflects the topographic arrangement of neural populations in the visual cortex.
 
-- **Metabolic Constraints**: Energy losses and regularization terms that encourage metabolically efficient coding.
+- **Metabolic Constraints**: Activity losses and regularization terms that encourage metabolically efficient coding.
 
 Importantly, biological plausibility is balanced with computational tractability, focusing on aspects that are likely to have functional significance rather than implementing every biological detail.
 
