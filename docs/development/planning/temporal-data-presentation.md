@@ -57,7 +57,7 @@ Reviewed and fixed the complete loss calculation pipeline to ensure correct hand
 
 **Result:** ActivityLoss now correctly measures average absolute activity per unit, per timestep, per module, per sample.
 
-**Detailed documentation:** See [Loss Functions Reference](../reference/losses.md)
+**Detailed documentation:** See [Loss Functions Reference](../../reference/losses.md)
 
 ---
 

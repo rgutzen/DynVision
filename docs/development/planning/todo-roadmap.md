@@ -11,7 +11,7 @@ This file outlines the development roadmap for DynVision, organizing future enha
 - [Implementation Phases](#implementation-phases)
   - [Phase 1: Quick Wins](#phase-1-quick-wins-1-2-weeks)
   - [Phase 2: Foundation](#phase-2-foundation-2-3-weeks)
-  - [Phase 3: Tools & Analysis](#phase-3-tools--analysis-3-4-weeks)
+  - [Phase 3: Tools & Analysis](#phase-3-tools-analysis-3-4-weeks)
   - [Phase 4: Advanced Features](#phase-4-advanced-features-4-weeks)
 - [By Category](#organized-by-category)
 - [Effort Matrix](#effort-matrix)
@@ -625,7 +625,7 @@ This roadmap should be reviewed and updated:
 - **[todo-docs.md](./todo-docs.md)**: Documentation fixes and implementation mismatches
 - **[Claude Code Guide](../guides/claude-guide.md)**: Architecture overview and development guide
 - **[CONTRIBUTING.md](../../contributing.md)**: How to contribute
-- **[README.md](../../../README.md)**: Project overview
+- **[README.md](https://github.com/Lindsay-Lab/DynVision)**: Project overview
 - **[Developer Guide](../index.md)**: Overview of development documentation
 
 ---

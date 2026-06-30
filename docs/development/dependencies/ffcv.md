@@ -318,5 +318,5 @@ ffcv:
 ## Related Documentation
 
 - [Data Processing Guide](../../user-guide/data-processing.md)
-- [Performance Optimization](../../user-guide/performance-optimization.md)
+- [DynVision Workflow Guide](../../user-guide/workflows.md)
 - [Snakemake Workflow](snakemake.md)

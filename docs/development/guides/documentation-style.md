@@ -398,7 +398,7 @@ When creating custom models, follow these best practices:
 
 ## Related Resources
 
-- [Base Classes Reference](../reference/model-components.md#base-classes)
-- [Recurrence Types](../reference/recurrence-types.md)
-- [Example Models](../tutorials/custom-model-creation.md)
+- [Base Classes Reference](../../reference/model-components.md#base-classes)
+- [Recurrence Types](../../reference/recurrence-types.md)
+- [Example Models](../../tutorial/custom-model.md)
 ```

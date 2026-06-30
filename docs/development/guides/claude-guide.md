@@ -183,9 +183,9 @@ When proposing changes:
 
 See the sections below for detailed guidance on:
 - [Adding a new model](#adding-a-new-model) (workflow section)
-- [Adding a new recurrent connection type](#adding-recurrent-connections) (architecture section)
-- [Adding a new experiment](#adding-experiments) (workflow section)
-- [Debugging temporal dynamics](#debugging-tips) (known issues section)
+- [Modifying recurrent connections](#modifying-recurrent-connections) (architecture section)
+- [Adding a new experiment](#adding-a-new-experiment) (workflow section)
+- [Known issues](#known-issues-and-inconsistencies) (known issues section)
 
 ## Architecture Overview
 
@@ -640,18 +640,18 @@ See [`docs/development/planning/todo-docs.md`](../planning/todo-docs.md) for a c
 
 ## References and Documentation
 
-- [Getting Started Guide](docs/getting-started.md): First steps with DynVision
-- [Design Philosophy](docs/explanation/design-philosophy.md): Core design principles
-- [Temporal Dynamics](docs/explanation/temporal_dynamics.md): Understanding temporal properties
-- [Biological Plausibility](docs/explanation/biological-plausibility.md): Alignment with neural systems
-- [Model Components Reference](docs/reference/model-components.md): Core building blocks
-- [Recurrence Types](docs/reference/recurrence-types.md): Different recurrent implementations
-- [Dynamics Solvers](docs/reference/dynamics-solvers.md): ODE solvers
-- [Configuration Reference](docs/reference/configuration.md): Config file documentation
-- [Workflows Guide](docs/user-guide/workflows.md): Snakemake workflow management
-- [Custom Models Guide](docs/user-guide/custom-models.md): Creating custom architectures
-- [Parameter Handling](docs/user-guide/parameter-handling.md): Sophisticated parameter system
-- [Software Patterns](docs/development/software-patterns.md): Design patterns used in DynVision
+- [Getting Started Guide](../../getting-started.md): First steps with DynVision
+- [Design Philosophy](../../explanation/design-philosophy.md): Core design principles
+- [Temporal Dynamics](../../explanation/temporal_dynamics.md): Understanding temporal properties
+- [Biological Plausibility](../../explanation/biological-plausibility.md): Alignment with neural systems
+- [Model Components Reference](../../reference/model-components.md): Core building blocks
+- [Recurrence Types](../../reference/recurrence-types.md): Different recurrent implementations
+- [Dynamics Solvers](../../reference/dynamics-solvers.md): ODE solvers
+- [Configuration Reference](../../reference/configuration.md): Config file documentation
+- [Workflows Guide](../../user-guide/workflows.md): Snakemake workflow management
+- [Custom Models Guide](../../user-guide/custom-models.md): Creating custom architectures
+- [Parameter Handling](../../user-guide/parameter-handling.md): Sophisticated parameter system
+- [Software Patterns](software-patterns.md): Design patterns used in DynVision
 
 ## Quick Reference
 

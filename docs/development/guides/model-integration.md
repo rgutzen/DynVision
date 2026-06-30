@@ -2366,11 +2366,11 @@ Before considering integration complete:
 
 - **DynVision Architecture**: [`docs/development/guides/claude-guide.md`](claude-guide.md)
 - **AI Development Guide**: [`docs/development/guides/ai-style-guide.md`](ai-style-guide.md)
-- **Base Classes**: [`dynvision/base/temporal.py`](../../dynvision/base/temporal.py)
-- **Recurrence Components**: [`dynvision/model_components/recurrence.py`](../../dynvision/model_components/recurrence.py)
-- **Example Models**:
-  - Simple: [`dynvision/models/cornet_rt.py`](../../dynvision/models/cornet_rt.py)
-  - Complex: [`dynvision/models/dyrcnn.py`](../../dynvision/models/dyrcnn.py)
+- **Base Classes**: `dynvision/base/temporal.py` ([view on GitHub](https://github.com/Lindsay-Lab/DynVision/blob/main/dynvision/base/temporal.py))
+- **Recurrence Components**: `dynvision/model_components/recurrence.py` ([view on GitHub](https://github.com/Lindsay-Lab/DynVision/blob/main/dynvision/model_components/recurrence.py))
+- **Reference Implementations**:
+  - Simple: `dynvision/models/cornet_rt.py` ([view on GitHub](https://github.com/Lindsay-Lab/DynVision/blob/main/dynvision/models/cornet_rt.py))
+  - Complex: `dynvision/models/dyrcnn.py` ([view on GitHub](https://github.com/Lindsay-Lab/DynVision/blob/main/dynvision/models/dyrcnn.py))
 
 ---
 
