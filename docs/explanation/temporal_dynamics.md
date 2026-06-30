@@ -73,20 +73,77 @@ DynVision implements several key components to capture these temporal dynamics:
 
 ### 1. Continuous-Time Dynamical Systems
 
-Unlike traditional discrete-time recurrent neural networks, DynVision models neural dynamics using continuous-time differential equations:
+Unlike traditional discrete-time recurrent neural networks, DynVision models
+neural dynamics using a continuous-time differential equation where
+heterogeneous connectivity and delays interact over a single time constant
+$\tau$:
 
-$$\tau \frac{dx}{dt} = -x + \Phi[f(t, r_n, r_{n-1})]$$
+$$
+\begin{align}
+&\text{\footnotesize
+{\color{#c4380f}\text{Dynamical\;Timescale}}\;
+{\color{#18359c}\text{Network\;Activations}}\;
+{\color{#41960e}\text{External\;Input}}\;
+{\color{#556B2F}\text{Bias}}
+}\\
+&{\color{#c4380f}\tau} \frac{d{\color{#18359c}r}}{d{\color{#5f5b5b}t}} =
+-{\color{#18359c}r}({\color{#5f5b5b}t})
++ {\color{#821ca9}\Phi\left[}
+{\color{#41960e}I}({\color{#5f5b5b}t})
++ {\color{#17a89c}J}{\color{#18359c}r}({\color{#5f5b5b}t})
+{\color{#821ca9}\right]}
++ {\color{#556B2F}B}\\[6pt]
+&\text{\footnotesize
+{\color{#5f5b5b}\text{Time\;Dimension}}\;
+{\color{#821ca9}\text{Activation\;Fn}}\;
+{\color{#17a89c}\text{Network\;Connectivity}}\;
+{\color{#b8621a}\text{Time\;Step/Delay}}
+}\\
+&{\color{#18359c}r_l}({\color{#5f5b5b}t}) =
+{\color{#18359c}r_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
++ \frac{{\color{#b8621a}dt}}{\color{#c4380f}\tau}
+\left(
+-{\color{#18359c}r_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
++ {\color{#821ca9}\Phi\left[}
+{\color{#41960e}I_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
++ \sum_{}^{} {\color{#17a89c}J_l} {\color{#18359c}r(\cdot)}
+{\color{#821ca9}\right]}
++ {\color{#556B2F}B_l}
+\right)\\[6pt]
+&\sum_{{\color{#5f5b5b}s}=0}^{{\color{#5f5b5b}t}-{\color{#b8621a}dt}}
+{\color{#17a89c}J_l} {\color{#18359c}r}({\color{#5f5b5b}s}) =
+{\color{#17a89c}J_{FF}}\!\cdot\!{\color{#18359c}r_{l-1}}({\color{#5f5b5b}t}-{\color{#b8621a}\Delta_{FF}}) \;+\;
+{\color{#17a89c}J_{RC}}\!\cdot\!{\color{#18359c}r_l}({\color{#5f5b5b}t}-{\color{#b8621a}\Delta_{RC}}) \;+\;
+{\color{#17a89c}J_{FB}}\!\cdot\!{\color{#18359c}r_{>l}}({\color{#5f5b5b}t}-{\color{#b8621a}\Delta_{FB}}) \;+\;
+{\color{#17a89c}J_{SK}}\!\cdot\!{\color{#18359c}r_{<l-1}}({\color{#5f5b5b}t}-{\color{#b8621a}\Delta_{SK}})
+\end{align}
+$$
 
-Where:
-- $\tau$ is the time constant of the neural dynamics
-- $x$ is the neural activity
-- $\Phi$ is a nonlinearity
-- $f(t, r_n, r_{n-1})$ represents the inputs to the neuron
+**What this shows:**
+
+1. **Differential equation** — network activity $r$ evolves continuously over
+   time $t$ with a dynamical timescale $\tau$, driven by external input $I$
+   and modulated by recurrent connectivity $J$, then passed through a
+   nonlinearity $\Phi$ with an additive bias $B$.
+
+2. **Euler discretization** — a numerical stepwise approximation for layer
+   $l$ at the next time step $t$. The Euler method advances the activity by
+   $dt/\tau$ times the difference between the driven state (inside the
+   brackets) and the current activity.
+
+3. **Heterogeneous connectivity** — the sum over all connections to layer $l$
+   separates into four biologically motivated pathways: **feedforward**
+   ($J_{FF}$, from the preceding layer), **lateral recurrent** ($J_{RC}$,
+   within the same layer), **feedback** ($J_{FB}$, from higher layers),
+   and **skip** ($J_{SK}$, from earlier non‑adjacent layers). Each pathway
+   has its own delay $\Delta$ (an integer multiple of $dt$), matching
+   cortical propagation distances.
 
 This formulation provides several advantages:
 - More biologically realistic temporal evolution
 - Smoother dynamics with appropriate time constants
-- Explicit modeling of integration and decay
+- Explicit modeling of integration, decay, and heterogeneous delays
+- All connection types operate within a single unified dynamical system
 
 ### 2. Numerical Solvers
 
