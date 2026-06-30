@@ -695,9 +695,9 @@ for batch in dataloader:
 If you can't find a solution here:
 
 1. **Check logs**:
-   - Training logs: `logs/training/`
-   - Cluster logs: `logs/slurm/`
-   - Runtime config: `logs/config_runtime.yaml`
+      - Training logs: `logs/training/`
+      - Cluster logs: `logs/slurm/`
+      - Runtime config: `logs/config_runtime.yaml`
 
 2. **Enable debug mode**:
    ```yaml
@@ -707,11 +707,11 @@ If you can't find a solution here:
 3. **Search GitHub Issues**: Check if others have encountered the same problem
 
 4. **Create detailed bug report** with:
-   - Complete error message and stack trace
-   - Configuration files used
-   - DynVision version
-   - PyTorch and CUDA versions
-   - Steps to reproduce
+      - Complete error message and stack trace
+      - Configuration files used
+      - DynVision version
+      - PyTorch and CUDA versions
+      - Steps to reproduce
 
 5. **Contact**: robin.gutzen@nyu.edu
 

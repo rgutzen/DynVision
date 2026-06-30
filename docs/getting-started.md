@@ -133,10 +133,10 @@ For more details on analyzing test results, see the [Model Testing Guide](user-g
 1. **Explicit Time Dimension**: DynVision models work with sequences where time is an explicit dimension after the batch dimension: `(batch, timesteps, channels, height, width)`.
 
 2. **Biological Time Unrolling**: Models simulate biological neural dynamics with configurable time steps and delays:
-   - Integration time step (`dt`)
-   - Neural time constant (`tau`)
-   - Feedforward and recurrent delays (`t_feedforward`, `t_recurrent`)
-   - Handling of residual timesteps (timesteps needed for the first input to reach the last model layer)
+      - Integration time step (`dt`)
+      - Neural time constant (`tau`)
+      - Feedforward and recurrent delays (`t_feedforward`, `t_recurrent`)
+      - Handling of residual timesteps (timesteps needed for the first input to reach the last model layer)
 
 3. **Modular Components**: The framework provides a collection of interoperable components to assist model development, and features mechanism to flexibly rearrange their execution order, e.g.:
     ```python

@@ -9,7 +9,7 @@ Recurrent connections are abundant in the primate visual system. In the ventral 
 DynVision implements several types of recurrent connections, each with different computational properties and biological interpretations.
 
 <p align="center">
-  <img src="../../assets/recurrence_types.png" alt="Recurrence Types" width="800"/>
+  <img src="../../assets/recurrency_types.png" alt="Recurrence Types" width="800"/>
 </p>
 
 ## Available Recurrence Types
@@ -137,7 +137,7 @@ Local recurrence captures the 2-D topology of visual cortices by arranging units
 - Models how features that are close in feature space (e.g., similar orientations) interact more strongly.
 
 <p align="center">
-  <img src="../../assets/local_recurrence_mapping.png" alt="Local Recurrence Topographic Mapping" width="500"/>
+  <img src="../../assets/recurrency_types.png" alt="Local Recurrence Topographic Mapping" width="500"/>
 </p>
 
 *Figure: Local recurrence maps the 3D activation tensor to a 2D cortical plane where nearby units have similar feature preferences. A convolution on this plane captures topographically organized lateral interactions.*
@@ -270,18 +270,18 @@ class RecurrentConnectedConv2d(ConvolutionalRecurrenceBase):
 Recurrence types significantly impact both memory usage and computation time:
 
 1. **Memory Usage**:
-   - Self recurrence has minimal memory overhead
-   - Full and local recurrence types require storing intermediate activations
-   - Depthwise separable recurrence types offer a middle ground
+      - Self recurrence has minimal memory overhead
+      - Full and local recurrence types require storing intermediate activations
+      - Depthwise separable recurrence types offer a middle ground
 
 2. **Computation Time**:
-   - Self recurrence is fastest
-   - Local and localdepthwise recurrence are slowest
-   - For large models, consider using pointdepthwise or depthpointwise recurrence
+      - Self recurrence is fastest
+      - Local and localdepthwise recurrence are slowest
+      - For large models, consider using pointdepthwise or depthpointwise recurrence
 
 3. **Scaling with Image Size**:
-   - Full recurrence scales quadratically with image size
-   - Depthwise separable types scale more efficiently
+      - Full recurrence scales quadratically with image size
+      - Depthwise separable types scale more efficiently
 
 ## References
 

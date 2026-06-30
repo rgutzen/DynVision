@@ -212,14 +212,14 @@ These wildcards are used to specify which files to generate and how to connect t
 DynVision workflows are configured through YAML files and command-line overrides:
 
 1. **YAML Configuration**:
-   - `config_defaults.yaml`: Default parameters for all components
-   - `config_data.yaml`: Dataset-specific configurations
-   - `config_experiments.yaml`: Experiment-specific settings
-   - `config_workflow.yaml`: Workflow execution parameters
+      - `config_defaults.yaml`: Default parameters for all components
+      - `config_data.yaml`: Dataset-specific configurations
+      - `config_experiments.yaml`: Experiment-specific settings
+      - `config_workflow.yaml`: Workflow execution parameters
 
 2. **Command-Line Overrides**:
-   - Directly override parameters with `--config key=value`
-   - Specify complex parameters using Python-like syntax: `--config model_args="{rctype:full}"`
+      - Directly override parameters with `--config key=value`
+      - Specify complex parameters using Python-like syntax: `--config model_args="{rctype:full}"`
 
 See the [Configuration Reference](../reference/configuration.md) for detailed information about configuration parameters.
 

@@ -1,4 +1,6 @@
-# Developer Guide
+---
+title: Developer Guide
+---
 
 Welcome to the DynVision Developer Guide! This section provides comprehensive resources for contributors, maintainers, and AI assistants (like Claude Code) working on the DynVision codebase.
 

@@ -134,19 +134,19 @@ This approach allows:
 Key configuration categories include:
 
 1. **Model Configuration**:
-   - Architecture parameters (recurrence type, skip connections)
-   - Initialization options (pretrained weights, seed)
-   - Hyperparameters (learning rate, batch size, epochs)
+      - Architecture parameters (recurrence type, skip connections)
+      - Initialization options (pretrained weights, seed)
+      - Hyperparameters (learning rate, batch size, epochs)
 
 2. **Data Configuration**:
-   - Dataset definitions and locations
-   - Data group mappings (category subsets)
-   - Preprocessing parameters (resolution, transforms)
+      - Dataset definitions and locations
+      - Data group mappings (category subsets)
+      - Preprocessing parameters (resolution, transforms)
 
 3. **Experiment Configuration**:
-   - Parameter sweeps (contrast, duration, interval)
-   - Evaluation protocols
-   - Visualization settings
+      - Parameter sweeps (contrast, duration, interval)
+      - Evaluation protocols
+      - Visualization settings
 
 ### 2.3 Parameter Expansion
 

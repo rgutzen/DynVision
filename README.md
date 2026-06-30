@@ -13,7 +13,7 @@
 DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks and how these networks can be aligned with properties of biological visual systems.
 
 <p align="center">
-  <img src="docs/assets/overview.png" alt="DynVision Overview" width="600"/>
+  <img src="docs/assets/rcnn_architecture.png" alt="DynVision Architecture" width="600"/>
 </p>
 
 ## Key Features
@@ -92,7 +92,7 @@ snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rcty
 ```
 
 <p align="center">
-  <img src="docs/assets/tau.png" alt="Temporal Dynamics Example" width="600"/>
+  <img src="docs/assets/performance_rctarget.png" alt="Noise robustness by recurrence target" width="600"/>
 </p>
 
 ## Documentation

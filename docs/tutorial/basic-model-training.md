@@ -188,19 +188,19 @@ This will create visualizations comparing the response properties of models with
 The visualizations will be saved in the `reports/figures/` directory. Let's examine them to understand the model's behavior:
 
 1. **Basic Response Properties**:
-   - Look at the response time courses in each layer (V1, V2, V4, IT)
-   - Note the response latencies (when activity starts to increase)
-   - Observe the peak times and response durations
+      - Look at the response time courses in each layer (V1, V2, V4, IT)
+      - Note the response latencies (when activity starts to increase)
+      - Observe the peak times and response durations
 
 2. **Contrast Response Properties**:
-   - Examine how response magnitude changes with contrast
-   - Observe whether higher contrast leads to faster responses
-   - Compare the contrast sensitivity across layers
+      - Examine how response magnitude changes with contrast
+      - Observe whether higher contrast leads to faster responses
+      - Compare the contrast sensitivity across layers
 
 3. **Recurrence Type Comparison**:
-   - Compare full recurrence vs. self recurrence
-   - Note differences in response magnitude, timing, and shape
-   - Consider which better captures biological properties
+      - Compare full recurrence vs. self recurrence
+      - Note differences in response magnitude, timing, and shape
+      - Consider which better captures biological properties
 
 ## Step 10: Customizing the Training
 

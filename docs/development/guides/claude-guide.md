@@ -119,21 +119,21 @@ snakemake <project_paths.data.interim>/<dataset_name>/train_all.ready
 Before making any changes:
 
 1. **Understand the Scientific Context**:
-   - What biological/computational principle is being implemented?
-   - How does this relate to visual neuroscience or neural dynamics?
-   - What are the mathematical foundations (ODEs, connectivity patterns, etc.)?
+      - What biological/computational principle is being implemented?
+      - How does this relate to visual neuroscience or neural dynamics?
+      - What are the mathematical foundations (ODEs, connectivity patterns, etc.)?
 
 2. **Find Existing Patterns**:
-   - Search for similar implementations in the codebase
-   - Check if related functionality exists in model_components/
-   - Review how other models implement similar features
-   - Look for established parameter handling patterns
+      - Search for similar implementations in the codebase
+      - Check if related functionality exists in model_components/
+      - Review how other models implement similar features
+      - Look for established parameter handling patterns
 
 3. **Review Documentation**:
-   - Check docstrings for scientific context and parameter meanings
-   - Review config files to understand parameter ranges and defaults
-   - Consult planning/todo-*.md for known issues and planned work
-   - Reference software-patterns.md for architectural guidance
+      - Check docstrings for scientific context and parameter meanings
+      - Review config files to understand parameter ranges and defaults
+      - Consult planning/todo-*.md for known issues and planned work
+      - Reference software-patterns.md for architectural guidance
 
 ### Scientific Correctness is Paramount
 

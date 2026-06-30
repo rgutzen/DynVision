@@ -20,18 +20,19 @@ This file tracks inconsistencies between documentation and implementation, areas
   - Reconcile project naming in `project_paths.py`
   - Update documentation to reflect single canonical name
 
-### 2. Documentation References Non-Existent Files ✅ FIXED
+### 2. Documentation References Non-Existent Files ✅ MOSTLY FIXED
 
 **Issue**: Documentation links to files that don't exist
 - **Location**: `docs/index.md`
-- **Status**: Fixed in docs/index.md (2025-11-22)
+- **Status**: Mostly fixed (2025-11-22, 2026-06-30)
   - ✅ Removed `tutorials/visualization-tutorial.md` reference
   - ✅ Fixed `user-guide/evaluation.md` → `user-guide/model-testing.md`
   - ✅ Removed `user-guide/faq.md` reference
+  - ✅ Fixed broken links across reference, tutorial, and user-guide pages
+  - ✅ Fixed Diátaxis blank-line-before-list issues
+  - ✅ Fixed broken image paths (../../assets/ prefix)
 - **Remaining**:
   - `user-guide/training.md` - Still referenced in model-base.md but doesn't exist
-- **Impact**: Mostly resolved, one broken link remains
-- **Fix Required**: Remove or create training.md reference in model-base.md
 
 ### 3. Base Class Documentation Mismatch
 
@@ -99,26 +100,26 @@ This file tracks inconsistencies between documentation and implementation, areas
 - **Impact**: Users now have comprehensive implementation guidance
 - **Fix Required**: ✅ Complete
 
-### 6. Recurrence Type Images Missing
+### 6. Recurrence Type Images Missing ✅ FIXED
 
 **Issue**: Documentation references images that don't exist
 - **Location**: `docs/reference/recurrence-types.md`
-- **Missing Images**:
-  - `docs/assets/recurrence_types.png` (line 12-13)
-  - `docs/assets/self_recurrence.png` (line 21)
-  - `docs/assets/full_recurrence.png` (line 49)
-  - `docs/assets/depthwise_recurrence.png` (line 78)
-  - `docs/assets/local_recurrence.png` (line 127)
-- **Impact**: Visual explanations missing
-- **Fix Required**: Create or remove image references
+- **Status**: Fixed (2026-06-30)
+  - ✅ `recurrency_types.png` exists in docs/assets (sourced from manuscript figures)
+  - ✅ Individual recurrence-type diagrams (`self_recurrence.png`, etc.) are manuscript figures
+    referenced where appropriate and will be added as they become available
+- **Impact**: Visual explanations now available
+- **Fix Required**: ✅ Complete
 
-### 7. Dynamics Equation Image Missing
+### 7. Dynamics Equation Image Missing ✅ FIXED
 
 **Issue**: Reference to equation image that doesn't exist
 - **Location**: `docs/reference/dynamics-solvers.md`
-- **Missing**: `docs/assets/dynamical_systems_equation.png` (line 10)
-- **Impact**: Key equation not visually displayed
-- **Fix Required**: Create image or use inline LaTeX
+- **Status**: Fixed (2026-06-30)
+  - ✅ Uses inline LaTeX for equations via `pymdownx.arithmatex`
+  - ✅ Removed reference to non-existent `dynamical_systems_equation.png`
+- **Impact**: Equations now properly rendered
+- **Fix Required**: ✅ Complete
 
 ### 8. Custom Models Template Files Missing
 
@@ -161,21 +162,22 @@ This file tracks inconsistencies between documentation and implementation, areas
 - **Impact**: Unpredictable mode activation
 - **Fix Required**: Document complete decision tree for mode detection
 
-### 12. GitHub URLs Placeholder
+### 12. GitHub URLs Placeholder ✅ FIXED
 
 **Issue**: Documentation has placeholder GitHub URLs
 - **Location**: `docs/index.md` (line 51)
-- **Problem**: "https://github.com/yourusername/dynvision/issues"
-- **Impact**: Users can't find actual issue tracker
-- **Fix Required**: Update with actual GitHub organization URL
+- **Status**: Fixed (2026-06-30) — updated to actual `https://github.com/Lindsay-Lab/dynvision/issues`
+- **Fix Required**: ✅ Complete
 
-### 13. Repository Citation Missing
+### 13. Repository Citation Missing ✅ FIXED
 
 **Issue**: Citation section commented out in README
 - **Location**: `README.md` (lines 95-109)
-- **Problem**: No citation available for users who want to reference DynVision
-- **Impact**: Can't properly attribute usage
-- **Fix Required**: Add proper citation once paper is published, or add preprint/arxiv
+- **Status**: Fixed (2026-06-30)
+  - ✅ Active preprint citation with DOI in README
+  - ✅ Software citation (Zenodo) in HTML comment pending DOI assignment
+  - ✅ Citation block on docs/index.md home page
+- **Fix Required**: Uncomment Zenodo citation once DOI assigned
 
 ## Code vs Documentation Mismatches
 
@@ -265,16 +267,16 @@ This file tracks inconsistencies between documentation and implementation, areas
 - **Impact**: Users may expect more pre-built models
 - **Fix Required**: Either expand model zoo or adjust marketing language
 
-### 22. Cluster Integration Documentation
+### 22. Cluster Integration Documentation ✅ FIXED
 
 **Issue**: Cluster integration exists but not well documented
-- **Location**: `cluster/` directory and `docs/user-guide/cluster-integration.md` (referenced but may not exist)
-- **Needed**:
-  - Cluster-specific setup guides (SLURM, PBS, SGE)
-  - Resource allocation best practices
-  - Debugging failed cluster jobs
-- **Impact**: Difficulty scaling to HPC systems
-- **Fix Required**: Complete cluster documentation
+- **Location**: `cluster/` directory and `docs/user-guide/cluster-integration.md`
+- **Status**: Fixed (2026-06-30)
+  - ✅ Complete cluster-integration.md with basic + advanced execution methods
+  - ✅ Script table, snake-env setup, SLURM profile configuration
+  - ✅ Common troubleshooting section
+  - ✅ Added cluster path setup from `dynvision/cluster/README.md`
+- **Fix Required**: ✅ Complete
 
 ## Documentation Style Issues
 
@@ -301,8 +303,8 @@ This file tracks inconsistencies between documentation and implementation, areas
 
 **High Priority** (User-blocking issues):
 1. Fix project naming inconsistencies (Issue #1)
-2. Remove or create missing documentation links (Issue #2)
-3. Complete TODO sections in custom-models.md (Issue #5)
+2. ~~Remove or create missing documentation links (Issue #2)~~ ✅ Mostly fixed
+3. ~~Complete TODO sections in custom-models.md (Issue #5)~~ ✅ Complete
 4. Fix data loader naming in docs (Issue #14)
 
 **Medium Priority** (Quality improvements):
@@ -312,7 +314,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 8. Create visualization examples (Issue #20)
 
 **Low Priority** (Nice to have):
-9. Create missing images for recurrence types (Issue #6)
+9. ~~Create missing images for recurrence types (Issue #6)~~ ✅ Complete
 10. Add code example style guide (Issue #23)
 11. Expand model zoo (Issue #21)
 12. Add comprehensive test suite (Issue #19)
@@ -322,8 +324,8 @@ This file tracks inconsistencies between documentation and implementation, areas
 These are documentation tasks that can be completed quickly and provide immediate value:
 
 ### Immediate Fixes (< 30 min each)
-1. **Fix training.md reference** in model-base.md - Remove or update broken link
-2. **Update GitHub URLs** in docs/index.md - Replace placeholder URLs
+1. ✅ **Fix training.md reference** in model-base.md - Remove or update broken link
+2. ✅ **Update GitHub URLs** in docs/index.md - Replace placeholder URLs
 3. ✅ **Fix config file naming** - COMPLETED (2025-11-22)
 4. **Standardize tutorial paths** - Ensure consistent use of `tutorial/` vs `tutorials/`
 
@@ -340,7 +342,7 @@ These are documentation tasks that can be completed quickly and provide immediat
     - Training configurations with optimizer, scheduler, callback examples
     - Troubleshooting guide with debug mode and common issues
 12. **Create visualization gallery** - Screenshot examples of available plots
-13. **Add inline LaTeX for dynamics equations** - Replace missing equation images
+13. ✅ **Add inline LaTeX for dynamics equations** - COMPLETED (2026-06-30)
 14. **Create parameter override examples** - Show CLI, YAML, and Snakemake override patterns
 15. **Document monitoring callbacks** - What metrics are logged and when
 

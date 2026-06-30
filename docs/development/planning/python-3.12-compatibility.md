@@ -48,9 +48,9 @@ If FFCV proves incompatible with Python 3.12:
 1. **Stay on Python 3.11** for the 0.1 release — safest option, no code changes needed
 2. **Make FFCV optional** — allow fallback to standard PyTorch DataLoader when FFCV is unavailable
 3. **Replace FFCV** — alternatives include:
-   - [WebDataset](https://github.com/webdataset/webdataset) — streaming I/O for large datasets
-   - [NVIDIA DALI](https://github.com/NVIDIA/DALI) — GPU-accelerated data loading
-   - Standard PyTorch DataLoader with appropriate tuning
+      - [WebDataset](https://github.com/webdataset/webdataset) — streaming I/O for large datasets
+      - [NVIDIA DALI](https://github.com/NVIDIA/DALI) — GPU-accelerated data loading
+      - Standard PyTorch DataLoader with appropriate tuning
 
 ## Version Bumps Required for 3.12
 

@@ -393,25 +393,25 @@ project_paths.figures / "{experiment}" / "{model_name}{model_args}_{seed}" / "{d
 ### Core Rules
 
 1. **init_model**: Create initialized model
-   - Input: Configuration, scripts
-   - Output: `models/{model_name}{model_args}_{seed}/{data_name}/init.pt`
+      - Input: Configuration, scripts
+      - Output: `models/{model_name}{model_args}_{seed}/{data_name}/init.pt`
 
 2. **train_model** (checkpoint): Train model and create symlink
-   - Input: Initialized model, training data
-   - Output: `models/{model_name}{model_args}_{seed}/{data_name}/trained.pt`
-   - Side effects: Create symlink, hash file
+      - Input: Initialized model, training data
+      - Output: `models/{model_name}{model_args}_{seed}/{data_name}/trained.pt`
+      - Side effects: Create symlink, hash file
 
 3. **test_model**: Evaluate model on test protocol
-   - Input: Model (via polymorphic wildcard), test data
-   - Output: `reports/{experiment}/{model_name}:{hash_id}/{data_name}:{data_group}_{status}/{data_loader}{data_args}/test_outputs.csv`
+      - Input: Model (via polymorphic wildcard), test data
+      - Output: `reports/{experiment}/{model_name}:{hash_id}/{data_name}:{data_group}_{status}/{data_loader}{data_args}/test_outputs.csv`
 
 4. **process_test_data**: Aggregate test results
-   - Input: Multiple test outputs (checkpoint-dependent)
-   - Output: `reports/{experiment}/{model_name}{model_args}_{seed}/{data_name}:{data_group}_{status}/test_data.csv`
+      - Input: Multiple test outputs (checkpoint-dependent)
+      - Output: `reports/{experiment}/{model_name}{model_args}_{seed}/{data_name}:{data_group}_{status}/test_data.csv`
 
 5. **plot_***: Generate visualizations
-   - Input: Processed data
-   - Output: `figures/{experiment}/{model_name}{model_args}_{seed}/{data_name}:{data_group}_{status}/{plot}.png`
+      - Input: Processed data
+      - Output: `figures/{experiment}/{model_name}{model_args}_{seed}/{data_name}:{data_group}_{status}/{plot}.png`
 
 ### Dependency Graph
 

@@ -177,14 +177,14 @@ This matches the pattern observed in biological neurons, where responses don't s
 DynVision models show adaptation to sustained or repeated stimuli:
 
 1. **During sustained stimulation**:
-   - Initial strong response
-   - Gradual decrease over time
-   - Eventual steady-state response
+      - Initial strong response
+      - Gradual decrease over time
+      - Eventual steady-state response
 
 2. **For repeated stimuli**:
-   - Strong response to first presentation
-   - Reduced response to second presentation
-   - Recovery with longer intervals
+      - Strong response to first presentation
+      - Reduced response to second presentation
+      - Recovery with longer intervals
 
 These adaptation patterns emerge from the interaction between recurrent connections and neural dynamics.
 
@@ -198,10 +198,10 @@ The models also show contrast-dependent response timing:
 This emerges from the interaction between input strength and the threshold dynamics in the neural equations.
 
 <p align="center">
-  <img src="../../assets/ordering_dyrcnn.png" alt="Layer Operations Order" width="500"/>
+  <img src="../../assets/rcnn_architecture.png" alt="DynVision Architecture" width="700"/>
 </p>
 
-*Figure: The configurable ordering of operations within each layer (convolution → bias → dynamics step → nonlinearity → pooling) determines where in the neuron activation sequence recurrent signals are integrated.*
+*Figure: The RCNN architecture showing the configurable ordering of operations within each layer (convolution → bias → dynamics step → nonlinearity → pooling) that determines where in the neuron activation sequence recurrent signals are integrated.*
 
 ## Empirical Validation
 
@@ -234,6 +234,25 @@ depending on architectural context.
 </p>
 
 *Figure: systematic comparison of model performance across recurrence targets (left vs center panels), demonstrating that the location where recurrent signals are integrated (pre- vs post-activation) qualitatively changes the learned dynamics.*
+
+### Temporal Parameters in Detail
+
+<p align="center">
+  <img src="../../assets/responses_tripytch_tau_trc_tsk.png" alt="Response profiles across time constants and recurrence delays" width="700"/>
+</p>
+
+*Figure: Per‑layer response trajectories across different time constants (τ) and
+recurrence delays (t_recurrence). The three‑panel layout isolates the
+contribution of each temporal parameter to the overall response shape.*
+
+<p align="center">
+  <img src="../../assets/responses_tripytch_tsteps_lossrt_idle.png" alt="Response profiles across timesteps and loss reaction time" width="700"/>
+</p>
+
+*Figure: Response trajectories across varying numbers of timesteps and loss
+reaction‑time delays. The temporal window over which the loss is computed and
+the number of idle timesteps (no stimulus present) both shape the emergent
+dynamics.*
 
 ## Computational Considerations
 

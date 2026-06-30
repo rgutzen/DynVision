@@ -282,9 +282,9 @@ DynVision automatically adapts to cluster environments:
    ```
 
 2. **Path Management**
-   - Large data directories move to scratch partitions
-   - Logs redirect to appropriate locations
-   - Container mounts configured automatically
+      - Large data directories move to scratch partitions
+      - Logs redirect to appropriate locations
+      - Container mounts configured automatically
    ```python
    # in project_paths.py
    if self.iam_on_cluster():
@@ -302,9 +302,9 @@ DynVision automatically adapts to cluster environments:
    ```
 
 3. **Resource Scaling**
-   - Batch sizes adjust for development vs. production
-   - Progress bars disable on compute nodes
-   - Memory limits scale based on available resources
+      - Batch sizes adjust for development vs. production
+      - Progress bars disable on compute nodes
+      - Memory limits scale based on available resources
    ```yaml
    # Debugging settings
    debug_batch_size: 3

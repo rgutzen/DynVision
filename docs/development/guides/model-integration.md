@@ -2025,8 +2025,8 @@ def forward(self, inp=None):
 ```
 
 2. **Combined layer timing**: When multiple layers are processed in the same forward pass and their outputs combined:
-   - Layer processed LATER (layer8): Needs `t_feedforward=0` (immediate)
-   - Layer processed EARLIER (layer7): Needs `delay_index=1` (from hidden state)
+      - Layer processed LATER (layer8): Needs `t_feedforward=0` (immediate)
+      - Layer processed EARLIER (layer7): Needs `delay_index=1` (from hidden state)
 
 **Why This Matters**:
 

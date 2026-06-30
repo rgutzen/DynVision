@@ -67,6 +67,80 @@ variants.*
 weighting. Recurrent weights remain consistently small and negative across all
 regularisation strengths, while feedforward weights are unaffected.*
 
+<p align="center">
+  <img src="../../assets/weights_activityloss_pattern=1011.png" alt="Weight distributions with alternating presentation pattern" width="700"/>
+</p>
+
+*Figure: Same weight analysis but with the `1011` alternating presentation
+pattern, confirming that the inhibitory‑weight regime is robust to the
+temporal structure of input presentation.*
+
+<p align="center">
+  <img src="../../assets/weights_feedback.png" alt="Feedback weight distributions" width="700"/>
+</p>
+
+*Figure: Feedback weight distributions across different feedback‑connection
+configurations. Multiplicative feedback shows marginally different
+distributions compared to additive, but no systematic noise‑robustness
+benefit across seeds.*
+
+<p align="center">
+  <img src="../../assets/weights_rctarget.png" alt="Weight distributions by recurrence target" width="700"/>
+</p>
+
+*Figure: Recurrent weight distributions for models trained with different
+recurrence targets (input, middle, output). Middle‑target training produces
+qualitatively different weight structures consistent with the noise‑robustness
+regime.*
+
+## Response Profiles
+
+DynVision can capture detailed temporal response profiles that reveal how
+different architectural choices shape neural dynamics:
+
+<p align="center">
+  <img src="../../assets/responses_tripytch_rctype_rctarget_seed.png" alt="Response profiles across recurrence configs and seeds" width="700"/>
+</p>
+
+*Figure: Per‑layer response trajectories across recurrence types, recurrence
+targets, and random seeds. The three‑panel layout (type × target × seed)
+exposes consistent response‑shaping effects of recurrence independent of
+initialization variability.*
+
+<p align="center">
+  <img src="../../assets/responses_tripytch_pattern_skip_feedback.png" alt="Response profiles with skip and feedback connections" width="700"/>
+</p>
+
+*Figure: Response trajectories for models with skip and feedback connections
+enabled. The additional connectivity pathways produce richer temporal dynamics
+that propagate earlier and later than in purely feedforward networks.*
+
+## Performance and Stability
+
+<p align="center">
+  <img src="../../assets/performance_feedback.png" alt="Performance with feedback connections" width="700"/>
+</p>
+
+*Figure: Accuracy across model variants with different feedback configurations.
+Feedback connections provide no systematic noise‑robustness benefit across
+seeds; multiplicative integration is only marginally preferable to additive.*
+
+<p align="center">
+  <img src="../../assets/performance_rctype_rctarget=middle.png" alt="Performance by recurrence type, middle-target" width="700"/>
+</p>
+
+*Figure: Accuracy comparison across recurrence types when recurrence targets the
+middle layer computation. Full recurrence consistently enables the strongest
+noise‑robustness effect.*
+
+<p align="center">
+  <img src="../../assets/stability_rctarget.png" alt="Training stability by recurrence target" width="700"/>
+</p>
+
+*Figure: Training stability analysis by recurrence target. The middle‑target
+configuration shows the most stable convergence across seeds while producing
+the strongest noise‑robustness gains.*
+
 ## See also
 
 - Reference: [Recurrence Types](../reference/recurrence-types.md)

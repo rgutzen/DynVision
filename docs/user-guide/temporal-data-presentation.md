@@ -267,6 +267,15 @@ model = DyRCNNx4(
     # data_presentation_pattern=[1, 0, 1, 1, 1, 1, 1, 1, 0, 1]
 )
 
+<p align="center">
+  <img src="../assets/pattern=1.png" alt="Simple presentation pattern (1)" width="400"/>
+  <img src="../assets/pattern=1011.png" alt="Alternating presentation pattern (1011)" width="400"/>
+</p>
+
+*Figure: Examples of temporal presentation patterns. Left: the simplest `1` pattern
+(repeat the same stimulus every timestep). Right: the alternating `1011` pattern
+(recommended for training — improves null‑response behaviour by including blanks).*
+
 # Timeline interpretation:
 # Timestep:  0  1  2  3  4  5  6  7  8  9
 # Pattern:   1  0  1  1  1  1  1  1  0  1

@@ -610,19 +610,19 @@ For more details on workflows, see:
 ## Best Practices
 
 1. **Code Organization**
-   - Keep related components together
-   - Use descriptive names
-   - Document parameter choices
+      - Keep related components together
+      - Use descriptive names
+      - Document parameter choices
 
 2. **Performance**
-   - Profile your model
-   - Use appropriate batch sizes
-   - Consider hardware constraints
+      - Profile your model
+      - Use appropriate batch sizes
+      - Consider hardware constraints
 
 3. **Debugging**
-   - Add logging statements
-   - Monitor gradients
-   - Test incrementally
+      - Add logging statements
+      - Monitor gradients
+      - Test incrementally
 
 ## Next Steps
 

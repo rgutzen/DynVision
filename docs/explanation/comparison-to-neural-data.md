@@ -84,6 +84,56 @@ Additional comparisons are available for:
 *Figure: Same analysis with V1 and V2 layer summaries swapped, showing that V1
 responses to contrast experiments better match the Groen et al. reference data.*
 
+### Recurrence Target Analysis
+
+<p align="center">
+  <img src="../../assets/dynamics_rctarget_V2-V2-V1.png" alt="Temporal dynamics by recurrence target (V2)" width="700"/>
+</p>
+
+*Figure: Temporal dynamics analysis of the DyRCNNx8 model across recurrence
+targets (input, middle, output). The target position qualitatively changes
+which temporal phenomena emerge.*
+
+<p align="center">
+  <img src="../../assets/dynamics_rctarget_V1-V1-V2.png" alt="Temporal dynamics by recurrence target (V1/V2 swapped)" width="700"/>
+</p>
+
+*Figure: Same recurrence‑target analysis with V1 and V2 layer summaries
+swapped.*
+
+### Training and Stability
+
+<p align="center">
+  <img src="../../assets/training_activityloss_pattern=1.png" alt="Training dynamics with activity loss" width="700"/>
+</p>
+
+*Figure: Training dynamics across activity‑loss weights showing convergence
+properties and the trade‑off between regularization strength and final accuracy.
+The `1` presentation pattern is used here.*
+
+<p align="center">
+  <img src="../../assets/training_activityloss_pattern=1011.png" alt="Training dynamics with alternating pattern" width="700"/>
+</p>
+
+*Figure: Same training‑dynamics analysis with the `1011` alternating
+presentation pattern. The pattern choice affects convergence speed but not the
+qualitative regularization trade‑off.*
+
+<p align="center">
+  <img src="../../assets/stability_activityloss_pattern=1.png" alt="Stability analysis with activity loss" width="700"/>
+</p>
+
+*Figure: Parameter stability analysis across activity‑loss weights. The map
+reveals regions of stable convergence vs. regions where the dynamics become
+unstable, explaining why certain configurations fail to train.*
+
+<p align="center">
+  <img src="../../assets/stability_activityloss_pattern=1011.png" alt="Stability analysis with alternating pattern" width="700"/>
+</p>
+
+*Figure: Same stability analysis with the `1011` pattern, confirming that
+the instability regions are consistent across presentation patterns.*
+
 ## References
 
 - Groen, I. I. A., et al. (2022). Temporal Dynamics of Neural Responses in

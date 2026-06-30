@@ -220,19 +220,19 @@ See the [Custom Models Guide](../user-guide/custom-models.md) for detailed instr
 ## Best Practices
 
 1. **Model Selection**:
-   - Use DyRCNN models for biological vision research
-   - Use enhanced standard architectures for comparison with literature
-   - Use research models for specific hypotheses
+      - Use DyRCNN models for biological vision research
+      - Use enhanced standard architectures for comparison with literature
+      - Use research models for specific hypotheses
 
 2. **Component Configuration**:
-   - Match time constants to biological values (typically 5-20ms)
-   - Choose recurrence types based on computational budget
-   - Use appropriate nonlinearities for biological plausibility
+      - Match time constants to biological values (typically 5-20ms)
+      - Choose recurrence types based on computational budget
+      - Use appropriate nonlinearities for biological plausibility
 
 3. **Performance Optimization**:
-   - Use simpler recurrence types for large-scale training
-   - Consider mixed precision training
-   - Adjust batch sizes based on available memory
+      - Use simpler recurrence types for large-scale training
+      - Consider mixed precision training
+      - Adjust batch sizes based on available memory
 
 ## References
 
