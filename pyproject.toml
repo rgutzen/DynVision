@@ -82,6 +82,8 @@ doc = [
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-git-revision-date-localized-plugin>=1.2.0",
     "mkdocs-autorefs>=0.5.0",
+    # Versioned documentation deploys (mkdocs.yml -> extra.version.provider: mike)
+    "mike>=2.1.0",
     # Markdown extensions
     "pymdown-extensions>=10.0",
     # Optional: for social cards plugin

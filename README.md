@@ -111,7 +111,17 @@ snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rcty
 If you use DynVision in your research, please cite both the software and the preprint:
 
 ```bibtex
-@software{Gutzen_DynVision,
+@article{Gutzen2025_2025.08.11.669756,
+  title        = {Modeling Dynamical Vision with Biologically Plausible Recurrent Convolutional Networks},
+  shorttitle   = {{{Modeling Dynamical Vision}}},
+  author       = {Gutzen, Robin and Lindsay, Grace W.},
+  year         = 2025,
+  pages        = {2025.08.11.669756},
+  publisher    = {bioRxiv},
+  doi          = {10.1101/2025.08.11.669756},
+}
+```
+<!-- @software{Gutzen_DynVision,
   author       = {Gutzen, Robin and Lindsay, Grace W.},
   title        = {DynVision: A Modeling Toolbox for Biologically Plausible
                    Recurrent Visual Networks},
@@ -120,19 +130,7 @@ If you use DynVision in your research, please cite both the software and the pre
   doi          = {10.5281/zenodo.XXXXXXXX},
   url          = {https://github.com/Lindsay-Lab/DynVision},
   note         = {Replace XXXXXXXX with DOI from https://zenodo.org after first release}
-}
-
-@article{Gutzen2025_2025.08.11.669756,
-  title        = {DynVision: A Toolbox for Biologically Plausible Recurrent
-                   Convolutional Networks},
-  shorttitle   = {{{DynVision}}},
-  author       = {Gutzen, Robin and Lindsay, Grace W.},
-  year         = 2025,
-  pages        = {2025.08.11.669756},
-  publisher    = {bioRxiv},
-  doi          = {10.1101/2025.08.11.669756},
-}
-```
+} -->
 
 ## License
 
