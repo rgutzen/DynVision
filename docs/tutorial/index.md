@@ -6,7 +6,7 @@ This section provides step-by-step tutorials to help beginners learn how to use 
 
 - [**Basic Model Training**](basic-model-training.md): Train your first model on CIFAR-10
 <!-- - [**Visualization Tutorial**](visualization-tutorial.md): Visualize model responses and dynamics -->
-- [**Custom Model Creation**](custom-model-creation.md): Create your own neural network architecture
+- [**Custom Model Creation**](custom-model.md): Create your own neural network architecture
 <!-- - [**Experiment Design**](experiment-design.md): Design and run experiments with Snakemake -->
 
 *...more to come...*

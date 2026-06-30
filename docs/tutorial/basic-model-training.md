@@ -262,4 +262,4 @@ Next Steps:
 - Explore other recurrence types
 - Create your own custom model
 
-For more advanced usage, check out the [Custom Models Guide](../user-guide/custom-models.md) and [Advanced Training Techniques](../user-guide/advanced-training.md).
+For more advanced usage, check out the [Custom Models Guide](../user-guide/custom-models.md).

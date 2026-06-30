@@ -124,7 +124,7 @@ The test results are stored in a pandas DataFrame with the following columns:
 - **`image_index`**: A reference to the specific image of the label class in the dataset.
 - **`label_set`**: The string representation of input over all timesteps (e.g. "-1-1-1-1202020202020" indicating null input (label_index=-1) for 4 timesteps and 6 timesteps of an image with label index 20).
 
-For more details on analyzing test results, see the [Evaluation Guide](user-guide/evaluation.md).
+For more details on analyzing test results, see the [Model Testing Guide](user-guide/model-testing.md).
 
 ## Understanding DynVision
 
@@ -201,7 +201,7 @@ DynVision leverages several powerful tools:
 
 4. [**Advanced Topics**](user-guide/index.md):
    - [Custom Data Processing](user-guide/data-processing.md)
-   - [Model Evaluation](user-guide/evaluation.md)
+   - [Model Testing](user-guide/model-testing.md)
    - [Result Visualization](user-guide/visualization.md)
    - [Workflow Management](user-guide/workflows.md)
 

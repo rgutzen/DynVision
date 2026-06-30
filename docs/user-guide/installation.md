@@ -1,5 +1,9 @@
 # Installation Guide
 
+!!! goal "Goal"
+    Get a working DynVision environment with all dependencies installed, so you
+    can train and evaluate models.
+
 This guide provides detailed instructions for installing DynVision and its dependencies on different operating systems.
 
 ## Prerequisites

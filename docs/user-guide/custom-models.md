@@ -286,7 +286,7 @@ monitor: "val_loss"  # Metric to track for checkpoints
 save_top_k: 3        # Keep top 3 checkpoints
 ```
 
-For complete training configuration details, see [Workflows Guide](../user-guide/workflows.md#training).
+For complete training configuration details, see [Workflows Guide](../user-guide/workflows.md).
 
 
 ### Layer Operations
@@ -305,7 +305,7 @@ def _define_architecture(self):
     ]
 ```
 
-See [Layer Operations Reference](../reference/organization.md#layer-operations) for available operations.
+See [Codebase Organization Reference](../reference/organization.md) for module structure.
 
 ## Parameter Initialization
 
