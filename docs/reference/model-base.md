@@ -41,7 +41,7 @@ class BaseModel(
 - `n_classes` (Optional[int]): Number of output classes. Can be inferred from data if not specified
 - `n_timesteps` (int): Number of temporal processing steps. Default: `1`
 - `dt` (float): Integration time step in milliseconds. Default: `2.0`
-- `tau` (float): Neural time constant in milliseconds. Default: `8.0`
+- `tau` (float): Neural time constant in milliseconds. Default: `5.0`
 - `learning_rate` (float): Base learning rate for training. Default: `0.001`
 - `store_responses` (int): Number of responses to store during training. Default: `0`
 - `**kwargs`: Additional parameters passed to component classes

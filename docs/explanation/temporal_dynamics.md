@@ -102,14 +102,22 @@ This method is computationally efficient but may require small timesteps for acc
 
 ### 3. Biologically Motivated Delays
 
-DynVision implements different delays for different types of connections:
+DynVision implements different delays for different connection types
+($\Delta_{FF}$, $\Delta_{RC}$, $\Delta_{SK}$, $\Delta_{FB}$). Each delay is an
+integer multiple of the integration step `dt`:
 
-- **Feedforward delays** (t_feedforward): Typically 10ms
-- **Recurrent delays** (t_recurrence): Typically 6ms
+- **Feedforward delay** ($\Delta_{FF}$): `0 ms` in the default engineering-time
+  unrolling; set to a positive value (e.g. `10 ms`) for biological-time unrolling.
+- **Recurrent delay** ($\Delta_{RC}$): `6 ms` by default, independent of the
+  unrolling convention.
+- **Skip / feedback delays** ($\Delta_{SK}$, $\Delta_{FB}$): adjusted automatically
+  when converting between engineering and biological time.
 
-These delays approximate the signal propagation times in biological systems, where:
-- Feedforward connections involve longer-range projections
-- Recurrent connections involve shorter-range lateral interactions
+These delays approximate signal-propagation times in biological systems, where
+feedforward connections involve longer-range projections and recurrent
+connections involve shorter-range lateral interactions. The choice of
+engineering vs. biological time only shifts responses in time; it does not change
+the dynamics (see [Engineering vs. Biological Time](engineering-vs-biological-time.md)).
 
 <p align="center">
   <img src="../assets/rcnn_unrolling_diagram.png" alt="Engineering vs Biological Time Unrolling" width="700"/>
@@ -119,13 +127,18 @@ These delays approximate the signal propagation times in biological systems, whe
 
 ### 4. Time Constants
 
-Different neural populations have different time constants governing their dynamics:
+The time constant $\tau$ governs how quickly a layer's activity tracks its
+driven state. The DynVision default is $\tau = 5$ ms (see the
+[default training configuration](../reference/benchmarking.md#default-training-configuration)).
+Larger $\tau$ values produce slower rise and decay; transient onset overshoots
+(also seen in cortical responses) appear only for small $\tau$ ($< 9$ ms).
 
-- **Fast time constants** (5-10ms): For rapid response components
-- **Medium time constants** (20-50ms): For sustained responses
-- **Slow time constants** (100-500ms): For adaptation and integration
+DynVision allows setting the time constant per layer, enabling layer-specific
+temporal dynamics. As a rough orientation:
 
-DynVision allows setting these time constants for each layer, enabling layer-specific temporal dynamics that match biological observations.
+- **Fast time constants** (~5-10 ms): rapid response components
+- **Medium time constants** (~20-50 ms): sustained responses
+- **Slow time constants** (~100-500 ms): adaptation and integration
 
 ### 5. Specialized Data Loaders
 
@@ -143,19 +156,9 @@ DynVision's implementation of temporal dynamics allows it to capture several key
 
 ### Response Latencies
 
-By using feedforward delays and layer-specific time constants, DynVision models show latency progressions similar to biological systems:
-
-```python
-# Example of layer latencies in a DyRCNN model
-latencies = {
-    'V1': 10,  # timesteps
-    'V2': 15,  # timesteps
-    'V4': 22,  # timesteps
-    'IT': 30   # timesteps
-}
-```
-
-These latencies emerge naturally from the model's architecture and dynamics, without explicit training.
+By using feedforward delays and layer-specific time constants, DynVision models
+show latency progressions similar to biological systems. These latencies emerge
+naturally from the model's architecture and dynamics, without explicit training.
 
 ### Temporal Summation
 
@@ -202,7 +205,29 @@ This emerges from the interaction between input strength and the threshold dynam
 
 ## Empirical Validation
 
-DynVision models have been validated against electrophysiological recordings from human visual cortex (Groen et al., 2022), showing that continuous-time recurrent dynamics can naturally reproduce key cortical temporal phenomena including adaptation, sublinear temporal summation, and contrast-dependent response timing — without requiring explicit divisive normalization mechanisms.
+DynVision models have been validated against electrophysiological recordings from
+human visual cortex (Groen et al., 2022). The key finding is that different
+recurrent configurations give rise to **functionally distinct dynamic regimes**:
+
+1. **Temporal normalization regime** — Models with **full** lateral recurrence
+   targeting the layer **output**, combined with **strong activity-loss**
+   regularization, naturally produce adaptation (reduced response to repeated
+   stimuli), sublinear temporal summation, and contrast‑dependent response
+   timing. This happens *without* any explicit divisive‑normalization operation;
+   the recurrent weights converge to effectively inhibitory values that stabilize
+   feedforward activity.
+
+2. **Noise-robustness regime** — A different configuration with full recurrence
+   targeting the **middle** of a layer's computations, trained with **minimal**
+   activity‑loss on purely static images, produces substantially improved
+   robustness to Gaussian noise (approaching human‑level performance curves from
+   Jang et al., 2021) but shows *weaker* temporal normalization.
+
+The two regimes thus **dissociate**: the activity loss that promotes biologically
+realistic temporal normalization also reduces noise robustness, while
+middle‑target recurrence enhances denoising at the cost of weaker temporal
+normalization. This suggests that recurrence serves functionally distinct roles
+depending on architectural context.
 
 <p align="center">
   <img src="../assets/performance_rctarget.png" alt="Performance Comparison by Recurrence Target" width="700"/>

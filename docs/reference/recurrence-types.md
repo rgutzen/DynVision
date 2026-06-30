@@ -4,21 +4,12 @@ This document describes the different types of recurrent connections available i
 
 ## Introduction to Recurrence
 
-<!--
-  TODO: Several recurrence-type images are missing:
-  - ../assets/self_recurrence.png
-  - ../assets/full_recurrence.png
-  - ../assets/depthwise_recurrence.png
-  - ../assets/local_recurrence.png
-  The overview image recurrence_types.png exists.
--->
-
 Recurrent connections are abundant in the primate visual system. In the ventral visual stream, lateral recurrent connections exist amongst neurons within a visual cortical region, and feedback connections go from higher areas (like V4) back to lower ones (such as V1).
 
 DynVision implements several types of recurrent connections, each with different computational properties and biological interpretations.
 
 <p align="center">
-  <img src="docs/assets/recurrence_types.png" alt="Recurrence Types" width="800"/>
+  <img src="../assets/recurrence_types.png" alt="Recurrence Types" width="800"/>
 </p>
 
 ## Available Recurrence Types
@@ -27,7 +18,7 @@ DynVision implements several types of recurrent connections, each with different
 
 Self recurrence is the simplest form of recurrence, where a unit connects only to itself.
 
-![Self Recurrence](../assets/self_recurrence.png)
+**Illustration**: See the [Recurrence Types overview image](#available-recurrence-types) at the top of this page.
 
 **Implementation Details**:
 - A layer's output tensor from a previous time step is multiplied with a weight and added to the current time step.
@@ -55,7 +46,7 @@ model = DyRCNNx4(
 
 In full recurrence, a unit gets input from all units within a nearby spatial region across all channels.
 
-![Full Recurrence](../assets/full_recurrence.png)
+**Illustration**: See the [Recurrence Types overview image](#available-recurrence-types).
 
 **Implementation Details**:
 - Implemented by applying a kernel convolution on the layer's output tensor and adding the outcome back to the same layer.
@@ -84,7 +75,7 @@ model = DyRCNNx4(
 
 Depthwise separable recurrence applies a depthwise (spatial dimension) and then a pointwise (feature dimension) convolution instead of a full one.
 
-![Depthwise Separable Recurrence](../assets/depthwise_recurrence.png)
+**Illustration**: See the [Recurrence Types overview image](#available-recurrence-types).
 
 #### 3.1 Depthpointwise Recurrence
 
@@ -133,7 +124,7 @@ model = DyRCNNx4(
 
 Local recurrence captures the 2-D topology of visual cortices by arranging units on a 2-D grid inspired by cortical organization.
 
-![Local Recurrence](../assets/local_recurrence.png)
+**Illustration**: See the [Recurrence Types overview image](#available-recurrence-types).
 
 **Implementation Details**:
 - Units in a layer are systematically arranged on a 2-D grid inspired by cortical organization.

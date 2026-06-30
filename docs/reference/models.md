@@ -2,6 +2,14 @@
 
 This reference documentation provides an overview of the model architectures available in DynVision and how they utilize different components to implement biologically-inspired vision models.
 
+<p align="center">
+  <img src="../assets/reference_models.png" alt="Reference models (CORnet-RT, CordsNet, DyRCNNx8)" width="700"/>
+</p>
+
+*Figure: Equivalent reimplementation of CORnet‑RT and CordsNet in DynVision,
+alongside the native DyRCNNx8. The reimplementations are numerically equivalent
+to the originals while achieving up to 52% speedup.*
+
 ## Available Model Architectures
 
 DynVision provides several model architectures, each serving different research purposes:
@@ -18,11 +26,11 @@ A four-layer architecture inspired by the ventral visual stream:
 from dynvision.models import DyRCNNx4
 
 model = DyRCNNx4(
-    n_classes=1000,              # Number of output classes
-    input_dims=(20, 3, 224, 224),  # (timesteps, channels, height, width)
+    n_classes=10,                  # Number of output classes
+    input_dims=(20, 3, 64, 64),   # (timesteps, channels, height, width)
     recurrence_type="full",      # Type of recurrent connectivity
     dt=2.0,                      # Integration time step (ms)
-    tau=10.0                     # Neural time constant (ms)
+    tau=5.0                      # Neural time constant (ms) — default
 )
 ```
 
@@ -55,7 +63,7 @@ model = ResNet(
     version="50",                # ResNet version (18, 34, 50, 101)
     dynamics_solver="euler",     # Type of dynamics solver
     dt=2.0,
-    tau=10.0
+    tau=5.0
 )
 ```
 
@@ -69,7 +77,7 @@ model = AlexNet(
     input_dims=(20, 3, 224, 224),
     dynamics_solver="euler",
     dt=2.0,
-    tau=10.0
+    tau=5.0
 )
 ```
 
@@ -85,7 +93,7 @@ model = CordsNet(
     input_dims=(20, 3, 224, 224),
     topographic=True,           # Enable topographic organization
     dt=2.0,
-    tau=10.0
+    tau=5.0
 )
 ```
 
