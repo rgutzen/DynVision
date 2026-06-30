@@ -8,7 +8,7 @@
 [![Preprint](https://badges.ws/badge/Preprint-10.1101%2F2025.08.11.669756%20-B31B1B)](https://doi.org/10.1101/2025.08.11.669756)
 <!-- Zenodo DOI badge: replace XXXXXXXX after first GitHub release triggers archival -->
 <!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXXX) -->
-[![Docs](https://img.shields.io/badge/docs-up%20to%20date-brightgreen)](https://dynvision.readthedocs.io)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://lindsay-lab.github.io/DynVision/)
 
 DynVision is a modular toolbox for constructing and evaluating recurrent convolutional neural networks (RCNNs) with biologically inspired dynamics. It provides a flexible framework for exploring how recurrent connections and temporal dynamics shape visual processing in artificial neural networks and how these networks can be aligned with properties of biological visual systems.
 
@@ -35,7 +35,7 @@ DynVision is a modular toolbox for constructing and evaluating recurrent convolu
 
 ## Installation
 
-**Python requirement**: Python 3.11+ (3.12 support pending FFCV compatibility testing — see [Python 3.12 Compatibility](docs/development/python-3.12-compatibility.md)).
+**Python requirement**: Python 3.11+ (3.12 support pending FFCV compatibility testing — see [Python 3.12 Compatibility](docs/development/planning/python-3.12-compatibility.md)).
 
 ```bash
 # Clone repository
@@ -68,8 +68,8 @@ model = DyRCNNx4(
     recurrence_type="full",        # Full recurrent connectivity
     dt=2,                          # Integration time step (ms)
     tau=5,                         # Neural time constant (ms)
-    tff=8,                         # feedforward delay (ms)
-    trc=4,                         # recurrence delay (ms)
+    t_feedforward=0,               # feedforward delay (ms)
+    t_recurrence=6,                # recurrence delay (ms)
 )
 
 # Forward pass with a batch of inputs
@@ -100,7 +100,7 @@ snakemake -j4 --config experiment=duration model_name=DyRCNNx4 model_args="{rcty
 - [Getting Started](docs/getting-started.md): Beginner's tutorial
 - [User Guide](docs/user-guide/index.md): How-to guides for common tasks
 - [API Reference](docs/reference/index.md): Technical documentation
-- [Concepts](docs/explanation/concepts.md): Explanation of core concepts
+- [Explanation](docs/explanation/index.md): Understanding core concepts
 - [Contributing](docs/contributing.md): How to contribute to the project
 - [Developer Guide](docs/development/index.md): Resources for contributors and AI assistants
 

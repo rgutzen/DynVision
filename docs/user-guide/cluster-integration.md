@@ -249,6 +249,25 @@ tail -f /path/to/logs/slurm/snakecharm_<id>.log
 ls /path/to/logs/slurm/
 ```
 
+## Available Cluster Scripts
+
+DynVision ships with ready-to-use cluster scripts and configuration templates in `dynvision/cluster/`:
+
+| Script | Purpose |
+|--------|---------|
+| `snakecharm.sh` | Wrapper that runs the workflow in the background with logging |
+| `_snakecharm.sh` | Core orchestration: loads modules, activates conda, runs Snakemake with slurm profile |
+| `snakejob.sh` | Single SLURM job submission script (with inline SBATCH directives) |
+| `executor_wrapper.sh` | Container wrapper for training — handles distributed env setup |
+| `setup_distributed_execution.sh` | Distributed training setup: GPU detection, NCCL config, MASTER_ADDR/PORT |
+| `profiles/slurm/config.yaml` | Snakemake slurm profile: default resources, per-rule overrides |
+
+These scripts are templates — you **must** fill in your own system-specific values before use. Look for `<YOUR_...>` placeholders in each file.
+
+## Cluster Path Setup
+
+Before running workflows, set your project paths in `dynvision/project_paths.py`. The file includes an `iam_on_cluster()` check that auto-detects cluster nodes via hostname patterns (`hpc`, `greene`, `slurm`, `compute`). When detected, large data directories (data, models, reports, logs) are redirected to scratch partitions.
+
 ## Environment Adaptation
 
 DynVision automatically adapts to cluster environments:
