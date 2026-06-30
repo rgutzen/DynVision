@@ -85,12 +85,6 @@ $\tau$:
 
 $$
 \begin{align}
-&\text{\scriptsize\;
-{\color{#c4380f}\text{Dynamical Timescale}}\;
-{\color{#18359c}\text{Network Activations}}\;
-{\color{#41960e}\text{External Input}}\;
-{\color{#556B2F}\text{Bias}}\;
-}\\[2pt]
 &{\color{#c4380f}\tau}
 \frac{d{\color{#18359c}r}}{d{\color{#5f5b5b}t}} =
 -{\color{#18359c}r}({\color{#5f5b5b}t})
@@ -100,12 +94,6 @@ $$
   + {\color{#17a89c}J}{\color{#18359c}r}({\color{#5f5b5b}t})
   {\color{#821ca9}\bigr]}
 + {\color{#556B2F}B}\\[4pt]
-&\text{\scriptsize\;
-{\color{#5f5b5b}\text{Time Dimension}}\;
-{\color{#821ca9}\text{Activation Fn}}\;
-{\color{#17a89c}\text{Network Connectivity}}\;
-{\color{#b8621a}\text{Time Step/Delay}}\;
-}\\[2pt]
 &{\color{#18359c}r_l}({\color{#5f5b5b}t}) =
 {\color{#18359c}r_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
 + \frac{{\color{#b8621a}dt}}{\color{#c4380f}\tau}
@@ -126,6 +114,16 @@ $$
 {\color{#17a89c}J_{SK}}\!\cdot\!{\color{#18359c}r_{<l-1}}({\color{#5f5b5b}t}-{\color{#b8621a}\Delta_{SK}})
 \end{align}
 $$
+
+Where the colors denote:
+<span style="color:#c4380f">● $\tau$ — dynamical timescale</span> ·
+<span style="color:#18359c">● $r$ — network activations</span> ·
+<span style="color:#41960e">● $I$ — external input</span> ·
+<span style="color:#556B2F">● $B$ — bias</span> ·
+<span style="color:#5f5b5b">● $t$, $s$ — time dimension</span> ·
+<span style="color:#821ca9">● $\Phi$ — activation function</span> ·
+<span style="color:#17a89c">● $J$ — network connectivity</span> ·
+<span style="color:#b8621a">● $dt$, $\Delta$ — time step / delays</span>
 
 **What this shows:**
 

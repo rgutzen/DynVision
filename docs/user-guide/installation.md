@@ -64,14 +64,20 @@ mamba install -c conda-forge graphviz
 
 ### 3. Install DynVision
 
-Clone and install the repository:
+**From PyPI (recommended for most users):**
+
+```bash
+pip install dynvision
+```
+
+**From source (for development):**
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/dynvision.git
+git clone https://github.com/Lindsay-Lab/dynvision.git
 cd DynVision
 
-# Install package
+# Install package in development mode
 pip install -e .
 ```
 

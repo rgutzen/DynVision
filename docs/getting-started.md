@@ -14,6 +14,13 @@ This guide will walk you through the basic steps to get started, including insta
 ## Quick Installation
 
 ```bash
+# Install from PyPI (recommended)
+pip install dynvision
+```
+
+**From source (for development):**
+
+```bash
 # Clone the repository
 git clone https://github.com/Lindsay-Lab/dynvision.git
 

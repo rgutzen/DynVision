@@ -38,6 +38,13 @@ DynVision is a modular toolbox for constructing and evaluating recurrent convolu
 **Python requirement**: Python 3.11+ (3.12 support pending FFCV compatibility testing — see [Python 3.12 Compatibility](docs/development/planning/python-3.12-compatibility.md)).
 
 ```bash
+# Install from PyPI (recommended for most users)
+pip install dynvision
+```
+
+**From source (for development):**
+
+```bash
 # Clone repository
 git clone https://github.com/Lindsay-Lab/dynvision.git
 cd dynvision
