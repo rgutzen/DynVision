@@ -120,7 +120,7 @@ engineering vs. biological time only shifts responses in time; it does not chang
 the dynamics (see [Engineering vs. Biological Time](engineering-vs-biological-time.md)).
 
 <p align="center">
-  <img src="../assets/rcnn_unrolling_diagram.png" alt="Engineering vs Biological Time Unrolling" width="700"/>
+  <img src="../../assets/rcnn_unrolling_diagram.png" alt="Engineering vs Biological Time Unrolling" width="700"/>
 </p>
 
 *Figure: The same recurrent network can be unrolled in engineering time (left, all delays collapsed) or biological time (right, delays match cortical propagation distances). The toolbox automatically converts between these conventions.*
@@ -198,7 +198,7 @@ The models also show contrast-dependent response timing:
 This emerges from the interaction between input strength and the threshold dynamics in the neural equations.
 
 <p align="center">
-  <img src="../assets/ordering_dyrcnn.png" alt="Layer Operations Order" width="500"/>
+  <img src="../../assets/ordering_dyrcnn.png" alt="Layer Operations Order" width="500"/>
 </p>
 
 *Figure: The configurable ordering of operations within each layer (convolution → bias → dynamics step → nonlinearity → pooling) determines where in the neuron activation sequence recurrent signals are integrated.*
@@ -230,7 +230,7 @@ normalization. This suggests that recurrence serves functionally distinct roles
 depending on architectural context.
 
 <p align="center">
-  <img src="../assets/performance_rctarget.png" alt="Performance Comparison by Recurrence Target" width="700"/>
+  <img src="../../assets/performance_rctarget.png" alt="Performance Comparison by Recurrence Target" width="700"/>
 </p>
 
 *Figure: systematic comparison of model performance across recurrence targets (left vs center panels), demonstrating that the location where recurrent signals are integrated (pre- vs post-activation) qualitatively changes the learned dynamics.*

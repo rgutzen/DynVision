@@ -15,7 +15,7 @@ more efficient but the temporal graph is mathematically equivalent when delays
 are converted correctly.
 
 <p align="center">
-  <img src="../assets/rcnn_unrolling_diagram.png" alt="Engineering vs biological time unrolling" width="700"/>
+  <img src="../../assets/rcnn_unrolling_diagram.png" alt="Engineering vs biological time unrolling" width="700"/>
 </p>
 
 *Figure: The same recurrent network unrolled in engineering time (left,
@@ -58,7 +58,7 @@ from 2.39 GB to 2.13 GB.
 ## Equivalence Validation
 
 <p align="center">
-  <img src="../assets/unrolling.png" alt="Equivalence of engineering and biological time" width="500"/>
+  <img src="../../assets/unrolling.png" alt="Equivalence of engineering and biological time" width="500"/>
 </p>
 
 *Figure: A DyRCNNx8 model trained in engineering time (with skip and feedback)

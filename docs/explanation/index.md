@@ -1,4 +1,4 @@
-# Explanations and Concepts
+<!-- # Explanations and Concepts -->
 
 This section provides conceptual discussions and explanations of the ideas behind DynVision. Here you'll find in-depth coverage of the theoretical foundations, design principles, and biological inspirations that inform the toolbox.
 

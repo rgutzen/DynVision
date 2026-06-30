@@ -1,4 +1,4 @@
-# Reference Documentation
+<!-- # Reference Documentation -->
 
 This section provides detailed technical reference documentation for DynVision's components, configurations, and APIs. Each subsection focuses on specific aspects of the toolbox, providing comprehensive information about implementation details, parameters, and usage.
 

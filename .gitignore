@@ -17,6 +17,7 @@ config_runtime.yaml
 
 # temporary files 
 temp_*
+!docs/development/temp_presentation/
 *_old.py
 *_old.md
 *_backup.py

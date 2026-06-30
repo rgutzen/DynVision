@@ -18,7 +18,7 @@ training to improve null‑response behaviour.
 ## Temporal Normalisation Without Explicit Normalisation
 
 <p align="center">
-  <img src="../assets/dynamics_rctype_V2-V2-V1.png" alt="Temporal dynamics by recurrence type (V2)" width="700"/>
+  <img src="../../assets/dynamics_rctype_V2-V2-V1.png" alt="Temporal dynamics by recurrence type (V2)" width="700"/>
 </p>
 
 *Figure: Temporal dynamics of the DyRCNNx8 model for different recurrence types,
@@ -54,7 +54,7 @@ These results reveal a **dissociation** between two dynamic regimes:
 ## Noise Robustness vs. Humans
 
 <p align="center">
-  <img src="../assets/performance_rctarget.png" alt="Noise robustness by recurrence target" width="700"/>
+  <img src="../../assets/performance_rctarget.png" alt="Noise robustness by recurrence target" width="700"/>
 </p>
 
 *Figure: Noise robustness depends on where the recurrent signal is integrated
@@ -78,7 +78,7 @@ Additional comparisons are available for:
 - **Different recurrence types** at matched noise‑robustness conditions.
 
 <p align="center">
-  <img src="../assets/dynamics_rctype_V1-V1-V2.png" alt="Temporal dynamics (V1/V2 swapped)" width="700"/>
+  <img src="../../assets/dynamics_rctype_V1-V1-V2.png" alt="Temporal dynamics (V1/V2 swapped)" width="700"/>
 </p>
 
 *Figure: Same analysis with V1 and V2 layer summaries swapped, showing that V1

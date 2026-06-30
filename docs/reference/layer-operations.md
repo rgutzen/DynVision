@@ -26,7 +26,7 @@ layer_operations:
 ```
 
 <p align="center">
-  <img src="../assets/rcnn_architecture.png" alt="Layer Operations and Architecture" width="700"/>
+  <img src="../../assets/rcnn_architecture.png" alt="Layer Operations and Architecture" width="700"/>
 </p>
 
 *Figure: Architecture schematic of the DyRCNN model family. The left side shows

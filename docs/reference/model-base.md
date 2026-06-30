@@ -3,7 +3,7 @@
 The `dynvision.base` module provides the foundational classes for building biologically-inspired neural network models with PyTorch Lightning integration. This module implements a modular architecture that separates core neural network functionality, training infrastructure, storage management, and debugging capabilities.
 
 <p align="center">
-  <img src="../assets/rcnn_architecture.png" alt="DynVision RCNN Architecture" width="700"/>
+  <img src="../../assets/rcnn_architecture.png" alt="DynVision RCNN Architecture" width="700"/>
 </p>
 
 *Figure: Architecture of the DyRCNN model family. Each layer receives feedforward input with configurable delays and recurrent input from its own past activity, with optional skip and feedback connections from other layers.*

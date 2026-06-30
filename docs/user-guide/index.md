@@ -1,4 +1,4 @@
-# User Guide
+<!-- # User Guide -->
 
 Welcome to the DynVision User Guide! This section provides task-oriented guides to help you accomplish specific goals with DynVision.
 

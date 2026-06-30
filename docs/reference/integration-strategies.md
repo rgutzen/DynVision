@@ -14,7 +14,7 @@ Set via `integration_strategy`:
 | *callable* | $x' = f(x, h)$ | Any user‑supplied callable. |
 
 <p align="center">
-  <img src="../assets/rcnn_architecture.png" alt="Integration shown in layer architecture" width="700"/>
+  <img src="../../assets/rcnn_architecture.png" alt="Integration shown in layer architecture" width="700"/>
 </p>
 
 ## Recurrence Target

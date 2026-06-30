@@ -3,7 +3,7 @@
 This reference documentation provides an overview of the model architectures available in DynVision and how they utilize different components to implement biologically-inspired vision models.
 
 <p align="center">
-  <img src="../assets/reference_models.png" alt="Reference models (CORnet-RT, CordsNet, DyRCNNx8)" width="700"/>
+  <img src="../../assets/reference_models.png" alt="Reference models (CORnet-RT, CordsNet, DyRCNNx8)" width="700"/>
 </p>
 
 *Figure: Equivalent reimplementation of CORnet‑RT and CordsNet in DynVision,
@@ -102,7 +102,7 @@ model = CordsNet(
 DynVision enables systematic comparison of different recurrent architectures. The figure below compares training performance across reference models and DynVision variants trained on ImageNet:
 
 <p align="center">
-  <img src="../assets/reference_models.png" alt="Reference Model Comparison" width="700"/>
+  <img src="../../assets/reference_models.png" alt="Reference Model Comparison" width="700"/>
 </p>
 
 *Figure: Training comparison of reference RCNN implementations (CorNet-RT, CordsNet) and DynVision's DyRCNNx8 across ImageNet training. DynVision achieves faster training while supporting more biologically detailed architectures.*

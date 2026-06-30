@@ -14,7 +14,7 @@ Thank you for your interest in contributing to DynVision! This document provides
 
 ## Code of Conduct
 
-DynVision adopts the [Contributor Covenant Code of Conduct](./code-of-contact.md). By participating in this project, you agree to abide by its terms. Please report unacceptable behavior to the project maintainers.
+DynVision adopts the [Contributor Covenant Code of Conduct](./code-of-conduct.md). By participating in this project, you agree to abide by its terms. Please report unacceptable behavior to the project maintainers.
 
 ## Getting Started
 

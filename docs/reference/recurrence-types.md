@@ -9,7 +9,7 @@ Recurrent connections are abundant in the primate visual system. In the ventral 
 DynVision implements several types of recurrent connections, each with different computational properties and biological interpretations.
 
 <p align="center">
-  <img src="../assets/recurrence_types.png" alt="Recurrence Types" width="800"/>
+  <img src="../../assets/recurrence_types.png" alt="Recurrence Types" width="800"/>
 </p>
 
 ## Available Recurrence Types
@@ -137,7 +137,7 @@ Local recurrence captures the 2-D topology of visual cortices by arranging units
 - Models how features that are close in feature space (e.g., similar orientations) interact more strongly.
 
 <p align="center">
-  <img src="../assets/local_recurrence_mapping.png" alt="Local Recurrence Topographic Mapping" width="500"/>
+  <img src="../../assets/local_recurrence_mapping.png" alt="Local Recurrence Topographic Mapping" width="500"/>
 </p>
 
 *Figure: Local recurrence maps the 3D activation tensor to a 2D cortical plane where nearby units have similar feature preferences. A convolution on this plane captures topographically organized lateral interactions.*

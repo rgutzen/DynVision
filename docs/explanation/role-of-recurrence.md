@@ -50,7 +50,7 @@ Analysis of learned weights reveals systematic patterns across recurrence types
 that explain the two functional regimes:
 
 <p align="center">
-  <img src="../assets/weights_rctype.png" alt="Weight distributions by recurrence type" width="700"/>
+  <img src="../../assets/weights_rctype.png" alt="Weight distributions by recurrence type" width="700"/>
 </p>
 
 *Figure: Recurrent weight distributions for models trained with different
@@ -60,7 +60,7 @@ near zero. Feedforward weight distributions (not shown) are consistent across al
 variants.*
 
 <p align="center">
-  <img src="../assets/weights_activityloss_pattern=1.png" alt="Weight distributions by activity loss weight" width="700"/>
+  <img src="../../assets/weights_activityloss_pattern=1.png" alt="Weight distributions by activity loss weight" width="700"/>
 </p>
 
 *Figure: Feedforward and recurrent weight distributions across activity‑loss

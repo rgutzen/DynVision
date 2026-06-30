@@ -42,6 +42,7 @@ validation:
 # Home page (index.md) is linked via the logo, not the nav bar.
 not_in_nav: |
   index.md
+  code-of-conduct.md
   development/planning/
   development/python-3.12-compatibility.md
   development/guides/model-integration.md
