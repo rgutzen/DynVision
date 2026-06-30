@@ -603,9 +603,9 @@ python plot_training.py \
 
 ## Related Documentation
 
-- [Testing Guide](../user-guide/testing.md) - How to run tests and configure test parameters
-- [Snakemake Workflow](../user-guide/workflow.md) - Complete workflow orchestration
-- [Visualization Reference](visualization.md) - Plotting aggregated data
+- [Testing Guide](../user-guide/model-testing.md) - How to run tests and configure test parameters
+- [Workflows Guide](../user-guide/workflows.md) - Complete workflow orchestration
+- [Visualization Guide](../user-guide/visualization.md) - Plotting aggregated data
 - [Configuration System](configuration.md) - Parameter management and config files
 
 ## Notes
