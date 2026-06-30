@@ -9,7 +9,6 @@ Thank you for your interest in contributing to DynVision! This document provides
 - [Development Workflow](#development-workflow)
 - [Pull Request Process](#pull-request-process)
 - [Coding Standards](#coding-standards)
-- [Testing](#testing)
 - [Documentation](#documentation)
 - [Issue Tracking](#issue-tracking)
 
