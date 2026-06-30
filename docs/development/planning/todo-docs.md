@@ -1,15 +1,105 @@
 # Documentation and Implementation TODO
 
-> **Updated 2026-06-23**: Many items addressed in 0.1 release prep. See [todo-release-0.1.md](todo-release-0.1.md) for completed tasks.
+> **Updated 2026-06-30**: Major docs-website overhaul completed. See [todo-release-0.1.md](todo-release-0.1.md) for release-prep tasks.
 
 This file tracks inconsistencies between documentation and implementation, areas needing improvement, and future work items.
+
+## Docs-Website Overhaul Completed (2026-06-30)
+
+The following high-level documentation tasks were completed during the feature/docs-website branch:
+
+### Structure & Layout
+- ✅ Diátaxis framework enforced: quadrant badges via template overrides, per-section accent colours
+- ✅ Header: logo-only (site_name empty), dark/light mode adaptive via partials/logo.html
+- ✅ Home page: logo hero, Diátaxis-structured nav, citation block
+- ✅ Index pages: YAML frontmatter titles instead of h1 headings (prevents 'Index' fallback)
+- ✅ Diátaxis CSS: per-quadrant accent colours, Tutorial single-column, Explanation wider line-height
+
+### Content Fixes
+- ✅ 40+ broken links fixed (tutorial→tutorials, evaluation→model-testing, docs/ prefix, code-of-contact→code-of-conduct)
+- ✅ 575+ blank-line-before-list fixes across 52 files (Python-Markdown requirement)
+- ✅ README.md: fixed Quick Start params, docs badge URL, stale paths
+- ✅ Installation: added `pip install dynvision` to all install guides (README, getting-started, installation)
+- ✅ Stale 'yourusername' placeholder replaced with Lindsay-Lab in installation.md
+
+### Configuration
+- ✅ mkdocs.yml: site_name empty, `pymdownx.tasklist` extension added
+- ✅ pyproject.toml: added mike to [doc] extra
+- ✅ favicon: thumbnail.png → logo.svg (transparent thumbnail was invisible)
+
+### Figures
+- ✅ All 28 manuscript figures copied to docs/assets/
+- ✅ Non-manuscript PNGs removed (overview, tau, ordering, dynamical_systems_equation, local_recurrence)
+- ✅ recurrence_types.png → recurrency_types.png (match manuscript spelling)
+- ✅ 17 previously-unused manuscript figures wired into pages with proper captions
+- ✅ Image paths normalised to `../../assets/` prefix for depth-2 pages
+
+### New Pages Created (structured placeholders)
+- ✅ `explanation/comparison-to-neural-data.md` — ECoG comparison, noise robustness, two-regime dissociation
+- ✅ `explanation/engineering-vs-biological-time.md` — delay conversion formulas
+- ✅ `reference/layer-operations.md`, `reference/skip-feedback-connections.md`, `reference/integration-strategies.md`
+- ✅ `reference/evaluation-metrics.md`, `reference/benchmarking.md`
+
+### Outstanding from the Overhaul
+- ⬜ Write full prose for new pages that are currently thin/skeletal:
+  `benchmarking.md`, `evaluation-metrics.md`, `skip-feedback-connections.md`,
+  `layer-operations.md`, `integration-strategies.md`
+- ⬜ Add `docs/assets/recurrency_types.png` to main README (currently uses rcnn_architecture.png)
+- ⬜ The tutorial/index.md aspirational page list (~18 commented links) needs either creation or removal
+- ⬜ The user-guide/index.md commented links (~5 pages) need either creation or removal
+- ⬜ Code-of-conduct.md is in not_in_nav — decide whether it should be surfaced
+
+### Remaining Broken Links
+- ⬜ `user-guide/training.md` referenced live in `reference/model-base.md` — file does not exist
+- ℹ️ All other broken links (tutorial/index.md aspirational list, user-guide/index.md commented sections) are inside HTML comments and invisible to readers
+
+### Missing Pages / Sections
+- ⬜ **Visualization gallery** — `user-guide/visualization.md` is bare; needs screenshot examples of plot types
+- ⬜ **Monitoring callbacks** — no docs for what metrics are logged, where, and how to add custom ones
+- ⬜ **StorageBuffer API** — mentioned in model-base but no dedicated reference page
+- ⬜ **Parameter override examples** — CLI / YAML / Snakemake override patterns not documented
+- ⬜ **Transforms reference** — complete list of available transforms with parameters
+- ⬜ **Model naming conventions** — how to name models, variants, checkpoints
+- ⬜ **Performance tips cheat sheet** — quick wins for faster training
+- ⬜ **Complete parameter reference** — exhaustive list of all parameters by component
+- ⬜ **FFCV troubleshooting** — installation issues, when beneficial vs overhead, fallback behavior
+- ⬜ **Mixed-precision best practices** — GPU requirements, numerical stability, benchmarks
+- ⬜ **Visualization tutorial** — example notebooks showing common plots
+- ⬜ **Migration guide** — for users of previous versions
+- ⬜ **Custom models template files** — README mentions them, none exist in repo
+
+### Code Modules Without Reference Docs
+The following code modules have no corresponding reference page. Not all need one
+(some are internal), but high-value candidates are flagged:
+
+- **High priority** (user-facing): `recurrence`, `temporal`, `dynamics_solver`,
+  `integration_strategy`, `transforms`, `callbacks`, `datamodule`
+- **Medium priority**: `dataloader`, `datasets`, `ffcv_*`, `noise`, `retina`,
+  `supralinearity`, `bias`
+- **Low priority** (internal/developer): `*_utils`, `*_params`, `project_paths`,
+  `snake*`, `mode_registry`
+
+### Reference Pages That Are Grouping / Index Files (not 1:1 with a code module)
+These are intentional: `organization`, `models`, `losses`, `model-components`,
+`recurrence-types`, `dynamics-solvers`, `configuration`, `workflow`,
+`optimizers-schedulers`, `model-base`, `model-architecture`.
+
+### Sections That Could Use a Dedicated Page
+- **Recurrence** — currently part of recurrence-types.md but the code module is
+  `model_components/recurrence.py`; a separate API reference may help
+- **Temporal data** — `temporal.py` is partiality covered in
+  temporal-data-presentation.md but not in reference
+- **Transforms** — `transforms.py` has no dedicated doc page, only mentioned in
+  transform-configuration.md
+- **Callbacks** — `callbacks.py` has no reference page
+- **Data module** — `datamodule.py`, `dataloader.py`, `datasets.py` have no
+  dedicated API reference
 
 ## Critical Issues
 
 ### 1. Project Naming Inconsistencies
 
 **Issue**: Multiple naming schemes used throughout the project
-
 - **Location**: `Makefile`, `project_paths.py`, documentation
 - **Problem**:
   - Makefile uses `rhythmic_visual_attention` instead of `dynvision`
@@ -21,20 +111,7 @@ This file tracks inconsistencies between documentation and implementation, areas
   - Reconcile project naming in `project_paths.py`
   - Update documentation to reflect single canonical name
 
-### 2. Documentation References Non-Existent Files ✅ MOSTLY FIXED
-
-**Issue**: Documentation links to files that don't exist
-
-- **Location**: `docs/index.md`
-- **Status**: Mostly fixed (2025-11-22, 2026-06-30)
-  - ✅ Removed `tutorials/visualization-tutorial.md` reference
-  - ✅ Fixed `user-guide/evaluation.md` → `user-guide/model-testing.md`
-  - ✅ Removed `user-guide/faq.md` reference
-  - ✅ Fixed broken links across reference, tutorial, and user-guide pages
-  - ✅ Fixed Diátaxis blank-line-before-list issues
-  - ✅ Fixed broken image paths (../../assets/ prefix)
-- **Remaining**:
-  - `user-guide/training.md` - Still referenced in model-base.md but doesn't exist
+### 2. Broken Links: user-guide/training.md in model-base.md
 
 ### 3. Base Class Documentation Mismatch
 
