@@ -37,6 +37,7 @@ class BaseModel(
 **Purpose**: Complete neural network framework with training, storage, monitoring, and device coordination.
 
 **Parameters**:
+
 - `input_dims` (Tuple[int]): Input tensor dimensions as (timesteps, channels, height, width). Default: `(20, 3, 224, 224)`
 - `n_classes` (Optional[int]): Number of output classes. Can be inferred from data if not specified
 - `n_timesteps` (int): Number of temporal processing steps. Default: `1`
@@ -47,6 +48,7 @@ class BaseModel(
 - `**kwargs`: Additional parameters passed to component classes
 
 **Key Methods**:
+
 - `_define_architecture()`: Abstract method to implement model architecture
 - `forward(x)`: Forward pass through the network
 - `training_step(batch, batch_idx)`: PyTorch Lightning training step
@@ -79,6 +81,7 @@ class TemporalBase(nn.Module)
 **Purpose**: Implements fundamental neural network computation including forward passes, temporal dynamics, and parameter management.
 
 **Key Attributes**:
+
 - `input_dims` (Tuple[int]): Processed input dimensions
 - `n_classes` (int): Number of output classes
 - `n_timesteps` (int): Number of temporal processing steps
@@ -134,6 +137,7 @@ Abstract method that must be implemented by subclasses to define the network arc
 Forward pass through the network over all timesteps.
 
 **Parameters**:
+
 - `x_0` (torch.Tensor): Input tensor with shape (batch, timesteps, channels, height, width)
 - `store_responses` (bool): Whether to store intermediate responses. Default: `False`
 - `feedforward_only` (bool): Whether to disable recurrent connections. Default: `False`
@@ -144,6 +148,7 @@ Forward pass through the network over all timesteps.
 Set or automatically determine the number of residual timesteps required for signal propagation.
 
 **Parameters**:
+
 - `n_timesteps` (Optional[int]): Explicit number of residual timesteps
 - `max_timesteps` (int): Maximum timesteps to check during automatic determination
 
@@ -170,6 +175,7 @@ class LightningBase(pl.LightningModule)
 **Purpose**: Provides PyTorch Lightning training framework integration including loss computation, optimization, and training loops.
 
 **Key Parameters**:
+
 - `optimizer` (str): Optimizer class name from `torch.optim`. Default: `"Adam"`
 - `learning_rate` (float): Base learning rate. Default: `0.001`
 - `scheduler` (str): Learning rate scheduler name. Default: `"StepLR"`
@@ -182,6 +188,7 @@ class LightningBase(pl.LightningModule)
 Single training step implementation.
 
 **Parameters**:
+
 - `batch` (Tuple): Input data and labels
 - `batch_idx` (int): Batch index
 
@@ -191,6 +198,7 @@ Single training step implementation.
 Single validation step implementation.
 
 **Parameters**:
+
 - `batch` (Tuple): Input data and labels
 - `batch_idx` (int): Batch index
 
@@ -200,6 +208,7 @@ Single validation step implementation.
 Single test step implementation.
 
 **Parameters**:
+
 - `batch` (Tuple): Input data and labels
 - `batch_idx` (int): Batch index
 
@@ -214,6 +223,7 @@ Configure optimizers and learning rate schedulers with parameter grouping.
 Perform backward pass with optional retain_graph for gradient computation.
 
 **Parameters**:
+
 - `loss` (torch.Tensor): Loss value to backpropagate
 - `optimizer` (Any): Optimizer instance (provided by Lightning)
 - `optimizer_idx` (int): Optimizer index for multi-optimizer setups
@@ -272,6 +282,7 @@ Retrieve stored neural responses.
 Generate a pandas DataFrame with classifier responses and metadata.
 
 **Parameters**:
+
 - `layer_name` (str): Name of classifier layer
 
 **Returns**: `pd.DataFrame` with columns for responses, labels, predictions, and metadata
@@ -296,6 +307,7 @@ class MonitoringMixin(Monitoring):
 Log statistics of model parameters.
 
 **Parameters**:
+
 - `section` (str): Section name for logging
 - `metrics` (List[str]): Statistics to compute and log
 
@@ -303,6 +315,7 @@ Log statistics of model parameters.
 Check model weights for NaN/Inf values and dtype consistency.
 
 **Parameters**:
+
 - `raise_error` (bool): Whether to raise exception on detection of issues
 
 ### DtypeDeviceCoordinator and DtypeDeviceCoordinatorMixin
@@ -325,6 +338,7 @@ class DtypeDeviceCoordinatorMixin(DtypeDeviceCoordinator):
 Create tensors with correct dtype and device for the coordination network.
 
 **Parameters**:
+
 - `size` (Tuple[int]): Tensor dimensions
 - `creation_method` (str): Tensor creation method ("randn", "zeros", "ones"). Default: `"randn"`
 - `**kwargs`: Additional tensor creation parameters
@@ -410,6 +424,7 @@ class CustomTrainingModel(TemporalBase, LightningBase):
 
 ### Method Resolution Order (MRO)
 The inheritance order in `BaseModel` ensures proper method resolution:
+
 1. `TemporalBase` provides core neural network methods
 2. `LightningBase` can call DynVision methods in training steps
 3. Storage and monitoring mixins add Lightning hooks

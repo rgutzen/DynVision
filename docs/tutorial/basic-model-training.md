@@ -74,6 +74,7 @@ snakemake project_paths.models/DyRCNNx4/DyRCNNx4:rctype=full_0001_cifar10_traine
 This will train the model for 50 epochs using the Adam optimizer with a learning rate of 0.001.
 
 The training process will:
+
 1. Load the initialized model
 2. Prepare the data loaders using FFCV
 3. Configure the optimizer and learning rate scheduler
@@ -81,6 +82,7 @@ The training process will:
 5. Save the trained model
 
 You can monitor the training progress with the output logs, which show:
+
 - Training loss and accuracy
 - Validation loss and accuracy
 - Learning rate changes
@@ -220,6 +222,7 @@ snakemake train_model --config \
 ```
 
 This example:
+
 - Uses a smaller time step (dt=1ms)
 - Changes the time constant (tau=10ms)
 - Adjusts the feedforward (tff=12ms) and recurrent (trc=5ms) delays
@@ -241,6 +244,7 @@ snakemake train_model --config \
 ```
 
 This example adds:
+
 - `pattern:1011`: Alternating stimulus (1) and null (0) presentation
 - `shufflepattern:true`: Randomly shuffle the pattern per batch
 - `lossrt:4`: Mask labels for 4ms after stimulus onset
@@ -250,6 +254,7 @@ For details on temporal presentation options, see the [Temporal Data Presentatio
 ## Conclusion
 
 Congratulations! You've successfully:
+
 1. Prepared a dataset for DynVision
 2. Trained a recurrent neural network model
 3. Evaluated its performance
@@ -257,6 +262,7 @@ Congratulations! You've successfully:
 5. Compared different recurrence types
 
 Next Steps:
+
 - Try other datasets like CIFAR-100 or ImageNet
 - Experiment with different model architectures
 - Explore other recurrence types

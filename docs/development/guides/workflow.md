@@ -79,6 +79,7 @@ reports/uniformnoise/
 ```
 
 **Key Points:**
+
 - `{experiment}`: Inferred from data_loader and arguments (e.g., "uniformnoise")
 - `{model_name}{model_args}_{seed}`: Full model identifier
 - `{data_name}:{data_group}_{status}`: Combined training/test specification
@@ -179,6 +180,7 @@ This approach ensures that even when test identifiers are compressed, all parame
 ### Concept
 
 The `{test_identifier}` wildcard matches **either**:
+
 - Uncompressed form: `StimulusNoise:noisetype=uniform+noiselevel=0.2`
 - Compressed form: `abc123ef` (hash)
 
@@ -272,6 +274,7 @@ checkpoint train_model:
 ```
 
 **Key features:**
+
 - Creates trained model with full parameter specification in path
 - Saves intermediate checkpoints to same directory
 - Enables downstream rules to depend on trained models
@@ -330,11 +333,13 @@ The `{experiment}` level organizes related test outputs. The workflow infers exp
 **Location:** `dynvision/workflow/snake_utils.smk`
 
 Experiment names are inferred based on:
+
 1. Data loader type (e.g., `StimulusNoise`, `StimulusDuration`)
 2. Data loader arguments (e.g., `noisetype=uniform`)
 3. Model status (e.g., `trained`, `init`)
 
 **Examples:**
+
 - `StimulusDuration` + any args → `response`
 - `StimulusNoise` + `noisetype=uniform` → `uniformnoise`
 - `StimulusNoise` + `noisetype=gaussianblur` → `gaussianblurnoise`
@@ -449,6 +454,7 @@ python3 dynvision/migrate_to_hierarchical_layout.py
 ```
 
 **Migration performs:**
+
 1. Reorganizes model files into hierarchical structure
 2. Creates hash documentation files
 3. Creates symlinks for hashed identifiers
@@ -496,14 +502,17 @@ snakemake --forcerun train_model reports/exp/DyRCNNx8:tsteps=20_42/mnist:all_tra
 ### Common Issues
 
 **Issue:** "File not found" for test outputs
+
 - **Cause:** Test hasn't run yet or test identifier is incorrect
 - **Solution:** Check if test_model rule completed successfully, verify experiment configuration
 
 **Issue:** Cannot find parameters in compressed test identifier
+
 - **Cause:** Test identifier is hashed
 - **Solution:** Check the `.config.yaml` file in the same directory as test outputs
 
 **Issue:** process_test_data fails with parameter extraction error
+
 - **Cause:** Config file missing or doesn't contain expected parameters
 - **Solution:** Verify test_model completed successfully and created config file, check parameter namespacing (data.* vs model.*)
 

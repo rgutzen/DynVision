@@ -30,11 +30,13 @@ The Euler method is a first-order numerical procedure for solving ordinary diffe
 $$x(t+dt) = x(t) + \frac{dt}{\tau} \cdot [-x(t) + J(x(t))]$$
 
 **Advantages**:
+
 - Computational efficiency
 - Memory efficiency
 - Stable for small time steps
 
 **Limitations**:
+
 - Less accurate for rapidly changing dynamics
 - Requires small time steps for stability
 
@@ -49,11 +51,13 @@ $$k_4 = f(t_n + dt, y_n + dt \cdot k_3)$$
 $$y_{n+1} = y_n + \frac{dt}{6}(k_1 + 2k_2 + 2k_3 + k_4)$$
 
 **Advantages**:
+
 - Higher accuracy than Euler method
 - Stable for larger time steps
 - Better captures complex dynamics
 
 **Limitations**:
+
 - Computationally more expensive
 - Higher memory requirements
 

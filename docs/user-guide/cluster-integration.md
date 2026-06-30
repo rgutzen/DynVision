@@ -142,6 +142,7 @@ conda activate /path/to/snake-env  # the environment created in step 1
 ```
 
 Important details:
+
 - Use `conda activate`, not `source activate` (which is deprecated and may fail)
 - `module purge` first to avoid conflicts with system-provided snakemake versions
 - Only load the minimal modules needed to make conda available

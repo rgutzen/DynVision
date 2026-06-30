@@ -18,9 +18,11 @@ $$\text{Accuracy}(t) = \frac{1}{N}\sum_{n=1}^{N} \left[\mathrm{argmax}_i\, c_i(t
 - **During training** — computed only for timesteps where the input has
   propagated through the network to reach the classifier (excluding residual
   timesteps and the `loss_reaction_time` offset).
+
 - **During testing** — computed for *all* timesteps, enabling analysis of
   classification dynamics during both stimulus presentation and subsequent
   null‑input periods.
+
 - **Top‑$k$ accuracy** follows analogously.
 
 ## Confidence
@@ -29,6 +31,7 @@ Softmax‑based certainty measures:
 
 - **Target confidence** — softmax probability assigned to the *correct* class:
   $\mathrm{softmax}(c)_{y_n}(t)$.
+
 - **Guess confidence** — maximum softmax probability:
   $\max_i \mathrm{softmax}(c)_i(t)$.
 

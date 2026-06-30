@@ -81,6 +81,7 @@ How-to information for developers and AI assistants:
   - Scientific computing patterns (Computation Graph, Lazy Evaluation, Parameter Management, Data Pipeline, Experiment Tracking)
 
 **When to use**:
+
 - **AI Assistants**: Start with AI Style Guide → Claude Code Guide → other guides as needed
 - **Human Developers**: Reference guides when developing features, writing docs, or onboarding
 
@@ -120,6 +121,7 @@ Knowledge about external frameworks and libraries:
 ### For New Contributors
 
 Recommended reading order:
+
 1. Start with [Claude Code Guide](guides/claude-guide.md) for project overview
 2. Reference [Research Software](guides/software-patterns.md) for design guidance
 3. Consult [Documentation Style Guide](guides/documentation-style.md) when writing docs
@@ -129,10 +131,12 @@ Recommended reading order:
 ### For AI Assistants
 
 **Required Reading Order**:
+
 1. **[AI Style Guide](guides/ai-style-guide.md)** first - Establishes core principles for research software development
 2. **[Claude Code Guide](guides/claude-guide.md)** second - Provides DynVision-specific architecture and conventions
 
 The AI Style Guide teaches you **how to approach** research software tasks with emphasis on:
+
 - Scientific correctness and reproducibility
 - Investigation → Analysis → Implementation workflow
 - Performance optimization strategies
@@ -140,6 +144,7 @@ The AI Style Guide teaches you **how to approach** research software tasks with 
 - Communication with researchers
 
 The Claude Code Guide provides **project-specific context**:
+
 - Complete architecture with inheritance diagrams
 - All parameter aliases and conventions
 - Common workflows with examples
@@ -150,6 +155,7 @@ Together, these guides minimize the need for extensive code reading while ensuri
 ### For Maintainers
 
 Track project health via:
+
 - [Documentation TODOs](planning/todo-docs.md) - 24 documentation issues to address
 - [Development Roadmap](planning/todo-roadmap.md) - 30 development items organized by priority
 
@@ -158,11 +164,13 @@ Both files include priority rankings and effort estimates.
 ## Quick Links
 
 **Most Referenced**:
+
 - [Claude Code Guide](guides/claude-guide.md) - Complete developer reference
 - [Todo Docs](planning/todo-docs.md) - Known documentation issues
 - [Roadmap](planning/todo-roadmap.md) - Planned features
 
 **Dependency Docs**:
+
 - [Snakemake Patterns](dependencies/snakemake.md) - Workflow management
 - [PyTorch Lightning](dependencies/pytorch-lightning.md) - Training framework
 - [FFCV Integration](dependencies/ffcv.md) - Fast data loading
@@ -184,6 +192,7 @@ Both files include priority rankings and effort estimates.
 ## Keeping Documentation Current
 
 This Developer Guide should be updated:
+
 - **When adding features**: Update [Claude Code Guide](guides/claude-guide.md) architecture
 - **When finding bugs**: Add to [Documentation TODOs](planning/todo-docs.md)
 - **When planning work**: Update [Development Roadmap](planning/todo-roadmap.md)

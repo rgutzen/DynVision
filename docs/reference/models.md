@@ -35,12 +35,14 @@ model = DyRCNNx4(
 ```
 
 **Layer Organization**:
+
 - V1: Early visual processing with local feature extraction
 - V2: Intermediate feature processing
 - V4: Higher-order feature integration
 - IT: Object recognition
 
 Each layer implements:
+
 - Feedforward convolution
 - Recurrent connections
 - Nonlinear activation

@@ -41,6 +41,7 @@ The visual cortex contains abundant recurrent connections:
 3. **Skip connections**: Between non-adjacent areas (e.g., V1 to V4)
 
 These connections are thought to enable:
+
 - Contextual modulation of neural responses
 - Perceptual grouping and figure-ground segregation
 - Predictive processing and expectation
@@ -83,12 +84,14 @@ Rather than using discrete-time steps like traditional RNNs, DynVision implement
 ```
 
 Where:
+
 - τ is the time constant
 - x is the neural activity
 - Φ is a nonlinearity
 - f represents inputs from various sources
 
 This approach:
+
 - Better captures the temporal characteristics of neural responses
 - Allows for different time constants in different areas
 - Models the differential delays of various connection types

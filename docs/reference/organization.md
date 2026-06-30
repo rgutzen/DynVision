@@ -38,6 +38,7 @@ dynvision/
 The `base` module provides the fundamental infrastructure for the entire framework:
 
 **Core Base Classes**:
+
    - `__init__.py`: Contains the BaseModel class that combines the other base classes
    - `dynvision.py`: Core forward functionality and temporal dynamics
    - `lightning.py`: PyTorch Lightning integration and training infrastructure
@@ -52,6 +53,7 @@ This module establishes the foundational architecture that all other components 
 The `model_components` module provides the fundamental building blocks for neural networks:
 
 **Neural Components**:
+
    - `dynamics_solver.py`: Numerical integration methods for neural dynamics
    - `recurrence.py`: Recurrent connection implementations
    - `topographic_recurrence.py`: Spatially-constrained recurrent connections

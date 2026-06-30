@@ -9,6 +9,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 1. Project Naming Inconsistencies
 
 **Issue**: Multiple naming schemes used throughout the project
+
 - **Location**: `Makefile`, `project_paths.py`, documentation
 - **Problem**:
   - Makefile uses `rhythmic_visual_attention` instead of `dynvision`
@@ -23,6 +24,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 2. Documentation References Non-Existent Files ✅ MOSTLY FIXED
 
 **Issue**: Documentation links to files that don't exist
+
 - **Location**: `docs/index.md`
 - **Status**: Mostly fixed (2025-11-22, 2026-06-30)
   - ✅ Removed `tutorials/visualization-tutorial.md` reference
@@ -37,6 +39,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 3. Base Class Documentation Mismatch
 
 **Issue**: Documentation describes classes that don't exist exactly as documented
+
 - **Location**: `docs/reference/model-base.md`
 - **Problems**:
   - Documents `BaseModel` inheritance from `StorageBuffer`, `Monitoring`, `DtypeDeviceCoordinator` directly
@@ -48,6 +51,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 4. Parameter System Documentation vs Implementation
 
 **Issue**: Extensive parameter handling documentation but unclear integration
+
 - **Location**: `docs/user-guide/parameter-handling.md`
 - **Problem**:
   - Documents sophisticated Pydantic-based parameter system in `dynvision/params/`
@@ -55,6 +59,7 @@ This file tracks inconsistencies between documentation and implementation, areas
     - `@alias_kwargs` decorator system used throughout models
     - Snakemake config system
     - PyTorch Lightning's hyperparameter tracking
+
   - Unclear which system has precedence when both are used
 - **Impact**: Developers unsure which parameter system to use
 - **Fix Required**:
@@ -85,6 +90,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 5. Missing Implementation Details ✅ FIXED
 
 **Issue**: Documentation describes features but lacks implementation examples
+
 - **Location**: `docs/user-guide/custom-models.md`
 - **Status**: Fixed (2025-11-23)
   - ✅ Completed "Training Configurations" section with:
@@ -92,28 +98,33 @@ This file tracks inconsistencies between documentation and implementation, areas
     - Learning rate scheduling
     - Custom PyTorch Lightning callbacks
     - Advanced training options
+
   - ✅ Completed "Troubleshooting Guide" section with:
     - Debug mode usage (3 activation methods)
     - Common issues and solutions (NaN, recurrence, performance, OOM)
     - Debugging tools (anomaly detection, logging, profiling)
     - Response inspection techniques
+
 - **Impact**: Users now have comprehensive implementation guidance
 - **Fix Required**: ✅ Complete
 
 ### 6. Recurrence Type Images Missing ✅ FIXED
 
 **Issue**: Documentation references images that don't exist
+
 - **Location**: `docs/reference/recurrence-types.md`
 - **Status**: Fixed (2026-06-30)
   - ✅ `recurrency_types.png` exists in docs/assets (sourced from manuscript figures)
   - ✅ Individual recurrence-type diagrams (`self_recurrence.png`, etc.) are manuscript figures
     referenced where appropriate and will be added as they become available
+
 - **Impact**: Visual explanations now available
 - **Fix Required**: ✅ Complete
 
 ### 7. Dynamics Equation Image Missing ✅ FIXED
 
 **Issue**: Reference to equation image that doesn't exist
+
 - **Location**: `docs/reference/dynamics-solvers.md`
 - **Status**: Fixed (2026-06-30)
   - ✅ Uses inline LaTeX for equations via `pymdownx.arithmatex`
@@ -124,6 +135,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 8. Custom Models Template Files Missing
 
 **Issue**: Documentation mentions template files that don't exist
+
 - **Location**: README.md mentions "template files and guides"
 - **Problem**: No templates found in repository
 - **Impact**: New users can't easily bootstrap custom models
@@ -134,6 +146,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 9. Model Initialization Sequence
 
 **Issue**: Documentation lists slightly different initialization orders
+
 - **Location**:
   - `docs/reference/model-base.md` (lines 86-88)
   - Actual implementation in `base/temporal.py`
@@ -144,6 +157,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 10. Experiment Configuration Wildcards
 
 **Issue**: Documentation uses different wildcard formats in examples
+
 - **Location**:
   - `docs/user-guide/workflows.md` shows one format
   - Claude Code Guide shows expanded format with data_loader and data_args
@@ -154,6 +168,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 11. Config Mode Detection
 
 **Issue**: Documentation incomplete on mode detection logic
+
 - **Location**: `docs/user-guide/parameter-handling.md`
 - **Problem**:
   - States debug mode triggered by `log_level="DEBUG"` OR `epochs <= 5`
@@ -165,6 +180,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 12. GitHub URLs Placeholder ✅ FIXED
 
 **Issue**: Documentation has placeholder GitHub URLs
+
 - **Location**: `docs/index.md` (line 51)
 - **Status**: Fixed (2026-06-30) — updated to actual `https://github.com/Lindsay-Lab/dynvision/issues`
 - **Fix Required**: ✅ Complete
@@ -172,6 +188,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 13. Repository Citation Missing ✅ FIXED
 
 **Issue**: Citation section commented out in README
+
 - **Location**: `README.md` (lines 95-109)
 - **Status**: Fixed (2026-06-30)
   - ✅ Active preprint citation with DOI in README
@@ -184,6 +201,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 14. Data Loader Names
 
 **Issue**: Inconsistent naming of data loaders
+
 - **Location**: `docs/explanation/temporal_dynamics.md` vs `dynvision/data/datasets.py`
 - **Documented**: `StimulusDurationDataLoader`, `StimulusIntervalDataLoader`, `StimulusContrastDataLoader`
 - **Actual**: `StimulusDuration`, `StimulusInterval`, `StimulusContrast` (without "DataLoader" suffix)
@@ -193,6 +211,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 15. Operation Sequence Names
 
 **Issue**: Documentation uses different operation names than code
+
 - **Location**: `docs/reference/model-architecture.md`
 - **Documented**: "tstep", "nonlin", "pool"
 - **Actual Implementation**: May vary by model - not clear if these are standardized
@@ -202,6 +221,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 16. Solver Naming Inconsistency
 
 **Issue**: Documentation uses different solver names
+
 - **Location**: `docs/reference/dynamics-solvers.md`
 - **Documented**: `RungeKuttaStep`
 - **Config**: Likely expects `rk4` as string identifier
@@ -213,6 +233,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 17. FFCV Integration Documentation
 
 **Issue**: Documentation mentions FFCV but lacks troubleshooting
+
 - **Location**: Multiple files mention `use_ffcv: true`
 - **Problem**: No documentation on:
   - FFCV installation issues
@@ -224,6 +245,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 18. Mixed Precision Documentation
 
 **Issue**: Mixed precision mentioned but not fully documented
+
 - **Location**: References to `precision: "bf16-mixed"` in configs
 - **Problem**:
   - No guidance on GPU requirements
@@ -237,6 +259,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 19. Test Suite Needed
 
 **Issue**: No formal test suite exists
+
 - **Current State**: No `tests/` directory, no pytest configuration
 - **Needed Tests**:
   - Temporal dynamics correctness
@@ -251,6 +274,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 20. Visualization Examples Needed
 
 **Issue**: Visualization code exists but lacks examples
+
 - **Location**: `dynvision/visualization/` exists but not well documented
 - **Needed**:
   - Example notebooks showing common visualizations
@@ -262,6 +286,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 21. Model Zoo Expansion
 
 **Issue**: README mentions "Comprehensive Model Zoo" but limited models
+
 - **Current Models**: AlexNet, CorNetRT, ResNet variants, CordsNet, DyRCNN
 - **Potential Additions**: VGG, EfficientNet, Vision Transformers with recurrence
 - **Impact**: Users may expect more pre-built models
@@ -270,6 +295,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 22. Cluster Integration Documentation ✅ FIXED
 
 **Issue**: Cluster integration exists but not well documented
+
 - **Location**: `cluster/` directory and `docs/user-guide/cluster-integration.md`
 - **Status**: Fixed (2026-06-30)
   - ✅ Complete cluster-integration.md with basic + advanced execution methods
@@ -283,6 +309,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 23. Inconsistent Code Example Style
 
 **Issue**: Code examples use different formatting
+
 - **Locations**: Throughout user guides
 - **Variations**:
   - Some use full class paths, others don't
@@ -294,6 +321,7 @@ This file tracks inconsistencies between documentation and implementation, areas
 ### 24. Missing Type Hints in Examples
 
 **Issue**: Documentation examples often lack type hints
+
 - **Location**: Throughout tutorials and guides
 - **Problem**: Code uses type hints extensively, but examples don't
 - **Impact**: Users may not understand expected types
@@ -302,18 +330,21 @@ This file tracks inconsistencies between documentation and implementation, areas
 ## Priority Recommendations
 
 **High Priority** (User-blocking issues):
+
 1. Fix project naming inconsistencies (Issue #1)
 2. ~~Remove or create missing documentation links (Issue #2)~~ ✅ Mostly fixed
 3. ~~Complete TODO sections in custom-models.md (Issue #5)~~ ✅ Complete
 4. Fix data loader naming in docs (Issue #14)
 
 **Medium Priority** (Quality improvements):
+
 5. Clarify parameter system integration (Issue #4)
 6. Update base class documentation (Issue #3)
 7. Document FFCV setup and troubleshooting (Issue #17)
 8. Create visualization examples (Issue #20)
 
 **Low Priority** (Nice to have):
+
 9. ~~Create missing images for recurrence types (Issue #6)~~ ✅ Complete
 10. Add code example style guide (Issue #23)
 11. Expand model zoo (Issue #21)
@@ -341,6 +372,7 @@ These are documentation tasks that can be completed quickly and provide immediat
 11. ✅ **Complete TODO sections in custom-models.md** - COMPLETED (2025-11-23)
     - Training configurations with optimizer, scheduler, callback examples
     - Troubleshooting guide with debug mode and common issues
+
 12. **Create visualization gallery** - Screenshot examples of available plots
 13. ✅ **Add inline LaTeX for dynamics equations** - COMPLETED (2026-06-30)
 14. **Create parameter override examples** - Show CLI, YAML, and Snakemake override patterns
@@ -356,6 +388,7 @@ These are documentation tasks that can be completed quickly and provide immediat
 ## Notes for Contributors
 
 When updating documentation:
+
 - Always verify class names, method signatures, and file paths against actual code
 - Include working code examples that have been tested
 - Use consistent terminology (check existing docs)
@@ -364,6 +397,7 @@ When updating documentation:
 - Link to related documentation sections
 
 When updating code:
+
 - Update relevant documentation when changing APIs
 - Add docstrings following existing style
 - Consider backward compatibility for documented features

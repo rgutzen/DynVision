@@ -74,15 +74,19 @@ NVIDIA A100‑SXM4‑80 GB, batch size 192, averaged over 3 seeds.
 
 - **52 % speedup over CORnet‑RT**: reimplementation runs at 8.86 s/epoch vs.
   original 13.51 s/epoch on A100 (averaged over first 80 epochs).
+
 - Engineering vs. biological time: engineering time reduces epoch time by
   ~29 % and GPU memory from 2.39 GB to 2.13 GB in a representative DyRCNNx8
   training run.
+
 - The Dense recurrence targeting the *middle* increases GPU memory by ~6 GB
   relative to *output* despite identical channel dimensions — the autograd
   engine must retain both first‑convolution output and recurrence output for
   the second convolution's backward pass.
+
 - Disabling the activity loss frees ~19 GB GPU memory (no per‑timestep
   activation norms to track).
+
 - FFCV loaders can provide 1.2–7× epoch‑speed improvements, but benefits
   depend on dataset size and compute‑ vs. I/O‑bound workload.
 

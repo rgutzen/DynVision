@@ -88,6 +88,7 @@ snakemake --config experiment=duration model_name=AlexNet model_args='{tsteps: 2
 ```
 
 This command:
+
 1. Initializes an AlexNet version with full recurrence
 2. Downloads and prepares the CIFAR100 dataset if needed
 3. Trains the model using [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/)
@@ -178,6 +179,7 @@ The recorded unit activations during testing are stored in files with the follow
 ### Core Technologies
 
 DynVision leverages several powerful tools:
+
 - [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) for training management
 - [FFCV](https://ffcv.io/) for optimized data loading
 - [Snakemake](https://snakemake.readthedocs.io/) for workflow orchestration

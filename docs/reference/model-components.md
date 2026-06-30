@@ -156,6 +156,7 @@ class RecurrentConnectedConv2d(nn.Module):
 ```
 
 Supported recurrence types:
+
 - "full": Full connectivity
 - "local": Local connectivity
 - "none": No recurrence

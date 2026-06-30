@@ -59,14 +59,17 @@ To update `pyproject.toml` for Python 3.12 support, the following changes are ne
 ```diff
  dependencies = [
      ...
+
 -    "torch >=2.2.0",
 -    "torchvision >=0.16.0",
 +    "torch >=2.4.0",
 +    "torchvision >=0.19.0",
      ...
+
 -    "pytorch-lightning >=2.0.0",
 +    "pytorch-lightning >=2.4.0",
      ...
+
 -    "scikit-learn >=1.2.0,<2",
 +    "scikit-learn >=1.4.0,<2",
      ...

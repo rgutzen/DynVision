@@ -21,10 +21,12 @@ Self recurrence is the simplest form of recurrence, where a unit connects only t
 **Illustration**: See the [Recurrence Types overview image](#available-recurrence-types) at the top of this page.
 
 **Implementation Details**:
+
 - A layer's output tensor from a previous time step is multiplied with a weight and added to the current time step.
 - Implemented in `SelfConnection` class.
 
 **Biological Relevance**:
+
 - Models the persistence of neural activity over time.
 - Can be interpreted as a simplified form of neural adaptation.
 
@@ -39,6 +41,7 @@ model = DyRCNNx4(
 ```
 
 **Computational Efficiency**:
+
 - Very efficient, as it only requires a scalar multiplication.
 - Low parameter count, making it suitable for quick experiments.
 
@@ -49,11 +52,13 @@ In full recurrence, a unit gets input from all units within a nearby spatial reg
 **Illustration**: See the [Recurrence Types overview image](#available-recurrence-types).
 
 **Implementation Details**:
+
 - Implemented by applying a kernel convolution on the layer's output tensor and adding the outcome back to the same layer.
 - Uses a full convolutional operation with a kernel size that determines the spatial extent of the recurrence.
 - Implemented in `FullConnection` class.
 
 **Biological Relevance**:
+
 - Models dense local connectivity within cortical areas.
 - Captures both iso-feature and cross-feature interactions.
 
@@ -68,6 +73,7 @@ model = DyRCNNx4(
 ```
 
 **Computational Efficiency**:
+
 - More computationally expensive than self recurrence.
 - Has O(C²K²) parameters, where C is the number of channels and K is the kernel size.
 
@@ -80,11 +86,13 @@ Depthwise separable recurrence applies a depthwise (spatial dimension) and then 
 #### 3.1 Depthpointwise Recurrence
 
 **Implementation Details**:
+
 - First applies a depthwise convolution (separate convolution for each channel).
 - Then applies a pointwise convolution (1x1 convolution across channels).
 - Implemented in `DepthPointwiseConnection` class.
 
 **Biological Relevance**:
+
 - Models the idea that neurons first integrate information from the same feature type across space, then integrate across features.
 
 **Usage Example**:
@@ -100,10 +108,12 @@ model = DyRCNNx4(
 #### 3.2 Pointdepthwise Recurrence
 
 **Implementation Details**:
+
 - Inverts the order of operations: first pointwise, then depthwise.
 - Implemented in `PointDepthwiseConnection` class.
 
 **Biological Relevance**:
+
 - Models the idea that neurons in visual cortex might first integrate across features at a single location, then spread that integration spatially.
 
 **Usage Example**:
@@ -117,6 +127,7 @@ model = DyRCNNx4(
 ```
 
 **Computational Efficiency**:
+
 - More efficient than full recurrence, with O(C² + CK²) parameters instead of O(C²K²).
 - A good compromise between computational efficiency and representational power.
 
@@ -127,12 +138,14 @@ Local recurrence captures the 2-D topology of visual cortices by arranging units
 **Illustration**: See the [Recurrence Types overview image](#available-recurrence-types).
 
 **Implementation Details**:
+
 - Units in a layer are systematically arranged on a 2-D grid inspired by cortical organization.
 - A convolution with kernel size > 1 is applied to this grid.
 - Input to each unit is a combination of cortically-local feature and space information.
 - Implemented in `LocalLateralConnection` class.
 
 **Biological Relevance**:
+
 - Respects the topographic organization of visual cortex (e.g., orientation pinwheels in V1).
 - Models how features that are close in feature space (e.g., similar orientations) interact more strongly.
 
@@ -157,11 +170,13 @@ model = DyRCNNx4(
 An extension of local recurrence that adds patchy long-range connections for more complex interactions.
 
 **Implementation Details**:
+
 - Combines local recurrence with an additional depthwise convolution.
 - Models patchy long-range connections between units with different feature preferences but the same receptive field.
 - Implemented in `LocalSeparableConnection` class.
 
 **Biological Relevance**:
+
 - Models the patchy long-range lateral connections observed in visual cortex.
 - These connections typically link cells with similar feature preferences across space.
 
@@ -176,6 +191,7 @@ model = DyRCNNx4(
 ```
 
 **Computational Efficiency**:
+
 - Most computationally intensive of all recurrence types.
 - Provides the most biologically realistic connectivity patterns.
 

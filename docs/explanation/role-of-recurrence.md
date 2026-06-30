@@ -27,8 +27,10 @@ recurrence:
 - **Temporal normalization** — recurrent inhibition can reproduce adaptation,
   sublinear temporal summation, and contrast-dependent response timing without
   explicit divisive-normalization operators.
+
 - **Noise robustness** — recurrent dynamics can stabilize representations under
   input perturbations, approaching human-level robustness in some regimes.
+
 - **Iterative inference** — recurrence allows the network to refine its estimate
   over biological time, rather than committing to a single feedforward pass.
 

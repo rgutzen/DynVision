@@ -31,8 +31,10 @@ Key findings:
 - **Adaptation** (reduced response to repeated stimuli, peak ratio < 1) emerges
   **only** for *full* recurrence with *large* activity‑loss weights. Other
   recurrence types show the opposite: the second peak is *larger* than the first.
+
 - **Sublinear summation** is also most pronounced for full recurrence with
   strong activity loss.
+
 - **Contrast‑dependent reaction time** appears for *local* recurrence or for
   full recurrence with *minimal* activity loss — the opposite condition to
   adaptation and summation.
@@ -74,6 +76,7 @@ Additional comparisons are available for:
 - **V1 vs V2 layer responses** across recurrence types and targets (triggering
   complementary results where V1 responses to contrast experiments better match
   the data).
+
 - **Feedback connections** — no systematic noise‑robustness benefit across seeds.
 - **Different recurrence types** at matched noise‑robustness conditions.
 
@@ -138,8 +141,10 @@ the instability regions are consistent across presentation patterns.*
 
 - Groen, I. I. A., et al. (2022). Temporal Dynamics of Neural Responses in
   Human Visual Cortex.
+
 - Jang, H., et al. (2021). Noise‑trained deep neural networks effectively
   predict human vision in a crowded task.
+
 - Heeger, D. J., & Mackey, W. E. (2019). ORGaNICs.
 - Rubin, D. B., et al. (2015). The stabilized supralinear network.
 

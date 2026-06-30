@@ -12,6 +12,7 @@ This guide walks you through the process of creating custom neural network model
 ## Prerequisites
 
 Before creating a custom model, ensure you:
+
 - Understand basic PyTorch and PyTorch Lightning concepts
 - Are familiar with DynVision's [design philosophy](../explanation/design-philosophy.md)
 - Have reviewed the [example models](../reference/models.md)
@@ -53,6 +54,7 @@ class SimpleModel(LightningBase):
 ```
 
 This simple model demonstrates:
+
 - Inheriting from `LightningBase`
 - Handling input dimensions
 - Basic layer definition
@@ -135,6 +137,7 @@ class BiologicalModel(LightningBase):
 ```
 
 For details on biological components, see:
+
 - [Dynamics Solvers](../reference/dynamics-solvers.md)
 - [Recurrence Types](../reference/recurrence-types.md)
 - [Biological Plausibility](../explanation/biological-plausibility.md)
@@ -383,6 +386,7 @@ python runtime/train_model.py --use_debug_mode True
 **Method 3: Automatic Activation**
 
 Debug mode activates automatically when:
+
 - `log_level: "DEBUG"` is set, OR
 - `epochs <= 5` (short training runs)
 
@@ -419,6 +423,7 @@ def forward(self, x):
 ```
 
 **Solutions:**
+
 - Reduce learning rate
 - Add gradient clipping: `gradient_clip_val: 1.0`
 - Check weight initialization
@@ -442,6 +447,7 @@ def _define_architecture(self):
 ```
 
 **Solutions:**
+
 - Verify `n_timesteps > 1`
 - Check temporal parameters: `dt`, `tau`, `t_recurrence`
 - Ensure recurrence type is not `"none"`
@@ -467,6 +473,7 @@ def training_step(self, batch, batch_idx):
 ```
 
 **Solutions:**
+
 - Enable FFCV: `use_ffcv: True`
 - Increase `num_workers: 8`
 - Use mixed precision: `precision: "bf16-mixed"`
@@ -487,6 +494,7 @@ def on_train_batch_start(self, batch, batch_idx):
 ```
 
 **Solutions:**
+
 - Reduce `batch_size`
 - Reduce `n_timesteps`
 - Enable gradient accumulation
@@ -561,6 +569,7 @@ prof.export_chrome_trace("trace.json")
 ```
 
 For additional troubleshooting help, see:
+
 - [General Troubleshooting Guide](troubleshooting.md)
 - [Cluster Integration Issues](cluster-integration.md#troubleshooting)
 - [Loss Function Debugging](../reference/losses.md#troubleshooting)
@@ -604,6 +613,7 @@ snakemake --config model_name=MyModel experiment=contrast
 ```
 
 For more details on workflows, see:
+
 - [Workflow Guide](../user-guide/workflows.md)
 - [Configuration Reference](../reference/configuration.md)
 

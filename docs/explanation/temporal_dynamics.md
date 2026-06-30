@@ -30,6 +30,7 @@ Several important temporal phenomena characterize biological visual processing:
 #### 1. Response Latencies
 
 Different visual areas respond with characteristic latencies:
+
 - V1: ~40-60ms
 - V2: ~50-70ms
 - V4: ~60-80ms
@@ -40,6 +41,7 @@ These latencies reflect not just the time required for signals to propagate but 
 #### 2. Temporal Summation
 
 Neural responses don't simply follow the temporal profile of the stimulus. Instead, they exhibit:
+
 - **Integration**: Responses to longer stimuli increase up to a point (temporal summation)
 - **Subadditivity**: The increase is sublinear, eventually saturating
 - **Persistence**: Activity continues briefly after stimulus offset
@@ -47,6 +49,7 @@ Neural responses don't simply follow the temporal profile of the stimulus. Inste
 #### 3. Adaptation
 
 With sustained or repeated stimulation, neural responses typically decrease:
+
 - **Fast adaptation**: Rapid decrease during continuous stimulation
 - **Repetition suppression**: Reduced response to a repeated stimulus
 - **Recovery**: Gradual recovery with longer intervals between stimuli
@@ -54,6 +57,7 @@ With sustained or repeated stimulation, neural responses typically decrease:
 #### 4. Contrast-Dependent Timing
 
 The timing of neural responses depends on stimulus contrast:
+
 - Higher contrast → Faster response onset
 - Higher contrast → Earlier peak response
 - Higher contrast → More transient response
@@ -61,6 +65,7 @@ The timing of neural responses depends on stimulus contrast:
 #### 5. Rhythmic Activity
 
 Neural activity often shows oscillatory patterns:
+
 - Alpha rhythms (~8-12Hz)
 - Gamma oscillations (~30-80Hz)
 - Theta rhythms (~4-8Hz)
@@ -80,36 +85,39 @@ $\tau$:
 
 $$
 \begin{align}
-&\text{\footnotesize
-{\color{#c4380f}\text{Dynamical\;Timescale}}\;
-{\color{#18359c}\text{Network\;Activations}}\;
-{\color{#41960e}\text{External\;Input}}\;
-{\color{#556B2F}\text{Bias}}
-}\\
-&{\color{#c4380f}\tau} \frac{d{\color{#18359c}r}}{d{\color{#5f5b5b}t}} =
+&\text{\scriptsize\;
+{\color{#c4380f}\text{Dynamical Timescale}}\;
+{\color{#18359c}\text{Network Activations}}\;
+{\color{#41960e}\text{External Input}}\;
+{\color{#556B2F}\text{Bias}}\;
+}\\[2pt]
+&{\color{#c4380f}\tau}
+\frac{d{\color{#18359c}r}}{d{\color{#5f5b5b}t}} =
 -{\color{#18359c}r}({\color{#5f5b5b}t})
-+ {\color{#821ca9}\Phi\left[}
-{\color{#41960e}I}({\color{#5f5b5b}t})
-+ {\color{#17a89c}J}{\color{#18359c}r}({\color{#5f5b5b}t})
-{\color{#821ca9}\right]}
-+ {\color{#556B2F}B}\\[6pt]
-&\text{\footnotesize
-{\color{#5f5b5b}\text{Time\;Dimension}}\;
-{\color{#821ca9}\text{Activation\;Fn}}\;
-{\color{#17a89c}\text{Network\;Connectivity}}\;
-{\color{#b8621a}\text{Time\;Step/Delay}}
-}\\
++ {\color{#821ca9}\Phi}
+  {\color{#821ca9}\bigl[}
+  {\color{#41960e}I}({\color{#5f5b5b}t})
+  + {\color{#17a89c}J}{\color{#18359c}r}({\color{#5f5b5b}t})
+  {\color{#821ca9}\bigr]}
++ {\color{#556B2F}B}\\[4pt]
+&\text{\scriptsize\;
+{\color{#5f5b5b}\text{Time Dimension}}\;
+{\color{#821ca9}\text{Activation Fn}}\;
+{\color{#17a89c}\text{Network Connectivity}}\;
+{\color{#b8621a}\text{Time Step/Delay}}\;
+}\\[2pt]
 &{\color{#18359c}r_l}({\color{#5f5b5b}t}) =
 {\color{#18359c}r_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
 + \frac{{\color{#b8621a}dt}}{\color{#c4380f}\tau}
-\left(
+\Bigl(
 -{\color{#18359c}r_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
-+ {\color{#821ca9}\Phi\left[}
-{\color{#41960e}I_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
-+ \sum_{}^{} {\color{#17a89c}J_l} {\color{#18359c}r(\cdot)}
-{\color{#821ca9}\right]}
++ {\color{#821ca9}\Phi}
+  {\color{#821ca9}\bigl[}
+  {\color{#41960e}I_l}({\color{#5f5b5b}t}-{\color{#b8621a}dt})
+  + \textstyle\sum{\color{#17a89c}J_l}\,{\color{#18359c}r(\cdot)}
+  {\color{#821ca9}\bigr]}
 + {\color{#556B2F}B_l}
-\right)\\[6pt]
+\Bigr)\\[4pt]
 &\sum_{{\color{#5f5b5b}s}=0}^{{\color{#5f5b5b}t}-{\color{#b8621a}dt}}
 {\color{#17a89c}J_l} {\color{#18359c}r}({\color{#5f5b5b}s}) =
 {\color{#17a89c}J_{FF}}\!\cdot\!{\color{#18359c}r_{l-1}}({\color{#5f5b5b}t}-{\color{#b8621a}\Delta_{FF}}) \;+\;
@@ -140,6 +148,7 @@ $$
    cortical propagation distances.
 
 This formulation provides several advantages:
+
 - More biologically realistic temporal evolution
 - Smoother dynamics with appropriate time constants
 - Explicit modeling of integration, decay, and heterogeneous delays
@@ -165,8 +174,10 @@ integer multiple of the integration step `dt`:
 
 - **Feedforward delay** ($\Delta_{FF}$): `0 ms` in the default engineering-time
   unrolling; set to a positive value (e.g. `10 ms`) for biological-time unrolling.
+
 - **Recurrent delay** ($\Delta_{RC}$): `6 ms` by default, independent of the
   unrolling convention.
+
 - **Skip / feedback delays** ($\Delta_{SK}$, $\Delta_{FB}$): adjusted automatically
   when converting between engineering and biological time.
 
@@ -318,6 +329,7 @@ Implementing continuous-time dynamics in neural networks poses several computati
 ### Efficiency vs. Accuracy
 
 There's a trade-off between computational efficiency and accuracy:
+
 - Smaller time steps (dt) → Higher accuracy but more computation
 - Larger time steps → Lower accuracy but faster computation
 
@@ -326,11 +338,13 @@ DynVision uses a default time step of 2ms, which provides a reasonable balance f
 ### Memory Requirements
 
 Storing neural states over time requires significant memory:
+
 - Each layer needs to store its activation history
 - History length depends on the longest delay (usually t_feedforward)
 - Total memory scales with batch size × history length × layer size
 
 DynVision implements several optimizations to manage memory usage:
+
 - Efficient history management
 - Optional CPU storage for responses
 - Mixed precision computation
@@ -338,11 +352,13 @@ DynVision implements several optimizations to manage memory usage:
 ### Gradient Propagation
 
 Training models with temporal dynamics requires backpropagation through time, which:
+
 - Creates large computational graphs
 - Can lead to vanishing/exploding gradients
 - Requires significant memory for intermediate activations
 
 DynVision addresses these challenges with:
+
 - Truncated backpropagation
 - Gradient clipping
 - Mixed precision training
@@ -354,6 +370,7 @@ The temporal dynamics in DynVision enable several interesting applications:
 ### 1. Modeling Perceptual Phenomena
 
 Many perceptual phenomena involve temporal dynamics:
+
 - **Backward masking**: When a briefly presented stimulus is masked by a subsequent stimulus
 - **Flash-lag effect**: When a moving object appears ahead of a briefly flashed stationary object
 - **Motion perception**: How the visual system integrates information over time to perceive motion
@@ -361,11 +378,13 @@ Many perceptual phenomena involve temporal dynamics:
 ### 2. Studying Neurological Conditions
 
 Altered temporal dynamics are associated with several neurological conditions:
+
 - **Autism**: Altered excitation/inhibition balance affecting temporal integration
 - **Schizophrenia**: Disrupted feedback processing
 - **Dyslexia**: Deficits in rapid temporal processing
 
 DynVision can be used to model these conditions by adjusting parameters like:
+
 - Time constants
 - Excitation/inhibition balance
 - Feedback connection strength
@@ -373,6 +392,7 @@ DynVision can be used to model these conditions by adjusting parameters like:
 ### 3. Robust Object Recognition
 
 Temporal processing may enhance object recognition:
+
 - **Disambiguation**: Resolving ambiguous inputs through recurrent processing
 - **Noise reduction**: Integrating information over time to reduce noise
 - **Occlusion handling**: Completing partially occluded objects through feedback
@@ -380,6 +400,7 @@ Temporal processing may enhance object recognition:
 ### 4. Attention Mechanisms
 
 Temporal dynamics play a crucial role in attention:
+
 - **Temporal selection**: Enhancing processing at specific time points
 - **Rhythmic attention**: Fluctuations in attentional processing
 - **Feature binding**: Synchronization of neural activity
@@ -391,6 +412,7 @@ The implementation of temporal dynamics in DynVision opens several avenues for f
 ### 1. Oscillatory Dynamics
 
 Adding oscillatory components to the neural dynamics could capture:
+
 - Alpha/beta/gamma rhythms
 - Phase-dependent processing
 - Cross-frequency coupling
@@ -398,6 +420,7 @@ Adding oscillatory components to the neural dynamics could capture:
 ### 2. Heterogeneous Time Constants
 
 Implementing cell-type specific time constants could model:
+
 - Fast-spiking interneurons
 - Regular-spiking pyramidal cells
 - Intrinsically bursting neurons
@@ -405,6 +428,7 @@ Implementing cell-type specific time constants could model:
 ### 3. Neuromodulation
 
 Adding neuromodulatory influences could capture:
+
 - Arousal-dependent processing
 - Task-dependent dynamics
 - Learning-dependent changes in temporal processing
@@ -412,6 +436,7 @@ Adding neuromodulatory influences could capture:
 ### 4. Spike-Based Implementation
 
 Moving towards spiking neural networks could provide:
+
 - Greater biological realism
 - Enhanced temporal precision
 - Energy-efficient computation
