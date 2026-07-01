@@ -201,12 +201,12 @@ FFCV 1.0.2 (last released 2023-03-05) predates Python 3.12. The Ubuntu package w
 
 | # | Issue | Source | Fix |
 |---|-------|--------|-----|
-| 1 | Base class docs mismatched (Mixin vs base) | `docs/reference/model-base.md` | Update to reflect actual Mixin class names |
-| 2 | Broken training.md link | `docs/reference/model-base.md` | Remove or create the referenced training guide |
-| 3 | Missing recurrence type images | `docs/reference/recurrence-types.md` | Either create images or convert to inline Mermaid diagrams |
-| 4 | Missing dynamics equation image | `docs/reference/dynamics-solvers.md` | Replace with inline LaTeX (`$$ \tau \cdot dx/dt = ... $$`) |
-| 5 | Data loader naming mismatch | `docs/explanation/temporal_dynamics.md` | Use actual class names (`StimulusDuration` not `StimulusDurationDataLoader`) |
-| 6 | Solver naming inconsistency | `docs/reference/dynamics-solvers.md` | Clarify string identifiers (`rk4`) vs class names (`RungeKuttaStep`) |
+| 1 | ✅ Base class docs mismatched (Mixin vs base) | `docs/reference/model-base.md` | Verified 2026-07-01: docs already show `*Mixin` variants matching `base/__init__.py` |
+| 2 | ✅ Broken training.md link | `docs/user-guide/model-testing.md` | Fixed 2026-07-01: created `user-guide/training.md`; link repointed and added to nav |
+| 3 | ✅ Missing recurrence type images | `docs/reference/recurrence-types.md` | Fixed: `recurrency_types.png` from manuscript figures |
+| 4 | ✅ Missing dynamics equation image | `docs/reference/dynamics-solvers.md` | Fixed: replaced with inline LaTeX |
+| 5 | ✅ Data loader naming (no mismatch) | docs | Verified 2026-07-01: `get_data_loader_class` appends `DataLoader` automatically, so bare alias and full class name are both valid; docs use each in the correct context |
+| 6 | ✅ Solver naming inconsistency | `docs/reference/dynamics-solvers.md` | Verified 2026-07-01: docs already document config strings `euler`/`rk4` (per `model_params.py` `Literal`) vs classes `EulerStep`/`RungeKuttaStep` |
 
 **Medium-priority fixes**:
 

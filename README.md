@@ -33,6 +33,12 @@ DynVision is a modular toolbox for constructing and evaluating recurrent convolu
 - **Optimized Performance**: Fast data loading with FFCV, GPU acceleration, mixed precision
 - **Pre-built Model Zoo**: Access pre-implemented architectures like AlexNet, CorNetRT, ResNet variants, CordsNet, and DyRCNNx4/8
 
+<p align="center">
+  <img src="docs/assets/recurrency_types.png" alt="Lateral recurrence connection types" width="600"/>
+</p>
+
+<p align="center"><em>Lateral recurrence connection types supported by DynVision.</em></p>
+
 ## Installation
 
 **Python requirement**: Python 3.11+ (3.12 support pending FFCV compatibility testing — see [Python 3.12 Compatibility](docs/development/planning/python-3.12-compatibility.md)).

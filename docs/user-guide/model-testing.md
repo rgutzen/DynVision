@@ -156,7 +156,7 @@ filtered = test_data.query("first_label_index == 5 and times_index <= 10")
 - **Empty outputs**: Ensure `test_outputs.csv` contains rows for every sample; rerun `test_model` if the evaluation terminated early.
 
 ## Related Resources
-- `docs/user-guide/training.md` for generating checkpoints.
+- [Training](training.md) for training models and generating checkpoints.
 - `docs/development/guides/ai-style-guide.md` for workflow conventions.
 - `docs/reference/workflow-overview.md` (if available) for a schematic of Snakemake rules.
 - Source scripts in `dynvision/runtime/test_model.py` and `dynvision/processing/process_test_data.py` for implementation details.

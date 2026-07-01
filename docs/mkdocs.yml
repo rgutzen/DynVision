@@ -178,6 +178,7 @@ nav:
     - Data Processing: user-guide/data-processing.md
     - Temporal Data Presentation: user-guide/temporal-data-presentation.md
     - Workflow Management: user-guide/workflows.md
+    - Training: user-guide/training.md
     - Model Testing: user-guide/model-testing.md
     - Visualization: user-guide/visualization.md
     - Parameter Handling: user-guide/parameter-handling.md

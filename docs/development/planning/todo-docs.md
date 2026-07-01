@@ -113,17 +113,17 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 
 ### 2. Broken Links: user-guide/training.md in model-base.md
 
-### 3. Base Class Documentation Mismatch
+### 3. Base Class Documentation Mismatch ✅ VERIFIED — ALREADY CORRECT
 
-**Issue**: Documentation describes classes that don't exist exactly as documented
+**Issue** (original): Documentation suspected of describing wrong base classes
 
 - **Location**: `docs/reference/model-base.md`
-- **Problems**:
-  - Documents `BaseModel` inheritance from `StorageBuffer`, `Monitoring`, `DtypeDeviceCoordinator` directly
-  - In reality, inherits from their `*Mixin` variants: `StorageBufferMixin`, `MonitoringMixin`, `DtypeDeviceCoordinatorMixin`
-  - The distinction between base classes and mixins is important for Lightning hooks
-- **Impact**: Confusion about which classes to inherit from
-- **Fix Required**: Update documentation to accurately reflect Mixin vs base class distinction
+- **Finding (2026-07-01)**: `model-base.md` already documents `BaseModel` as
+  inheriting from `TemporalBase, LightningBase, StorageBufferMixin,
+  MonitoringMixin, DtypeDeviceCoordinatorMixin`, which matches the actual
+  definition in `dynvision/base/__init__.py` (lines 41–47) exactly.
+- **Impact**: None.
+- **Fix Required**: ✅ None (verified consistent)
 
 ### 4. Parameter System Documentation vs Implementation
 
@@ -275,25 +275,41 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 
 ## Code vs Documentation Mismatches
 
-### 14. Data Loader Names
+### 14. Data Loader Names ✅ VERIFIED — NO MISMATCH
 
-**Issue**: Inconsistent naming of data loaders
+**Issue** (original): Suspected inconsistent naming of data loaders
 
-- **Location**: `docs/explanation/temporal_dynamics.md` vs `dynvision/data/datasets.py`
-- **Documented**: `StimulusDurationDataLoader`, `StimulusIntervalDataLoader`, `StimulusContrastDataLoader`
-- **Actual**: `StimulusDuration`, `StimulusInterval`, `StimulusContrast` (without "DataLoader" suffix)
-- **Impact**: Code examples won't work
-- **Fix Required**: Standardize on actual class names in documentation
+- **Location**: `docs/explanation/temporal_dynamics.md` vs `dynvision/data/dataloader.py`
+- **Finding (2026-07-01)**: Both forms are valid and used correctly.
+  - The Python class names in `dynvision/data/dataloader.py` are
+    `StimulusDurationDataLoader`, `StimulusIntervalDataLoader`,
+    `StimulusContrastDataLoader` (see `DATALOADER_CLASSES`, lines 1026–1033).
+  - `get_data_loader_class()` (line 1077) appends `"DataLoader"` automatically
+    when it is absent, so the bare form (`StimulusDuration`) is a valid alias
+    used in config/CLI `data_loader=` contexts.
+  - Docs use each form in the correct context: full class name in Python
+    import/instantiation examples (`custom-model.md`,
+    `temporal-data-presentation.md`), bare alias in config/CLI examples
+    (`model-testing.md`, `data-processing.md`, `workflow.md`).
+    `getting-started.md` documents the alias convention explicitly.
+- **Impact**: None — examples work as written.
+- **Fix Required**: ✅ None (verified consistent)
 
-### 15. Operation Sequence Names
+### 15. Operation Sequence Names ⬜ REAL MISMATCH FOUND
 
 **Issue**: Documentation uses different operation names than code
 
-- **Location**: `docs/reference/model-architecture.md`
-- **Documented**: "tstep", "nonlin", "pool"
-- **Actual Implementation**: May vary by model - not clear if these are standardized
-- **Impact**: Users may expect operations that don't exist
-- **Fix Required**: Document actual available operations from code
+- **Location**: `docs/reference/layer-operations.md`
+- **Finding (2026-07-01)**: The actual DyRCNN `layer_operations`
+  (`dynvision/models/dyrcnn.py` lines 232–243) is:
+  `["layer", "addext", "addskip", "addfeedback", "tstep", "nonlin", "supralin",
+  "record", "delay", "pool"]`. The base default in
+  `dynvision/base/temporal.py` (lines 319–331) is the same but adds `"norm"` at
+  the end. The doc previously listed `["rconv", "addskip", "addfeedback",
+  "tstep", "nonlin", "record", "delay", "pool"]`, i.e. it used `"rconv"` instead
+  of `"layer"` and omitted `"addext"` and `"supralin"`.
+- **Impact**: Users misled about the real operation pipeline.
+- **Fix Required**: Update `layer-operations.md` to the verified operation list.
 
 ### 16. Solver Naming Inconsistency
 
@@ -430,20 +446,6 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 ## Low-Hanging Fruits (Quick Wins)
 
 These are documentation tasks that can be completed quickly and provide immediate value:
-
-### Immediate Fixes (< 30 min each)
-1. ✅ **Fix training.md reference** in model-base.md - Remove or update broken link
-2. ✅ **Update GitHub URLs** in docs/index.md - Replace placeholder URLs
-3. ✅ **Fix config file naming** - COMPLETED (2025-11-22)
-4. **Standardize tutorial paths** - Ensure consistent use of `tutorial/` vs `tutorials/`
-
-### Quick Additions (30-60 min each)
-5. ✅ **Create scheduler quick reference** - COMPLETED (optimizers-schedulers.md, 2025-11-22)
-6. ✅ **Create optimizer quick reference** - COMPLETED (optimizers-schedulers.md, 2025-11-22)
-7. ✅ **Add common errors troubleshooting** - COMPLETED (troubleshooting.md, 2025-11-22)
-8. **Create model naming conventions guide** - How to name models, variants, and checkpoints
-9. **Add performance tips cheat sheet** - Quick wins for faster training
-10. ✅ **Create data loader comparison table** - COMPLETED (temporal-data-presentation.md, 2025-11-22)
 
 ### Medium Additions (1-2 hours each)
 11. ✅ **Complete TODO sections in custom-models.md** - COMPLETED (2025-11-23)
