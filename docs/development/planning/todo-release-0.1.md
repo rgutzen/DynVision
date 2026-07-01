@@ -208,20 +208,20 @@ FFCV 1.0.2 (last released 2023-03-05) predates Python 3.12. The Ubuntu package w
 | 5 | ✅ Data loader naming (no mismatch) | docs | Verified 2026-07-01: `get_data_loader_class` appends `DataLoader` automatically, so bare alias and full class name are both valid; docs use each in the correct context |
 | 6 | ✅ Solver naming inconsistency | `docs/reference/dynamics-solvers.md` | Verified 2026-07-01: docs already document config strings `euler`/`rk4` (per `model_params.py` `Literal`) vs classes `EulerStep`/`RungeKuttaStep` |
 
-**Medium-priority fixes**:
+**Medium-priority fixes (status as of 2026-07-01)**:
 
-| # | Issue | Source | Fix |
-|---|-------|--------|-----|
-| 7 | Parameter system integration unclear | `docs/user-guide/parameter-handling.md` | Document how Pydantic params + @alias_kwargs work together |
-| 8 | Config mode detection incomplete | `docs/user-guide/parameter-handling.md` | Document complete mode detection decision tree |
-| 9 | GitHub URLs placeholder | `docs/index.md` | Update to actual `https://github.com/Lindsay-Lab/dynvision` |
-| 10 | FFCV troubleshooting missing | Multiple files | Add FFCV troubleshooting section |
-| 11 | Mixed precision guidance missing | References in configs | Add best practices for bf16-mixed |
+| # | Issue | Source | Status |
+|---|-------|--------|--------|
+| 7 | Parameter system integration unclear | `docs/user-guide/parameter-handling.md` | ⬜ Document how Pydantic params + @alias_kwargs work together |
+| 8 | Config mode detection incomplete | `docs/user-guide/parameter-handling.md` | ⬜ Document complete mode detection decision tree |
+| 9 | GitHub URLs placeholder | `docs/index.md` | ✅ Fixed in docs-website overhaul (2026-06-30) |
+| 10 | FFCV troubleshooting missing | Multiple files | ⬜ Add FFCV troubleshooting section |
+| 11 | Mixed precision guidance missing | References in configs | ⬜ Add best practices for bf16-mixed |
 
 **Procedure**:
 
-1. Fix items 1-6 (30 min each = ~3 hours)
-2. Fix items 7-11 (20 min each = ~1.5 hours)
+1. ✅ Fix items 1-6 (completed 2026-06-30 / 2026-07-01)
+2. Fix items 7, 8, 10, 11 (remaining medium-priority)
 3. Run `mkdocs build` or equivalent to verify docs build cleanly
 4. Review all doc links for broken references
 
@@ -355,17 +355,18 @@ Task 9 (logging) ────────────> (independent)
 
 ## Success Criteria for 0.1 Release
 
-- [ ] Repository is free of old/deprecated/backup files
-- [ ] Manuscript-specific code lives in manuscript repo, not in DynVision
-- [ ] All internal naming is consistent (DynVision, no rva/rva references)
-- [ ] scikit-learn constraint is relaxed (`>=1.2.0,<2`)
-- [ ] Python version compatibility is documented
-- [ ] README is polished (correct badges, citation, links, code examples)
-- [ ] Documentation has no broken links and uses correct class names
-- [ ] Core modules have basic test coverage (DataBuffer, dynamics solver, recurrence)
-- [ ] Version is `0.1.0` with `Development Status :: 4 - Beta`
-- [ ] CHANGELOG.md documents changes
-- [ ] Git tag `v0.1.0` is created
+- [ ] Repository is free of old/deprecated/backup files (Task 2)
+- [ ] Manuscript-specific code lives in manuscript repo, not in DynVision (Task 1)
+- [ ] All internal naming is consistent — DynVision, no rva/rva references (Task 3)
+- [ ] scikit-learn constraint is relaxed (`>=1.2.0,<2`) (Task 4)
+- [ ] Python version compatibility is documented (Task 5)
+- [ ] README is polished — correct badges, citation, links, code examples (Task 7)
+- [x] Documentation has no user-facing broken links and uses correct class names (Task 6 — high-priority fixes verified)
+- [x] Thin reference pages fleshed out, code-vs-doc mismatches resolved (Task 6 — 2026-07-01 sweep)
+- [ ] Core modules have basic test coverage — DataBuffer, dynamics solver, recurrence (Task 8)
+- [ ] Version is `0.1.0` with `Development Status :: 4 - Beta` (Task 10)
+- [ ] CHANGELOG.md documents changes (Task 10)
+- [ ] Git tag `v0.1.0` is created (Task 10)
 
 ---
 

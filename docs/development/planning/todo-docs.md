@@ -1,6 +1,6 @@
 # Documentation and Implementation TODO
 
-> **Updated 2026-06-30**: Major docs-website overhaul completed. See [todo-release-0.1.md](todo-release-0.1.md) for release-prep tasks.
+> **Updated 2026-07-01**: Outdated after the 2026-06-30 docs-website overhaul + 2026-07-01 todo sweep. Entries flagged with ✅/⬜ are verified current; unmarked sections may be stale. See [todo-release-0.1.md](todo-release-0.1.md) for release-prep tasks.
 
 This file tracks inconsistencies between documentation and implementation, areas needing improvement, and future work items.
 
@@ -40,18 +40,19 @@ The following high-level documentation tasks were completed during the feature/d
 - ✅ `reference/layer-operations.md`, `reference/skip-feedback-connections.md`, `reference/integration-strategies.md`
 - ✅ `reference/evaluation-metrics.md`, `reference/benchmarking.md`
 
-### Outstanding from the Overhaul
-- ⬜ Write full prose for new pages that are currently thin/skeletal:
+### Outstanding from the Overhaul (status as of 2026-07-01)
+- ✅ Write full prose for thin reference pages:
   `benchmarking.md`, `evaluation-metrics.md`, `skip-feedback-connections.md`,
-  `layer-operations.md`, `integration-strategies.md`
-- ⬜ Add `docs/assets/recurrency_types.png` to main README (currently uses rcnn_architecture.png)
-- ⬜ The tutorial/index.md aspirational page list (~18 commented links) needs either creation or removal
-- ⬜ The user-guide/index.md commented links (~5 pages) need either creation or removal
-- ⬜ Code-of-conduct.md is in not_in_nav — decide whether it should be surfaced
+  `layer-operations.md`, `integration-strategies.md` — completed in 2026-07-01 sweep
+- ✅ Add `docs/assets/recurrency_types.png` to main README
+- ✅ Convert tutorial/index.md commented links to visible roadmap note
+- ✅ Convert user-guide/index.md commented links to visible roadmap note
+- ⬜ Code-of-conduct.md is in `not_in_nav` — decide whether it should be surfaced
 
-### Remaining Broken Links
-- ⬜ `user-guide/training.md` referenced live in `reference/model-base.md` — file does not exist
-- ℹ️ All other broken links (tutorial/index.md aspirational list, user-guide/index.md commented sections) are inside HTML comments and invisible to readers
+### Remaining Broken Links (status as of 2026-07-01)
+- ✅ `user-guide/training.md` referenced in `reference/model-base.md` — file created, link resolved
+- ℹ️ Tutorial/user-guide index aspirational links converted to visible roadmap notes (invisible to readers)
+- ℹ️ Any remaining broken links are in development/planning guides (known, non-blocking per `--strict` decision)
 
 ### Missing Pages / Sections
 - ⬜ **Visualization gallery** — `user-guide/visualization.md` is bare; needs screenshot examples of plot types
@@ -103,15 +104,18 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 - **Location**: `Makefile`, `project_paths.py`, documentation
 - **Problem**:
   - Makefile uses `rhythmic_visual_attention` instead of `dynvision`
-  - `project_paths.py` has both `project_name = "rhythmic_visual_attention"` and `toolbox_name = "DynVision"`
-  - Default `working_dir` points to `/home/rgutzen/01_PROJECTS/rhythmic_visual_attention`
+  - `project_paths.py` has both `project_name = "Modeling_Dynamical_Vision"` and `toolbox_name = "DynVision"`
+  - Default `working_dir` points to a user-specific absolute path
 - **Impact**: Confusion for new users, inconsistent commands
 - **Fix Required**:
   - Update Makefile targets to use `dynvision`
   - Reconcile project naming in `project_paths.py`
   - Update documentation to reflect single canonical name
 
-### 2. Broken Links: user-guide/training.md in model-base.md
+### 2. Broken Links: user-guide/training.md ✅ RESOLVED (2026-07-01)
+
+**Issue**: `model-base.md` referenced a non-existent `user-guide/training.md`.
+**Fix**: Created `user-guide/training.md` how-to guide, repointed link, added to nav and `user-guide/index.md`.
 
 ### 3. Base Class Documentation Mismatch ✅ VERIFIED — ALREADY CORRECT
 
@@ -295,7 +299,7 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 - **Impact**: None — examples work as written.
 - **Fix Required**: ✅ None (verified consistent)
 
-### 15. Operation Sequence Names ⬜ REAL MISMATCH FOUND
+### 15. Operation Sequence Names ✅ FIXED (2026-07-01)
 
 **Issue**: Documentation uses different operation names than code
 
@@ -311,15 +315,16 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 - **Impact**: Users misled about the real operation pipeline.
 - **Fix Required**: Update `layer-operations.md` to the verified operation list.
 
-### 16. Solver Naming Inconsistency
+### 16. Solver Naming Inconsistency ✅ VERIFIED — ALREADY CORRECT (2026-07-01)
 
-**Issue**: Documentation uses different solver names
+**Issue** (original): Documentation suspected of using different solver names
 
 - **Location**: `docs/reference/dynamics-solvers.md`
-- **Documented**: `RungeKuttaStep`
-- **Config**: Likely expects `rk4` as string identifier
-- **Impact**: Configuration may fail if wrong name used
-- **Fix Required**: Clarify string identifiers vs class names
+- **Finding (2026-07-01)**: Docs correctly document config strings `euler`/`rk4`
+  (per `model_params.py` `Literal["euler", "rk4"]`) vs class names
+  `EulerStep`/`RungeKuttaStep`.
+- **Impact**: None.
+- **Fix Required**: ✅ None (verified consistent)
 
 ## Performance and Optimization
 
@@ -420,28 +425,31 @@ These are intentional: `organization`, `models`, `losses`, `model-components`,
 - **Impact**: Users may not understand expected types
 - **Fix Required**: Add type hints to all code examples
 
-## Priority Recommendations
+## Priority Recommendations (updated 2026-07-01)
 
 **High Priority** (User-blocking issues):
 
 1. Fix project naming inconsistencies (Issue #1)
-2. ~~Remove or create missing documentation links (Issue #2)~~ ✅ Mostly fixed
-3. ~~Complete TODO sections in custom-models.md (Issue #5)~~ ✅ Complete
-4. Fix data loader naming in docs (Issue #14)
+2. Clarify parameter system integration (Issue #4)
+3. Add missing type hints to code examples (Issue #24)
 
 **Medium Priority** (Quality improvements):
 
-5. Clarify parameter system integration (Issue #4)
-6. Update base class documentation (Issue #3)
-7. Document FFCV setup and troubleshooting (Issue #17)
-8. Create visualization examples (Issue #20)
+4. Document mode detection logic completely (Issue #11)
+5. Document FFCV setup and troubleshooting (Issue #17)
+6. Create visualization examples and gallery (Issue #20 — also Missing Pages)
+7. Standardize experiment-config wildcard documentation (Issue #10)
 
 **Low Priority** (Nice to have):
 
-9. ~~Create missing images for recurrence types (Issue #6)~~ ✅ Complete
-10. Add code example style guide (Issue #23)
-11. Expand model zoo (Issue #21)
-12. Add comprehensive test suite (Issue #19)
+8. Update model initialization sequence docs (Issue #9)
+9. Establish code example style guide (Issue #23)
+10. Expand model zoo (Issue #21) or adjust marketing language
+11. Add comprehensive test suite (Issue #19)
+
+**Completed since last review:**
+
+- ✅ Issues #2, #3, #5, #6, #7, #12, #13, #14, #15, #16, #22 — all resolved/verified/fixed
 
 ## Low-Hanging Fruits (Quick Wins)
 
