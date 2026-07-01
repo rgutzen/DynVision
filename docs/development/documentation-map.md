@@ -9,7 +9,7 @@ reference for maintainers.
 | Quadrant | Orientation | Reader is… | Accent |
 |----------|-------------|------------|:------:|
 | **Tutorials** | Learning | …studying; following a guided path | 🟢 Green `#2ecc71` |
-| **How-to Guides** | Tasks | …working; solving a specific problem | 🟠 Orange `#f39c12` |
+| **How-to Guides** | Tasks | …working; solving a specific problem | 🟫 Brown `#795548` (brand accent `#CF8A2A`) |
 | **Reference** | Information | …looking something up | ⬛ Slate `#34495e` |
 | **Explanation** | Understanding | …reading to understand *why* | 🟦 Teal `#16a085` |
 
@@ -44,8 +44,8 @@ layer. The table below records the mapping.
 | `explanation/biological-plausibility.md` | Explanation | Biological Plausibility |
 | `explanation/temporal_dynamics.md` | Explanation | Temporal Dynamics |
 | `explanation/design-philosophy.md` | Explanation | Design Philosophy |
-| `explanation/why-snakemake.md` | Explanation | Why Snakemake? *(new)* |
-| `explanation/role-of-recurrence.md` | Explanation | Role of Recurrence *(new)* |
+| `explanation/why-snakemake.md` | Explanation | Why Snakemake? |
+| `explanation/role-of-recurrence.md` | Explanation | Role of Recurrence |
 | `development/**` | About (outside the 4 quadrants) | Developer Guide |
 | `contributing.md` | About + footer | Contributing |
 | `LICENSE` | Footer | — |

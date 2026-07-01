@@ -4,10 +4,13 @@
    Each of the four documentation quadrants gets a distinct accent colour and
    icon so users always know which "mode" of documentation they are in:
 
-     Tutorials      green  #2ecc71   (learning-oriented)
-     How-to Guides  orange #f39c12   (task-oriented)
-     Reference      slate  #34495e   (information-oriented)
-     Explanation    teal   #16a085   (understanding-oriented)
+     Tutorials      green    #2ecc71   (learning-oriented)
+     How-to Guides  brown    #795548   (task-oriented)
+     Reference      slate    #34495e   (information-oriented)
+     Explanation    teal     #16a085   (understanding-oriented)
+
+   Brand colour #CF8A2A (amber) is the global accent — used for links,
+   hover states, and emphasis across ALL quadrants for a coherent feel.
 
    The body receives a `data-diataxis` attribute set by overrides/main.html
    (based on the page URL). All section theming keys off that attribute, so it
@@ -17,41 +20,48 @@
 :root {
   --dv-tutorial: #2ecc71;
   --dv-tutorial-dark: #27ae60;
-  --dv-howto: #f39c12;
-  --dv-howto-dark: #d68910;
+  --dv-howto: #795548;
+  --dv-howto-dark: #5D4037;
   --dv-reference: #34495e;
   --dv-reference-dark: #2c3e50;
   --dv-explanation: #16a085;
   --dv-explanation-dark: #138d75;
+
+  /* Brand amber — global accent colour for links and hover states */
+  --dv-brand: #CF8A2A;
+  --dv-brand-dark: #B07820;
 }
 
 /* -------------------------------------------------------------------------
-   1. Per-section accent colour
-   Override Material's primary accent variables per quadrant.
+   0. Global accent (all quadrants)
+   Links, hover, and active states use the brand amber throughout.
+   ------------------------------------------------------------------------- */
+:root {
+  --md-accent-fg-color: var(--dv-brand);
+  --md-accent-fg-color--dark: var(--dv-brand-dark);
+  --md-accent-fg-color--transparent: rgba(207, 138, 42, 0.1);
+  --md-typeset-a-color: var(--dv-brand);
+}
+
+/* -------------------------------------------------------------------------
+   1. Per-section header colour
+   Override Material's primary header variable per quadrant.
    ------------------------------------------------------------------------- */
 body[data-diataxis="tutorial"] {
   --md-primary-fg-color: var(--dv-tutorial);
   --md-primary-fg-color--dark: var(--dv-tutorial-dark);
-  --md-accent-fg-color: var(--dv-tutorial-dark);
-  --md-typeset-a-color: var(--dv-tutorial-dark);
 }
 body[data-diataxis="howto"] {
   --md-primary-fg-color: var(--dv-howto);
   --md-primary-fg-color--dark: var(--dv-howto-dark);
-  --md-accent-fg-color: var(--dv-howto-dark);
-  --md-typeset-a-color: var(--dv-howto-dark);
 }
 body[data-diataxis="reference"] {
   --md-primary-fg-color: var(--dv-reference);
   --md-primary-fg-color--dark: var(--dv-reference-dark);
-  --md-accent-fg-color: var(--dv-reference-dark);
-  --md-typeset-a-color: #2f6f9f;
 }
 body[data-diataxis="explanation"] {
   --md-primary-fg-color: var(--dv-explanation);
   --md-primary-fg-color--dark: var(--dv-explanation-dark);
-  --md-accent-fg-color: var(--dv-explanation-dark);
-  --md-typeset-a-color: var(--dv-explanation-dark);
 }
 
 /* -------------------------------------------------------------------------
@@ -138,7 +148,7 @@ body[data-diataxis="reference"] .md-typeset table:not([class]) th {
 }
 .md-typeset .goal > .admonition-title,
 .md-typeset .goal > summary {
-  background-color: rgba(243, 156, 18, 0.1);
+  background-color: rgba(207, 138, 42, 0.12);
 }
 .md-typeset .goal > .admonition-title::before,
 .md-typeset .goal > summary::before {

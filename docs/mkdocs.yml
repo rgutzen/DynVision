@@ -160,7 +160,7 @@ extra_javascript:
 # Directory names on disk are kept as-is (tutorial/, user-guide/, reference/,
 # explanation/); only the nav labels/grouping express the Diátaxis structure.
 #   Tutorials      -> learning-oriented   (green  #2ecc71)
-#   How-to Guides  -> task-oriented       (orange #f39c12)
+#   How-to Guides  -> task-oriented       (brown #795548, brand accent #CF8A2A)
 #   Reference      -> information-oriented (slate  #34495e)
 #   Explanation    -> understanding        (teal   #16a085)
 # -----------------------------------------------------------------------------
