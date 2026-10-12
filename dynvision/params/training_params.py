@@ -520,7 +520,7 @@ class TrainingParams(CompositeParams):
             }
         )
 
-        return aliases
+        return cls.merge_component_aliases(aliases)
 
     @classmethod
     def from_cli_and_config(

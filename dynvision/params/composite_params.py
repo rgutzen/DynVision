@@ -116,6 +116,54 @@ class CompositeParams(BaseParams):
         """
         return cls.get_component_classes().keys()
 
+    @classmethod
+    def get_component_aliases(cls) -> Dict[str, str]:
+        """Aliases declared by each component, scoped to that component.
+
+        A component's own ``get_aliases()`` returns targets valid inside that
+        component (``trc -> t_recurrence``); a composite needs them scoped
+        (``trc -> model.t_recurrence``). Deriving them here means an alias added
+        to a component routes through every composite containing that component,
+        instead of requiring a matching hand-written entry in each composite.
+
+        That omission is not hypothetical: ``TrainingParams`` and ``InitParams``
+        listed only a subset of ``ModelParams``' aliases, so the Snakemake
+        wildcards ``trc``, ``tff``, ``tsk`` and ``lossrt`` arrived as bare keys,
+        were routed to the model component unscoped, and were stored as inert
+        extra attributes by ``ModelParams`` (``extra="allow"``). The configured
+        value never became ``t_recurrence`` or ``loss_reaction_time``.
+
+        Where two components declare the same alias name, the first in
+        ``component_classes`` order wins.
+        """
+        scoped: Dict[str, str] = {}
+        for name, component_cls in cls.get_component_classes().items():
+            for alias, target in component_cls.get_aliases().items():
+                scoped.setdefault(alias, f"{name}.{target}")
+        return scoped
+
+    @classmethod
+    def merge_component_aliases(cls, aliases: Dict[str, str]) -> Dict[str, str]:
+        """Add component-declared aliases to ``aliases`` without overriding them.
+
+        Entries already present are kept, because a composite's own map records
+        deliberate cross-component choices that the components cannot make
+        themselves: ``log`` resolves to the composite's own ``log_level``, while
+        all three components independently alias ``log`` to their own
+        ``log_level``. Hand-written entries also cover names that are plain
+        component *fields* rather than aliases (``epochs``, ``batch_size``,
+        ``model_name``), which no component declares as an alias.
+
+        Args:
+            aliases: The composite's own alias map, mutated in place.
+
+        Returns:
+            The same mapping, extended with the component-declared aliases.
+        """
+        for alias, target in cls.get_component_aliases().items():
+            aliases.setdefault(alias, target)
+        return aliases
+
     def iter_components(self) -> Iterable[Tuple[str, BaseParams]]:
         """Iterate over instantiated component parameter objects."""
 

@@ -718,6 +718,21 @@ class RecurrentConnectedConv2d(ForwardRecurrenceBase):
         self.max_weight_init = max_weight_init
         self.feedforward_only = str_to_bool(feedforward_only)
 
+        # 'middle' applies the recurrence between the two feedforward stages, so
+        # it needs a mid stage to sit between. Without mid_channels there is no
+        # conv2 for forward_feedforward2 to apply, the dimension calculation
+        # subscripts a scalar kernel_size/stride/padding, and the recurrence is
+        # built with out_channels=None. Reject the combination rather than
+        # failing inside the dimension arithmetic or, worse, silently building a
+        # model whose 'middle' recurrence degenerates to 'output'.
+        if self.recurrence_target == "middle" and mid_channels is None:
+            raise ValueError(
+                "recurrence_target='middle' requires mid_channels: the recurrent "
+                "connection would be applied between the two feedforward stages, "
+                "which do not exist without mid_channels. Set mid_channels for "
+                "this layer, or use recurrence_target='output' / 'input'."
+            )
+
         # Configure hidden state memory
         self._setup_hidden_state_memory(history_length)
 

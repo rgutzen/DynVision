@@ -77,7 +77,7 @@ class InitParams(CompositeParams):
             }
         )
 
-        return aliases
+        return cls.merge_component_aliases(aliases)
 
     @model_validator(mode="after")
     def validate_initialization_config(self) -> "InitParams":

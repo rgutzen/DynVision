@@ -403,4 +403,4 @@ class TestingParams(CompositeParams):
             }
         )
 
-        return aliases
+        return cls.merge_component_aliases(aliases)

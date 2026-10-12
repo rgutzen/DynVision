@@ -1,7 +1,6 @@
 """Core neural network functionality for biologically-inspired models."""
 
 import logging
-import math
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -10,6 +9,11 @@ import torch.nn as nn
 from dynvision import losses
 from dynvision.data.operations import _adjust_data_dimensions, _adjust_label_dimensions
 from dynvision.utils import alias_kwargs, str_to_bool
+from dynvision.utils.timing import (
+    is_integer_multiple,
+    multiple_error_message,
+    to_timesteps,
+)
 from .storage import DataBuffer
 
 logger = logging.getLogger(__name__)
@@ -113,6 +117,11 @@ class TemporalBase(nn.Module):
         self.feedforward_only = str_to_bool(feedforward_only)
         self.truncated_bptt_timesteps = int(truncated_bptt_timesteps)
 
+        # Durations are integrated on the dt grid and define integer delay and
+        # offset indices, so a non-multiple would silently run with a different
+        # delay than the one configured.
+        self._validate_dt_multiples()
+
         # Set operation selections (use defaults if not provided)
         self.non_feedforward_operations = (
             non_feedforward_operations
@@ -167,6 +176,39 @@ class TemporalBase(nn.Module):
                 self.dim_x,
             )
             self.reset(input_shape)
+
+    def _validate_dt_multiples(self) -> None:
+        """Reject durations that are not a whole number of ``dt`` steps.
+
+        Runs on the effective values, so a duration left unset still gets
+        checked against the model class default that supply it. ``t_feedback``
+        and ``t_skip`` are checked only when the connection they parameterise
+        is enabled, since they are otherwise inert and a non-multiple there
+        changes no computation.
+
+        Raises:
+            ValueError: If a used duration is not a multiple of ``dt``.
+        """
+        if self.dt is None:
+            return
+        if self.dt <= 0:
+            raise ValueError(f"dt must be positive, got dt={self.dt:g} ms")
+
+        durations = [
+            ("t_feedforward", self.t_feedforward),
+            ("t_recurrence", self.t_recurrence),
+            ("loss_reaction_time", self.loss_reaction_time),
+        ]
+        if self.feedback:
+            durations.append(("t_feedback", self.t_feedback))
+        if self.skip:
+            durations.append(("t_skip", self.t_skip))
+
+        for name, value in durations:
+            if value is None:
+                continue
+            if not is_integer_multiple(value, self.dt):
+                raise ValueError(multiple_error_message(name, value, self.dt))
 
     # Data processing
     #################
@@ -847,7 +889,7 @@ class TemporalBase(nn.Module):
         if pattern.numel() == 0:
             return torch.zeros_like(pattern, dtype=torch.bool)
 
-        reaction_steps = max(1, math.ceil(self.loss_reaction_time / self.dt))
+        reaction_steps = max(1, to_timesteps(self.loss_reaction_time, self.dt))
 
         # Detect rising edges (stimulus onsets) - where pattern goes from False to True
         padded = torch.cat(

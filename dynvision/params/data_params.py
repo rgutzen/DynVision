@@ -140,6 +140,14 @@ class DataParams(BaseParams):
     resolution: Optional[int] = Field(
         default=None, ge=1, description="Image resolution"
     )
+    data_loader: Optional[str] = Field(
+        default=None,
+        description=(
+            "DataLoader class name, resolved against the loader registry in "
+            "dynvision.data.dataloader (e.g. 'StandardDataLoader', "
+            "'StimulusDurationDataLoader'). None means the dataset decides."
+        ),
+    )
     normalize: Optional[Tuple[List[float], List[float]]] = Field(
         default=None,
         description="Custom normalization (mean, std) as JSON string or tuple",
